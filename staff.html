@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>루미클리닉 직원앱 v4</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root{--bg-primary:#0a0f1c;--bg-secondary:#111827;--bg-card:#1a2235;--accent-blue:#3b82f6;--accent-green:#10b981;--accent-red:#ef4444;--accent-orange:#f97316;--accent-purple:#8b5cf6;--text-primary:#f8fafc;--text-secondary:#94a3b8;--text-muted:#64748b;--border-color:#2d3748}
+        *{margin:0;padding:0;box-sizing:border-box}html,body{height:100%;overflow:hidden}
+        body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-primary);color:var(--text-primary)}
+        .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:2rem;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:var(--bg-primary)}
+        .login-screen.hidden{display:none}
+        .login-logo{font-size:3rem;margin-bottom:1rem}.login-title{font-size:1.5rem;font-weight:700;margin-bottom:.5rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .login-subtitle{color:var(--text-muted);margin-bottom:2rem}.login-form{width:100%;max-width:320px}
+        .login-input{width:100%;padding:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;color:var(--text-primary);font-size:1rem;margin-bottom:1rem}
+        .login-input:focus{outline:none;border-color:var(--accent-blue)}.login-input::placeholder{color:var(--text-muted)}
+        .login-btn{width:100%;padding:1rem;background:var(--accent-blue);border:none;border-radius:12px;color:white;font-size:1rem;font-weight:600;cursor:pointer;margin-bottom:1rem}
+        .login-error{color:var(--accent-red);font-size:.85rem;text-align:center;margin-bottom:1rem}
+        .pw-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:2000;align-items:center;justify-content:center;padding:1rem}
+        .pw-modal.active{display:flex}.pw-modal-content{background:var(--bg-card);border-radius:16px;padding:2rem;width:100%;max-width:320px}
+        .pw-modal-title{font-size:1.1rem;font-weight:600;margin-bottom:1rem;text-align:center}
+        .app-container{display:none;flex-direction:column;height:100vh;height:100dvh}.app-container.active{display:flex}
+        .header{background:var(--bg-secondary);padding:1rem;padding-top:max(1rem,env(safe-area-inset-top));border-bottom:1px solid var(--border-color);flex-shrink:0}
+        .header-content{display:flex;justify-content:space-between;align-items:center}.header-title{font-size:1.1rem;font-weight:600}
+        .header-user{display:flex;align-items:center;gap:.5rem}.user-name{font-size:.9rem;font-weight:500}
+        .logout-btn{padding:.4rem .8rem;background:transparent;border:1px solid var(--border-color);border-radius:8px;color:var(--text-secondary);font-size:.75rem;cursor:pointer}
+        .content{flex:1;overflow-y:auto;padding:1rem;padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+        .card{background:var(--bg-card);border-radius:16px;padding:1.25rem;margin-bottom:1rem;border:1px solid var(--border-color)}
+        .card-title{font-size:.9rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+        .info-row{display:flex;justify-content:space-between;padding:.75rem 0;border-bottom:1px solid var(--border-color)}
+        .info-row:last-child{border-bottom:none}.info-label{color:var(--text-secondary);font-size:.85rem}.info-value{font-weight:500;font-size:.9rem}
+        .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1rem}
+        .stat-card{background:var(--bg-secondary);border-radius:12px;padding:1rem;text-align:center}
+        .stat-value{font-size:1.4rem;font-weight:700;margin-bottom:.25rem}.stat-label{font-size:.75rem;color:var(--text-secondary)}
+        .stat-card.blue .stat-value{color:var(--accent-blue)}.stat-card.green .stat-value{color:var(--accent-green)}
+        .stat-card.orange .stat-value{color:var(--accent-orange)}.stat-card.purple .stat-value{color:var(--accent-purple)}
+        .ot-input-section{background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:1rem}
+        .ot-input-title{font-size:.85rem;font-weight:500;margin-bottom:.75rem;color:var(--text-secondary)}
+        .ot-input-row{display:flex;align-items:center;gap:1rem}
+        .ot-input{flex:1;padding:.75rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:1rem;text-align:center}
+        .ot-save-btn{padding:.75rem 1.5rem;background:var(--accent-green);border:none;border-radius:8px;color:white;font-weight:500;cursor:pointer}
+        .leave-balance{display:flex;justify-content:space-around;background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:1rem}
+        .leave-item{text-align:center}.leave-num{font-size:1.5rem;font-weight:700;color:var(--accent-blue)}.leave-label{font-size:.75rem;color:var(--text-secondary)}
+        .leave-btn{width:100%;padding:1rem;background:var(--accent-blue);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;margin-bottom:1rem}
+        .leave-list{max-height:300px;overflow-y:auto}
+        .leave-item-card{background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:.75rem}
+        .leave-date{font-weight:500;margin-bottom:.25rem}.leave-type{font-size:.8rem;color:var(--text-muted)}
+        .leave-status{display:inline-block;padding:.25rem .75rem;border-radius:20px;font-size:.75rem;font-weight:500;margin-top:.5rem}
+        .leave-status.pending{background:rgba(249,115,22,.2);color:var(--accent-orange)}
+        .leave-status.approved{background:rgba(16,185,129,.2);color:var(--accent-green)}
+        .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg-secondary);border-top:1px solid var(--border-color);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:100}
+        .nav-item{flex:1;padding:1rem .5rem;display:flex;flex-direction:column;align-items:center;gap:.25rem;cursor:pointer;color:var(--text-muted);border:none;background:none}
+        .nav-item.active{color:var(--accent-blue)}.nav-icon{font-size:1.25rem}.nav-label{font-size:.7rem;font-weight:500}
+        .tab-content{display:none}.tab-content.active{display:block}
+        .modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:200;align-items:flex-end;justify-content:center}
+        .modal.active{display:flex}
+        .modal-content{background:var(--bg-card);border-radius:24px 24px 0 0;padding:2rem;padding-bottom:calc(2rem + env(safe-area-inset-bottom));width:100%;max-height:80vh;overflow-y:auto}
+        .modal-title{font-size:1.1rem;font-weight:600;margin-bottom:1.5rem;text-align:center}
+        .modal-input,.modal-select{width:100%;padding:1rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:12px;color:var(--text-primary);font-size:1rem;margin-bottom:1rem}
+        .modal-btn{width:100%;padding:1rem;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;margin-bottom:.75rem}
+        .modal-btn.primary{background:var(--accent-blue);color:white}.modal-btn.secondary{background:var(--bg-secondary);color:var(--text-secondary)}
+        .badge{display:inline-flex;padding:.25rem .75rem;border-radius:20px;font-size:.75rem;font-weight:500}
+        .badge-purple{background:rgba(139,92,246,.2);color:var(--accent-purple)}.badge-green{background:rgba(16,185,129,.2);color:var(--accent-green)}.badge-orange{background:rgba(249,115,22,.2);color:var(--accent-orange)}
+        .incentive-record{background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center}
+        .incentive-record-info{flex:1}.incentive-record-name{font-weight:500;font-size:.9rem}.incentive-record-detail{font-size:.8rem;color:var(--text-muted)}
+        .incentive-record-delete{padding:.5rem;background:transparent;border:1px solid var(--accent-red);border-radius:8px;color:var(--accent-red);font-size:.75rem;cursor:pointer}
+        .no-incentive{text-align:center;padding:2rem;color:var(--text-muted)}
+    </style>
+</head>
+<body>
+    <div class="login-screen" id="loginScreen">
+        <div class="login-logo">💎</div><div class="login-title">LUMI CLINIC</div><div class="login-subtitle">직원 전용</div>
+        <div class="login-form">
+            <input type="text" class="login-input" id="loginId" placeholder="사번 (예: 20kok)" autocapitalize="none">
+            <input type="password" class="login-input" id="loginPw" placeholder="비밀번호">
+            <div class="login-error" id="loginError"></div>
+            <button class="login-btn" onclick="handleLogin()">로그인</button>
+        </div>
+    </div>
+    <div class="pw-modal" id="pwSetupModal">
+        <div class="pw-modal-content">
+            <div class="pw-modal-title">🔐 비밀번호 설정</div>
+            <input type="password" class="login-input" id="newPw1" placeholder="새 비밀번호">
+            <input type="password" class="login-input" id="newPw2" placeholder="비밀번호 확인">
+            <div class="login-error" id="pwError"></div>
+            <button class="login-btn" onclick="setupPassword()">설정 완료</button>
+        </div>
+    </div>
+    <div class="app-container" id="appContainer">
+        <header class="header"><div class="header-content"><div class="header-title">💎 루미클리닉</div><div class="header-user"><span class="user-name" id="userName">-</span><button class="logout-btn" onclick="logout()">로그아웃</button></div></div></header>
+        <div class="content">
+            <!-- 내 정보 탭 -->
+            <div class="tab-content active" id="tab-info">
+                <div class="card"><div class="card-title">👤 내 정보</div>
+                    <div class="info-row"><span class="info-label">이름</span><span class="info-value" id="infoName">-</span></div>
+                    <div class="info-row"><span class="info-label">사번</span><span class="info-value" id="infoId">-</span></div>
+                    <div class="info-row"><span class="info-label">직급</span><span class="info-value" id="infoRole">-</span></div>
+                    <div class="info-row"><span class="info-label">입사일</span><span class="info-value" id="infoJoinDate">-</span></div>
+                    <div class="info-row"><span class="info-label">근속기간</span><span class="info-value" id="infoTenure">-</span></div>
+                </div>
+                <div class="card"><div class="card-title">💰 급여 정보</div>
+                    <div class="info-row"><span class="info-label">기본급</span><span class="info-value" id="infoBaseSalary">-</span></div>
+                    <div class="info-row"><span class="info-label">고정OT수당</span><span class="info-value" id="infoFixedOT">-</span></div>
+                    <div class="info-row"><span class="info-label">시급</span><span class="info-value" id="infoHourlyWage">-</span></div>
+                </div>
+            </div>
+            <!-- 출퇴근 탭 -->
+            <div class="tab-content" id="tab-attendance">
+                <div class="stats-grid">
+                    <div class="stat-card blue"><div class="stat-value" id="attWorkDays">0</div><div class="stat-label">이번달 출근</div></div>
+                    <div class="stat-card orange"><div class="stat-value" id="attLate">0</div><div class="stat-label">지각</div></div>
+                </div>
+                <div class="card"><div class="card-title">📅 오늘 근무</div>
+                    <div class="info-row"><span class="info-label">출근</span><span class="info-value" id="todayCheckIn">-</span></div>
+                    <div class="info-row"><span class="info-label">퇴근</span><span class="info-value" id="todayCheckOut">-</span></div>
+                </div>
+                <button class="leave-btn" id="checkInBtn" onclick="checkIn()">🟢 출근하기</button>
+                <button class="leave-btn" id="checkOutBtn" onclick="checkOut()" style="background:var(--accent-orange);display:none">🔴 퇴근하기</button>
+            </div>
+            <!-- 오버타임 탭 -->
+            <div class="tab-content" id="tab-overtime">
+                <div class="stats-grid">
+                    <div class="stat-card blue"><div class="stat-value" id="otAfterWork">0H</div><div class="stat-label">퇴근후 OT</div></div>
+                    <div class="stat-card purple"><div class="stat-value" id="otLunch">0H</div><div class="stat-label">점심 OT</div></div>
+                    <div class="stat-card green"><div class="stat-value" id="otTotal">0H</div><div class="stat-label">총 OT</div></div>
+                    <div class="stat-card orange"><div class="stat-value" id="otPay">₩0</div><div class="stat-label">예상 OT수당</div></div>
+                </div>
+                <div class="ot-input-section">
+                    <div class="ot-input-title">📝 오늘 점심 오버타임 입력</div>
+                    <div class="ot-input-row"><input type="number" class="ot-input" id="lunchOTInput" placeholder="0" min="0" step="5"><span style="color:var(--text-secondary)">분</span><button class="ot-save-btn" onclick="saveLunchOT()">저장</button></div>
+                </div>
+            </div>
+            <!-- 인센티브 탭 (새로 추가) -->
+            <div class="tab-content" id="tab-incentive">
+                <div class="stats-grid">
+                    <div class="stat-card green"><div class="stat-value" id="incTotal">₩0</div><div class="stat-label">이번달 인센티브</div></div>
+                    <div class="stat-card purple"><div class="stat-value" id="incItemCount">0개</div><div class="stat-label">적용 항목</div></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">🎯 나의 인센티브 항목</div>
+                    <div id="myIncentiveItems"><div class="no-incentive">적용된 인센티브 항목이 없습니다.</div></div>
+                </div>
+                <button class="leave-btn" onclick="openIncentiveModal()" style="background:var(--accent-purple)">📝 실적 입력</button>
+                <div class="card">
+                    <div class="card-title">📋 이번달 입력 내역</div>
+                    <div id="incRecordsList"><div class="no-incentive">입력된 실적이 없습니다.</div></div>
+                </div>
+            </div>
+            <!-- 휴가 탭 -->
+            <div class="tab-content" id="tab-leave">
+                <div class="leave-balance">
+                    <div class="leave-item"><div class="leave-num" id="leaveTotal">0</div><div class="leave-label">총 연차</div></div>
+                    <div class="leave-item"><div class="leave-num" id="leaveUsed">0</div><div class="leave-label">사용</div></div>
+                    <div class="leave-item"><div class="leave-num" style="color:var(--accent-green)" id="leaveRemain">0</div><div class="leave-label">잔여</div></div>
+                </div>
+                <button class="leave-btn" onclick="openLeaveModal()">📝 휴가 신청</button>
+                <div class="card"><div class="card-title">📋 신청 내역</div><div class="leave-list" id="leaveList"><div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div></div></div>
+            </div>
+        </div>
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-tab="info"><span class="nav-icon">👤</span><span class="nav-label">내 정보</span></button>
+            <button class="nav-item" data-tab="attendance"><span class="nav-icon">📅</span><span class="nav-label">출퇴근</span></button>
+            <button class="nav-item" data-tab="overtime"><span class="nav-icon">⏰</span><span class="nav-label">OT</span></button>
+            <button class="nav-item" data-tab="incentive"><span class="nav-icon">🎯</span><span class="nav-label">인센티브</span></button>
+            <button class="nav-item" data-tab="leave"><span class="nav-icon">🏖️</span><span class="nav-label">휴가</span></button>
+        </nav>
+    </div>
+    <!-- 인센티브 입력 모달 -->
+    <div class="modal" id="incentiveModal">
+        <div class="modal-content">
+            <div class="modal-title">📝 인센티브 실적 입력</div>
+            <select class="modal-select" id="incItemSelect"><option value="">항목 선택</option></select>
+            <input type="text" class="modal-input" id="incClientName" placeholder="고객 이름">
+            <input type="text" class="modal-input" id="incChartNo" placeholder="차트번호">
+            <button class="modal-btn primary" onclick="submitIncentiveRecord()">+ 1건 추가</button>
+            <button class="modal-btn secondary" onclick="closeIncentiveModal()">닫기</button>
+        </div>
+    </div>
+    <!-- 휴가 모달 -->
+    <div class="modal" id="leaveModal">
+        <div class="modal-content">
+            <div class="modal-title">📝 휴가 신청</div>
+            <select class="modal-select" id="leaveType"><option value="annual">연차</option><option value="half">반차</option><option value="off">오프</option></select>
+            <input type="date" class="modal-input" id="leaveStart" placeholder="시작일">
+            <input type="date" class="modal-input" id="leaveEnd" placeholder="종료일">
+            <input type="text" class="modal-input" id="leaveReason" placeholder="사유">
+            <button class="modal-btn primary" onclick="submitLeave()">신청하기</button>
+            <button class="modal-btn secondary" onclick="closeLeaveModal()">취소</button>
+        </div>
+    </div>
+    <script>
+        const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
+        firebase.initializeApp(firebaseConfig);const db=firebase.firestore();
+
+        let currentUser=null,attendanceData={},leaveRequests=[],lunchOTRecords={},myIncentiveItems=[],incentiveRecords={},revenueData={};
+        const DEFAULT_PW='final12890-';
+        const overtimeRules={1:'18:30',2:'18:30',3:'18:00',4:'18:00',5:'18:30',6:'15:00'};
+        const monthlyData2024=[173111326,156060457,198554450,207124800,193543660,179806116,187612314,157672141,206156505,211217542,243773264,215202565];
+
+        // Login
+        async function handleLogin(){
+            const id=document.getElementById('loginId').value.toLowerCase().trim();
+            const pw=document.getElementById('loginPw').value;
+            document.getElementById('loginError').textContent='';
+            if(!id){document.getElementById('loginError').textContent='사번을 입력하세요';return;}
+            try{
+                const doc=await db.collection('employees').doc(id).get();
+                if(!doc.exists){document.getElementById('loginError').textContent='등록되지 않은 사번입니다';return;}
+                const emp=doc.data();
+                if(!emp.password){currentUser={id,...emp};document.getElementById('pwSetupModal').classList.add('active');return;}
+                if(emp.password!==pw){document.getElementById('loginError').textContent='비밀번호가 틀렸습니다';return;}
+                currentUser={id,...emp};localStorage.setItem('lumiUser',id);showApp();
+            }catch(e){document.getElementById('loginError').textContent='로그인 실패: '+e.message;}
+        }
+        async function setupPassword(){
+            const pw1=document.getElementById('newPw1').value,pw2=document.getElementById('newPw2').value;
+            document.getElementById('pwError').textContent='';
+            if(pw1.length<4){document.getElementById('pwError').textContent='비밀번호는 4자 이상';return;}
+            if(pw1!==pw2){document.getElementById('pwError').textContent='비밀번호가 일치하지 않습니다';return;}
+            try{await db.collection('employees').doc(currentUser.id).update({password:pw1});currentUser.password=pw1;localStorage.setItem('lumiUser',currentUser.id);document.getElementById('pwSetupModal').classList.remove('active');showApp();}catch(e){document.getElementById('pwError').textContent='설정 실패';}
+        }
+        function logout(){localStorage.removeItem('lumiUser');currentUser=null;document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('appContainer').classList.remove('active');document.getElementById('loginId').value='';document.getElementById('loginPw').value='';}
+        async function showApp(){document.getElementById('loginScreen').classList.add('hidden');document.getElementById('appContainer').classList.add('active');await loadAllData();renderAll();}
+        async function checkAutoLogin(){const savedId=localStorage.getItem('lumiUser');if(savedId){try{const doc=await db.collection('employees').doc(savedId).get();if(doc.exists){currentUser={id:savedId,...doc.data()};showApp();return;}}catch(e){}}}
+
+        function getYM(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+        function getToday(){return new Date().toISOString().split('T')[0];}
+
+        async function loadAllData(){await loadAttendance();await loadLeaveRequests();await loadLunchOTRecords();await loadMyIncentiveItems();await loadIncentiveRecords();await loadRevenueData();}
+        async function loadAttendance(){
+            const ym=getYM();
+            try{const snap=await db.collection('attendance').doc(currentUser.id).collection('records').where(firebase.firestore.FieldPath.documentId(),'>=',ym+'-01').where(firebase.firestore.FieldPath.documentId(),'<=',ym+'-31').get();
+                attendanceData={records:[],summary:{workDays:0,late:0,afterWorkOT:0}};
+                snap.forEach(d=>{const data=d.data(),dow=new Date(d.id).getDay(),ot=calcAfterWorkOT(data.checkOut,dow);
+                    attendanceData.records.push({date:d.id,...data,afterWorkOT:ot});attendanceData.summary.workDays++;
+                    if(data.status==='late')attendanceData.summary.late++;attendanceData.summary.afterWorkOT+=ot;
+                });
+            }catch(e){}
+        }
+        async function loadLeaveRequests(){try{const snap=await db.collection('leaveRequests').where('employeeId','==',currentUser.id).orderBy('createdAt','desc').limit(20).get();leaveRequests=[];snap.forEach(d=>leaveRequests.push({id:d.id,...d.data()}));}catch(e){}}
+        async function loadLunchOTRecords(){const ym=getYM();try{const doc=await db.collection('lunchOTDaily').doc(currentUser.id).get();lunchOTRecords=doc.exists?doc.data():{};}catch(e){}}
+        async function loadMyIncentiveItems(){
+            try{const snap=await db.collection('incentiveItems').where('employees','array-contains',currentUser.id).get();
+                myIncentiveItems=[];snap.forEach(d=>myIncentiveItems.push({id:d.id,...d.data()}));
+            }catch(e){}
+        }
+        async function loadIncentiveRecords(){
+            const ym=getYM();
+            try{const doc=await db.collection('incentiveRecords').doc(currentUser.id).collection('monthly').doc(ym).get();
+                incentiveRecords=doc.exists?doc.data():{};
+            }catch(e){incentiveRecords={};}
+        }
+        async function loadRevenueData(){const ym=getYM();try{const doc=await db.collection('revenue').doc(ym).get();revenueData=doc.exists?doc.data():{total:0,japan:0,japanVisitors:0};}catch(e){revenueData={total:0,japan:0,japanVisitors:0};}}
+
+        function timeToMin(t){if(!t)return 0;const[h,m]=t.split(':').map(Number);return h*60+m;}
+        function calcAfterWorkOT(checkOut,dow){if(!checkOut||dow===0)return 0;const rule=overtimeRules[dow];if(!rule)return 0;return Math.max(0,timeToMin(checkOut)-timeToMin(rule));}
+        function calcTenure(jd){if(!jd)return'-';const j=new Date(jd),n=new Date();let y=n.getFullYear()-j.getFullYear(),m=n.getMonth()-j.getMonth();if(m<0){y--;m+=12;}if(y>0)return m>0?y+'년 '+m+'개월':y+'년차';if(m>0)return m+'개월';return'신입';}
+        function calcAnnualLeave(jd){if(!jd)return 0;const j=new Date(jd),n=new Date(),months=(n.getFullYear()-j.getFullYear())*12+(n.getMonth()-j.getMonth());if(months<12)return Math.min(months,11);return Math.min(15+Math.floor((Math.floor(months/12)-1)/2),25);}
+        function formatCurrency(n){return'₩'+new Intl.NumberFormat('ko-KR').format(n||0);}
+
+        // Calculate my incentive
+        function calcMyIncentive(){
+            let total=0;const details=[];
+            myIncentiveItems.forEach(item=>{
+                let amount=0,desc='';
+                switch(item.type){
+                    case 'per_case':
+                        const count=incentiveRecords[item.id]?.count||0;
+                        amount=count*(item.perCaseAmount||0);
+                        desc=`${count}건 × ${formatCurrency(item.perCaseAmount)}`;
+                        break;
+                    case 'revenue_percent':
+                        amount=Math.round((revenueData.total||0)*(item.percent||0)/100);
+                        if(item.cap&&amount>item.cap)amount=item.cap;
+                        desc=`총매출 × ${item.percent}%`;
+                        break;
+                    case 'growth_percent':
+                        const monthIdx=new Date().getMonth();
+                        const prev=monthlyData2024[monthIdx]||0;
+                        const growth=Math.max(0,(revenueData.total||0)-prev);
+                        amount=Math.round(growth*(item.percent||0)/100);
+                        if(item.cap&&amount>item.cap)amount=item.cap;
+                        desc=`성장분 × ${item.percent}%`;
+                        break;
+                    case 'japan_visit':
+                        amount=(revenueData.japanVisitors||0)*(item.perCaseAmount||0);
+                        desc=`${revenueData.japanVisitors||0}명 × ${formatCurrency(item.perCaseAmount)}`;
+                        break;
+                    case 'japan_revenue':
+                        amount=Math.round((revenueData.japan||0)*(item.percent||0)/100);
+                        desc=`일본인매출 × ${item.percent}%`;
+                        break;
+                }
+                details.push({item:item.name,type:item.type,amount,desc,id:item.id});
+                total+=amount;
+            });
+            return{total,details};
+        }
+
+        function renderAll(){
+            document.getElementById('userName').textContent=currentUser.name;
+            renderInfo();renderAttendance();renderOvertime();renderIncentive();renderLeave();
+        }
+        function renderInfo(){
+            document.getElementById('infoName').textContent=currentUser.name;document.getElementById('infoId').textContent=currentUser.id;
+            document.getElementById('infoRole').textContent=currentUser.role||'-';document.getElementById('infoJoinDate').textContent=currentUser.joinDate||'-';
+            document.getElementById('infoTenure').textContent=calcTenure(currentUser.joinDate);
+            document.getElementById('infoBaseSalary').textContent=formatCurrency(currentUser.baseSalary);
+            document.getElementById('infoFixedOT').textContent=formatCurrency(currentUser.fixedOT);
+            document.getElementById('infoHourlyWage').textContent=formatCurrency(currentUser.hourlyWage);
+        }
+        function renderAttendance(){
+            document.getElementById('attWorkDays').textContent=attendanceData.summary?.workDays||0;document.getElementById('attLate').textContent=attendanceData.summary?.late||0;
+            const today=getToday(),todayRec=attendanceData.records?.find(r=>r.date===today);
+            document.getElementById('todayCheckIn').textContent=todayRec?.checkIn||'-';document.getElementById('todayCheckOut').textContent=todayRec?.checkOut||'-';
+            if(todayRec?.checkIn&&!todayRec?.checkOut){document.getElementById('checkInBtn').style.display='none';document.getElementById('checkOutBtn').style.display='block';}
+            else{document.getElementById('checkInBtn').style.display='block';document.getElementById('checkOutBtn').style.display='none';}
+        }
+        function renderOvertime(){
+            const ym=getYM();let totalLunchOT=0;
+            Object.keys(lunchOTRecords).forEach(k=>{if(k.startsWith(ym))totalLunchOT+=lunchOTRecords[k]||0;});
+            const afterWorkOT=attendanceData.summary?.afterWorkOT||0,totalOT=afterWorkOT+totalLunchOT;
+            const otPay=Math.round((totalOT/60)*(currentUser.hourlyWage||0)*1.5*0.967);
+            document.getElementById('otAfterWork').textContent=(afterWorkOT/60).toFixed(1)+'H';document.getElementById('otLunch').textContent=(totalLunchOT/60).toFixed(1)+'H';
+            document.getElementById('otTotal').textContent=(totalOT/60).toFixed(1)+'H';document.getElementById('otPay').textContent=formatCurrency(otPay);
+            document.getElementById('lunchOTInput').value=lunchOTRecords[getToday()]||'';
+        }
+        function renderIncentive(){
+            const inc=calcMyIncentive();
+            document.getElementById('incTotal').textContent=formatCurrency(inc.total);document.getElementById('incItemCount').textContent=myIncentiveItems.length+'개';
+            // My items
+            const itemsDiv=document.getElementById('myIncentiveItems');
+            if(myIncentiveItems.length===0){itemsDiv.innerHTML='<div class="no-incentive">적용된 인센티브 항목이 없습니다.</div>';}
+            else{
+                itemsDiv.innerHTML=inc.details.map(d=>{
+                    const typeLabels={per_case:'건당',revenue_percent:'매출비율',growth_percent:'성장분',japan_visit:'일본인방문',japan_revenue:'일본인매출'};
+                    return `<div class="incentive-record"><div class="incentive-record-info"><div class="incentive-record-name">${d.item} <span class="badge badge-purple">${typeLabels[d.type]||d.type}</span></div><div class="incentive-record-detail">${d.desc} = <strong style="color:var(--accent-green)">${formatCurrency(d.amount)}</strong></div></div></div>`;
+                }).join('');
+            }
+            // Records list (per_case type only)
+            const recordsDiv=document.getElementById('incRecordsList');
+            const perCaseItems=myIncentiveItems.filter(i=>i.type==='per_case');
+            let allRecords=[];
+            perCaseItems.forEach(item=>{
+                const recs=incentiveRecords[item.id]?.records||[];
+                recs.forEach(r=>allRecords.push({...r,itemName:item.name,itemId:item.id}));
+            });
+            if(allRecords.length===0){recordsDiv.innerHTML='<div class="no-incentive">입력된 실적이 없습니다.</div>';}
+            else{
+                recordsDiv.innerHTML=allRecords.map((r,idx)=>`<div class="incentive-record"><div class="incentive-record-info"><div class="incentive-record-name">${r.itemName}</div><div class="incentive-record-detail">${r.clientName} (${r.chartNo}) - ${r.date}</div></div><button class="incentive-record-delete" onclick="deleteIncentiveRecord('${r.itemId}',${idx})">삭제</button></div>`).join('');
+            }
+            // Update select options in modal
+            const select=document.getElementById('incItemSelect');
+            select.innerHTML='<option value="">항목 선택</option>'+perCaseItems.map(i=>`<option value="${i.id}">${i.name} (${formatCurrency(i.perCaseAmount)}/건)</option>`).join('');
+        }
+        function renderLeave(){
+            const total=calcAnnualLeave(currentUser.joinDate),used=leaveRequests.filter(l=>l.status==='approved'&&l.type==='annual').length;
+            document.getElementById('leaveTotal').textContent=total;document.getElementById('leaveUsed').textContent=used;document.getElementById('leaveRemain').textContent=total-used;
+            const list=document.getElementById('leaveList');
+            if(leaveRequests.length===0){list.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div>';return;}
+            list.innerHTML=leaveRequests.map(l=>`<div class="leave-item-card"><div class="leave-date">${l.startDate}${l.startDate!==l.endDate?' ~ '+l.endDate:''}</div><div class="leave-type">${l.type==='annual'?'연차':l.type==='half'?'반차':'오프'}${l.reason?' - '+l.reason:''}</div><span class="leave-status ${l.status}">${l.status==='pending'?'대기중':l.status==='approved'?'승인됨':'반려됨'}</span></div>`).join('');
+        }
+
+        // Actions
+        async function checkIn(){const now=new Date(),time=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');const today=getToday(),status=timeToMin(time)>timeToMin('09:30')?'late':'normal';try{await db.collection('attendance').doc(currentUser.id).collection('records').doc(today).set({checkIn:time,status,createdAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});alert('출근 완료: '+time);await loadAttendance();renderAttendance();renderOvertime();}catch(e){alert('출근 실패');}}
+        async function checkOut(){const now=new Date(),time=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');const today=getToday();try{await db.collection('attendance').doc(currentUser.id).collection('records').doc(today).update({checkOut:time,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});alert('퇴근 완료: '+time);await loadAttendance();renderAttendance();renderOvertime();}catch(e){alert('퇴근 실패');}}
+        async function saveLunchOT(){const today=getToday(),min=parseInt(document.getElementById('lunchOTInput').value)||0;lunchOTRecords[today]=min;try{await db.collection('lunchOTDaily').doc(currentUser.id).set(lunchOTRecords,{merge:true});alert('저장 완료');renderOvertime();}catch(e){alert('저장 실패');}}
+
+        // Incentive record
+        function openIncentiveModal(){document.getElementById('incentiveModal').classList.add('active');document.getElementById('incClientName').value='';document.getElementById('incChartNo').value='';}
+        function closeIncentiveModal(){document.getElementById('incentiveModal').classList.remove('active');}
+        async function submitIncentiveRecord(){
+            const itemId=document.getElementById('incItemSelect').value;
+            const clientName=document.getElementById('incClientName').value.trim();
+            const chartNo=document.getElementById('incChartNo').value.trim();
+            if(!itemId){alert('항목을 선택하세요');return;}
+            if(!clientName){alert('고객 이름을 입력하세요');return;}
+            const ym=getYM();
+            const newRecord={clientName,chartNo,date:getToday()};
+            const current=incentiveRecords[itemId]||{count:0,records:[]};
+            current.count=(current.count||0)+1;
+            current.records=current.records||[];
+            current.records.push(newRecord);
+            incentiveRecords[itemId]=current;
+            try{
+                await db.collection('incentiveRecords').doc(currentUser.id).collection('monthly').doc(ym).set(incentiveRecords);
+                alert('1건 추가 완료');document.getElementById('incClientName').value='';document.getElementById('incChartNo').value='';renderIncentive();
+            }catch(e){alert('저장 실패');}
+        }
+        async function deleteIncentiveRecord(itemId,idx){
+            if(!confirm('삭제?'))return;
+            const ym=getYM();
+            const current=incentiveRecords[itemId];
+            if(current&&current.records&&current.records[idx]){
+                current.records.splice(idx,1);current.count=Math.max(0,(current.count||1)-1);
+                incentiveRecords[itemId]=current;
+                try{await db.collection('incentiveRecords').doc(currentUser.id).collection('monthly').doc(ym).set(incentiveRecords);renderIncentive();}catch(e){alert('삭제 실패');}
+            }
+        }
+
+        // Leave
+        function openLeaveModal(){document.getElementById('leaveModal').classList.add('active');}
+        function closeLeaveModal(){document.getElementById('leaveModal').classList.remove('active');}
+        async function submitLeave(){
+            const data={employeeId:currentUser.id,type:document.getElementById('leaveType').value,startDate:document.getElementById('leaveStart').value,endDate:document.getElementById('leaveEnd').value||document.getElementById('leaveStart').value,reason:document.getElementById('leaveReason').value,status:'pending',createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+            if(!data.startDate){alert('시작일을 선택하세요');return;}
+            try{await db.collection('leaveRequests').add(data);alert('휴가 신청 완료');closeLeaveModal();await loadLeaveRequests();renderLeave();}catch(e){alert('신청 실패');}
+        }
+
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>{
+            document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+            n.classList.add('active');document.getElementById('tab-'+n.dataset.tab).classList.add('active');
+        }));
+
+        checkAutoLogin();
+    </script>
+</body>
+</html>

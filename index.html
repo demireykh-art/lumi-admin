@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>루미클리닉 관리자 대시보드 v4</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root{--bg-primary:#0a0f1c;--bg-secondary:#111827;--bg-card:#1a2235;--accent-blue:#3b82f6;--accent-green:#10b981;--accent-red:#ef4444;--accent-orange:#f97316;--accent-purple:#8b5cf6;--accent-pink:#ec4899;--accent-cyan:#06b6d4;--accent-yellow:#fbbf24;--text-primary:#f8fafc;--text-secondary:#94a3b8;--text-muted:#64748b;--border-color:#2d3748;--gradient-1:linear-gradient(135deg,#3b82f6,#8b5cf6)}
+        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh}
+        .header{background:rgba(10,15,28,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border-color);padding:1rem 2rem;position:sticky;top:0;z-index:100}
+        .header-content{display:flex;justify-content:space-between;align-items:center;max-width:1800px;margin:0 auto}
+        .logo{display:flex;align-items:center;gap:12px}.logo-icon{width:42px;height:42px;background:var(--gradient-1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px}
+        .logo-text{font-size:1.4rem;font-weight:700;background:var(--gradient-1);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .logo-sub{font-size:.75rem;color:var(--text-muted)}
+        .main-nav{display:flex;gap:.5rem;background:var(--bg-secondary);padding:.75rem 2rem;border-bottom:1px solid var(--border-color)}
+        .nav-item{padding:.75rem 1.5rem;background:transparent;border:none;color:var(--text-secondary);cursor:pointer;font-size:.9rem;font-weight:500;border-radius:8px;transition:all .2s}
+        .nav-item:hover{background:var(--bg-card);color:var(--text-primary)}.nav-item.active{background:var(--accent-blue);color:white}
+        .sub-nav{display:flex;gap:.5rem;padding:.75rem 2rem;background:var(--bg-primary);border-bottom:1px solid var(--border-color);flex-wrap:wrap}
+        .sub-nav-item{padding:.5rem 1rem;background:transparent;border:1px solid var(--border-color);border-radius:8px;color:var(--text-secondary);cursor:pointer;font-size:.85rem;transition:all .2s}
+        .sub-nav-item:hover{border-color:var(--accent-blue);color:var(--text-primary)}.sub-nav-item.active{background:rgba(59,130,246,.2);border-color:var(--accent-blue);color:var(--accent-blue)}
+        .main{padding:2rem;max-width:1800px;margin:0 auto}.section{display:none}.section.active{display:block}
+        .card{background:var(--bg-card);border-radius:16px;padding:1.5rem;border:1px solid var(--border-color);margin-bottom:1.5rem}
+        .card-title{font-size:1rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem}
+        .stat-card{background:var(--bg-card);border-radius:16px;padding:1.5rem;border:1px solid var(--border-color);position:relative;overflow:hidden}
+        .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--gradient-1)}
+        .stat-card.green::before{background:linear-gradient(135deg,#10b981,#06b6d4)}.stat-card.orange::before{background:linear-gradient(135deg,#f97316,#fbbf24)}.stat-card.purple::before{background:linear-gradient(135deg,#8b5cf6,#ec4899)}.stat-card.cyan::before{background:linear-gradient(135deg,#06b6d4,#3b82f6)}
+        .stat-label{color:var(--text-secondary);font-size:.85rem;margin-bottom:.5rem}.stat-value{font-size:1.5rem;font-weight:700}
+        .table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}
+        th,td{padding:.75rem;text-align:left;border-bottom:1px solid var(--border-color)}th{color:var(--text-secondary);font-weight:500;font-size:.8rem}td{font-size:.85rem}tr:hover{background:rgba(255,255,255,.02)}
+        .btn{padding:.5rem 1rem;border-radius:8px;border:none;cursor:pointer;font-size:.85rem;font-weight:500;transition:all .2s}
+        .btn-primary{background:var(--accent-blue);color:white}.btn-success{background:var(--accent-green);color:white}.btn-danger{background:var(--accent-red);color:white}
+        .btn-secondary{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color)}.btn-warning{background:var(--accent-orange);color:white}
+        .btn-sm{padding:.4rem .8rem;font-size:.75rem}.btn-group{display:flex;gap:.5rem}
+        .form-group{margin-bottom:1rem}.form-label{display:block;margin-bottom:.5rem;color:var(--text-secondary);font-size:.85rem}
+        .form-input,.form-select{width:100%;padding:.75rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:.9rem}
+        .form-input:focus,.form-select:focus{outline:none;border-color:var(--accent-blue)}
+        .form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem}
+        .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
+        .modal-overlay.active{display:flex}.modal{background:var(--bg-card);border-radius:16px;padding:2rem;width:90%;max-width:700px;max-height:90vh;overflow-y:auto;border:1px solid var(--border-color)}
+        .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
+        .modal-title{font-size:1.25rem;font-weight:600}.modal-close{background:none;border:none;color:var(--text-secondary);font-size:1.5rem;cursor:pointer}
+        .badge{display:inline-flex;padding:.25rem .75rem;border-radius:20px;font-size:.75rem;font-weight:500}
+        .badge-success{background:rgba(16,185,129,.2);color:var(--accent-green)}.badge-danger{background:rgba(239,68,68,.2);color:var(--accent-red)}
+        .badge-warning{background:rgba(249,115,22,.2);color:var(--accent-orange)}.badge-info{background:rgba(59,130,246,.2);color:var(--accent-blue)}
+        .badge-purple{background:rgba(139,92,246,.2);color:var(--accent-purple)}.badge-cyan{background:rgba(6,182,212,.2);color:var(--accent-cyan)}
+        .chart-container{height:300px;position:relative}.charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:1.5rem}
+        .summary-row{display:flex;justify-content:space-between;padding:1rem;background:var(--bg-secondary);border-radius:8px;margin-top:1rem;font-weight:600}
+        .birthday-alert{background:linear-gradient(135deg,#ec4899,#f97316);color:white;padding:.75rem 1.5rem;text-align:center;font-weight:500}
+        .text-success{color:var(--accent-green)}.text-danger{color:var(--accent-red)}.text-warning{color:var(--accent-orange)}.text-purple{color:var(--accent-purple)}.text-muted{color:var(--text-muted)}.text-right{text-align:right}
+        .mb-2{margin-bottom:1rem}.mt-2{margin-top:1rem}.flex{display:flex}.justify-between{justify-content:space-between}.items-center{align-items:center}.gap-1{gap:.5rem}
+        .memo-input{background:transparent;border:1px dashed var(--border-color);padding:.25rem .5rem;border-radius:4px;color:var(--text-secondary);font-size:.8rem;width:100%}
+        .upload-zone{border:2px dashed var(--border-color);border-radius:16px;padding:3rem;text-align:center;cursor:pointer;transition:all .3s;margin-bottom:1.5rem}
+        .upload-zone:hover,.upload-zone.dragover{border-color:var(--accent-blue);background:rgba(59,130,246,.05)}
+        .upload-icon{font-size:3rem;margin-bottom:1rem}.upload-title{font-size:1.1rem;font-weight:500;margin-bottom:.5rem}.upload-desc{color:var(--text-muted);font-size:.85rem}
+        .emp-chip{display:inline-flex;align-items:center;gap:.25rem;padding:.25rem .5rem;background:var(--bg-secondary);border-radius:20px;font-size:.75rem;margin:.125rem}
+        .emp-chip .remove{cursor:pointer;color:var(--accent-red)}
+        .incentive-item{background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:.75rem;border:1px solid var(--border-color)}
+        .incentive-item-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+        .incentive-item-name{font-weight:600;font-size:.95rem}
+        .incentive-item-type{font-size:.8rem;color:var(--text-muted)}
+        .incentive-item-employees{margin-top:.5rem}
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo"><div class="logo-icon">💎</div><div><div class="logo-text">LUMI CLINIC</div><div class="logo-sub">관리자 대시보드 v4.0</div></div></div>
+            <div style="display:flex;align-items:center;gap:1rem">
+                <select class="form-select" id="selectedYear" onchange="loadAllData()" style="width:auto"><option value="2026">2026년</option><option value="2025" selected>2025년</option><option value="2024">2024년</option></select>
+                <select class="form-select" id="selectedMonth" onchange="loadAllData()" style="width:auto">
+                    <option value="01">1월</option><option value="02">2월</option><option value="03">3월</option><option value="04">4월</option><option value="05">5월</option><option value="06">6월</option>
+                    <option value="07">7월</option><option value="08">8월</option><option value="09">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12" selected>12월</option>
+                </select>
+            </div>
+        </div>
+    </header>
+    <nav class="main-nav">
+        <button class="nav-item active" data-nav="sales">📊 매출</button>
+        <button class="nav-item" data-nav="expense">💸 지출</button>
+        <button class="nav-item" data-nav="staff">👥 직원관리</button>
+    </nav>
+    <div class="birthday-alert" id="birthdayAlert" style="display:none">🎂 <span id="birthdayNames"></span>님, 생일 축하합니다! 🎉</div>
+    <main class="main">
+        <!-- 매출 섹션 -->
+        <div class="section active" id="sales-section">
+            <div class="sub-nav">
+                <button class="sub-nav-item active" data-sub="sales-overview">📈 매출 현황</button>
+                <button class="sub-nav-item" data-sub="sales-japan">🇯🇵 일본인 매출</button>
+                <button class="sub-nav-item" data-sub="sales-data">📁 데이터 관리</button>
+            </div>
+            <div class="section active" id="sales-overview">
+                <div class="stats-grid" style="margin-top:1.5rem">
+                    <div class="stat-card"><div class="stat-label">이번달 총매출</div><div class="stat-value" style="color:var(--accent-blue)" id="monthlyTotal">₩0</div></div>
+                    <div class="stat-card green"><div class="stat-label">전년 동월 대비</div><div class="stat-value" style="color:var(--accent-green)" id="monthlyGrowth">+₩0</div></div>
+                    <div class="stat-card orange"><div class="stat-label">거래 건수</div><div class="stat-value" style="color:var(--accent-orange)" id="monthlyTrans">0건</div></div>
+                    <div class="stat-card purple"><div class="stat-label">평균 객단가</div><div class="stat-value" style="color:var(--accent-purple)" id="monthlyAvg">₩0</div></div>
+                </div>
+                <div class="charts-grid">
+                    <div class="card"><div class="card-title">📈 월별 매출 추이</div><div class="chart-container"><canvas id="monthlyChart"></canvas></div></div>
+                    <div class="card"><div class="card-title">📊 연도별 비교</div><div class="chart-container"><canvas id="yearCompareChart"></canvas></div></div>
+                </div>
+            </div>
+            <!-- 일본인 매출 탭 -->
+            <div class="section" id="sales-japan">
+                <div class="stats-grid" style="margin-top:1.5rem">
+                    <div class="stat-card purple"><div class="stat-label">일본인 매출</div><div class="stat-value" style="color:var(--accent-purple)" id="japanRevenue">₩0</div></div>
+                    <div class="stat-card cyan"><div class="stat-label">일본인 내원수</div><div class="stat-value" style="color:var(--accent-cyan)" id="japanVisitors">0명</div></div>
+                    <div class="stat-card orange"><div class="stat-label">일본인 객단가</div><div class="stat-value" style="color:var(--accent-orange)" id="japanAvg">₩0</div></div>
+                    <div class="stat-card"><div class="stat-label">전체 매출 비중</div><div class="stat-value" style="color:var(--accent-blue)" id="japanRatio">0%</div></div>
+                </div>
+                <div class="card"><div class="card-title">📋 일본인 관련 인센티브 대상자</div>
+                    <div class="table-wrapper"><table>
+                        <thead><tr><th>직원</th><th>인센티브 항목</th><th>이번달 인센티브</th></tr></thead>
+                        <tbody id="japanIncentiveTable"><tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">대상자가 없습니다.</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+            <div class="section" id="sales-data">
+                <div class="upload-zone" id="uploadZone" style="margin-top:1.5rem">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-title">엑셀 파일을 드래그하거나 클릭하여 업로드</div>
+                    <div class="upload-desc">지원 형식: .xlsx, .xls, .csv | 오더판매내역 파일</div>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(event)">
+                </div>
+                <div class="card"><div class="card-title">📝 월별 매출 수동 입력</div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">총 매출</label><input type="text" class="form-input" id="inputTotalRevenue" placeholder="200,000,000"></div>
+                        <div class="form-group"><label class="form-label">일본인 매출</label><input type="text" class="form-input" id="inputJapanRevenue" placeholder="20,000,000"></div>
+                        <div class="form-group"><label class="form-label">일본인 내원수</label><input type="number" class="form-input" id="inputJapanVisitors" placeholder="25"></div>
+                        <div class="form-group"><label class="form-label">거래 건수</label><input type="number" class="form-input" id="inputTransactions" placeholder="3000"></div>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveRevenueData()">저장</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 지출 섹션 -->
+        <div class="section" id="expense-section">
+            <div class="sub-nav">
+                <button class="sub-nav-item active" data-sub="expense-fixed">🏢 고정비</button>
+                <button class="sub-nav-item" data-sub="expense-variable">📦 유동비</button>
+            </div>
+            <div class="section active" id="expense-fixed">
+                <div class="card" style="margin-top:1.5rem">
+                    <div class="flex justify-between items-center mb-2"><div class="card-title">🏢 고정비 관리</div><button class="btn btn-primary btn-sm" onclick="openExpenseModal('fixed')">+ 추가</button></div>
+                    <div class="table-wrapper"><table><thead><tr><th>항목</th><th>금액</th><th>주기</th><th>메모</th><th>관리</th></tr></thead>
+                        <tbody id="fixedExpenseTable"><tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">고정비 항목이 없습니다.</td></tr></tbody>
+                    </table></div>
+                    <div class="summary-row"><span>월 고정비 합계</span><span style="color:var(--accent-red)" id="fixedExpenseTotal">₩0</span></div>
+                </div>
+            </div>
+            <div class="section" id="expense-variable">
+                <div class="card" style="margin-top:1.5rem">
+                    <div class="flex justify-between items-center mb-2"><div class="card-title">📦 유동비 관리</div><button class="btn btn-primary btn-sm" onclick="openExpenseModal('variable')">+ 추가</button></div>
+                    <div class="table-wrapper"><table><thead><tr><th>날짜</th><th>항목</th><th>카테고리</th><th>금액</th><th>메모</th><th>관리</th></tr></thead>
+                        <tbody id="variableExpenseTable"><tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">유동비 항목이 없습니다.</td></tr></tbody>
+                    </table></div>
+                    <div class="summary-row"><span>이번달 유동비 합계</span><span style="color:var(--accent-orange)" id="variableExpenseTotal">₩0</span></div>
+                </div>
+            </div>
+        </div>
+        <!-- 직원관리 섹션 -->
+        <div class="section" id="staff-section">
+            <div class="sub-nav">
+                <button class="sub-nav-item active" data-sub="staff-list">👥 직원관리</button>
+                <button class="sub-nav-item" data-sub="staff-leave">🏖️ 휴가관리</button>
+                <button class="sub-nav-item" data-sub="staff-attendance">📅 근태현황</button>
+                <button class="sub-nav-item" data-sub="staff-overtime">⏰ 오버타임</button>
+                <button class="sub-nav-item" data-sub="staff-incentive">🎯 인센티브</button>
+                <button class="sub-nav-item" data-sub="staff-salary">💰 급여</button>
+            </div>
+
+            <!-- 직원관리 -->
+            <div class="section active" id="staff-list">
+                <div class="flex justify-between items-center mb-2" style="margin-top:1.5rem"><h2>👥 직원 관리</h2><button class="btn btn-primary" onclick="openEmployeeModal()">+ 직원 추가</button></div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">전체 직원</div><div class="stat-value" style="color:var(--accent-blue)" id="totalEmployees">-</div></div>
+                    <div class="stat-card green"><div class="stat-label">재직중</div><div class="stat-value" style="color:var(--accent-green)" id="activeEmployees">-</div></div>
+                    <div class="stat-card orange"><div class="stat-label">퇴사</div><div class="stat-value" style="color:var(--accent-red)" id="inactiveEmployees">-</div></div>
+                    <div class="stat-card purple"><div class="stat-label">이번달 생일</div><div class="stat-value" style="color:var(--accent-pink)" id="birthdayCount">-</div></div>
+                </div>
+                <div class="card"><div class="table-wrapper"><table>
+                    <thead><tr><th>사번</th><th>이름</th><th>나이</th><th>직급</th><th>입사일</th><th>근속</th><th>상태</th><th>비밀번호</th><th>관리</th></tr></thead>
+                    <tbody id="employeeTableBody"><tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">로딩중...</td></tr></tbody>
+                </table></div></div>
+            </div>
+
+            <!-- 휴가관리 -->
+            <div class="section" id="staff-leave">
+                <h2 class="mb-2" style="margin-top:1.5rem">🏖️ 휴가 관리</h2>
+                <div class="stats-grid">
+                    <div class="stat-card orange"><div class="stat-label">승인 대기</div><div class="stat-value" style="color:var(--accent-orange)" id="pendingLeaves">-</div></div>
+                    <div class="stat-card green"><div class="stat-label">이번달 승인</div><div class="stat-value" style="color:var(--accent-green)" id="approvedLeaves">-</div></div>
+                </div>
+                <div class="card"><div class="table-wrapper"><table>
+                    <thead><tr><th>신청일</th><th>직원</th><th>유형</th><th>기간</th><th>사유</th><th>상태</th><th>처리</th></tr></thead>
+                    <tbody id="leaveTableBody"><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">휴가 신청이 없습니다.</td></tr></tbody>
+                </table></div></div>
+            </div>
+
+            <!-- 근태현황 -->
+            <div class="section" id="staff-attendance">
+                <h2 class="mb-2" style="margin-top:1.5rem">📅 근태 현황</h2>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">이번달 근무일</div><div class="stat-value" style="color:var(--accent-blue)" id="workDays">-</div></div>
+                    <div class="stat-card green"><div class="stat-label">금일 출근</div><div class="stat-value" style="color:var(--accent-green)" id="todayPresent">-</div></div>
+                </div>
+                <div class="card"><div class="table-wrapper"><table>
+                    <thead><tr><th>직원</th><th>사번</th><th>금일 출근</th><th>금일 퇴근</th><th>출근일수</th><th>지각</th><th>총 OT</th></tr></thead>
+                    <tbody id="attendanceTableBody"><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">로딩중...</td></tr></tbody>
+                </table></div></div>
+            </div>
+
+            <!-- 오버타임 -->
+            <div class="section" id="staff-overtime">
+                <h2 class="mb-2" style="margin-top:1.5rem">⏰ 오버타임 현황</h2>
+                <div class="stats-grid">
+                    <div class="stat-card orange"><div class="stat-label">이번달 총 OT</div><div class="stat-value" style="color:var(--accent-orange)" id="totalOT">-</div></div>
+                    <div class="stat-card green"><div class="stat-label">총 OT 비용 (세후)</div><div class="stat-value" style="color:var(--accent-green)" id="totalOTNet">-</div></div>
+                </div>
+                <div class="card"><div class="table-wrapper"><table>
+                    <thead><tr><th>직원</th><th>시급</th><th>퇴근후 OT</th><th>점심 OT</th><th>총 OT</th><th>세후</th></tr></thead>
+                    <tbody id="overtimeTableBody"><tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">로딩중...</td></tr></tbody>
+                </table></div>
+                <div class="summary-row"><span>합계</span><span><span id="sumOTHours">0H</span> | 세후 <span style="color:var(--accent-green)" id="sumOTNet">₩0</span></span></div>
+                </div>
+            </div>
+
+            <!-- 인센티브 (완전 개편) -->
+            <div class="section" id="staff-incentive">
+                <h2 class="mb-2" style="margin-top:1.5rem">🎯 인센티브 관리</h2>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">인센티브 항목 수</div><div class="stat-value" style="color:var(--accent-blue)" id="incentiveItemCount">0개</div></div>
+                    <div class="stat-card green"><div class="stat-label">이번달 총 인센티브</div><div class="stat-value" style="color:var(--accent-green)" id="totalIncentiveSum">₩0</div></div>
+                </div>
+                
+                <!-- 인센티브 항목 관리 -->
+                <div class="card">
+                    <div class="flex justify-between items-center mb-2"><div class="card-title">⚙️ 인센티브 항목 설정</div><button class="btn btn-primary btn-sm" onclick="openIncentiveItemModal()">+ 항목 추가</button></div>
+                    <div id="incentiveItemsList"></div>
+                </div>
+
+                <!-- 직원별 인센티브 현황 -->
+                <div class="card"><div class="card-title">📊 직원별 인센티브 현황</div>
+                    <div class="table-wrapper"><table>
+                        <thead><tr><th>직원</th><th>적용 항목</th><th>실적</th><th>이번달 인센티브</th></tr></thead>
+                        <tbody id="incentiveTableBody"><tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">로딩중...</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- 급여 -->
+            <div class="section" id="staff-salary">
+                <h2 class="mb-2" style="margin-top:1.5rem">💰 급여 현황</h2>
+                <div class="card"><div class="table-wrapper"><table>
+                    <thead><tr><th>직원</th><th>기본급</th><th>고정OT</th><th>추가OT</th><th>인센티브</th><th>총 급여</th><th style="width:150px">메모</th></tr></thead>
+                    <tbody id="salaryTableBody"><tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">로딩중...</td></tr></tbody>
+                </table></div>
+                <div class="summary-row"><span>총 급여 합계</span><span style="color:var(--accent-green);font-size:1.2rem" id="totalSalarySum">₩0</span></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 직원 모달 -->
+    <div class="modal-overlay" id="employeeModal">
+        <div class="modal">
+            <div class="modal-header"><div class="modal-title" id="employeeModalTitle">직원 추가</div><button class="modal-close" onclick="closeEmployeeModal()">&times;</button></div>
+            <form id="employeeForm">
+                <input type="hidden" id="empEditId">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">이름 *</label><input type="text" class="form-input" id="empName" required></div>
+                    <div class="form-group"><label class="form-label">사번 * (소문자)</label><input type="text" class="form-input" id="empId" placeholder="예: 20kok" required style="text-transform:lowercase"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">생년월일</label><input type="date" class="form-input" id="empBirthDate"></div>
+                    <div class="form-group"><label class="form-label">직급 *</label>
+                        <select class="form-select" id="empRole" required><option value="">선택</option><option value="실장">실장</option><option value="피부관리사">피부관리사</option><option value="간호사">간호사</option><option value="간호조무사">간호조무사</option><option value="코디">코디</option><option value="마케팅">마케팅</option></select>
+                    </div>
+                    <div class="form-group"><label class="form-label">입사일 *</label><input type="date" class="form-input" id="empJoinDate" required></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">기본급 *</label><input type="number" class="form-input" id="empBaseSalary" required></div>
+                    <div class="form-group"><label class="form-label">고정OT수당</label><input type="number" class="form-input" id="empFixedOT"></div>
+                    <div class="form-group"><label class="form-label">시급</label><input type="number" class="form-input" id="empHourlyWage"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">재직 상태</label>
+                        <select class="form-select" id="empIsActive"><option value="true">재직중</option><option value="false">퇴사</option></select>
+                    </div>
+                </div>
+                <div class="flex justify-between mt-2"><button type="button" class="btn btn-secondary" onclick="closeEmployeeModal()">취소</button><button type="submit" class="btn btn-primary">저장</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 인센티브 항목 모달 -->
+    <div class="modal-overlay" id="incentiveItemModal">
+        <div class="modal">
+            <div class="modal-header"><div class="modal-title" id="incentiveItemModalTitle">인센티브 항목 추가</div><button class="modal-close" onclick="closeIncentiveItemModal()">&times;</button></div>
+            <form id="incentiveItemForm">
+                <input type="hidden" id="incItemEditId">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="incItemName" placeholder="예: 하이드라 페이셜" required></div>
+                    <div class="form-group"><label class="form-label">유형 *</label>
+                        <select class="form-select" id="incItemType" required onchange="toggleIncTypeFields()">
+                            <option value="per_case">건당 (₩/건)</option>
+                            <option value="revenue_percent">매출 비율 (%)</option>
+                            <option value="growth_percent">성장분 비율 (%)</option>
+                            <option value="japan_visit">일본인 방문 (₩/명)</option>
+                            <option value="japan_revenue">일본인 매출 (%)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row" id="incPerCaseFields">
+                    <div class="form-group"><label class="form-label">건당 금액 (원)</label><input type="number" class="form-input" id="incPerCaseAmount" placeholder="10000"></div>
+                </div>
+                <div class="form-row" id="incPercentFields" style="display:none">
+                    <div class="form-group"><label class="form-label">비율 (%)</label><input type="number" class="form-input" id="incPercent" placeholder="1" step="0.1"></div>
+                    <div class="form-group"><label class="form-label">상한 (원, 선택)</label><input type="number" class="form-input" id="incCap" placeholder="200000"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">적용 직원 선택</label>
+                    <div id="incEmployeeCheckboxes" style="display:flex;flex-wrap:wrap;gap:.5rem;background:var(--bg-secondary);padding:1rem;border-radius:8px;max-height:200px;overflow-y:auto"></div>
+                </div>
+                <div class="flex justify-between mt-2"><button type="button" class="btn btn-secondary" onclick="closeIncentiveItemModal()">취소</button><button type="submit" class="btn btn-primary">저장</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 지출 모달 -->
+    <div class="modal-overlay" id="expenseModal">
+        <div class="modal">
+            <div class="modal-header"><div class="modal-title" id="expenseModalTitle">지출 추가</div><button class="modal-close" onclick="closeExpenseModal()">&times;</button></div>
+            <form id="expenseForm">
+                <input type="hidden" id="expType">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="expName" required></div>
+                    <div class="form-group"><label class="form-label">금액 *</label><input type="number" class="form-input" id="expAmount" required></div>
+                </div>
+                <div class="form-row" id="expFixedFields"><div class="form-group"><label class="form-label">주기</label><select class="form-select" id="expCycle"><option value="monthly">월간</option><option value="yearly">연간</option></select></div></div>
+                <div class="form-row" id="expVariableFields" style="display:none">
+                    <div class="form-group"><label class="form-label">날짜</label><input type="date" class="form-input" id="expDate"></div>
+                    <div class="form-group"><label class="form-label">카테고리</label><select class="form-select" id="expCategory"><option value="재료비">재료비</option><option value="소모품">소모품</option><option value="마케팅">마케팅</option><option value="기타">기타</option></select></div>
+                </div>
+                <div class="form-group"><label class="form-label">메모</label><input type="text" class="form-input" id="expMemo"></div>
+                <div class="flex justify-between mt-2"><button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">취소</button><button type="submit" class="btn btn-primary">저장</button></div>
+            </form>
+        </div>
+    </div>
+    <script>
+        // Firebase
+        const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
+        firebase.initializeApp(firebaseConfig);const db=firebase.firestore();
+
+        let employees=[],attendanceData={},leaveRequests=[],revenueData={},salaryMemos={},lunchOTAllData={},fixedExpenses=[],variableExpenses=[];
+        let incentiveItems=[],employeeIncentiveRecords={};
+        const overtimeRules={1:'18:30',2:'18:30',3:'18:00',4:'18:00',5:'18:30',6:'15:00'};
+        const DEFAULT_PW='final12890-';
+        const monthlyData={labels:['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+            data2024:[173111326,156060457,198554450,207124800,193543660,179806116,187612314,157672141,206156505,211217542,243773264,215202565],
+            data2025:[243491066,257728622,198946613,209752982,194799262,183098254,169175502,168038894,192032741,185696152,194178322,202146630]};
+
+        function getYM(){return document.getElementById('selectedYear').value+'-'+document.getElementById('selectedMonth').value;}
+
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>{
+            document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+            document.querySelectorAll('.section[id$="-section"]').forEach(x=>x.classList.remove('active'));
+            n.classList.add('active');document.getElementById(n.dataset.nav+'-section').classList.add('active');
+        }));
+        document.querySelectorAll('.sub-nav-item').forEach(s=>s.addEventListener('click',()=>{
+            const parent=s.closest('.section');parent.querySelectorAll('.sub-nav-item').forEach(x=>x.classList.remove('active'));
+            parent.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));s.classList.add('active');document.getElementById(s.dataset.sub).classList.add('active');
+        }));
+
+        // Load All
+        async function loadAllData(){
+            await loadEmployees();await loadAttendance();await loadLeaveRequests();await loadRevenueData();
+            await loadSalaryMemos();await loadLunchOTAll();await loadExpenses();await loadIncentiveItems();await loadEmployeeIncentiveRecords();
+            checkBirthdays();renderAll();initCharts();
+        }
+
+        async function loadEmployees(){
+            try{const snap=await db.collection('employees').get();employees=[];snap.forEach(d=>employees.push({id:d.id,...d.data()}));}
+            catch(e){generateDemoEmployees();}
+        }
+        function generateDemoEmployees(){
+            employees=[
+                {id:'20kok',name:'김옥경',birthDate:'1985-03-15',role:'실장',joinDate:'2020-03-01',baseSalary:3050590,fixedOT:760540,hourlyWage:15553,isActive:true},
+                {id:'21yyn',name:'양예나',birthDate:'1992-01-17',role:'피부관리사',joinDate:'2021-05-15',baseSalary:2633103,fixedOT:733050,hourlyWage:13687,isActive:true},
+                {id:'22ysy',name:'윤소영',birthDate:'1990-07-22',role:'피부관리사',joinDate:'2022-02-01',baseSalary:2393730,fixedOT:666975,hourlyWage:12442,isActive:true},
+                {id:'22lsy',name:'이서영',birthDate:'1994-11-08',role:'피부관리사',joinDate:'2022-08-01',baseSalary:2154357,fixedOT:600061,hourlyWage:11198,isActive:true},
+                {id:'23jsr',name:'정소라',birthDate:'1996-05-30',role:'간호조무사',joinDate:'2023-03-01',baseSalary:2154357,fixedOT:600061,hourlyWage:11198,isActive:true},
+                {id:'25sih',name:'신인해',birthDate:'1998-09-12',role:'코디',joinDate:'2025-01-02',baseSalary:2034732,fixedOT:566745,hourlyWage:10576,isActive:true},
+                {id:'22pjy',name:'박지윤',birthDate:'1993-04-25',role:'코디',joinDate:'2022-06-01',baseSalary:2274105,fixedOT:633506,hourlyWage:11820,isActive:true},
+                {id:'22pbm',name:'박보미',birthDate:'1991-12-03',role:'코디',joinDate:'2022-09-01',baseSalary:2274105,fixedOT:633506,hourlyWage:11820,isActive:true}
+            ];
+        }
+        async function loadAttendance(){
+            const ym=getYM();attendanceData={};
+            for(const emp of employees){
+                try{const snap=await db.collection('attendance').doc(emp.id).collection('records').where(firebase.firestore.FieldPath.documentId(),'>=',ym+'-01').where(firebase.firestore.FieldPath.documentId(),'<=',ym+'-31').get();
+                    attendanceData[emp.id]={records:[],summary:{workDays:0,late:0,afterWorkOT:0}};
+                    snap.forEach(d=>{const data=d.data(),dow=new Date(d.id).getDay(),ot=calcAfterWorkOT(data.checkOut,dow);
+                        attendanceData[emp.id].records.push({date:d.id,...data,afterWorkOT:ot});
+                        attendanceData[emp.id].summary.workDays++;if(data.status==='late')attendanceData[emp.id].summary.late++;
+                        attendanceData[emp.id].summary.afterWorkOT+=ot;
+                    });
+                }catch(e){}
+            }
+        }
+        async function loadLeaveRequests(){try{const snap=await db.collection('leaveRequests').orderBy('createdAt','desc').limit(50).get();leaveRequests=[];snap.forEach(d=>leaveRequests.push({id:d.id,...d.data()}));}catch(e){}}
+        async function loadRevenueData(){const ym=getYM();try{const doc=await db.collection('revenue').doc(ym).get();revenueData=doc.exists?doc.data():{total:0,japan:0,japanVisitors:0,transactions:0};}catch(e){revenueData={total:0,japan:0,japanVisitors:0,transactions:0};}}
+        async function loadSalaryMemos(){const ym=getYM();try{const doc=await db.collection('salaryMemos').doc(ym).get();salaryMemos=doc.exists?doc.data():{};}catch(e){}}
+        async function loadLunchOTAll(){
+            const ym=getYM();lunchOTAllData={};
+            for(const emp of employees){
+                try{const doc=await db.collection('lunchOTDaily').doc(emp.id).get();
+                    if(doc.exists){const data=doc.data();let total=0;Object.entries(data).forEach(([k,v])=>{if(k.startsWith(ym))total+=v;});lunchOTAllData[emp.id]={total,records:data};}
+                    else{lunchOTAllData[emp.id]={total:0,records:{}};}
+                }catch(e){lunchOTAllData[emp.id]={total:0,records:{}};}
+            }
+        }
+        async function loadExpenses(){
+            try{const fSnap=await db.collection('fixedExpenses').get();fixedExpenses=[];fSnap.forEach(d=>fixedExpenses.push({id:d.id,...d.data()}));}catch(e){}
+            const ym=getYM();try{const vSnap=await db.collection('variableExpenses').where('month','==',ym).get();variableExpenses=[];vSnap.forEach(d=>variableExpenses.push({id:d.id,...d.data()}));}catch(e){}
+        }
+        async function loadIncentiveItems(){
+            try{const snap=await db.collection('incentiveItems').get();incentiveItems=[];snap.forEach(d=>incentiveItems.push({id:d.id,...d.data()}));}catch(e){}
+        }
+        async function loadEmployeeIncentiveRecords(){
+            const ym=getYM();employeeIncentiveRecords={};
+            for(const emp of employees){
+                try{const doc=await db.collection('incentiveRecords').doc(emp.id).collection('monthly').doc(ym).get();
+                    employeeIncentiveRecords[emp.id]=doc.exists?doc.data():{};
+                }catch(e){employeeIncentiveRecords[emp.id]={};}
+            }
+        }
+
+        // Calculations
+        function timeToMin(t){if(!t)return 0;const[h,m]=t.split(':').map(Number);return h*60+m;}
+        function calcAfterWorkOT(checkOut,dow){if(!checkOut||dow===0)return 0;const rule=overtimeRules[dow];if(!rule)return 0;return Math.max(0,timeToMin(checkOut)-timeToMin(rule));}
+        function calcTenure(jd){if(!jd)return{label:'-'};const j=new Date(jd),n=new Date();let y=n.getFullYear()-j.getFullYear(),m=n.getMonth()-j.getMonth();if(m<0){y--;m+=12;}if(y>0)return{years:y,label:m>0?y+'년 '+m+'개월':y+'년차'};if(m>0)return{years:0,label:m+'개월'};return{years:0,label:'신입'};}
+        function calcAge(bd){if(!bd)return'-';const b=new Date(bd),n=new Date();let age=n.getFullYear()-b.getFullYear();if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate()))age--;return age+'세';}
+        function formatCurrency(n){return'₩'+new Intl.NumberFormat('ko-KR').format(n||0);}
+        function calcWorkDays(y,m){let c=0;const d=new Date(y,m,0).getDate();for(let i=1;i<=d;i++)if(new Date(y,m-1,i).getDay()!==0)c++;return c;}
+
+        // 직원별 인센티브 계산
+        function calcEmployeeIncentive(empId){
+            let total=0;const details=[];
+            const records=employeeIncentiveRecords[empId]||{};
+            incentiveItems.forEach(item=>{
+                if(!item.employees||!item.employees.includes(empId))return;
+                let amount=0,desc='';
+                switch(item.type){
+                    case 'per_case':
+                        const count=records[item.id]?.count||0;
+                        amount=count*(item.perCaseAmount||0);
+                        desc=`${count}건 × ${formatCurrency(item.perCaseAmount)}`;
+                        break;
+                    case 'revenue_percent':
+                        amount=Math.round((revenueData.total||0)*(item.percent||0)/100);
+                        if(item.cap&&amount>item.cap)amount=item.cap;
+                        desc=`총매출 × ${item.percent}%`;
+                        break;
+                    case 'growth_percent':
+                        const monthIdx=parseInt(document.getElementById('selectedMonth').value)-1;
+                        const prev=monthlyData.data2024[monthIdx]||0;
+                        const growth=Math.max(0,(revenueData.total||0)-prev);
+                        amount=Math.round(growth*(item.percent||0)/100);
+                        if(item.cap&&amount>item.cap)amount=item.cap;
+                        desc=`성장분 × ${item.percent}%${item.cap?' (상한 '+formatCurrency(item.cap)+')':''}`;
+                        break;
+                    case 'japan_visit':
+                        amount=(revenueData.japanVisitors||0)*(item.perCaseAmount||0);
+                        desc=`${revenueData.japanVisitors||0}명 × ${formatCurrency(item.perCaseAmount)}`;
+                        break;
+                    case 'japan_revenue':
+                        amount=Math.round((revenueData.japan||0)*(item.percent||0)/100);
+                        desc=`일본인매출 × ${item.percent}%`;
+                        break;
+                }
+                if(amount>0||item.type==='per_case'){details.push({item:item.name,amount,desc});}
+                total+=amount;
+            });
+            return{total,details};
+        }
+
+        function checkBirthdays(){
+            const today=new Date(),todayMD=String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0'),thisMonth=String(today.getMonth()+1).padStart(2,'0');
+            let birthdayToday=[],birthdayThisMonth=0;
+            employees.forEach(e=>{if(e.birthDate&&e.isActive!==false){const bMD=e.birthDate.substring(5);if(bMD===todayMD)birthdayToday.push(e.name);if(bMD.startsWith(thisMonth))birthdayThisMonth++;}});
+            document.getElementById('birthdayCount').textContent=birthdayThisMonth+'명';
+            if(birthdayToday.length>0){document.getElementById('birthdayAlert').style.display='block';document.getElementById('birthdayNames').textContent=birthdayToday.join(', ');}
+            else{document.getElementById('birthdayAlert').style.display='none';}
+        }
+        // Render Functions
+        function renderAll(){renderSales();renderEmployees();renderAttendance();renderLeaves();renderOvertime();renderIncentive();renderSalary();renderExpenses();}
+
+        function renderSales(){
+            const total=revenueData.total||0,japan=revenueData.japan||0,jVis=revenueData.japanVisitors||0,trans=revenueData.transactions||0;
+            const monthIdx=parseInt(document.getElementById('selectedMonth').value)-1;
+            const prev=monthlyData.data2024[monthIdx]||0;
+            document.getElementById('monthlyTotal').textContent=formatCurrency(total);
+            document.getElementById('monthlyGrowth').textContent=(total>=prev?'+':'')+formatCurrency(total-prev);
+            document.getElementById('monthlyTrans').textContent=(trans||0).toLocaleString()+'건';
+            document.getElementById('monthlyAvg').textContent=trans>0?formatCurrency(Math.round(total/trans)):'₩0';
+            // Japan stats
+            document.getElementById('japanRevenue').textContent=formatCurrency(japan);
+            document.getElementById('japanVisitors').textContent=(jVis||0)+'명';
+            document.getElementById('japanAvg').textContent=jVis>0?formatCurrency(Math.round(japan/jVis)):'₩0';
+            document.getElementById('japanRatio').textContent=total>0?((japan/total)*100).toFixed(1)+'%':'0%';
+            // Japan incentive table
+            const japanItems=incentiveItems.filter(i=>i.type==='japan_visit'||i.type==='japan_revenue');
+            const japanEmps=new Set();
+            japanItems.forEach(i=>(i.employees||[]).forEach(e=>japanEmps.add(e)));
+            const tbody=document.getElementById('japanIncentiveTable');
+            if(japanEmps.size===0){tbody.innerHTML='<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">대상자가 없습니다.</td></tr>';}
+            else{
+                tbody.innerHTML=[...japanEmps].map(empId=>{
+                    const emp=employees.find(e=>e.id===empId);
+                    const items=japanItems.filter(i=>(i.employees||[]).includes(empId)).map(i=>i.name).join(', ');
+                    const inc=calcEmployeeIncentive(empId);
+                    return `<tr><td><strong>${emp?.name||empId}</strong></td><td>${items}</td><td class="text-success"><strong>${formatCurrency(inc.total)}</strong></td></tr>`;
+                }).join('');
+            }
+        }
+
+        function renderEmployees(){
+            const active=employees.filter(e=>e.isActive!==false),inactive=employees.filter(e=>e.isActive===false);
+            document.getElementById('totalEmployees').textContent=employees.length;document.getElementById('activeEmployees').textContent=active.length;document.getElementById('inactiveEmployees').textContent=inactive.length;
+            const tbody=document.getElementById('employeeTableBody');
+            if(employees.length===0){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted)">직원이 없습니다.</td></tr>';return;}
+            tbody.innerHTML=employees.map(e=>{
+                const ten=calcTenure(e.joinDate),age=calcAge(e.birthDate);
+                const pwStatus=e.password?'<span class="badge badge-success">설정됨</span>':'<span class="badge badge-warning">미설정</span>';
+                return `<tr><td><span class="badge badge-info">${e.id}</span></td><td><strong>${e.name}</strong></td><td>${age}</td><td>${e.role||'-'}</td><td>${e.joinDate||'-'}</td><td><span class="badge ${ten.years>=3?'badge-success':ten.years>=1?'badge-info':'badge-warning'}">${ten.label}</span></td><td>${e.isActive!==false?'<span class="badge badge-success">재직</span>':'<span class="badge badge-danger">퇴사</span>'}</td><td>${pwStatus}</td><td><div class="btn-group"><button class="btn btn-secondary btn-sm" onclick="editEmployee('${e.id}')">수정</button><button class="btn btn-warning btn-sm" onclick="resetPassword('${e.id}')">비번초기화</button></div></td></tr>`;
+            }).join('');
+        }
+
+        function renderAttendance(){
+            const today=new Date().toISOString().split('T')[0];let todayPresent=0;
+            const active=employees.filter(e=>e.isActive!==false);
+            active.forEach(e=>{const d=attendanceData[e.id];if(d&&d.records.find(r=>r.date===today)?.checkIn)todayPresent++;});
+            const[y,m]=getYM().split('-');
+            document.getElementById('workDays').textContent=calcWorkDays(parseInt(y),parseInt(m))+'일';document.getElementById('todayPresent').textContent=todayPresent+'명';
+            document.getElementById('attendanceTableBody').innerHTML=active.map(e=>{
+                const d=attendanceData[e.id]||{records:[],summary:{workDays:0,late:0,afterWorkOT:0}},tr=d.records.find(r=>r.date===today)||{};
+                const lunchOT=lunchOTAllData[e.id]?.total||0;const totalOT=d.summary.afterWorkOT+lunchOT;
+                return `<tr><td><strong>${e.name}</strong></td><td><span class="badge badge-info">${e.id}</span></td><td>${tr.checkIn||'-'}</td><td>${tr.checkOut||'-'}</td><td>${d.summary.workDays}일</td><td class="${d.summary.late>0?'text-danger':''}">${d.summary.late}회</td><td class="text-success">${(totalOT/60).toFixed(1)}H</td></tr>`;
+            }).join('');
+        }
+
+        function renderLeaves(){
+            const pending=leaveRequests.filter(l=>l.status==='pending').length,approved=leaveRequests.filter(l=>l.status==='approved').length;
+            document.getElementById('pendingLeaves').textContent=pending;document.getElementById('approvedLeaves').textContent=approved;
+            const tbody=document.getElementById('leaveTableBody');
+            if(leaveRequests.length===0){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">휴가 신청이 없습니다.</td></tr>';return;}
+            tbody.innerHTML=leaveRequests.slice(0,20).map(l=>{
+                const emp=employees.find(e=>e.id===l.employeeId),sb={pending:'badge-warning',approved:'badge-success',rejected:'badge-danger'}[l.status]||'',st={pending:'대기',approved:'승인',rejected:'반려'}[l.status]||l.status;
+                return `<tr><td>${l.createdAt?.toDate?.()?.toLocaleDateString()||'-'}</td><td>${emp?.name||l.employeeId}</td><td>${l.type==='annual'?'연차':l.type==='half'?'반차':'오프'}</td><td>${l.startDate}~${l.endDate}</td><td>${l.reason||'-'}</td><td><span class="badge ${sb}">${st}</span></td><td>${l.status==='pending'?`<div class="btn-group"><button class="btn btn-success btn-sm" onclick="approveLeave('${l.id}')">승인</button><button class="btn btn-danger btn-sm" onclick="rejectLeave('${l.id}')">반려</button></div>`:'-'}</td></tr>`;
+            }).join('');
+        }
+
+        function renderOvertime(){
+            let totalMin=0,totalNet=0;const active=employees.filter(e=>e.isActive!==false);
+            active.forEach(e=>{const d=attendanceData[e.id]||{summary:{afterWorkOT:0}};const lunchOT=lunchOTAllData[e.id]?.total||0;const total=d.summary.afterWorkOT+lunchOT;totalMin+=total;totalNet+=(total/60)*e.hourlyWage*1.5*0.967;});
+            document.getElementById('totalOT').textContent=(totalMin/60).toFixed(1)+'H';document.getElementById('totalOTNet').textContent=formatCurrency(Math.round(totalNet));
+            document.getElementById('overtimeTableBody').innerHTML=active.map(e=>{
+                const d=attendanceData[e.id]||{summary:{afterWorkOT:0}};const lunchOT=lunchOTAllData[e.id]?.total||0;
+                const totalOT=d.summary.afterWorkOT+lunchOT;const n=(totalOT/60)*e.hourlyWage*1.5*0.967;
+                return `<tr><td><strong>${e.name}</strong></td><td>${formatCurrency(e.hourlyWage)}</td><td>${(d.summary.afterWorkOT/60).toFixed(1)}H</td><td>${(lunchOT/60).toFixed(1)}H</td><td class="text-warning"><strong>${(totalOT/60).toFixed(1)}H</strong></td><td class="text-success"><strong>${formatCurrency(Math.round(n))}</strong></td></tr>`;
+            }).join('');
+            document.getElementById('sumOTHours').textContent=(totalMin/60).toFixed(1)+'H';document.getElementById('sumOTNet').textContent=formatCurrency(Math.round(totalNet));
+        }
+
+        function renderIncentive(){
+            document.getElementById('incentiveItemCount').textContent=incentiveItems.length+'개';
+            // Render incentive items list
+            const itemsList=document.getElementById('incentiveItemsList');
+            if(incentiveItems.length===0){itemsList.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text-muted)">인센티브 항목이 없습니다. 항목을 추가해주세요.</div>';}
+            else{
+                itemsList.innerHTML=incentiveItems.map(item=>{
+                    const typeLabels={per_case:'건당',revenue_percent:'매출비율',growth_percent:'성장분비율',japan_visit:'일본인방문',japan_revenue:'일본인매출'};
+                    const emps=(item.employees||[]).map(id=>{const e=employees.find(x=>x.id===id);return e?`<span class="emp-chip">${e.name}</span>`:'';}).join('');
+                    let valueDesc='';
+                    if(item.type==='per_case'||item.type==='japan_visit')valueDesc=formatCurrency(item.perCaseAmount)+'/건';
+                    else valueDesc=item.percent+'%'+(item.cap?' (상한 '+formatCurrency(item.cap)+')':'');
+                    return `<div class="incentive-item"><div class="incentive-item-header"><div><span class="incentive-item-name">${item.name}</span><span class="badge badge-info" style="margin-left:.5rem">${typeLabels[item.type]||item.type}</span><span style="margin-left:.5rem;color:var(--accent-purple)">${valueDesc}</span></div><div class="btn-group"><button class="btn btn-secondary btn-sm" onclick="editIncentiveItem('${item.id}')">수정</button><button class="btn btn-danger btn-sm" onclick="deleteIncentiveItem('${item.id}')">삭제</button></div></div><div class="incentive-item-employees">${emps||'<span class="text-muted">적용 직원 없음</span>'}</div></div>`;
+                }).join('');
+            }
+            // Render employee incentive table
+            let totalInc=0;const active=employees.filter(e=>e.isActive!==false);
+            const tbody=document.getElementById('incentiveTableBody');
+            tbody.innerHTML=active.map(e=>{
+                const inc=calcEmployeeIncentive(e.id);totalInc+=inc.total;
+                const itemNames=inc.details.map(d=>`<div><span class="badge badge-purple">${d.item}</span> <span class="text-muted">${d.desc}</span> = ${formatCurrency(d.amount)}</div>`).join('');
+                const recordsHtml=inc.details.filter(d=>d.item).map(d=>{
+                    const item=incentiveItems.find(i=>i.name===d.item);
+                    if(item?.type==='per_case'){
+                        const count=employeeIncentiveRecords[e.id]?.[item.id]?.count||0;
+                        return `${count}건`;
+                    }
+                    return d.desc;
+                }).join(', ');
+                return `<tr><td><strong>${e.name}</strong></td><td>${itemNames||'<span class="text-muted">-</span>'}</td><td class="text-muted">${recordsHtml||'-'}</td><td class="text-success"><strong>${formatCurrency(inc.total)}</strong></td></tr>`;
+            }).join('');
+            document.getElementById('totalIncentiveSum').textContent=formatCurrency(totalInc);
+        }
+
+        function renderSalary(){
+            let totalSum=0;const active=employees.filter(e=>e.isActive!==false);
+            document.getElementById('salaryTableBody').innerHTML=active.map(e=>{
+                const d=attendanceData[e.id]||{summary:{afterWorkOT:0}};const lunchOT=lunchOTAllData[e.id]?.total||0;const totalOT=d.summary.afterWorkOT+lunchOT;
+                const otPay=Math.round((totalOT/60)*e.hourlyWage*1.5*0.967);
+                const inc=calcEmployeeIncentive(e.id);
+                const total=(e.baseSalary||0)+(e.fixedOT||0)+otPay+inc.total;
+                totalSum+=total;const memo=salaryMemos[e.id]||'';
+                return `<tr><td><strong>${e.name}</strong></td><td>${formatCurrency(e.baseSalary)}</td><td>${formatCurrency(e.fixedOT)}</td><td class="text-success">${formatCurrency(otPay)}</td><td class="text-purple">${formatCurrency(inc.total)}</td><td><strong>${formatCurrency(total)}</strong></td><td><input type="text" class="memo-input" value="${memo}" placeholder="메모" onchange="saveMemo('${e.id}',this.value)"></td></tr>`;
+            }).join('');
+            document.getElementById('totalSalarySum').textContent=formatCurrency(totalSum);
+        }
+
+        function renderExpenses(){
+            let fixedTotal=0;
+            document.getElementById('fixedExpenseTable').innerHTML=fixedExpenses.length===0?'<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">고정비 항목이 없습니다.</td></tr>':
+                fixedExpenses.map(e=>{fixedTotal+=e.amount;return `<tr><td>${e.name}</td><td>${formatCurrency(e.amount)}</td><td>${e.cycle==='monthly'?'월간':'연간'}</td><td>${e.memo||'-'}</td><td><button class="btn btn-danger btn-sm" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`;}).join('');
+            document.getElementById('fixedExpenseTotal').textContent=formatCurrency(fixedTotal);
+            let varTotal=0;
+            document.getElementById('variableExpenseTable').innerHTML=variableExpenses.length===0?'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">유동비 항목이 없습니다.</td></tr>':
+                variableExpenses.map(e=>{varTotal+=e.amount;return `<tr><td>${e.date||'-'}</td><td>${e.name}</td><td>${e.category||'-'}</td><td>${formatCurrency(e.amount)}</td><td>${e.memo||'-'}</td><td><button class="btn btn-danger btn-sm" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`;}).join('');
+            document.getElementById('variableExpenseTotal').textContent=formatCurrency(varTotal);
+        }
+        // Charts
+        let charts={};
+        function initCharts(){
+            const opts={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#94a3b8'}}},scales:{x:{ticks:{color:'#64748b'},grid:{color:'rgba(45,55,72,.5)'}},y:{ticks:{color:'#64748b',callback:v=>(v/100000000).toFixed(1)+'억'},grid:{color:'rgba(45,55,72,.5)'}}}};
+            if(charts.monthly)charts.monthly.destroy();
+            charts.monthly=new Chart(document.getElementById('monthlyChart'),{type:'line',data:{labels:monthlyData.labels,datasets:[{label:'2025년',data:monthlyData.data2025,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.1)',fill:true,tension:.4},{label:'2024년',data:monthlyData.data2024,borderColor:'#64748b',borderDash:[5,5],tension:.4}]},options:opts});
+            if(charts.yearCompare)charts.yearCompare.destroy();
+            charts.yearCompare=new Chart(document.getElementById('yearCompareChart'),{type:'bar',data:{labels:monthlyData.labels,datasets:[{label:'2024년',data:monthlyData.data2024,backgroundColor:'rgba(100,116,139,.7)',borderRadius:4},{label:'2025년',data:monthlyData.data2025,backgroundColor:'rgba(59,130,246,.7)',borderRadius:4}]},options:opts});
+        }
+
+        // Employee CRUD
+        function openEmployeeModal(id=null){document.getElementById('employeeModal').classList.add('active');document.getElementById('employeeForm').reset();
+            if(id){const e=employees.find(x=>x.id===id);if(e){document.getElementById('employeeModalTitle').textContent='직원 수정';document.getElementById('empEditId').value=e.id;document.getElementById('empName').value=e.name;document.getElementById('empId').value=e.id;document.getElementById('empId').disabled=true;document.getElementById('empBirthDate').value=e.birthDate||'';document.getElementById('empRole').value=e.role;document.getElementById('empJoinDate').value=e.joinDate;document.getElementById('empBaseSalary').value=e.baseSalary;document.getElementById('empFixedOT').value=e.fixedOT||'';document.getElementById('empHourlyWage').value=e.hourlyWage||'';document.getElementById('empIsActive').value=e.isActive!==false?'true':'false';}}
+            else{document.getElementById('employeeModalTitle').textContent='직원 추가';document.getElementById('empId').disabled=false;}}
+        function closeEmployeeModal(){document.getElementById('employeeModal').classList.remove('active');}
+        function editEmployee(id){openEmployeeModal(id);}
+        document.getElementById('employeeForm').addEventListener('submit',async e=>{e.preventDefault();
+            const editId=document.getElementById('empEditId').value,data={name:document.getElementById('empName').value,birthDate:document.getElementById('empBirthDate').value||null,role:document.getElementById('empRole').value,joinDate:document.getElementById('empJoinDate').value,baseSalary:parseInt(document.getElementById('empBaseSalary').value)||0,fixedOT:parseInt(document.getElementById('empFixedOT').value)||0,hourlyWage:parseInt(document.getElementById('empHourlyWage').value)||0,isActive:document.getElementById('empIsActive').value==='true',updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+            try{if(editId){await db.collection('employees').doc(editId).update(data);alert('수정 완료');}else{const newId=document.getElementById('empId').value.toLowerCase();data.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('employees').doc(newId).set(data);alert('추가 완료');}closeEmployeeModal();await loadEmployees();renderAll();}catch(err){alert('저장 실패: '+err.message);}});
+        async function resetPassword(id){if(!confirm(`${id} 비밀번호를 초기화?\n임시: ${DEFAULT_PW}`))return;try{await db.collection('employees').doc(id).update({password:DEFAULT_PW});alert('초기화 완료');await loadEmployees();renderEmployees();}catch(err){alert(err.message);}}
+
+        // Incentive Item CRUD
+        function toggleIncTypeFields(){
+            const type=document.getElementById('incItemType').value;
+            document.getElementById('incPerCaseFields').style.display=(type==='per_case'||type==='japan_visit')?'grid':'none';
+            document.getElementById('incPercentFields').style.display=(type==='revenue_percent'||type==='growth_percent'||type==='japan_revenue')?'grid':'none';
+        }
+        function openIncentiveItemModal(id=null){
+            document.getElementById('incentiveItemModal').classList.add('active');document.getElementById('incentiveItemForm').reset();
+            // Render employee checkboxes
+            const container=document.getElementById('incEmployeeCheckboxes');
+            const active=employees.filter(e=>e.isActive!==false);
+            container.innerHTML=active.map(e=>`<label style="display:flex;align-items:center;gap:.25rem;padding:.5rem;background:var(--bg-card);border-radius:8px;cursor:pointer"><input type="checkbox" value="${e.id}" class="inc-emp-check"> ${e.name}</label>`).join('');
+            if(id){
+                const item=incentiveItems.find(x=>x.id===id);
+                if(item){
+                    document.getElementById('incentiveItemModalTitle').textContent='인센티브 항목 수정';
+                    document.getElementById('incItemEditId').value=item.id;
+                    document.getElementById('incItemName').value=item.name;
+                    document.getElementById('incItemType').value=item.type;
+                    toggleIncTypeFields();
+                    if(item.perCaseAmount)document.getElementById('incPerCaseAmount').value=item.perCaseAmount;
+                    if(item.percent)document.getElementById('incPercent').value=item.percent;
+                    if(item.cap)document.getElementById('incCap').value=item.cap;
+                    (item.employees||[]).forEach(empId=>{const cb=container.querySelector(`input[value="${empId}"]`);if(cb)cb.checked=true;});
+                }
+            }else{document.getElementById('incentiveItemModalTitle').textContent='인센티브 항목 추가';toggleIncTypeFields();}
+        }
+        function closeIncentiveItemModal(){document.getElementById('incentiveItemModal').classList.remove('active');}
+        function editIncentiveItem(id){openIncentiveItemModal(id);}
+        document.getElementById('incentiveItemForm').addEventListener('submit',async e=>{e.preventDefault();
+            const editId=document.getElementById('incItemEditId').value;
+            const type=document.getElementById('incItemType').value;
+            const data={name:document.getElementById('incItemName').value,type,employees:[...document.querySelectorAll('.inc-emp-check:checked')].map(cb=>cb.value),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+            if(type==='per_case'||type==='japan_visit'){data.perCaseAmount=parseInt(document.getElementById('incPerCaseAmount').value)||0;}
+            if(type==='revenue_percent'||type==='growth_percent'||type==='japan_revenue'){data.percent=parseFloat(document.getElementById('incPercent').value)||0;data.cap=parseInt(document.getElementById('incCap').value)||null;}
+            try{
+                if(editId){await db.collection('incentiveItems').doc(editId).update(data);alert('수정 완료');}
+                else{data.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('incentiveItems').add(data);alert('추가 완료');}
+                closeIncentiveItemModal();await loadIncentiveItems();renderIncentive();
+            }catch(err){alert('저장 실패: '+err.message);}
+        });
+        async function deleteIncentiveItem(id){if(!confirm('삭제?'))return;try{await db.collection('incentiveItems').doc(id).delete();alert('삭제 완료');await loadIncentiveItems();renderIncentive();}catch(err){alert(err.message);}}
+
+        // Leave
+        async function approveLeave(id){if(!confirm('승인?'))return;try{await db.collection('leaveRequests').doc(id).update({status:'approved',approvedAt:firebase.firestore.FieldValue.serverTimestamp()});alert('승인');await loadLeaveRequests();renderLeaves();}catch(err){alert(err.message);}}
+        async function rejectLeave(id){const reason=prompt('반려 사유:');if(reason===null)return;try{await db.collection('leaveRequests').doc(id).update({status:'rejected',rejectReason:reason,rejectedAt:firebase.firestore.FieldValue.serverTimestamp()});alert('반려');await loadLeaveRequests();renderLeaves();}catch(err){alert(err.message);}}
+
+        // Revenue
+        async function saveRevenueData(){const ym=getYM(),total=parseNum(document.getElementById('inputTotalRevenue').value),japan=parseNum(document.getElementById('inputJapanRevenue').value),jVis=parseInt(document.getElementById('inputJapanVisitors').value)||0,trans=parseInt(document.getElementById('inputTransactions').value)||0;
+            try{await db.collection('revenue').doc(ym).set({total,japan,japanVisitors:jVis,transactions:trans,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});revenueData={total,japan,japanVisitors:jVis,transactions:trans};alert('저장 완료');renderAll();}catch(err){alert(err.message);}}
+        async function saveMemo(id,memo){const ym=getYM();salaryMemos[id]=memo;try{await db.collection('salaryMemos').doc(ym).set(salaryMemos,{merge:true});}catch(e){}}
+        function parseNum(s){return s?parseInt(s.replace(/,/g,''))||0:0;}
+
+        // Expense
+        function openExpenseModal(type){document.getElementById('expenseModal').classList.add('active');document.getElementById('expenseForm').reset();document.getElementById('expType').value=type;document.getElementById('expenseModalTitle').textContent=(type==='fixed'?'고정비':'유동비')+' 추가';document.getElementById('expFixedFields').style.display=type==='fixed'?'grid':'none';document.getElementById('expVariableFields').style.display=type==='variable'?'grid':'none';}
+        function closeExpenseModal(){document.getElementById('expenseModal').classList.remove('active');}
+        document.getElementById('expenseForm').addEventListener('submit',async e=>{e.preventDefault();const type=document.getElementById('expType').value,data={name:document.getElementById('expName').value,amount:parseInt(document.getElementById('expAmount').value)||0,memo:document.getElementById('expMemo').value,createdAt:firebase.firestore.FieldValue.serverTimestamp()};if(type==='fixed'){data.cycle=document.getElementById('expCycle').value;try{await db.collection('fixedExpenses').add(data);alert('저장');}catch(err){alert(err.message);}}else{data.date=document.getElementById('expDate').value;data.category=document.getElementById('expCategory').value;data.month=getYM();try{await db.collection('variableExpenses').add(data);alert('저장');}catch(err){alert(err.message);}}closeExpenseModal();await loadExpenses();renderExpenses();});
+        async function deleteExpense(type,id){if(!confirm('삭제?'))return;try{await db.collection(type==='fixed'?'fixedExpenses':'variableExpenses').doc(id).delete();await loadExpenses();renderExpenses();}catch(err){alert(err.message);}}
+
+        // File Upload
+        const uploadZone=document.getElementById('uploadZone');
+        uploadZone.addEventListener('click',()=>document.getElementById('fileInput').click());
+        uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('dragover');});
+        uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
+        uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover');if(e.dataTransfer.files.length>0)processFile(e.dataTransfer.files[0]);});
+        function handleFileUpload(e){if(e.target.files[0])processFile(e.target.files[0]);}
+        function processFile(file){
+            const reader=new FileReader();
+            reader.onload=function(e){
+                try{
+                    const data=new Uint8Array(e.target.result),wb=XLSX.read(data,{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]],json=XLSX.utils.sheet_to_json(sheet);
+                    let totalRev=0,japanRev=0,japanCount=0,year='',month='';
+                    json.forEach(row=>{
+                        if(row['금액'])totalRev+=parseInt(row['금액'])||0;
+                        if(row['국적']&&row['국적'].includes('일본')){japanRev+=parseInt(row['금액'])||0;japanCount++;}
+                        if(row['진료일']&&!year){const d=String(row['진료일']);if(d.length>=6){year=d.substring(0,4);month=d.substring(4,6);}}
+                    });
+                    const ym=year+'-'+month;
+                    db.collection('revenue').doc(ym).set({total:totalRev,japan:japanRev,japanVisitors:japanCount,transactions:json.length,uploadedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+                    alert(`업로드 완료!\n\n연월: ${ym}\n건수: ${json.length}건\n총매출: ${formatCurrency(totalRev)}\n일본인매출: ${formatCurrency(japanRev)}\n일본인수: ${japanCount}명`);
+                    if(ym===getYM()){loadRevenueData().then(()=>renderAll());}
+                }catch(err){alert('파일 처리 오류: '+err.message);}
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Init
+        loadAllData();
+    </script>
+</body>
+</html>
