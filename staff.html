@@ -81,24 +81,26 @@
     <div class="login-screen" id="loginScreen">
         <div class="login-logo">THE CLINIC</div>
         <div class="login-title">LUMI</div>
-        <div class="login-form">
-            <input type="text" class="login-input" id="loginId" placeholder="사번" autocapitalize="none">
+        <form class="login-form" onsubmit="handleLogin(); return false;" autocomplete="on">
+            <input type="text" class="login-input" id="loginId" placeholder="사번" autocapitalize="none" autocomplete="username">
             <div class="pw-wrapper">
-                <input type="password" class="login-input" id="loginPw" placeholder="비밀번호">
+                <input type="password" class="login-input" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
                 <button type="button" class="pw-toggle" onclick="togglePw('loginPw',this)">👁</button>
             </div>
             <div class="login-error" id="loginError"></div>
-            <button class="login-btn" onclick="handleLogin()">로그인</button>
-        </div>
+            <button type="submit" class="login-btn">로그인</button>
+        </form>
     </div>
     <div class="pw-modal" id="pwSetupModal">
         <div class="pw-modal-content">
             <div class="pw-modal-title">비밀번호 설정</div>
             <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:1rem;text-align:center">최초 로그인입니다. 새 비밀번호를 설정해주세요.</p>
-            <input type="password" class="login-input" id="newPw1" placeholder="새 비밀번호 (4자 이상)">
-            <input type="password" class="login-input" id="newPw2" placeholder="비밀번호 확인">
-            <div class="login-error" id="pwError"></div>
-            <button class="login-btn" onclick="setupPassword()">설정 완료</button>
+            <form onsubmit="setupPassword(); return false;" autocomplete="on">
+                <input type="password" class="login-input" id="newPw1" placeholder="새 비밀번호 (4자 이상)" autocomplete="new-password">
+                <input type="password" class="login-input" id="newPw2" placeholder="비밀번호 확인" autocomplete="new-password">
+                <div class="login-error" id="pwError"></div>
+                <button type="submit" class="login-btn">설정 완료</button>
+            </form>
         </div>
     </div>
     <div class="app-container" id="appContainer">
