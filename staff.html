@@ -3,91 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>루미클리닉</title>
+    <title>THE CLINIC LUMI</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="apple-touch-icon" href="/favicon.png">
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root{--bg-primary:#0a0f1c;--bg-secondary:#111827;--bg-card:#1a2235;--accent-blue:#3b82f6;--accent-green:#10b981;--accent-red:#ef4444;--accent-orange:#f97316;--accent-purple:#8b5cf6;--text-primary:#f8fafc;--text-secondary:#94a3b8;--text-muted:#64748b;--border-color:#2d3748}
+        :root{--bg-primary:#faf9f7;--bg-secondary:#ffffff;--bg-card:#ffffff;--accent-gold:#9a8b7a;--accent-dark:#2c2c2c;--accent-green:#5a7a5a;--accent-red:#a85a5a;--accent-blue:#5a6a7a;--text-primary:#2c2c2c;--text-secondary:#6b6b6b;--text-muted:#999999;--border-color:#e8e4df}
         *{margin:0;padding:0;box-sizing:border-box}html,body{height:100%;overflow:hidden}
         body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-primary);color:var(--text-primary)}
         .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:2rem;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:var(--bg-primary)}
         .login-screen.hidden{display:none}
-        .login-logo{font-size:3rem;margin-bottom:1rem}.login-title{font-size:1.5rem;font-weight:700;margin-bottom:.5rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-        .login-subtitle{color:var(--text-muted);margin-bottom:2rem;font-size:.9rem}.login-form{width:100%;max-width:320px}
-        .login-input{width:100%;padding:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;color:var(--text-primary);font-size:1rem;margin-bottom:1rem}
-        .login-input:focus{outline:none;border-color:var(--accent-blue)}.login-input::placeholder{color:var(--text-muted)}
-        .login-btn{width:100%;padding:1rem;background:var(--accent-blue);border:none;border-radius:12px;color:white;font-size:1rem;font-weight:600;cursor:pointer;margin-bottom:1rem}
+        .login-logo{font-family:'Cormorant Garamond',serif;letter-spacing:4px;color:var(--text-muted);font-size:.8rem;margin-bottom:.5rem}
+        .login-title{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:500;margin-bottom:2rem;color:var(--text-primary);letter-spacing:2px}
+        .login-form{width:100%;max-width:300px}
+        .login-input{width:100%;padding:1rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:0;color:var(--text-primary);font-size:1rem;margin-bottom:1rem}
+        .login-input:focus{outline:none;border-color:var(--accent-gold)}.login-input::placeholder{color:var(--text-muted)}
+        .pw-wrapper{position:relative}.pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;margin-top:-8px}
+        .login-btn{width:100%;padding:1rem;background:var(--accent-dark);border:none;color:white;font-size:.9rem;font-weight:500;cursor:pointer;letter-spacing:1px}
         .login-error{color:var(--accent-red);font-size:.85rem;text-align:center;margin-bottom:1rem}
-        .pw-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:2000;align-items:center;justify-content:center;padding:1rem}
-        .pw-modal.active{display:flex}.pw-modal-content{background:var(--bg-card);border-radius:16px;padding:2rem;width:100%;max-width:320px}
-        .pw-modal-title{font-size:1.1rem;font-weight:600;margin-bottom:1rem;text-align:center}
+        .pw-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:1rem}
+        .pw-modal.active{display:flex}.pw-modal-content{background:var(--bg-card);padding:2rem;width:100%;max-width:320px;border:1px solid var(--border-color)}
+        .pw-modal-title{font-size:1rem;font-weight:600;margin-bottom:1rem;text-align:center}
         .app-container{display:none;flex-direction:column;height:100vh;height:100dvh}.app-container.active{display:flex}
         .header{background:var(--bg-secondary);padding:1rem;padding-top:max(1rem,env(safe-area-inset-top));border-bottom:1px solid var(--border-color);flex-shrink:0}
-        .header-content{display:flex;justify-content:space-between;align-items:center}.header-title{font-size:1.1rem;font-weight:600}
-        .header-user{display:flex;align-items:center;gap:.5rem}.user-name{font-size:.9rem;font-weight:500}
-        .logout-btn{padding:.4rem .8rem;background:transparent;border:1px solid var(--border-color);border-radius:8px;color:var(--text-secondary);font-size:.75rem;cursor:pointer}
-        .content{flex:1;overflow-y:auto;padding:1rem;padding-bottom:calc(80px + env(safe-area-inset-bottom))}
-        .card{background:var(--bg-card);border-radius:16px;padding:1.25rem;margin-bottom:1rem;border:1px solid var(--border-color)}
-        .card-title{font-size:.9rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+        .header-content{display:flex;justify-content:space-between;align-items:center}
+        .header-logo{display:flex;flex-direction:column}.header-logo-sub{font-family:'Cormorant Garamond',serif;font-size:.6rem;letter-spacing:2px;color:var(--text-muted)}.header-logo-text{font-family:'Cormorant Garamond',serif;font-size:1.1rem;letter-spacing:1px}
+        .header-user{display:flex;align-items:center;gap:.5rem}.user-name{font-size:.85rem;font-weight:500}
+        .logout-btn{padding:.4rem .8rem;background:transparent;border:1px solid var(--border-color);color:var(--text-secondary);font-size:.7rem;cursor:pointer;letter-spacing:.5px}
+        .content{flex:1;overflow-y:auto;padding:1rem;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+        .card{background:var(--bg-card);padding:1.25rem;margin-bottom:1rem;border:1px solid var(--border-color)}
+        .card-title{font-size:.85rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;letter-spacing:.5px}
         .info-row{display:flex;justify-content:space-between;padding:.75rem 0;border-bottom:1px solid var(--border-color)}
-        .info-row:last-child{border-bottom:none}.info-label{color:var(--text-secondary);font-size:.85rem}.info-value{font-weight:500;font-size:.9rem}
+        .info-row:last-child{border-bottom:none}.info-label{color:var(--text-secondary);font-size:.8rem}.info-value{font-weight:500;font-size:.85rem}
         .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1rem}
-        .stat-card{background:var(--bg-secondary);border-radius:12px;padding:1rem;text-align:center}
-        .stat-value{font-size:1.4rem;font-weight:700;margin-bottom:.25rem}.stat-label{font-size:.75rem;color:var(--text-secondary)}
-        .stat-card.blue .stat-value{color:var(--accent-blue)}.stat-card.green .stat-value{color:var(--accent-green)}
-        .stat-card.orange .stat-value{color:var(--accent-orange)}.stat-card.purple .stat-value{color:var(--accent-purple)}
-        .ot-input-section{background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:1rem}
-        .ot-input-title{font-size:.85rem;font-weight:500;margin-bottom:.75rem;color:var(--text-secondary)}
+        .stat-card{background:var(--bg-secondary);padding:1rem;text-align:center;border:1px solid var(--border-color)}
+        .stat-value{font-size:1.3rem;font-weight:600;margin-bottom:.25rem}.stat-label{font-size:.7rem;color:var(--text-secondary);letter-spacing:.5px}
+        .stat-card.gold .stat-value{color:var(--accent-gold)}.stat-card.green .stat-value{color:var(--accent-green)}
+        .stat-card.orange .stat-value{color:#c4956a}.stat-card.purple .stat-value{color:#7a6a8a}
+        .ot-input-section{background:var(--bg-secondary);padding:1rem;margin-bottom:1rem;border:1px solid var(--border-color)}
+        .ot-input-title{font-size:.8rem;font-weight:500;margin-bottom:.75rem;color:var(--text-secondary)}
         .ot-input-row{display:flex;align-items:center;gap:1rem}
-        .ot-input{flex:1;padding:.75rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:1rem;text-align:center}
-        .ot-save-btn{padding:.75rem 1.5rem;background:var(--accent-green);border:none;border-radius:8px;color:white;font-weight:500;cursor:pointer}
-        .leave-balance{display:flex;justify-content:space-around;background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:1rem}
-        .leave-item{text-align:center}.leave-num{font-size:1.5rem;font-weight:700;color:var(--accent-blue)}.leave-label{font-size:.75rem;color:var(--text-secondary)}
-        .leave-btn{width:100%;padding:1rem;background:var(--accent-blue);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;margin-bottom:1rem}
+        .ot-input{flex:1;padding:.75rem;background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary);font-size:1rem;text-align:center}
+        .ot-save-btn{padding:.75rem 1.5rem;background:var(--accent-dark);border:none;color:white;font-weight:500;cursor:pointer}
+        .leave-balance{display:flex;justify-content:space-around;background:var(--bg-secondary);padding:1rem;margin-bottom:1rem;border:1px solid var(--border-color)}
+        .leave-item{text-align:center}.leave-num{font-size:1.4rem;font-weight:600;color:var(--accent-gold)}.leave-label{font-size:.7rem;color:var(--text-secondary)}
+        .action-btn{width:100%;padding:1rem;background:var(--accent-dark);border:none;color:white;font-weight:500;cursor:pointer;margin-bottom:1rem;letter-spacing:.5px}
+        .action-btn.secondary{background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color)}
+        .action-btn.gold{background:var(--accent-gold)}
         .leave-list{max-height:300px;overflow-y:auto}
-        .leave-item-card{background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:.75rem}
-        .leave-date{font-weight:500;margin-bottom:.25rem}.leave-type{font-size:.8rem;color:var(--text-muted)}
-        .leave-status{display:inline-block;padding:.25rem .75rem;border-radius:20px;font-size:.75rem;font-weight:500;margin-top:.5rem}
-        .leave-status.pending{background:rgba(249,115,22,.2);color:var(--accent-orange)}
-        .leave-status.approved{background:rgba(16,185,129,.2);color:var(--accent-green)}
+        .leave-item-card{background:var(--bg-secondary);padding:1rem;margin-bottom:.75rem;border:1px solid var(--border-color)}
+        .leave-date{font-weight:500;margin-bottom:.25rem;font-size:.9rem}.leave-type{font-size:.75rem;color:var(--text-muted)}
+        .leave-status{display:inline-block;padding:.25rem .75rem;font-size:.7rem;font-weight:500;margin-top:.5rem}
+        .leave-status.pending{background:rgba(196,149,106,.15);color:#a07a4a}
+        .leave-status.approved{background:rgba(90,122,90,.15);color:var(--accent-green)}
         .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg-secondary);border-top:1px solid var(--border-color);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:100}
-        .nav-item{flex:1;padding:1rem .5rem;display:flex;flex-direction:column;align-items:center;gap:.25rem;cursor:pointer;color:var(--text-muted);border:none;background:none}
-        .nav-item.active{color:var(--accent-blue)}.nav-icon{font-size:1.25rem}.nav-label{font-size:.7rem;font-weight:500}
+        .nav-item{flex:1;padding:.75rem .5rem;display:flex;flex-direction:column;align-items:center;gap:.25rem;cursor:pointer;color:var(--text-muted);border:none;background:none}
+        .nav-item.active{color:var(--accent-gold)}.nav-icon{font-size:1.1rem}.nav-label{font-size:.65rem;font-weight:500;letter-spacing:.5px}
         .tab-content{display:none}.tab-content.active{display:block}
-        .modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:200;align-items:flex-end;justify-content:center}
+        .modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;justify-content:center}
         .modal.active{display:flex}
-        .modal-content{background:var(--bg-card);border-radius:24px 24px 0 0;padding:2rem;padding-bottom:calc(2rem + env(safe-area-inset-bottom));width:100%;max-height:80vh;overflow-y:auto}
-        .modal-title{font-size:1.1rem;font-weight:600;margin-bottom:1.5rem;text-align:center}
-        .modal-input,.modal-select{width:100%;padding:1rem;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:12px;color:var(--text-primary);font-size:1rem;margin-bottom:1rem}
-        .modal-btn{width:100%;padding:1rem;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;margin-bottom:.75rem}
-        .modal-btn.primary{background:var(--accent-blue);color:white}.modal-btn.secondary{background:var(--bg-secondary);color:var(--text-secondary)}
-        .badge{display:inline-flex;padding:.25rem .75rem;border-radius:20px;font-size:.75rem;font-weight:500}
-        .badge-purple{background:rgba(139,92,246,.2);color:var(--accent-purple)}.badge-green{background:rgba(16,185,129,.2);color:var(--accent-green)}.badge-orange{background:rgba(249,115,22,.2);color:var(--accent-orange)}
-        .incentive-record{background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center}
-        .incentive-record-info{flex:1}.incentive-record-name{font-weight:500;font-size:.9rem}.incentive-record-detail{font-size:.8rem;color:var(--text-muted)}
-        .incentive-record-delete{padding:.5rem;background:transparent;border:1px solid var(--accent-red);border-radius:8px;color:var(--accent-red);font-size:.75rem;cursor:pointer}
+        .modal-content{background:var(--bg-card);padding:2rem;padding-bottom:calc(2rem + env(safe-area-inset-bottom));width:100%;max-height:80vh;overflow-y:auto;border-top:1px solid var(--border-color)}
+        .modal-title{font-size:1rem;font-weight:600;margin-bottom:1.5rem;text-align:center;letter-spacing:.5px}
+        .modal-input,.modal-select{width:100%;padding:1rem;background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);font-size:1rem;margin-bottom:1rem}
+        .modal-btn{width:100%;padding:1rem;border:none;font-size:.9rem;font-weight:500;cursor:pointer;margin-bottom:.75rem;letter-spacing:.5px}
+        .modal-btn.primary{background:var(--accent-dark);color:white}.modal-btn.secondary{background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-color)}
+        .badge{display:inline-flex;padding:.25rem .75rem;font-size:.7rem;font-weight:500}
+        .badge-purple{background:rgba(122,106,138,.15);color:#7a6a8a}.badge-green{background:rgba(90,122,90,.15);color:var(--accent-green)}.badge-orange{background:rgba(196,149,106,.15);color:#a07a4a}
+        .incentive-record{background:var(--bg-secondary);padding:1rem;margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border-color)}
+        .incentive-record-info{flex:1}.incentive-record-name{font-weight:500;font-size:.85rem}.incentive-record-detail{font-size:.75rem;color:var(--text-muted)}
+        .incentive-record-delete{padding:.5rem;background:transparent;border:1px solid var(--accent-red);color:var(--accent-red);font-size:.7rem;cursor:pointer}
         .no-incentive{text-align:center;padding:2rem;color:var(--text-muted)}
     </style>
 </head>
 <body>
     <div class="login-screen" id="loginScreen">
-        <div class="login-logo">💎</div>
-        <div class="login-title">LUMI CLINIC</div>
-        <div class="login-subtitle">직원 전용</div>
+        <div class="login-logo">THE CLINIC</div>
+        <div class="login-title">LUMI</div>
         <div class="login-form">
             <input type="text" class="login-input" id="loginId" placeholder="사번" autocapitalize="none">
-            <input type="password" class="login-input" id="loginPw" placeholder="비밀번호">
+            <div class="pw-wrapper">
+                <input type="password" class="login-input" id="loginPw" placeholder="비밀번호">
+                <button type="button" class="pw-toggle" onclick="togglePw('loginPw',this)">👁</button>
+            </div>
             <div class="login-error" id="loginError"></div>
             <button class="login-btn" onclick="handleLogin()">로그인</button>
         </div>
     </div>
     <div class="pw-modal" id="pwSetupModal">
         <div class="pw-modal-content">
-            <div class="pw-modal-title">🔐 비밀번호 설정</div>
-            <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem;text-align:center">최초 로그인입니다. 새 비밀번호를 설정해주세요.</p>
+            <div class="pw-modal-title">비밀번호 설정</div>
+            <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:1rem;text-align:center">최초 로그인입니다. 새 비밀번호를 설정해주세요.</p>
             <input type="password" class="login-input" id="newPw1" placeholder="새 비밀번호 (4자 이상)">
             <input type="password" class="login-input" id="newPw2" placeholder="비밀번호 확인">
             <div class="login-error" id="pwError"></div>
@@ -95,17 +102,17 @@
         </div>
     </div>
     <div class="app-container" id="appContainer">
-        <header class="header"><div class="header-content"><div class="header-title">💎 루미클리닉</div><div class="header-user"><span class="user-name" id="userName">-</span><button class="logout-btn" onclick="logout()">로그아웃</button></div></div></header>
+        <header class="header"><div class="header-content"><div class="header-logo"><div class="header-logo-sub">THE CLINIC</div><div class="header-logo-text">LUMI</div></div><div class="header-user"><span class="user-name" id="userName">-</span><button class="logout-btn" onclick="logout()">LOGOUT</button></div></div></header>
         <div class="content">
             <div class="tab-content active" id="tab-info">
-                <div class="card"><div class="card-title">👤 내 정보</div>
+                <div class="card"><div class="card-title">내 정보</div>
                     <div class="info-row"><span class="info-label">이름</span><span class="info-value" id="infoName">-</span></div>
                     <div class="info-row"><span class="info-label">사번</span><span class="info-value" id="infoId">-</span></div>
                     <div class="info-row"><span class="info-label">직급</span><span class="info-value" id="infoRole">-</span></div>
                     <div class="info-row"><span class="info-label">입사일</span><span class="info-value" id="infoJoinDate">-</span></div>
                     <div class="info-row"><span class="info-label">근속기간</span><span class="info-value" id="infoTenure">-</span></div>
                 </div>
-                <div class="card"><div class="card-title">💰 급여 정보</div>
+                <div class="card"><div class="card-title">급여 정보</div>
                     <div class="info-row"><span class="info-label">기본급</span><span class="info-value" id="infoBaseSalary">-</span></div>
                     <div class="info-row"><span class="info-label">고정OT수당</span><span class="info-value" id="infoFixedOT">-</span></div>
                     <div class="info-row"><span class="info-label">시급</span><span class="info-value" id="infoHourlyWage">-</span></div>
@@ -113,25 +120,25 @@
             </div>
             <div class="tab-content" id="tab-attendance">
                 <div class="stats-grid">
-                    <div class="stat-card blue"><div class="stat-value" id="attWorkDays">0</div><div class="stat-label">이번달 출근</div></div>
+                    <div class="stat-card gold"><div class="stat-value" id="attWorkDays">0</div><div class="stat-label">이번달 출근</div></div>
                     <div class="stat-card orange"><div class="stat-value" id="attLate">0</div><div class="stat-label">지각</div></div>
                 </div>
-                <div class="card"><div class="card-title">📅 오늘 근무</div>
+                <div class="card"><div class="card-title">오늘 근무</div>
                     <div class="info-row"><span class="info-label">출근</span><span class="info-value" id="todayCheckIn">-</span></div>
                     <div class="info-row"><span class="info-label">퇴근</span><span class="info-value" id="todayCheckOut">-</span></div>
                 </div>
-                <button class="leave-btn" id="checkInBtn" onclick="checkIn()">🟢 출근하기</button>
-                <button class="leave-btn" id="checkOutBtn" onclick="checkOut()" style="background:var(--accent-orange);display:none">🔴 퇴근하기</button>
+                <button class="action-btn" id="checkInBtn" onclick="checkIn()">출근하기</button>
+                <button class="action-btn gold" id="checkOutBtn" onclick="checkOut()" style="display:none">퇴근하기</button>
             </div>
             <div class="tab-content" id="tab-overtime">
                 <div class="stats-grid">
-                    <div class="stat-card blue"><div class="stat-value" id="otAfterWork">0H</div><div class="stat-label">퇴근후 OT</div></div>
+                    <div class="stat-card gold"><div class="stat-value" id="otAfterWork">0H</div><div class="stat-label">퇴근후 OT</div></div>
                     <div class="stat-card purple"><div class="stat-value" id="otLunch">0H</div><div class="stat-label">점심 OT</div></div>
                     <div class="stat-card green"><div class="stat-value" id="otTotal">0H</div><div class="stat-label">총 OT</div></div>
                     <div class="stat-card orange"><div class="stat-value" id="otPay">₩0</div><div class="stat-label">예상 OT수당</div></div>
                 </div>
                 <div class="ot-input-section">
-                    <div class="ot-input-title">📝 오늘 점심 오버타임 입력</div>
+                    <div class="ot-input-title">오늘 점심 오버타임 입력</div>
                     <div class="ot-input-row"><input type="number" class="ot-input" id="lunchOTInput" placeholder="0" min="0" step="5"><span style="color:var(--text-secondary)">분</span><button class="ot-save-btn" onclick="saveLunchOT()">저장</button></div>
                 </div>
             </div>
@@ -140,9 +147,9 @@
                     <div class="stat-card green"><div class="stat-value" id="incTotal">₩0</div><div class="stat-label">이번달 인센티브</div></div>
                     <div class="stat-card purple"><div class="stat-value" id="incItemCount">0개</div><div class="stat-label">적용 항목</div></div>
                 </div>
-                <div class="card"><div class="card-title">🎯 나의 인센티브 항목</div><div id="myIncentiveItems"><div class="no-incentive">적용된 인센티브 항목이 없습니다.</div></div></div>
-                <button class="leave-btn" onclick="openIncentiveModal()" style="background:var(--accent-purple)">📝 실적 입력</button>
-                <div class="card"><div class="card-title">📋 이번달 입력 내역</div><div id="incRecordsList"><div class="no-incentive">입력된 실적이 없습니다.</div></div></div>
+                <div class="card"><div class="card-title">나의 인센티브 항목</div><div id="myIncentiveItems"><div class="no-incentive">적용된 인센티브 항목이 없습니다.</div></div></div>
+                <button class="action-btn gold" onclick="openIncentiveModal()">실적 입력</button>
+                <div class="card"><div class="card-title">이번달 입력 내역</div><div id="incRecordsList"><div class="no-incentive">입력된 실적이 없습니다.</div></div></div>
             </div>
             <div class="tab-content" id="tab-leave">
                 <div class="leave-balance">
@@ -150,21 +157,21 @@
                     <div class="leave-item"><div class="leave-num" id="leaveUsed">0</div><div class="leave-label">사용</div></div>
                     <div class="leave-item"><div class="leave-num" style="color:var(--accent-green)" id="leaveRemain">0</div><div class="leave-label">잔여</div></div>
                 </div>
-                <button class="leave-btn" onclick="openLeaveModal()">📝 휴가 신청</button>
-                <div class="card"><div class="card-title">📋 신청 내역</div><div class="leave-list" id="leaveList"><div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div></div></div>
+                <button class="action-btn" onclick="openLeaveModal()">휴가 신청</button>
+                <div class="card"><div class="card-title">신청 내역</div><div class="leave-list" id="leaveList"><div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div></div></div>
             </div>
         </div>
         <nav class="bottom-nav">
             <button class="nav-item active" data-tab="info"><span class="nav-icon">👤</span><span class="nav-label">내 정보</span></button>
             <button class="nav-item" data-tab="attendance"><span class="nav-icon">📅</span><span class="nav-label">출퇴근</span></button>
             <button class="nav-item" data-tab="overtime"><span class="nav-icon">⏰</span><span class="nav-label">OT</span></button>
-            <button class="nav-item" data-tab="incentive"><span class="nav-icon">🎯</span><span class="nav-label">인센티브</span></button>
+            <button class="nav-item" data-tab="incentive"><span class="nav-icon">💎</span><span class="nav-label">인센티브</span></button>
             <button class="nav-item" data-tab="leave"><span class="nav-icon">🏖️</span><span class="nav-label">휴가</span></button>
         </nav>
     </div>
     <div class="modal" id="incentiveModal">
         <div class="modal-content">
-            <div class="modal-title">📝 인센티브 실적 입력</div>
+            <div class="modal-title">인센티브 실적 입력</div>
             <select class="modal-select" id="incItemSelect"><option value="">항목 선택</option></select>
             <input type="text" class="modal-input" id="incClientName" placeholder="고객 이름">
             <input type="text" class="modal-input" id="incChartNo" placeholder="차트번호">
@@ -174,7 +181,7 @@
     </div>
     <div class="modal" id="leaveModal">
         <div class="modal-content">
-            <div class="modal-title">📝 휴가 신청</div>
+            <div class="modal-title">휴가 신청</div>
             <select class="modal-select" id="leaveType"><option value="annual">연차</option><option value="half">반차</option><option value="off">오프</option></select>
             <input type="date" class="modal-input" id="leaveStart" placeholder="시작일">
             <input type="date" class="modal-input" id="leaveEnd" placeholder="종료일">
@@ -192,19 +199,18 @@
         const overtimeRules={1:'18:30',2:'18:30',3:'18:00',4:'18:00',5:'18:30',6:'15:00'};
         const monthlyData2024=[173111326,156060457,198554450,207124800,193543660,179806116,187612314,157672141,206156505,211217542,243773264,215202565];
 
+        function togglePw(id,btn){const inp=document.getElementById(id);if(inp.type==='password'){inp.type='text';btn.textContent='🔒';}else{inp.type='password';btn.textContent='👁';}}
+
         async function handleLogin(){
             const inputId=document.getElementById('loginId').value.trim();
-            const id=inputId.toLowerCase(); // 항상 소문자로 변환
+            const id=inputId.toLowerCase();
             const pw=document.getElementById('loginPw').value;
             document.getElementById('loginError').textContent='';
             if(!id){document.getElementById('loginError').textContent='사번을 입력하세요';return;}
             if(!pw){document.getElementById('loginError').textContent='비밀번호를 입력하세요';return;}
             try{
                 const doc=await db.collection('employees').doc(id).get();
-                if(!doc.exists){
-                    document.getElementById('loginError').textContent='등록되지 않은 사번입니다 ('+id+')';
-                    return;
-                }
+                if(!doc.exists){document.getElementById('loginError').textContent='등록되지 않은 사번입니다 ('+id+')';return;}
                 const emp=doc.data();
                 if(!emp.password){currentUser={id,...emp};document.getElementById('pwSetupModal').classList.add('active');return;}
                 if(emp.password!==pw){document.getElementById('loginError').textContent='비밀번호가 올바르지 않습니다';return;}
@@ -246,14 +252,8 @@
         function calcAnnualLeave(jd){if(!jd)return 0;const j=new Date(jd),n=new Date(),months=(n.getFullYear()-j.getFullYear())*12+(n.getMonth()-j.getMonth());if(months<12)return Math.min(months,11);return Math.min(15+Math.floor((Math.floor(months/12)-1)/2),25);}
         function formatCurrency(n){return'₩'+new Intl.NumberFormat('ko-KR').format(n||0);}
 
-        function getMyStaffSales(){
-            if(!currentUser.matchName)return 0;
-            return salesDetailData.staffSales?.[currentUser.matchName]?.amount||0;
-        }
-        function getMyJapanSales(){
-            if(!currentUser.matchName)return 0;
-            return salesDetailData.japanStaffSales?.[currentUser.matchName]?.amount||0;
-        }
+        function getMyStaffSales(){if(!currentUser.matchName)return 0;return salesDetailData.staffSales?.[currentUser.matchName]?.amount||0;}
+        function getMyJapanSales(){if(!currentUser.matchName)return 0;return salesDetailData.japanStaffSales?.[currentUser.matchName]?.amount||0;}
 
         function calcMyIncentive(){
             let total=0;const details=[];
