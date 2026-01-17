@@ -187,25 +187,29 @@
         const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
         firebase.initializeApp(firebaseConfig);const db=firebase.firestore();
 
-        let currentUser=null,attendanceData={},leaveRequests=[],lunchOTRecords={},myIncentiveItems=[],incentiveRecords={},revenueData={};
+        let currentUser=null,attendanceData={},leaveRequests=[],lunchOTRecords={},myIncentiveItems=[],incentiveRecords={},revenueData={},salesDetailData={};
         const DEFAULT_PW='final12890-';
         const overtimeRules={1:'18:30',2:'18:30',3:'18:00',4:'18:00',5:'18:30',6:'15:00'};
         const monthlyData2024=[173111326,156060457,198554450,207124800,193543660,179806116,187612314,157672141,206156505,211217542,243773264,215202565];
 
         async function handleLogin(){
-            const id=document.getElementById('loginId').value.toLowerCase().trim();
+            const inputId=document.getElementById('loginId').value.trim();
+            const id=inputId.toLowerCase(); // 항상 소문자로 변환
             const pw=document.getElementById('loginPw').value;
             document.getElementById('loginError').textContent='';
             if(!id){document.getElementById('loginError').textContent='사번을 입력하세요';return;}
             if(!pw){document.getElementById('loginError').textContent='비밀번호를 입력하세요';return;}
             try{
                 const doc=await db.collection('employees').doc(id).get();
-                if(!doc.exists){document.getElementById('loginError').textContent='등록되지 않은 사번입니다';return;}
+                if(!doc.exists){
+                    document.getElementById('loginError').textContent='등록되지 않은 사번입니다 ('+id+')';
+                    return;
+                }
                 const emp=doc.data();
                 if(!emp.password){currentUser={id,...emp};document.getElementById('pwSetupModal').classList.add('active');return;}
                 if(emp.password!==pw){document.getElementById('loginError').textContent='비밀번호가 올바르지 않습니다';return;}
                 currentUser={id,...emp};localStorage.setItem('lumiUser',id);showApp();
-            }catch(e){document.getElementById('loginError').textContent='로그인 실패';}
+            }catch(e){document.getElementById('loginError').textContent='로그인 실패: '+e.message;}
         }
         async function setupPassword(){
             const pw1=document.getElementById('newPw1').value,pw2=document.getElementById('newPw2').value;
@@ -221,7 +225,7 @@
         function getYM(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
         function getToday(){return new Date().toISOString().split('T')[0];}
 
-        async function loadAllData(){await loadAttendance();await loadLeaveRequests();await loadLunchOTRecords();await loadMyIncentiveItems();await loadIncentiveRecords();await loadRevenueData();}
+        async function loadAllData(){await loadAttendance();await loadLeaveRequests();await loadLunchOTRecords();await loadMyIncentiveItems();await loadIncentiveRecords();await loadRevenueData();await loadSalesDetailData();}
         async function loadAttendance(){
             const ym=getYM();
             try{const snap=await db.collection('attendance').doc(currentUser.id).collection('records').where(firebase.firestore.FieldPath.documentId(),'>=',ym+'-01').where(firebase.firestore.FieldPath.documentId(),'<=',ym+'-31').get();
@@ -234,12 +238,22 @@
         async function loadMyIncentiveItems(){try{const snap=await db.collection('incentiveItems').where('employees','array-contains',currentUser.id).get();myIncentiveItems=[];snap.forEach(d=>myIncentiveItems.push({id:d.id,...d.data()}));}catch(e){}}
         async function loadIncentiveRecords(){const ym=getYM();try{const doc=await db.collection('incentiveRecords').doc(currentUser.id).collection('monthly').doc(ym).get();incentiveRecords=doc.exists?doc.data():{};}catch(e){incentiveRecords={};}}
         async function loadRevenueData(){const ym=getYM();try{const doc=await db.collection('revenue').doc(ym).get();revenueData=doc.exists?doc.data():{total:0,japan:0,japanVisitors:0};}catch(e){revenueData={total:0,japan:0,japanVisitors:0};}}
+        async function loadSalesDetailData(){const ym=getYM();try{const doc=await db.collection('salesDetail').doc(ym).get();salesDetailData=doc.exists?doc.data():{staffSales:{},japanStaffSales:{}};}catch(e){salesDetailData={staffSales:{},japanStaffSales:{}};}}
 
         function timeToMin(t){if(!t)return 0;const[h,m]=t.split(':').map(Number);return h*60+m;}
         function calcAfterWorkOT(checkOut,dow){if(!checkOut||dow===0)return 0;const rule=overtimeRules[dow];if(!rule)return 0;return Math.max(0,timeToMin(checkOut)-timeToMin(rule));}
         function calcTenure(jd){if(!jd)return'-';const j=new Date(jd),n=new Date();let y=n.getFullYear()-j.getFullYear(),m=n.getMonth()-j.getMonth();if(m<0){y--;m+=12;}if(y>0)return m>0?y+'년 '+m+'개월':y+'년차';if(m>0)return m+'개월';return'신입';}
         function calcAnnualLeave(jd){if(!jd)return 0;const j=new Date(jd),n=new Date(),months=(n.getFullYear()-j.getFullYear())*12+(n.getMonth()-j.getMonth());if(months<12)return Math.min(months,11);return Math.min(15+Math.floor((Math.floor(months/12)-1)/2),25);}
         function formatCurrency(n){return'₩'+new Intl.NumberFormat('ko-KR').format(n||0);}
+
+        function getMyStaffSales(){
+            if(!currentUser.matchName)return 0;
+            return salesDetailData.staffSales?.[currentUser.matchName]?.amount||0;
+        }
+        function getMyJapanSales(){
+            if(!currentUser.matchName)return 0;
+            return salesDetailData.japanStaffSales?.[currentUser.matchName]?.amount||0;
+        }
 
         function calcMyIncentive(){
             let total=0;const details=[];
@@ -249,8 +263,9 @@
                     case 'per_case':const count=incentiveRecords[item.id]?.count||0;amount=count*(item.perCaseAmount||0);desc=`${count}건 × ${formatCurrency(item.perCaseAmount)}`;break;
                     case 'revenue_percent':amount=Math.round((revenueData.total||0)*(item.percent||0)/100);if(item.cap&&amount>item.cap)amount=item.cap;desc=`총매출 × ${item.percent}%`;break;
                     case 'growth_percent':const monthIdx=new Date().getMonth();const prev=monthlyData2024[monthIdx]||0;const growth=Math.max(0,(revenueData.total||0)-prev);amount=Math.round(growth*(item.percent||0)/100);if(item.cap&&amount>item.cap)amount=item.cap;desc=`성장분 × ${item.percent}%`;break;
+                    case 'staff_sales':const staffSales=getMyStaffSales();amount=Math.round(staffSales*(item.percent||0)/100);desc=`담당매출 ${formatCurrency(staffSales)} × ${item.percent}%`;break;
                     case 'japan_visit':amount=(revenueData.japanVisitors||0)*(item.perCaseAmount||0);desc=`${revenueData.japanVisitors||0}명 × ${formatCurrency(item.perCaseAmount)}`;break;
-                    case 'japan_revenue':amount=Math.round((revenueData.japan||0)*(item.percent||0)/100);desc=`일본인매출 × ${item.percent}%`;break;
+                    case 'japan_revenue':const japanSales=getMyJapanSales();amount=Math.round(japanSales*(item.percent||0)/100);desc=`일본인매출 ${formatCurrency(japanSales)} × ${item.percent}%`;break;
                 }
                 details.push({item:item.name,type:item.type,amount,desc,id:item.id});total+=amount;
             });
@@ -285,11 +300,11 @@
             const inc=calcMyIncentive();document.getElementById('incTotal').textContent=formatCurrency(inc.total);document.getElementById('incItemCount').textContent=myIncentiveItems.length+'개';
             const itemsDiv=document.getElementById('myIncentiveItems');
             if(myIncentiveItems.length===0){itemsDiv.innerHTML='<div class="no-incentive">적용된 인센티브 항목이 없습니다.</div>';}
-            else{const typeLabels={per_case:'건당',revenue_percent:'매출비율',growth_percent:'성장분',japan_visit:'일본인방문',japan_revenue:'일본인매출'};itemsDiv.innerHTML=inc.details.map(d=>`<div class="incentive-record"><div class="incentive-record-info"><div class="incentive-record-name">${d.item} <span class="badge badge-purple">${typeLabels[d.type]||d.type}</span></div><div class="incentive-record-detail">${d.desc} = <strong style="color:var(--accent-green)">${formatCurrency(d.amount)}</strong></div></div></div>`).join('');}
+            else{const typeLabels={per_case:'건당',revenue_percent:'매출비율',growth_percent:'성장분',staff_sales:'담당매출',japan_visit:'일본인방문',japan_revenue:'일본인매출'};itemsDiv.innerHTML=inc.details.map(d=>`<div class="incentive-record"><div class="incentive-record-info"><div class="incentive-record-name">${d.item} <span class="badge badge-purple">${typeLabels[d.type]||d.type}</span></div><div class="incentive-record-detail">${d.desc} = <strong style="color:var(--accent-green)">${formatCurrency(d.amount)}</strong></div></div></div>`).join('');}
             const recordsDiv=document.getElementById('incRecordsList');const perCaseItems=myIncentiveItems.filter(i=>i.type==='per_case');let allRecords=[];
-            perCaseItems.forEach(item=>{const recs=incentiveRecords[item.id]?.records||[];recs.forEach(r=>allRecords.push({...r,itemName:item.name,itemId:item.id}));});
+            perCaseItems.forEach(item=>{const recs=incentiveRecords[item.id]?.records||[];recs.forEach((r,idx)=>allRecords.push({...r,itemName:item.name,itemId:item.id,idx}));});
             if(allRecords.length===0){recordsDiv.innerHTML='<div class="no-incentive">입력된 실적이 없습니다.</div>';}
-            else{recordsDiv.innerHTML=allRecords.map((r,idx)=>`<div class="incentive-record"><div class="incentive-record-info"><div class="incentive-record-name">${r.itemName}</div><div class="incentive-record-detail">${r.clientName} (${r.chartNo}) - ${r.date}</div></div><button class="incentive-record-delete" onclick="deleteIncentiveRecord('${r.itemId}',${idx})">삭제</button></div>`).join('');}
+            else{recordsDiv.innerHTML=allRecords.map(r=>`<div class="incentive-record"><div class="incentive-record-info"><div class="incentive-record-name">${r.itemName}</div><div class="incentive-record-detail">${r.clientName} (${r.chartNo}) - ${r.date}</div></div><button class="incentive-record-delete" onclick="deleteIncentiveRecord('${r.itemId}',${r.idx})">삭제</button></div>`).join('');}
             const select=document.getElementById('incItemSelect');select.innerHTML='<option value="">항목 선택</option>'+perCaseItems.map(i=>`<option value="${i.id}">${i.name} (${formatCurrency(i.perCaseAmount)}/건)</option>`).join('');
         }
         function renderLeave(){
@@ -315,7 +330,7 @@
         }
         async function deleteIncentiveRecord(itemId,idx){
             if(!confirm('삭제?'))return;const ym=getYM();const current=incentiveRecords[itemId];
-            if(current&&current.records&&current.records[idx]){current.records.splice(idx,1);current.count=Math.max(0,(current.count||1)-1);incentiveRecords[itemId]=current;
+            if(current&&current.records&&current.records[idx]!==undefined){current.records.splice(idx,1);current.count=Math.max(0,(current.count||1)-1);incentiveRecords[itemId]=current;
                 try{await db.collection('incentiveRecords').doc(currentUser.id).collection('monthly').doc(ym).set(incentiveRecords);renderIncentive();}catch(e){alert('삭제 실패');}}
         }
 

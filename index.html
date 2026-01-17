@@ -14,8 +14,6 @@
     <style>
         :root{--bg-primary:#0a0f1c;--bg-secondary:#111827;--bg-card:#1a2235;--accent-blue:#3b82f6;--accent-green:#10b981;--accent-red:#ef4444;--accent-orange:#f97316;--accent-purple:#8b5cf6;--accent-pink:#ec4899;--accent-cyan:#06b6d4;--accent-yellow:#fbbf24;--text-primary:#f8fafc;--text-secondary:#94a3b8;--text-muted:#64748b;--border-color:#2d3748;--gradient-1:linear-gradient(135deg,#3b82f6,#8b5cf6)}
         *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh}
-        
-        /* 로그인 화면 */
         .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:2rem;position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:var(--bg-primary)}
         .login-screen.hidden{display:none}
         .login-logo{font-size:3rem;margin-bottom:1rem}.login-title{font-size:1.5rem;font-weight:700;margin-bottom:.5rem;background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
@@ -26,7 +24,6 @@
         .login-btn{width:100%;padding:1rem;background:var(--accent-blue);border:none;border-radius:12px;color:white;font-size:1rem;font-weight:600;cursor:pointer}
         .login-error{color:var(--accent-red);font-size:.85rem;text-align:center;margin-bottom:1rem}
         .login-notice{color:var(--accent-orange);font-size:.75rem;text-align:center;margin-top:1rem;padding:1rem;background:rgba(249,115,22,.1);border-radius:8px}
-        
         .header{background:rgba(10,15,28,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border-color);padding:1rem 2rem;position:sticky;top:0;z-index:100}
         .header-content{display:flex;justify-content:space-between;align-items:center;max-width:1800px;margin:0 auto}
         .logo{display:flex;align-items:center;gap:12px}.logo-icon{width:42px;height:42px;background:var(--gradient-1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px}
@@ -81,10 +78,13 @@
         .incentive-item{background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-bottom:.75rem;border:1px solid var(--border-color)}
         .incentive-item-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
         .incentive-item-name{font-weight:600;font-size:.95rem}
+        .doctor-card{background:var(--bg-secondary);border-radius:12px;padding:1.25rem;text-align:center}
+        .doctor-card .name{font-size:1.1rem;font-weight:600;margin-bottom:.5rem}
+        .doctor-card .amount{font-size:1.5rem;font-weight:700;color:var(--accent-blue)}
+        .doctor-card .count{font-size:.85rem;color:var(--text-muted);margin-top:.25rem}
     </style>
 </head>
 <body>
-    <!-- 로그인 화면 -->
     <div class="login-screen" id="loginScreen">
         <div class="login-logo">💎</div>
         <div class="login-title">LUMI CLINIC</div>
@@ -97,17 +97,15 @@
             <div class="login-notice">⚠️ 보안을 위해 비밀번호는 3개월마다 변경해주세요.</div>
         </div>
     </div>
-
-    <!-- 메인 앱 -->
     <div class="app-container" id="appContainer">
         <header class="header">
             <div class="header-content">
                 <div class="logo"><div class="logo-icon">💎</div><div><div class="logo-text">LUMI CLINIC</div><div class="logo-sub">관리자 대시보드</div></div></div>
                 <div class="header-right">
-                    <select class="form-select" id="selectedYear" onchange="loadAllData()" style="width:auto"><option value="2026">2026년</option><option value="2025" selected>2025년</option><option value="2024">2024년</option></select>
+                    <select class="form-select" id="selectedYear" onchange="loadAllData()" style="width:auto"><option value="2026" selected>2026년</option><option value="2025">2025년</option><option value="2024">2024년</option></select>
                     <select class="form-select" id="selectedMonth" onchange="loadAllData()" style="width:auto">
-                        <option value="01">1월</option><option value="02">2월</option><option value="03">3월</option><option value="04">4월</option><option value="05">5월</option><option value="06">6월</option>
-                        <option value="07">7월</option><option value="08">8월</option><option value="09">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12" selected>12월</option>
+                        <option value="01" selected>1월</option><option value="02">2월</option><option value="03">3월</option><option value="04">4월</option><option value="05">5월</option><option value="06">6월</option>
+                        <option value="07">7월</option><option value="08">8월</option><option value="09">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
                     </select>
                     <button class="logout-btn" onclick="adminLogout()">로그아웃</button>
                 </div>
@@ -124,6 +122,8 @@
             <div class="section active" id="sales-section">
                 <div class="sub-nav">
                     <button class="sub-nav-item active" data-sub="sales-overview">📈 매출 현황</button>
+                    <button class="sub-nav-item" data-sub="sales-doctor">👨‍⚕️ 진료의별</button>
+                    <button class="sub-nav-item" data-sub="sales-staff">👤 담당직원별</button>
                     <button class="sub-nav-item" data-sub="sales-japan">🇯🇵 일본인 매출</button>
                     <button class="sub-nav-item" data-sub="sales-data">📁 데이터 관리</button>
                 </div>
@@ -139,6 +139,30 @@
                         <div class="card"><div class="card-title">📊 연도별 비교</div><div class="chart-container"><canvas id="yearCompareChart"></canvas></div></div>
                     </div>
                 </div>
+                <div class="section" id="sales-doctor">
+                    <h2 class="mb-2" style="margin-top:1.5rem">👨‍⚕️ 진료의별 매출</h2>
+                    <div class="stats-grid" id="doctorSalesGrid">
+                        <div style="text-align:center;padding:2rem;color:var(--text-muted);grid-column:1/-1">데이터를 업로드하면 진료의별 매출이 표시됩니다.</div>
+                    </div>
+                    <div class="card"><div class="card-title">📋 진료의별 상세</div>
+                        <div class="table-wrapper"><table>
+                            <thead><tr><th>진료의</th><th>건수</th><th>매출</th><th>비중</th></tr></thead>
+                            <tbody id="doctorSalesTable"><tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">데이터 없음</td></tr></tbody>
+                        </table></div>
+                    </div>
+                </div>
+                <div class="section" id="sales-staff">
+                    <h2 class="mb-2" style="margin-top:1.5rem">👤 담당직원별 매출</h2>
+                    <div class="stats-grid" id="staffSalesGrid">
+                        <div style="text-align:center;padding:2rem;color:var(--text-muted);grid-column:1/-1">데이터를 업로드하면 담당직원별 매출이 표시됩니다.</div>
+                    </div>
+                    <div class="card"><div class="card-title">📋 담당직원별 상세 (인센티브 1%)</div>
+                        <div class="table-wrapper"><table>
+                            <thead><tr><th>담당직원</th><th>건수</th><th>매출</th><th>인센티브 (1%)</th></tr></thead>
+                            <tbody id="staffSalesTable"><tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">데이터 없음</td></tr></tbody>
+                        </table></div>
+                    </div>
+                </div>
                 <div class="section" id="sales-japan">
                     <div class="stats-grid" style="margin-top:1.5rem">
                         <div class="stat-card purple"><div class="stat-label">일본인 매출</div><div class="stat-value" style="color:var(--accent-purple)" id="japanRevenue">₩0</div></div>
@@ -146,10 +170,10 @@
                         <div class="stat-card orange"><div class="stat-label">일본인 객단가</div><div class="stat-value" style="color:var(--accent-orange)" id="japanAvg">₩0</div></div>
                         <div class="stat-card"><div class="stat-label">전체 매출 비중</div><div class="stat-value" style="color:var(--accent-blue)" id="japanRatio">0%</div></div>
                     </div>
-                    <div class="card"><div class="card-title">📋 일본인 관련 인센티브 대상자</div>
+                    <div class="card"><div class="card-title">📋 담당직원별 일본인 매출</div>
                         <div class="table-wrapper"><table>
-                            <thead><tr><th>직원</th><th>인센티브 항목</th><th>이번달 인센티브</th></tr></thead>
-                            <tbody id="japanIncentiveTable"><tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">대상자가 없습니다.</td></tr></tbody>
+                            <thead><tr><th>담당직원</th><th>건수</th><th>매출</th><th>인센티브 (1%)</th></tr></thead>
+                            <tbody id="japanStaffTable"><tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">데이터 없음</td></tr></tbody>
                         </table></div>
                     </div>
                 </div>
@@ -293,7 +317,7 @@
                 <input type="hidden" id="empEditId">
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">이름 *</label><input type="text" class="form-input" id="empName" required></div>
-                    <div class="form-group"><label class="form-label">사번 * (소문자)</label><input type="text" class="form-input" id="empId" placeholder="예: 20kok" required style="text-transform:lowercase"></div>
+                    <div class="form-group"><label class="form-label">사번 * (소문자 자동변환)</label><input type="text" class="form-input" id="empId" placeholder="예: 20kok" required></div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">생년월일</label><input type="date" class="form-input" id="empBirthDate"></div>
@@ -308,6 +332,7 @@
                     <div class="form-group"><label class="form-label">시급</label><input type="number" class="form-input" id="empHourlyWage"></div>
                 </div>
                 <div class="form-row">
+                    <div class="form-group"><label class="form-label">매칭 이름 (엑셀 담당직원)</label><input type="text" class="form-input" id="empMatchName" placeholder="예: 박보미, 박지윤"></div>
                     <div class="form-group"><label class="form-label">재직 상태</label>
                         <select class="form-select" id="empIsActive"><option value="true">재직중</option><option value="false">퇴사</option></select>
                     </div>
@@ -330,6 +355,7 @@
                             <option value="per_case">건당 (₩/건)</option>
                             <option value="revenue_percent">매출 비율 (%)</option>
                             <option value="growth_percent">성장분 비율 (%)</option>
+                            <option value="staff_sales">담당직원 매출 (%)</option>
                             <option value="japan_visit">일본인 방문 (₩/명)</option>
                             <option value="japan_revenue">일본인 매출 (%)</option>
                         </select>
@@ -399,9 +425,7 @@
             document.getElementById('adminPw').value='';
         }
         function checkAdminLogin(){
-            if(localStorage.getItem('lumiAdmin')==='true'){
-                showApp();
-            }
+            if(localStorage.getItem('lumiAdmin')==='true'){showApp();}
         }
         function showApp(){
             document.getElementById('loginScreen').classList.add('hidden');
@@ -410,7 +434,7 @@
         }
 
         let employees=[],attendanceData={},leaveRequests=[],revenueData={},salaryMemos={},lunchOTAllData={},fixedExpenses=[],variableExpenses=[];
-        let incentiveItems=[],employeeIncentiveRecords={};
+        let incentiveItems=[],employeeIncentiveRecords={},salesDetailData={doctorSales:{},staffSales:{},japanStaffSales:{}};
         const overtimeRules={1:'18:30',2:'18:30',3:'18:00',4:'18:00',5:'18:30',6:'15:00'};
         const DEFAULT_PW='final12890-';
         const monthlyData={labels:['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
@@ -433,7 +457,7 @@
         // Load All
         async function loadAllData(){
             await loadEmployees();await loadAttendance();await loadLeaveRequests();await loadRevenueData();
-            await loadSalaryMemos();await loadLunchOTAll();await loadExpenses();await loadIncentiveItems();await loadEmployeeIncentiveRecords();
+            await loadSalaryMemos();await loadLunchOTAll();await loadExpenses();await loadIncentiveItems();await loadEmployeeIncentiveRecords();await loadSalesDetailData();
             checkBirthdays();renderAll();initCharts();
         }
 
@@ -472,6 +496,12 @@
             const ym=getYM();employeeIncentiveRecords={};
             for(const emp of employees){try{const doc=await db.collection('incentiveRecords').doc(emp.id).collection('monthly').doc(ym).get();employeeIncentiveRecords[emp.id]=doc.exists?doc.data():{};}catch(e){employeeIncentiveRecords[emp.id]={};}}
         }
+        async function loadSalesDetailData(){
+            const ym=getYM();
+            try{const doc=await db.collection('salesDetail').doc(ym).get();
+                salesDetailData=doc.exists?doc.data():{doctorSales:{},staffSales:{},japanStaffSales:{}};
+            }catch(e){salesDetailData={doctorSales:{},staffSales:{},japanStaffSales:{}};}
+        }
 
         // Calculations
         function timeToMin(t){if(!t)return 0;const[h,m]=t.split(':').map(Number);return h*60+m;}
@@ -481,8 +511,15 @@
         function formatCurrency(n){return'₩'+new Intl.NumberFormat('ko-KR').format(n||0);}
         function calcWorkDays(y,m){let c=0;const d=new Date(y,m,0).getDate();for(let i=1;i<=d;i++)if(new Date(y,m-1,i).getDay()!==0)c++;return c;}
 
+        function getStaffSalesAmount(empId){
+            const emp=employees.find(e=>e.id===empId);
+            if(!emp||!emp.matchName)return 0;
+            return salesDetailData.staffSales[emp.matchName]?.amount||0;
+        }
+
         function calcEmployeeIncentive(empId){
             let total=0;const details=[];const records=employeeIncentiveRecords[empId]||{};
+            const emp=employees.find(e=>e.id===empId);
             incentiveItems.forEach(item=>{
                 if(!item.employees||!item.employees.includes(empId))return;
                 let amount=0,desc='';
@@ -490,8 +527,9 @@
                     case 'per_case':const count=records[item.id]?.count||0;amount=count*(item.perCaseAmount||0);desc=`${count}건 × ${formatCurrency(item.perCaseAmount)}`;break;
                     case 'revenue_percent':amount=Math.round((revenueData.total||0)*(item.percent||0)/100);if(item.cap&&amount>item.cap)amount=item.cap;desc=`총매출 × ${item.percent}%`;break;
                     case 'growth_percent':const monthIdx=parseInt(document.getElementById('selectedMonth').value)-1;const prev=monthlyData.data2024[monthIdx]||0;const growth=Math.max(0,(revenueData.total||0)-prev);amount=Math.round(growth*(item.percent||0)/100);if(item.cap&&amount>item.cap)amount=item.cap;desc=`성장분 × ${item.percent}%${item.cap?' (상한 '+formatCurrency(item.cap)+')':''}`;break;
+                    case 'staff_sales':const staffSales=getStaffSalesAmount(empId);amount=Math.round(staffSales*(item.percent||0)/100);desc=`담당매출 ${formatCurrency(staffSales)} × ${item.percent}%`;break;
                     case 'japan_visit':amount=(revenueData.japanVisitors||0)*(item.perCaseAmount||0);desc=`${revenueData.japanVisitors||0}명 × ${formatCurrency(item.perCaseAmount)}`;break;
-                    case 'japan_revenue':amount=Math.round((revenueData.japan||0)*(item.percent||0)/100);desc=`일본인매출 × ${item.percent}%`;break;
+                    case 'japan_revenue':const japanSales=emp?.matchName?salesDetailData.japanStaffSales[emp.matchName]?.amount||0:revenueData.japan||0;amount=Math.round(japanSales*(item.percent||0)/100);desc=`일본인매출 ${formatCurrency(japanSales)} × ${item.percent}%`;break;
                 }
                 if(amount>0||item.type==='per_case'){details.push({item:item.name,amount,desc});}total+=amount;
             });
@@ -521,11 +559,39 @@
             document.getElementById('japanVisitors').textContent=(jVis||0)+'명';
             document.getElementById('japanAvg').textContent=jVis>0?formatCurrency(Math.round(japan/jVis)):'₩0';
             document.getElementById('japanRatio').textContent=total>0?((japan/total)*100).toFixed(1)+'%':'0%';
-            const japanItems=incentiveItems.filter(i=>i.type==='japan_visit'||i.type==='japan_revenue');
-            const japanEmps=new Set();japanItems.forEach(i=>(i.employees||[]).forEach(e=>japanEmps.add(e)));
-            const tbody=document.getElementById('japanIncentiveTable');
-            if(japanEmps.size===0){tbody.innerHTML='<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted)">대상자가 없습니다.</td></tr>';}
-            else{tbody.innerHTML=[...japanEmps].map(empId=>{const emp=employees.find(e=>e.id===empId);const items=japanItems.filter(i=>(i.employees||[]).includes(empId)).map(i=>i.name).join(', ');const inc=calcEmployeeIncentive(empId);return `<tr><td><strong>${emp?.name||empId}</strong></td><td>${items}</td><td class="text-success"><strong>${formatCurrency(inc.total)}</strong></td></tr>`;}).join('');}
+            
+            // 진료의별 매출
+            const doctorGrid=document.getElementById('doctorSalesGrid');
+            const doctorTable=document.getElementById('doctorSalesTable');
+            const doctors=Object.entries(salesDetailData.doctorSales||{});
+            if(doctors.length===0){
+                doctorGrid.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text-muted);grid-column:1/-1">데이터를 업로드하면 진료의별 매출이 표시됩니다.</div>';
+                doctorTable.innerHTML='<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">데이터 없음</td></tr>';
+            }else{
+                doctorGrid.innerHTML=doctors.map(([name,data])=>`<div class="doctor-card"><div class="name">👨‍⚕️ ${name}</div><div class="amount">${formatCurrency(data.amount)}</div><div class="count">${data.count}건</div></div>`).join('');
+                doctorTable.innerHTML=doctors.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td>${data.count}건</td><td class="text-success">${formatCurrency(data.amount)}</td><td>${total>0?((data.amount/total)*100).toFixed(1)+'%':'0%'}</td></tr>`).join('');
+            }
+            
+            // 담당직원별 매출
+            const staffGrid=document.getElementById('staffSalesGrid');
+            const staffTable=document.getElementById('staffSalesTable');
+            const staffs=Object.entries(salesDetailData.staffSales||{});
+            if(staffs.length===0){
+                staffGrid.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text-muted);grid-column:1/-1">데이터를 업로드하면 담당직원별 매출이 표시됩니다.</div>';
+                staffTable.innerHTML='<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">데이터 없음</td></tr>';
+            }else{
+                staffGrid.innerHTML=staffs.map(([name,data])=>`<div class="doctor-card"><div class="name">👤 ${name}</div><div class="amount">${formatCurrency(data.amount)}</div><div class="count">${data.count}건 | 인센 ${formatCurrency(Math.round(data.amount*0.01))}</div></div>`).join('');
+                staffTable.innerHTML=staffs.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td>${data.count}건</td><td class="text-success">${formatCurrency(data.amount)}</td><td class="text-purple"><strong>${formatCurrency(Math.round(data.amount*0.01))}</strong></td></tr>`).join('');
+            }
+            
+            // 담당직원별 일본인 매출
+            const japanStaffTable=document.getElementById('japanStaffTable');
+            const japanStaffs=Object.entries(salesDetailData.japanStaffSales||{});
+            if(japanStaffs.length===0){
+                japanStaffTable.innerHTML='<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted)">데이터 없음</td></tr>';
+            }else{
+                japanStaffTable.innerHTML=japanStaffs.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td>${data.count}건</td><td class="text-success">${formatCurrency(data.amount)}</td><td class="text-purple"><strong>${formatCurrency(Math.round(data.amount*0.01))}</strong></td></tr>`).join('');
+            }
         }
 
         function renderEmployees(){
@@ -536,7 +602,7 @@
             tbody.innerHTML=employees.map(e=>{
                 const ten=calcTenure(e.joinDate),age=calcAge(e.birthDate);
                 const pwStatus=e.password?'<span class="badge badge-success">설정됨</span>':'<span class="badge badge-warning">미설정</span>';
-                return `<tr><td><span class="badge badge-info">${e.id}</span></td><td><strong>${e.name}</strong></td><td>${age}</td><td>${e.role||'-'}</td><td>${e.joinDate||'-'}</td><td><span class="badge ${ten.years>=3?'badge-success':ten.years>=1?'badge-info':'badge-warning'}">${ten.label}</span></td><td>${e.isActive!==false?'<span class="badge badge-success">재직</span>':'<span class="badge badge-danger">퇴사</span>'}</td><td>${pwStatus}</td><td><div class="btn-group"><button class="btn btn-secondary btn-sm" onclick="editEmployee('${e.id}')">수정</button><button class="btn btn-warning btn-sm" onclick="resetPassword('${e.id}')">비번초기화</button></div></td></tr>`;
+                return `<tr><td><span class="badge badge-info">${e.id}</span></td><td><strong>${e.name}</strong>${e.matchName?'<br><small class="text-muted">매칭: '+e.matchName+'</small>':''}</td><td>${age}</td><td>${e.role||'-'}</td><td>${e.joinDate||'-'}</td><td><span class="badge ${ten.years>=3?'badge-success':ten.years>=1?'badge-info':'badge-warning'}">${ten.label}</span></td><td>${e.isActive!==false?'<span class="badge badge-success">재직</span>':'<span class="badge badge-danger">퇴사</span>'}</td><td>${pwStatus}</td><td><div class="btn-group"><button class="btn btn-secondary btn-sm" onclick="editEmployee('${e.id}')">수정</button><button class="btn btn-warning btn-sm" onclick="resetPassword('${e.id}')">비번초기화</button></div></td></tr>`;
             }).join('');
         }
 
@@ -566,11 +632,11 @@
 
         function renderOvertime(){
             let totalMin=0,totalNet=0;const active=employees.filter(e=>e.isActive!==false);
-            active.forEach(e=>{const d=attendanceData[e.id]||{summary:{afterWorkOT:0}};const lunchOT=lunchOTAllData[e.id]?.total||0;const total=d.summary.afterWorkOT+lunchOT;totalMin+=total;totalNet+=(total/60)*e.hourlyWage*1.5*0.967;});
+            active.forEach(e=>{const d=attendanceData[e.id]||{summary:{afterWorkOT:0}};const lunchOT=lunchOTAllData[e.id]?.total||0;const total=d.summary.afterWorkOT+lunchOT;totalMin+=total;totalNet+=(total/60)*(e.hourlyWage||0)*1.5*0.967;});
             document.getElementById('totalOT').textContent=(totalMin/60).toFixed(1)+'H';document.getElementById('totalOTNet').textContent=formatCurrency(Math.round(totalNet));
             document.getElementById('overtimeTableBody').innerHTML=active.length===0?'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">직원이 없습니다.</td></tr>':active.map(e=>{
                 const d=attendanceData[e.id]||{summary:{afterWorkOT:0}};const lunchOT=lunchOTAllData[e.id]?.total||0;
-                const totalOT=d.summary.afterWorkOT+lunchOT;const n=(totalOT/60)*e.hourlyWage*1.5*0.967;
+                const totalOT=d.summary.afterWorkOT+lunchOT;const n=(totalOT/60)*(e.hourlyWage||0)*1.5*0.967;
                 return `<tr><td><strong>${e.name}</strong></td><td>${formatCurrency(e.hourlyWage)}</td><td>${(d.summary.afterWorkOT/60).toFixed(1)}H</td><td>${(lunchOT/60).toFixed(1)}H</td><td class="text-warning"><strong>${(totalOT/60).toFixed(1)}H</strong></td><td class="text-success"><strong>${formatCurrency(Math.round(n))}</strong></td></tr>`;
             }).join('');
             document.getElementById('sumOTHours').textContent=(totalMin/60).toFixed(1)+'H';document.getElementById('sumOTNet').textContent=formatCurrency(Math.round(totalNet));
@@ -581,8 +647,8 @@
             const itemsList=document.getElementById('incentiveItemsList');
             if(incentiveItems.length===0){itemsList.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text-muted)">인센티브 항목이 없습니다. 항목을 추가해주세요.</div>';}
             else{
+                const typeLabels={per_case:'건당',revenue_percent:'매출비율',growth_percent:'성장분비율',staff_sales:'담당매출',japan_visit:'일본인방문',japan_revenue:'일본인매출'};
                 itemsList.innerHTML=incentiveItems.map(item=>{
-                    const typeLabels={per_case:'건당',revenue_percent:'매출비율',growth_percent:'성장분비율',japan_visit:'일본인방문',japan_revenue:'일본인매출'};
                     const emps=(item.employees||[]).map(id=>{const e=employees.find(x=>x.id===id);return e?`<span class="emp-chip">${e.name}</span>`:'';}).join('');
                     let valueDesc='';if(item.type==='per_case'||item.type==='japan_visit')valueDesc=formatCurrency(item.perCaseAmount)+'/건';else valueDesc=item.percent+'%'+(item.cap?' (상한 '+formatCurrency(item.cap)+')':'');
                     return `<div class="incentive-item"><div class="incentive-item-header"><div><span class="incentive-item-name">${item.name}</span><span class="badge badge-info" style="margin-left:.5rem">${typeLabels[item.type]||item.type}</span><span style="margin-left:.5rem;color:var(--accent-purple)">${valueDesc}</span></div><div class="btn-group"><button class="btn btn-secondary btn-sm" onclick="editIncentiveItem('${item.id}')">수정</button><button class="btn btn-danger btn-sm" onclick="deleteIncentiveItem('${item.id}')">삭제</button></div></div><div class="incentive-item-employees">${emps||'<span class="text-muted">적용 직원 없음</span>'}</div></div>`;
@@ -603,7 +669,7 @@
             let totalSum=0;const active=employees.filter(e=>e.isActive!==false);
             document.getElementById('salaryTableBody').innerHTML=active.length===0?'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted)">직원이 없습니다.</td></tr>':active.map(e=>{
                 const d=attendanceData[e.id]||{summary:{afterWorkOT:0}};const lunchOT=lunchOTAllData[e.id]?.total||0;const totalOT=d.summary.afterWorkOT+lunchOT;
-                const otPay=Math.round((totalOT/60)*e.hourlyWage*1.5*0.967);const inc=calcEmployeeIncentive(e.id);
+                const otPay=Math.round((totalOT/60)*(e.hourlyWage||0)*1.5*0.967);const inc=calcEmployeeIncentive(e.id);
                 const total=(e.baseSalary||0)+(e.fixedOT||0)+otPay+inc.total;totalSum+=total;const memo=salaryMemos[e.id]||'';
                 return `<tr><td><strong>${e.name}</strong></td><td>${formatCurrency(e.baseSalary)}</td><td>${formatCurrency(e.fixedOT)}</td><td class="text-success">${formatCurrency(otPay)}</td><td class="text-purple">${formatCurrency(inc.total)}</td><td><strong>${formatCurrency(total)}</strong></td><td><input type="text" class="memo-input" value="${memo}" placeholder="메모" onchange="saveMemo('${e.id}',this.value)"></td></tr>`;
             }).join('');
@@ -618,29 +684,7 @@
             document.getElementById('variableExpenseTable').innerHTML=variableExpenses.length===0?'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">유동비 항목이 없습니다.</td></tr>':variableExpenses.map(e=>{varTotal+=e.amount;return `<tr><td>${e.date||'-'}</td><td>${e.name}</td><td>${e.category||'-'}</td><td>${formatCurrency(e.amount)}</td><td>${e.memo||'-'}</td><td><button class="btn btn-danger btn-sm" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`;}).join('');
             document.getElementById('variableExpenseTotal').textContent=formatCurrency(varTotal);
         }
-        // Charts
-        let charts={};
-        function initCharts(){
-            const opts={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#94a3b8'}}},scales:{x:{ticks:{color:'#64748b'},grid:{color:'rgba(45,55,72,.5)'}},y:{ticks:{color:'#64748b',callback:v=>(v/100000000).toFixed(1)+'억'},grid:{color:'rgba(45,55,72,.5)'}}}};
-            if(charts.monthly)charts.monthly.destroy();
-            charts.monthly=new Chart(document.getElementById('monthlyChart'),{type:'line',data:{labels:monthlyData.labels,datasets:[{label:'2025년',data:monthlyData.data2025,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.1)',fill:true,tension:.4},{label:'2024년',data:monthlyData.data2024,borderColor:'#64748b',borderDash:[5,5],tension:.4}]},options:opts});
-            if(charts.yearCompare)charts.yearCompare.destroy();
-            charts.yearCompare=new Chart(document.getElementById('yearCompareChart'),{type:'bar',data:{labels:monthlyData.labels,datasets:[{label:'2024년',data:monthlyData.data2024,backgroundColor:'rgba(100,116,139,.7)',borderRadius:4},{label:'2025년',data:monthlyData.data2025,backgroundColor:'rgba(59,130,246,.7)',borderRadius:4}]},options:opts});
-        }
-
-        // Employee CRUD
-        function openEmployeeModal(id=null){document.getElementById('employeeModal').classList.add('active');document.getElementById('employeeForm').reset();
-            if(id){const e=employees.find(x=>x.id===id);if(e){document.getElementById('employeeModalTitle').textContent='직원 수정';document.getElementById('empEditId').value=e.id;document.getElementById('empName').value=e.name;document.getElementById('empId').value=e.id;document.getElementById('empId').disabled=true;document.getElementById('empBirthDate').value=e.birthDate||'';document.getElementById('empRole').value=e.role;document.getElementById('empJoinDate').value=e.joinDate;document.getElementById('empBaseSalary').value=e.baseSalary;document.getElementById('empFixedOT').value=e.fixedOT||'';document.getElementById('empHourlyWage').value=e.hourlyWage||'';document.getElementById('empIsActive').value=e.isActive!==false?'true':'false';}}
-            else{document.getElementById('employeeModalTitle').textContent='직원 추가';document.getElementById('empId').disabled=false;}}
-        function closeEmployeeModal(){document.getElementById('employeeModal').classList.remove('active');}
-        function editEmployee(id){openEmployeeModal(id);}
-        document.getElementById('employeeForm').addEventListener('submit',async e=>{e.preventDefault();
-            const editId=document.getElementById('empEditId').value,data={name:document.getElementById('empName').value,birthDate:document.getElementById('empBirthDate').value||null,role:document.getElementById('empRole').value,joinDate:document.getElementById('empJoinDate').value,baseSalary:parseInt(document.getElementById('empBaseSalary').value)||0,fixedOT:parseInt(document.getElementById('empFixedOT').value)||0,hourlyWage:parseInt(document.getElementById('empHourlyWage').value)||0,isActive:document.getElementById('empIsActive').value==='true',updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
-            try{if(editId){await db.collection('employees').doc(editId).update(data);alert('수정 완료');}else{const newId=document.getElementById('empId').value.toLowerCase();data.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('employees').doc(newId).set(data);alert('추가 완료');}closeEmployeeModal();await loadEmployees();renderAll();}catch(err){alert('저장 실패: '+err.message);}});
-        async function resetPassword(id){if(!confirm(`${id} 비밀번호를 초기화?\n임시: ${DEFAULT_PW}`))return;try{await db.collection('employees').doc(id).update({password:DEFAULT_PW});alert('초기화 완료');await loadEmployees();renderEmployees();}catch(err){alert(err.message);}}
-
-        // Incentive Item CRUD
-        function toggleIncTypeFields(){const type=document.getElementById('incItemType').value;document.getElementById('incPerCaseFields').style.display=(type==='per_case'||type==='japan_visit')?'grid':'none';document.getElementById('incPercentFields').style.display=(type==='revenue_percent'||type==='growth_percent'||type==='japan_revenue')?'grid':'none';}
+'grid':'none';document.getElementById('incPercentFields').style.display=(type==='revenue_percent'||type==='growth_percent'||type==='japan_revenue'||type==='staff_sales')?'grid':'none';}
         function openIncentiveItemModal(id=null){
             document.getElementById('incentiveItemModal').classList.add('active');document.getElementById('incentiveItemForm').reset();
             const container=document.getElementById('incEmployeeCheckboxes');const active=employees.filter(e=>e.isActive!==false);
@@ -652,7 +696,7 @@
             const editId=document.getElementById('incItemEditId').value;const type=document.getElementById('incItemType').value;
             const data={name:document.getElementById('incItemName').value,type,employees:[...document.querySelectorAll('.inc-emp-check:checked')].map(cb=>cb.value),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
             if(type==='per_case'||type==='japan_visit'){data.perCaseAmount=parseInt(document.getElementById('incPerCaseAmount').value)||0;}
-            if(type==='revenue_percent'||type==='growth_percent'||type==='japan_revenue'){data.percent=parseFloat(document.getElementById('incPercent').value)||0;data.cap=parseInt(document.getElementById('incCap').value)||null;}
+            if(type==='revenue_percent'||type==='growth_percent'||type==='japan_revenue'||type==='staff_sales'){data.percent=parseFloat(document.getElementById('incPercent').value)||0;data.cap=parseInt(document.getElementById('incCap').value)||null;}
             try{if(editId){await db.collection('incentiveItems').doc(editId).update(data);alert('수정 완료');}else{data.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('incentiveItems').add(data);alert('추가 완료');}closeIncentiveItemModal();await loadIncentiveItems();renderIncentive();}catch(err){alert('저장 실패: '+err.message);}});
         async function deleteIncentiveItem(id){if(!confirm('삭제?'))return;try{await db.collection('incentiveItems').doc(id).delete();alert('삭제 완료');await loadIncentiveItems();renderIncentive();}catch(err){alert(err.message);}}
 
@@ -684,11 +728,65 @@
             reader.onload=function(e){
                 try{const data=new Uint8Array(e.target.result),wb=XLSX.read(data,{type:'array'}),sheet=wb.Sheets[wb.SheetNames[0]],json=XLSX.utils.sheet_to_json(sheet);
                     let totalRev=0,japanRev=0,japanCount=0,year='',month='';
-                    json.forEach(row=>{if(row['금액'])totalRev+=parseInt(row['금액'])||0;if(row['국적']&&row['국적'].includes('일본')){japanRev+=parseInt(row['금액'])||0;japanCount++;}if(row['진료일']&&!year){const d=String(row['진료일']);if(d.length>=6){year=d.substring(0,4);month=d.substring(4,6);}}});
+                    const doctorSales={},staffSales={},japanStaffSales={};
+                    
+                    json.forEach(row=>{
+                        const amount=parseInt(row['금액'])||0;
+                        totalRev+=amount;
+                        
+                        // 진료의별 매출
+                        const doctor=row['진료의명'];
+                        if(doctor&&doctor!=='빠른예약'){
+                            if(!doctorSales[doctor])doctorSales[doctor]={count:0,amount:0};
+                            doctorSales[doctor].count++;
+                            doctorSales[doctor].amount+=amount;
+                        }
+                        
+                        // 담당직원별 매출
+                        const staff=row['담당직원'];
+                        if(staff){
+                            if(!staffSales[staff])staffSales[staff]={count:0,amount:0};
+                            staffSales[staff].count++;
+                            staffSales[staff].amount+=amount;
+                        }
+                        
+                        // 일본인 매출
+                        const nationality=row['국적'];
+                        if(nationality&&nationality.includes('일본')){
+                            japanRev+=amount;
+                            japanCount++;
+                            // 일본인 담당직원별 매출
+                            if(staff){
+                                if(!japanStaffSales[staff])japanStaffSales[staff]={count:0,amount:0};
+                                japanStaffSales[staff].count++;
+                                japanStaffSales[staff].amount+=amount;
+                            }
+                        }
+                        
+                        // 날짜 추출
+                        if(row['진료일']&&!year){
+                            const d=String(row['진료일']);
+                            if(d.length>=6){year=d.substring(0,4);month=d.substring(4,6);}
+                        }
+                    });
+                    
                     const ym=year+'-'+month;
-                    db.collection('revenue').doc(ym).set({total:totalRev,japan:japanRev,japanVisitors:japanCount,transactions:json.length,uploadedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
-                    alert(`업로드 완료!\n\n연월: ${ym}\n건수: ${json.length}건\n총매출: ${formatCurrency(totalRev)}\n일본인매출: ${formatCurrency(japanRev)}\n일본인수: ${japanCount}명`);
-                    if(ym===getYM()){loadRevenueData().then(()=>renderAll());}
+                    
+                    // revenue 저장
+                    db.collection('revenue').doc(ym).set({
+                        total:totalRev,japan:japanRev,japanVisitors:japanCount,transactions:json.length,
+                        uploadedAt:firebase.firestore.FieldValue.serverTimestamp()
+                    },{merge:true});
+                    
+                    // salesDetail 저장 (진료의별, 담당직원별)
+                    db.collection('salesDetail').doc(ym).set({
+                        doctorSales,staffSales,japanStaffSales,
+                        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    alert(`업로드 완료!\n\n연월: ${ym}\n건수: ${json.length}건\n총매출: ${formatCurrency(totalRev)}\n\n진료의: ${Object.keys(doctorSales).join(', ')}\n담당직원: ${Object.keys(staffSales).join(', ')}\n\n일본인매출: ${formatCurrency(japanRev)} (${japanCount}건)`);
+                    
+                    if(ym===getYM()){loadRevenueData().then(()=>loadSalesDetailData().then(()=>renderAll()));}
                 }catch(err){alert('파일 처리 오류: '+err.message);}
             };
             reader.readAsArrayBuffer(file);
