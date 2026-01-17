@@ -4,622 +4,732 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>THE CLINIC LUMI - 관리자</title>
-    <link rel="icon" type="image/png" href="/favicon.png">
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root{--bg:#faf9f7;--card:#fff;--gold:#9a8b7a;--dark:#2c2c2c;--green:#5a7a5a;--red:#a85a5a;--text:#2c2c2c;--muted:#999;--border:#e8e4df}
-        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-        .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:2rem;position:fixed;inset:0;z-index:2000;background:var(--bg)}
-        .login-screen.hidden{display:none}
-        .login-logo{font-family:'Cormorant Garamond',serif;letter-spacing:4px;color:var(--muted);font-size:.9rem;margin-bottom:.5rem}
+        :root{--bg-primary:#faf9f7;--bg-secondary:#fff;--bg-card:#fff;--accent-gold:#9a8b7a;--accent-dark:#2c2c2c;--accent-green:#5a7a5a;--accent-red:#a85a5a;--accent-blue:#5a6a7a;--accent-orange:#c4956a;--accent-purple:#7a6a8a;--text-primary:#2c2c2c;--text-secondary:#6b6b6b;--text-muted:#999;--border-color:#e8e4df}
+        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Noto Sans KR',sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh}
+        .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:2rem;position:fixed;inset:0;z-index:2000;background:var(--bg-primary)}
+        .login-screen.hidden{display:none}.login-logo{font-family:'Cormorant Garamond',serif;letter-spacing:4px;color:var(--text-muted);font-size:.9rem;margin-bottom:.5rem}
         .login-title{font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:500;margin-bottom:.5rem;letter-spacing:2px}
-        .login-subtitle{color:var(--muted);margin-bottom:2rem;font-size:.85rem;letter-spacing:1px}
-        .login-form{width:100%;max-width:320px}
-        .login-input{width:100%;padding:1rem;background:#fff;border:1px solid var(--border);color:var(--text);font-size:1rem;margin-bottom:1rem}
-        .login-input:focus{outline:none;border-color:var(--gold)}
-        .pw-wrap{position:relative}.pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;margin-top:-8px}
-        .login-btn{width:100%;padding:1rem;background:var(--dark);border:none;color:#fff;font-size:.9rem;cursor:pointer;letter-spacing:1px}
-        .login-error{color:var(--red);font-size:.85rem;text-align:center;margin-bottom:1rem}
-        .login-notice{color:var(--gold);font-size:.75rem;text-align:center;margin-top:1.5rem;padding:1rem;background:rgba(154,139,122,.1);border:1px solid var(--border)}
-        .header{background:#fff;border-bottom:1px solid var(--border);padding:1rem 2rem;position:sticky;top:0;z-index:100}
-        .header-content{display:flex;justify-content:space-between;align-items:center;max-width:1600px;margin:0 auto}
-        .logo-sub{font-family:'Cormorant Garamond',serif;font-size:.7rem;letter-spacing:3px;color:var(--muted)}
-        .logo-text{font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:500;letter-spacing:2px}
-        .header-right{display:flex;align-items:center;gap:1rem}
-        .logout-btn{padding:.5rem 1rem;background:transparent;border:1px solid var(--border);color:var(--muted);font-size:.8rem;cursor:pointer}
-        .main-nav{display:flex;background:#fff;border-bottom:1px solid var(--border)}
-        .nav-btn{padding:1rem 2rem;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-size:.85rem}
-        .nav-btn:hover,.nav-btn.active{color:var(--text);border-bottom-color:var(--gold)}
-        .sub-nav{display:flex;gap:.5rem;padding:1rem 2rem;background:var(--bg);border-bottom:1px solid var(--border);flex-wrap:wrap}
-        .sub-btn{padding:.5rem 1rem;background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:.8rem}
-        .sub-btn:hover,.sub-btn.active{border-color:var(--gold);color:var(--text);background:var(--gold);color:#fff}
-        .main{padding:2rem;max-width:1600px;margin:0 auto}
-        .section{display:none}.section.active{display:block}
+        .login-subtitle{color:var(--text-muted);margin-bottom:2rem;font-size:.85rem;letter-spacing:1px}.login-form{width:100%;max-width:320px}
+        .login-input{width:100%;padding:1rem;background:#fff;border:1px solid var(--border-color);color:var(--text-primary);font-size:1rem;margin-bottom:1rem}
+        .login-input:focus{outline:none;border-color:var(--accent-gold)}.pw-wrap{position:relative}
+        .pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;margin-top:-8px}
+        .login-btn{width:100%;padding:1rem;background:var(--accent-dark);border:none;color:#fff;font-size:.9rem;cursor:pointer;letter-spacing:1px;margin-bottom:1rem}
+        .login-btn:hover{background:#444}.login-error{color:var(--accent-red);font-size:.85rem;margin-bottom:1rem;text-align:center;min-height:1.2rem}
+        .header{background:var(--bg-secondary);border-bottom:1px solid var(--border-color);padding:1rem 2rem;position:sticky;top:0;z-index:100}
+        .header-content{display:flex;justify-content:space-between;align-items:center;max-width:1800px;margin:0 auto}
+        .logo{display:flex;align-items:center;gap:12px}.logo-text{font-family:'Cormorant Garamond',serif}
+        .logo-sub{font-size:.7rem;letter-spacing:3px;color:var(--text-muted)}.logo-main{font-size:1.4rem;font-weight:500;letter-spacing:2px}
+        .header-right{display:flex;align-items:center;gap:1rem}.month-selector{display:flex;align-items:center;gap:.5rem;background:var(--bg-primary);padding:.5rem 1rem;border:1px solid var(--border-color)}
+        .month-selector select{border:none;background:transparent;font-size:.9rem;cursor:pointer;padding:.25rem}
+        .logout-btn{padding:.5rem 1rem;background:none;border:1px solid var(--border-color);cursor:pointer;font-size:.85rem;color:var(--text-secondary)}
+        .logout-btn:hover{background:var(--bg-primary)}
+        .nav-tabs{display:flex;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);padding:0 2rem;overflow-x:auto}
+        .nav-tab{padding:1rem 1.5rem;cursor:pointer;font-size:.9rem;color:var(--text-secondary);border-bottom:2px solid transparent;white-space:nowrap;transition:all .2s}
+        .nav-tab:hover{color:var(--text-primary)}.nav-tab.active{color:var(--accent-gold);border-bottom-color:var(--accent-gold);font-weight:500}
+        .sub-tabs{display:flex;gap:.5rem;padding:1rem 0;flex-wrap:wrap}
+        .sub-tab{padding:.5rem 1rem;background:var(--bg-secondary);border:1px solid var(--border-color);cursor:pointer;font-size:.85rem;color:var(--text-secondary)}
+        .sub-tab:hover{border-color:var(--accent-gold)}.sub-tab.active{background:var(--accent-gold);color:#fff;border-color:var(--accent-gold)}
+        .content{max-width:1800px;margin:0 auto;padding:1.5rem 2rem}.tab-content{display:none}.tab-content.active{display:block}.sub-content{display:none}.sub-content.active{display:block}
+        .cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem}
+        .card{background:var(--bg-card);border:1px solid var(--border-color);padding:1.25rem}
+        .card-label{font-size:.75rem;color:var(--text-muted);margin-bottom:.5rem;letter-spacing:1px}.card-value{font-size:1.5rem;font-weight:600}
+        .card-sub{font-size:.8rem;color:var(--text-secondary);margin-top:.25rem}.card-change{font-size:.8rem;margin-top:.5rem}
+        .card-change.positive{color:var(--accent-green)}.card-change.negative{color:var(--accent-red)}
+        .table-container{background:var(--bg-card);border:1px solid var(--border-color);overflow-x:auto;margin-bottom:1.5rem}
+        table{width:100%;border-collapse:collapse}th,td{padding:.75rem 1rem;text-align:left;border-bottom:1px solid var(--border-color);font-size:.9rem}
+        th{background:var(--bg-primary);font-weight:500;color:var(--text-secondary);font-size:.8rem;letter-spacing:.5px}tr:hover{background:var(--bg-primary)}
+        .chart-container{background:var(--bg-card);border:1px solid var(--border-color);padding:1.5rem;margin-bottom:1.5rem}
+        .chart-title{font-size:.9rem;font-weight:500;margin-bottom:1rem}.chart-wrapper{height:300px;position:relative}
+        .upload-zone{border:2px dashed var(--border-color);padding:2rem;text-align:center;cursor:pointer;margin-bottom:1.5rem;background:var(--bg-card);transition:border-color .2s}
+        .upload-zone:hover{border-color:var(--accent-gold)}.upload-icon{font-size:2rem;margin-bottom:.5rem}.upload-text{color:var(--text-secondary);font-size:.9rem}
+        .badge{display:inline-block;padding:.25rem .5rem;font-size:.75rem;font-weight:500;border-radius:2px}
+        .badge-green{background:rgba(90,122,90,.15);color:var(--accent-green)}.badge-red{background:rgba(168,90,90,.15);color:var(--accent-red)}
+        .badge-blue{background:rgba(90,106,122,.15);color:var(--accent-blue)}.badge-orange{background:rgba(196,149,106,.15);color:var(--accent-orange)}
+        .badge-purple{background:rgba(122,106,138,.15);color:var(--accent-purple)}.badge-gold{background:rgba(154,139,122,.15);color:var(--accent-gold)}
+        .btn{padding:.5rem 1rem;border:none;cursor:pointer;font-size:.85rem;transition:all .2s}
+        .btn-primary{background:var(--accent-gold);color:#fff}.btn-primary:hover{background:#8a7b6a}
+        .btn-secondary{background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-primary)}.btn-secondary:hover{background:var(--border-color)}
+        .btn-danger{background:var(--accent-red);color:#fff}.btn-danger:hover{opacity:.9}.btn-sm{padding:.35rem .75rem;font-size:.8rem}
+        .form-group{margin-bottom:1rem}.form-label{display:block;font-size:.85rem;color:var(--text-secondary);margin-bottom:.5rem}
+        .form-input,.form-select,.form-textarea{width:100%;padding:.75rem;border:1px solid var(--border-color);font-size:.9rem;background:var(--bg-secondary)}
+        .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--accent-gold)}.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+        .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;align-items:center;justify-content:center;padding:1rem}
+        .modal.active{display:flex}.modal-content{background:var(--bg-secondary);width:100%;max-width:500px;max-height:90vh;overflow-y:auto}
+        .modal-header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border-bottom:1px solid var(--border-color)}
+        .modal-title{font-size:1rem;font-weight:500}.modal-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-muted);line-height:1}
+        .modal-body{padding:1.5rem}.modal-footer{display:flex;gap:.5rem;justify-content:flex-end;padding:1rem 1.5rem;border-top:1px solid var(--border-color)}
+        .section{margin-bottom:2rem}.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}.section-title{font-size:1rem;font-weight:500}
+        .expense-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem}
+        .expense-box{background:var(--bg-card);border:1px solid var(--border-color);padding:1rem;text-align:center}
+        .expense-box-label{font-size:.75rem;color:var(--text-muted);margin-bottom:.25rem}.expense-box-value{font-size:1.2rem;font-weight:600}
+        .birthday-alert{background:linear-gradient(135deg,#fff5f5,#fffaf0);border:1px solid #f0e0d0;padding:1rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem}
+        .birthday-icon{font-size:1.5rem}.birthday-text{flex:1}.birthday-name{font-weight:600;color:var(--accent-orange)}
+        .text-right{text-align:right}.text-center{text-align:center}.mt-1{margin-top:1rem}.mb-1{margin-bottom:1rem}
         .app-container{display:none}.app-container.active{display:block}
-        .card{background:#fff;padding:1.5rem;border:1px solid var(--border);margin-bottom:1.5rem}
-        .card-title{font-size:.9rem;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
-        .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem}
-        .stat-card{background:#fff;padding:1.25rem;border:1px solid var(--border);border-top:3px solid var(--gold)}
-        .stat-label{color:var(--muted);font-size:.75rem;margin-bottom:.5rem}.stat-value{font-size:1.3rem;font-weight:600}
-        table{width:100%;border-collapse:collapse}th,td{padding:.75rem;text-align:left;border-bottom:1px solid var(--border)}
-        th{color:var(--muted);font-weight:500;font-size:.75rem;text-transform:uppercase}td{font-size:.85rem}
-        .btn{padding:.5rem 1rem;border:none;cursor:pointer;font-size:.8rem}.btn-primary{background:var(--dark);color:#fff}
-        .btn-danger{background:var(--red);color:#fff}.btn-sm{padding:.4rem .8rem;font-size:.75rem}.btn-group{display:flex;gap:.5rem}
-        .form-group{margin-bottom:1rem}.form-label{display:block;margin-bottom:.5rem;color:var(--muted);font-size:.8rem}
-        .form-input,.form-select{width:100%;padding:.75rem;background:#fff;border:1px solid var(--border);font-size:.9rem}
-        .form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem}
-        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center}
-        .modal-overlay.active{display:flex}.modal{background:#fff;padding:2rem;width:90%;max-width:600px;max-height:90vh;overflow-y:auto}
-        .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
-        .modal-title{font-size:1.1rem;font-weight:600}.modal-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--muted)}
-        .badge{display:inline-flex;padding:.25rem .5rem;font-size:.7rem}.badge-success{background:rgba(90,122,90,.15);color:var(--green)}
-        .badge-warning{background:rgba(154,139,122,.15);color:var(--gold)}.badge-info{background:rgba(90,106,122,.15);color:#5a6a7a}
-        .text-success{color:var(--green)}.text-danger{color:var(--red)}.text-muted{color:var(--muted)}
-        .upload-zone{border:2px dashed var(--border);padding:3rem;text-align:center;cursor:pointer;margin-bottom:1.5rem}
-        .upload-zone:hover{border-color:var(--gold);background:rgba(154,139,122,.05)}
-        .summary-row{display:flex;justify-content:space-between;padding:1rem;background:var(--bg);margin-top:1rem;font-weight:600}
-        .auto-id{background:var(--bg);padding:.75rem;border:1px solid var(--border);margin-top:.5rem;font-family:monospace;color:var(--gold)}
-        .flex{display:flex}.justify-between{justify-content:space-between}.items-center{align-items:center}.gap-1{gap:.5rem}.mb-2{margin-bottom:1rem}.mt-2{margin-top:1rem}
+        @media(max-width:768px){.header{padding:1rem}.content{padding:1rem}.nav-tabs{padding:0 1rem}.nav-tab{padding:.75rem 1rem;font-size:.85rem}.cards-grid{grid-template-columns:repeat(2,1fr)}.expense-summary{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
     <div class="login-screen" id="loginScreen">
         <div class="login-logo">THE CLINIC</div>
         <div class="login-title">LUMI</div>
-        <div class="login-subtitle">ADMINISTRATOR</div>
-        <div class="login-form">
-            <input type="text" class="login-input" id="adminId" placeholder="관리자 ID" autocapitalize="none">
+        <div class="login-subtitle">ADMIN PORTAL</div>
+        <form class="login-form" onsubmit="handleAdminLogin();return false;">
+            <input type="text" class="login-input" id="adminId" placeholder="관리자 ID" autocomplete="username">
             <div class="pw-wrap">
-                <input type="password" class="login-input" id="adminPw" placeholder="비밀번호">
+                <input type="password" class="login-input" id="adminPw" placeholder="비밀번호" autocomplete="current-password">
                 <button type="button" class="pw-toggle" onclick="togglePw('adminPw',this)">👁</button>
             </div>
             <div class="login-error" id="loginError"></div>
-            <button class="login-btn" onclick="handleAdminLogin()">로그인</button>
-            <div class="login-notice">⚠ 보안을 위해 비밀번호는 3개월마다 변경해주세요.</div>
-        </div>
+            <button type="submit" class="login-btn">로그인</button>
+        </form>
     </div>
     <div class="app-container" id="appContainer">
         <header class="header">
             <div class="header-content">
-                <div><div class="logo-sub">THE CLINIC</div><div class="logo-text">LUMI</div></div>
+                <div class="logo"><div class="logo-text"><div class="logo-sub">THE CLINIC</div><div class="logo-main">LUMI</div></div></div>
                 <div class="header-right">
-                    <select class="form-select" id="selectedYear" style="width:auto" onchange="loadAllData()"><option value="2026">2026</option><option value="2025">2025</option></select>
-                    <select class="form-select" id="selectedMonth" style="width:auto" onchange="loadAllData()">
-                        <option value="01">1월</option><option value="02">2월</option><option value="03">3월</option><option value="04">4월</option><option value="05">5월</option><option value="06">6월</option>
-                        <option value="07">7월</option><option value="08">8월</option><option value="09">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
-                    </select>
-                    <button class="logout-btn" onclick="adminLogout()">LOGOUT</button>
+                    <div class="month-selector">
+                        <select id="yearSelect" onchange="changeMonth()"></select><span>년</span>
+                        <select id="monthSelect" onchange="changeMonth()"></select><span>월</span>
+                    </div>
+                    <button class="logout-btn" onclick="logout()">로그아웃</button>
                 </div>
             </div>
         </header>
-        <nav class="main-nav">
-            <button class="nav-btn active" data-nav="sales">매출</button>
-            <button class="nav-btn" data-nav="staff">직원관리</button>
+        <nav class="nav-tabs">
+            <div class="nav-tab active" data-tab="revenue">매출</div>
+            <div class="nav-tab" data-tab="expense">지출</div>
+            <div class="nav-tab" data-tab="employee">직원관리</div>
         </nav>
-        <main class="main">
-            <!-- 매출 섹션 -->
-            <div class="section active" id="sales-section">
-                <div class="sub-nav">
-                    <button class="sub-btn active" data-sub="sales-overview">매출 현황</button>
-                    <button class="sub-btn" data-sub="sales-doctor">진료의별</button>
-                    <button class="sub-btn" data-sub="sales-staff">담당직원별</button>
-                    <button class="sub-btn" data-sub="sales-data">데이터 관리</button>
+        <main class="content">
+            <div class="tab-content active" id="tab-revenue">
+                <div class="sub-tabs">
+                    <div class="sub-tab active" data-sub="overview">매출 현황</div>
+                    <div class="sub-tab" data-sub="doctor">진료의별</div>
+                    <div class="sub-tab" data-sub="staff">담당직원별</div>
+                    <div class="sub-tab" data-sub="japan">일본인 매출</div>
+                    <div class="sub-tab" data-sub="upload">데이터 업로드</div>
                 </div>
-                <div class="section active" id="sales-overview">
-                    <div class="stats-grid" style="margin-top:1.5rem">
-                        <div class="stat-card"><div class="stat-label">이번달 총매출</div><div class="stat-value" id="monthlyTotal">₩0</div></div>
-                        <div class="stat-card"><div class="stat-label">일본인 매출</div><div class="stat-value" id="japanRevenue">₩0</div></div>
-                        <div class="stat-card"><div class="stat-label">거래 건수</div><div class="stat-value" id="monthlyTrans">0건</div></div>
-                        <div class="stat-card"><div class="stat-label">일본인 내원</div><div class="stat-value" id="japanVisitors">0명</div></div>
-                    </div>
+                <div class="sub-content active" id="sub-overview">
+                    <div id="birthdayAlert"></div>
+                    <div class="cards-grid" id="revenueCards"></div>
+                    <div class="chart-container"><div class="chart-title">월별 매출 추이</div><div class="chart-wrapper"><canvas id="revenueChart"></canvas></div></div>
+                    <div class="chart-container"><div class="chart-title">연도별 비교 (2024 vs 2025)</div><div class="chart-wrapper"><canvas id="compareChart"></canvas></div></div>
                 </div>
-                <div class="section" id="sales-doctor">
-                    <div class="card" style="margin-top:1.5rem"><div class="card-title">진료의별 매출</div>
-                        <table><thead><tr><th>진료의</th><th>건수</th><th>매출</th><th>비중</th></tr></thead>
-                            <tbody id="doctorSalesTable"><tr><td colspan="4" class="text-muted" style="text-align:center;padding:2rem">데이터 없음</td></tr></tbody>
-                        </table>
-                    </div>
+                <div class="sub-content" id="sub-doctor">
+                    <div class="cards-grid" id="doctorCards"></div>
+                    <div class="table-container"><table><thead><tr><th>진료의</th><th class="text-right">건수</th><th class="text-right">매출</th><th class="text-right">점유율</th></tr></thead><tbody id="doctorTable"></tbody></table></div>
                 </div>
-                <div class="section" id="sales-staff">
-                    <div class="card" style="margin-top:1.5rem"><div class="card-title">담당직원별 매출 (인센티브 1%)</div>
-                        <table><thead><tr><th>담당직원</th><th>건수</th><th>매출</th><th>인센티브</th></tr></thead>
-                            <tbody id="staffSalesTable"><tr><td colspan="4" class="text-muted" style="text-align:center;padding:2rem">데이터 없음</td></tr></tbody>
-                        </table>
-                    </div>
+                <div class="sub-content" id="sub-staff">
+                    <div class="cards-grid" id="staffSalesCards"></div>
+                    <div class="table-container"><table><thead><tr><th>담당직원</th><th class="text-right">건수</th><th class="text-right">매출</th><th class="text-right">인센티브(1%)</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
                 </div>
-                <div class="section" id="sales-data">
-                    <div class="upload-zone" id="uploadZone" style="margin-top:1.5rem">
-                        <div style="font-size:2rem;margin-bottom:1rem">📁</div>
-                        <div>엑셀 파일을 드래그하거나 클릭</div>
-                        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(event)">
+                <div class="sub-content" id="sub-japan">
+                    <div class="cards-grid" id="japanCards"></div>
+                    <div class="table-container"><table><thead><tr><th>월</th><th class="text-right">일본인 매출</th><th class="text-right">방문자 수</th><th class="text-right">객단가</th></tr></thead><tbody id="japanTable"></tbody></table></div>
+                </div>
+                <div class="sub-content" id="sub-upload">
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">엑셀 파일을 드래그하거나 클릭하여 업로드<br><small>오더판매내역및환자내역_YYYYMMDD_오더별_.xlsx</small></div>
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFileUpload(event)">
                     </div>
-                    <div class="card"><div class="card-title">월별 매출 수동 입력</div>
-                        <div class="form-row">
-                            <div class="form-group"><label class="form-label">총 매출</label><input type="text" class="form-input" id="inputTotalRevenue" placeholder="200,000,000"></div>
-                            <div class="form-group"><label class="form-label">일본인 매출</label><input type="text" class="form-input" id="inputJapanRevenue" placeholder="20,000,000"></div>
-                            <div class="form-group"><label class="form-label">일본인 내원수</label><input type="number" class="form-input" id="inputJapanVisitors" placeholder="25"></div>
-                            <div class="form-group"><label class="form-label">거래 건수</label><input type="number" class="form-input" id="inputTransactions" placeholder="3000"></div>
-                        </div>
-                        <button class="btn btn-primary" onclick="saveRevenueData()">저장</button>
+                    <div class="section"><div class="section-header"><div class="section-title">업로드 이력</div></div>
+                        <div class="table-container"><table><thead><tr><th>연월</th><th class="text-right">총매출</th><th class="text-right">건수</th><th>업로드일</th></tr></thead><tbody id="uploadHistory"></tbody></table></div>
                     </div>
                 </div>
             </div>
-            <!-- 직원관리 섹션 -->
-            <div class="section" id="staff-section">
-                <div class="sub-nav">
-                    <button class="sub-btn active" data-sub="staff-list">직원목록</button>
-                    <button class="sub-btn" data-sub="staff-leave">휴가관리</button>
-                    <button class="sub-btn" data-sub="staff-salary">급여</button>
+            <div class="tab-content" id="tab-expense">
+                <div class="sub-tabs">
+                    <div class="sub-tab active" data-sub="fixed">고정비</div>
+                    <div class="sub-tab" data-sub="variable">유동비</div>
                 </div>
-                <div class="section active" id="staff-list">
-                    <div class="flex justify-between items-center mb-2" style="margin-top:1.5rem">
-                        <h2 style="font-weight:500">직원 관리</h2>
-                        <button class="btn btn-primary" onclick="openEmployeeModal()">+ 직원 추가</button>
+                <div class="sub-content active" id="sub-fixed">
+                    <div class="expense-summary">
+                        <div class="expense-box"><div class="expense-box-label">월 고정비 총액</div><div class="expense-box-value" id="fixedTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">항목 수</div><div class="expense-box-value" id="fixedCount">0개</div></div>
+                        <div class="expense-box"><div class="expense-box-label">연간 예상</div><div class="expense-box-value" id="fixedYearly">₩0</div></div>
                     </div>
-                    <div class="stats-grid">
-                        <div class="stat-card"><div class="stat-label">전체 직원</div><div class="stat-value" id="totalEmp">0</div></div>
-                        <div class="stat-card"><div class="stat-label">재직중</div><div class="stat-value text-success" id="activeEmp">0</div></div>
-                    </div>
-                    <div class="card"><table>
-                        <thead><tr><th>사번</th><th>이름</th><th>직급</th><th>입사일</th><th>상태</th><th>관리</th></tr></thead>
-                        <tbody id="employeeTable"><tr><td colspan="6" class="text-muted" style="text-align:center;padding:2rem">로딩중...</td></tr></tbody>
-                    </table></div>
+                    <div class="section-header"><div class="section-title">고정비 목록</div><button class="btn btn-primary" onclick="openExpenseModal('fixed')">+ 항목 추가</button></div>
+                    <div class="table-container"><table><thead><tr><th>항목명</th><th>카테고리</th><th class="text-right">월 금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="fixedTable"></tbody></table></div>
                 </div>
-                <div class="section" id="staff-leave">
-                    <div class="card" style="margin-top:1.5rem"><div class="card-title">휴가 신청 목록</div>
-                        <table><thead><tr><th>직원</th><th>유형</th><th>기간</th><th>상태</th><th>처리</th></tr></thead>
-                            <tbody id="leaveTable"><tr><td colspan="5" class="text-muted" style="text-align:center;padding:2rem">신청 없음</td></tr></tbody>
-                        </table>
+                <div class="sub-content" id="sub-variable">
+                    <div class="expense-summary">
+                        <div class="expense-box"><div class="expense-box-label">이번 달 유동비</div><div class="expense-box-value" id="variableTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">건수</div><div class="expense-box-value" id="variableCount">0건</div></div>
+                        <div class="expense-box"><div class="expense-box-label">전월 대비</div><div class="expense-box-value" id="variableChange">-</div></div>
                     </div>
+                    <div class="section-header"><div class="section-title">유동비 목록</div><button class="btn btn-primary" onclick="openExpenseModal('variable')">+ 항목 추가</button></div>
+                    <div class="table-container"><table><thead><tr><th>날짜</th><th>항목명</th><th>카테고리</th><th class="text-right">금액</th><th>관리</th></tr></thead><tbody id="variableTable"></tbody></table></div>
                 </div>
-                <div class="section" id="staff-salary">
-                    <div class="card" style="margin-top:1.5rem"><div class="card-title">급여 현황</div>
-                        <table><thead><tr><th>직원</th><th>기본급</th><th>고정OT</th><th>인센티브</th><th>총 급여</th></tr></thead>
-                            <tbody id="salaryTable"><tr><td colspan="5" class="text-muted" style="text-align:center;padding:2rem">로딩중...</td></tr></tbody>
-                        </table>
-                        <div class="summary-row"><span>합계</span><span class="text-success" id="totalSalary">₩0</span></div>
+            </div>
+            <div class="tab-content" id="tab-employee">
+                <div class="sub-tabs">
+                    <div class="sub-tab active" data-sub="list">직원 목록</div>
+                    <div class="sub-tab" data-sub="attendance">근태 현황</div>
+                    <div class="sub-tab" data-sub="overtime">오버타임</div>
+                    <div class="sub-tab" data-sub="incentive">인센티브</div>
+                    <div class="sub-tab" data-sub="salary">급여</div>
+                </div>
+                <div class="sub-content active" id="sub-list">
+                    <div class="section-header"><div class="section-title">직원 목록</div><button class="btn btn-primary" onclick="openEmployeeModal()">+ 직원 등록</button></div>
+                    <div class="table-container"><table><thead><tr><th>사번</th><th>이름</th><th>매칭명</th><th>직급</th><th>입사일</th><th>근속</th><th>시급</th><th>상태</th><th>관리</th></tr></thead><tbody id="employeeTable"></tbody></table></div>
+                </div>
+                <div class="sub-content" id="sub-attendance">
+                    <div class="cards-grid">
+                        <div class="card"><div class="card-label">이번 달 출근일</div><div class="card-value" id="workDays">0일</div></div>
+                        <div class="card"><div class="card-label">지각</div><div class="card-value" id="lateDays">0회</div></div>
+                        <div class="card"><div class="card-label">조퇴</div><div class="card-value" id="earlyDays">0회</div></div>
+                        <div class="card"><div class="card-label">결근</div><div class="card-value" id="absentDays">0회</div></div>
                     </div>
+                    <div class="section-header"><div class="section-title">근태 기록</div><select class="form-select" id="attendanceFilter" style="width:auto" onchange="renderAttendance()"><option value="all">전체 직원</option></select></div>
+                    <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>상태</th></tr></thead><tbody id="attendanceTable"></tbody></table></div>
+                </div>
+                <div class="sub-content" id="sub-overtime">
+                    <div class="cards-grid">
+                        <div class="card"><div class="card-label">이번 달 총 오버타임</div><div class="card-value" id="totalOT">0시간</div></div>
+                        <div class="card"><div class="card-label">저녁 OT (자동)</div><div class="card-value" id="eveningOT">0시간</div></div>
+                        <div class="card"><div class="card-label">점심 OT (수동)</div><div class="card-value" id="lunchOTVal">0시간</div></div>
+                        <div class="card"><div class="card-label">OT 수당 합계</div><div class="card-value" id="totalOTPay">₩0</div></div>
+                    </div>
+                    <div class="section-header"><div class="section-title">점심 OT 입력</div><button class="btn btn-primary" onclick="openOTModal()">+ OT 입력</button></div>
+                    <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>시간(분)</th><th>사유</th><th>관리</th></tr></thead><tbody id="lunchOTTable"></tbody></table></div>
+                </div>
+                <div class="sub-content" id="sub-incentive">
+                    <div class="section-header"><div class="section-title">인센티브 항목 관리</div><button class="btn btn-primary" onclick="openIncentiveItemModal()">+ 항목 추가</button></div>
+                    <div class="table-container"><table><thead><tr><th>항목명</th><th>단가</th><th>적용 직급</th><th>관리</th></tr></thead><tbody id="incentiveItemTable"></tbody></table></div>
+                    <div class="section-header mt-1"><div class="section-title">직원별 인센티브 현황</div></div>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th>매출 인센티브</th><th>항목 인센티브</th><th>합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
+                </div>
+                <div class="sub-content" id="sub-salary">
+                    <div class="section-header"><div class="section-title">급여 명세</div><button class="btn btn-secondary" onclick="exportSalary()">엑셀 다운로드</button></div>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">기본급</th><th class="text-right">OT수당</th><th class="text-right">인센티브</th><th class="text-right">공제</th><th class="text-right">실수령액</th></tr></thead><tbody id="salaryTable"></tbody></table></div>
                 </div>
             </div>
         </main>
     </div>
-    <!-- 직원 모달 -->
-    <div class="modal-overlay" id="employeeModal">
-        <div class="modal">
-            <div class="modal-header"><div class="modal-title" id="empModalTitle">직원 추가</div><button class="modal-close" onclick="closeEmployeeModal()">&times;</button></div>
-            <form id="employeeForm">
+
+    <!-- Modals -->
+    <div class="modal" id="employeeModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title" id="employeeModalTitle">직원 등록</div><button class="modal-close" onclick="closeModal('employeeModal')">&times;</button></div>
+            <div class="modal-body">
                 <input type="hidden" id="empEditId">
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">이름 *</label><input type="text" class="form-input" id="empName" required oninput="updateAutoId()"></div>
-                    <div class="form-group"><label class="form-label">입사일 *</label><input type="date" class="form-input" id="empJoinDate" required onchange="updateAutoId()"></div>
-                </div>
-                <div class="form-group"><label class="form-label">사번 (자동생성)</label><div class="auto-id" id="autoIdPreview">이름과 입사일 입력시 자동생성</div></div>
-                <div class="form-row">
-                    <div class="form-group"><label class="form-label">직급 *</label>
-                        <select class="form-select" id="empRole" required><option value="">선택</option><option value="실장">실장</option><option value="피부관리사">피부관리사</option><option value="간호사">간호사</option><option value="코디">코디</option><option value="마케팅">마케팅</option></select>
-                    </div>
-                    <div class="form-group"><label class="form-label">기본급 *</label><input type="number" class="form-input" id="empBaseSalary" required></div>
+                    <div class="form-group"><label class="form-label">이름 *</label><input type="text" class="form-input" id="empName" required></div>
+                    <div class="form-group"><label class="form-label">매칭 이름 (엑셀)</label><input type="text" class="form-input" id="empMatchName" placeholder="엑셀 담당직원명"></div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">고정OT수당</label><input type="number" class="form-input" id="empFixedOT"></div>
-                    <div class="form-group"><label class="form-label">시급</label><input type="number" class="form-input" id="empHourlyWage"></div>
+                    <div class="form-group"><label class="form-label">직급 *</label><select class="form-select" id="empRole"><option value="doctor">원장</option><option value="nurse">간호사</option><option value="coordinator">코디네이터</option><option value="marketing">마케팅</option><option value="manager">실장</option><option value="staff">스태프</option></select></div>
+                    <div class="form-group"><label class="form-label">입사일 *</label><input type="date" class="form-input" id="empJoinDate" required></div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">매칭이름 (엑셀)</label><input type="text" class="form-input" id="empMatchName" placeholder="예: 박보미"></div>
-                    <div class="form-group"><label class="form-label">상태</label>
-                        <select class="form-select" id="empIsActive"><option value="true">재직중</option><option value="false">퇴사</option></select>
-                    </div>
+                    <div class="form-group"><label class="form-label">시급</label><input type="number" class="form-input" id="empHourly" value="12000"></div>
+                    <div class="form-group"><label class="form-label">인센티브 유형</label><select class="form-select" id="empIncentiveType"><option value="none">없음</option><option value="revenue">매출 1%</option><option value="growth">성장분 10%</option><option value="japan">일본인 매출</option><option value="staff_sales">담당직원 매출 1%</option></select></div>
                 </div>
-                <div class="flex justify-between mt-2">
-                    <button type="button" class="btn" style="background:var(--border)" onclick="closeEmployeeModal()">취소</button>
-                    <button type="submit" class="btn btn-primary">저장</button>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">생년월일</label><input type="date" class="form-input" id="empBirthday"></div>
+                    <div class="form-group"><label class="form-label">상태</label><select class="form-select" id="empStatus"><option value="active">재직</option><option value="inactive">퇴사</option></select></div>
                 </div>
-            </form>
+                <div class="form-group"><label class="form-label">사번 (자동생성)</label><input type="text" class="form-input" id="empId" readonly placeholder="저장 시 자동 생성"></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('employeeModal')">취소</button><button class="btn btn-primary" onclick="saveEmployee()">저장</button></div>
         </div>
     </div>
+    <div class="modal" id="expenseModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title" id="expenseModalTitle">지출 추가</div><button class="modal-close" onclick="closeModal('expenseModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="expenseEditId"><input type="hidden" id="expenseType">
+                <div class="form-group" id="expenseDateGroup"><label class="form-label">날짜</label><input type="date" class="form-input" id="expenseDate"></div>
+                <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="expenseName" required></div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">카테고리</label><select class="form-select" id="expenseCategory"><option value="임대료">임대료</option><option value="인건비">인건비</option><option value="공과금">공과금</option><option value="보험료">보험료</option><option value="장비">장비</option><option value="소모품">소모품</option><option value="마케팅">마케팅</option><option value="기타">기타</option></select></div>
+                    <div class="form-group"><label class="form-label">금액 *</label><input type="number" class="form-input" id="expenseAmount" required></div>
+                </div>
+                <div class="form-group"><label class="form-label">비고</label><textarea class="form-textarea" id="expenseNote" rows="2"></textarea></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('expenseModal')">취소</button><button class="btn btn-primary" onclick="saveExpense()">저장</button></div>
+        </div>
+    </div>
+    <div class="modal" id="otModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title">점심 OT 입력</div><button class="modal-close" onclick="closeModal('otModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">날짜</label><input type="date" class="form-input" id="otDate"></div>
+                    <div class="form-group"><label class="form-label">직원</label><select class="form-select" id="otEmployee"></select></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">시간 (분)</label><input type="number" class="form-input" id="otMinutes" value="30"></div>
+                    <div class="form-group"><label class="form-label">사유</label><input type="text" class="form-input" id="otReason" placeholder="예: 점심시간 근무"></div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('otModal')">취소</button><button class="btn btn-primary" onclick="saveLunchOT()">저장</button></div>
+        </div>
+    </div>
+    <div class="modal" id="incentiveItemModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title" id="incentiveItemModalTitle">인센티브 항목 추가</div><button class="modal-close" onclick="closeModal('incentiveItemModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="incItemEditId">
+                <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="incItemName" placeholder="예: 시술 보조, 상담 성공"></div>
+                <div class="form-group"><label class="form-label">단가 (건당)</label><input type="number" class="form-input" id="incItemPrice" value="10000"></div>
+                <div class="form-group"><label class="form-label">적용 직급</label><select class="form-select" id="incItemRole"><option value="all">전체</option><option value="nurse">간호사</option><option value="coordinator">코디네이터</option><option value="staff">스태프</option></select></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('incentiveItemModal')">취소</button><button class="btn btn-primary" onclick="saveIncentiveItem()">저장</button></div>
+        </div>
+    </div>
+
     <script>
+        // Firebase Configuration
         const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
         firebase.initializeApp(firebaseConfig);
         const db=firebase.firestore();
 
-        const ADMIN_ID='adminhighgo';
-        const ADMIN_PW='gndls-asdk!jd-As';
-        const DEFAULT_PW='final12890-';
+        // Global State
+        let currentYear=new Date().getFullYear();
+        let currentMonth=new Date().getMonth()+1;
+        let employees=[],attendance=[],revenueData={},salesDetail={},fixedExpenses=[],variableExpenses=[],incentiveItems=[],lunchOT=[];
+        let revenueChart=null,compareChart=null;
 
-        let employees=[],leaveRequests=[],revenueData={},salesDetailData={doctorSales:{},staffSales:{}};
+        // 2024년 데이터
+        const data2024={1:{total:243000000,japan:48000000,japanVisitors:32},2:{total:258000000,japan:52000000,japanVisitors:35},3:{total:199000000,japan:38000000,japanVisitors:25},4:{total:210000000,japan:42000000,japanVisitors:28},5:{total:195000000,japan:39000000,japanVisitors:26},6:{total:183000000,japan:36000000,japanVisitors:24},7:{total:169000000,japan:34000000,japanVisitors:23},8:{total:168000000,japan:33000000,japanVisitors:22},9:{total:192000000,japan:38000000,japanVisitors:25},10:{total:186000000,japan:37000000,japanVisitors:25},11:{total:194000000,japan:39000000,japanVisitors:26},12:{total:200000000,japan:40000000,japanVisitors:27}};
 
-        function togglePw(id,btn){
-            const inp=document.getElementById(id);
-            if(inp.type==='password'){inp.type='text';btn.textContent='🔒';}
-            else{inp.type='password';btn.textContent='👁';}
-        }
+        // Utility Functions
+        function formatCurrency(num){return num?'₩'+Math.round(num).toLocaleString():'₩0';}
+        function formatNumber(num){return num?Math.round(num).toLocaleString():'0';}
+        function getYM(){return `${currentYear}-${String(currentMonth).padStart(2,'0')}`;}
+        function togglePw(id,btn){const input=document.getElementById(id);if(input.type==='password'){input.type='text';btn.textContent='🙈';}else{input.type='password';btn.textContent='👁';}}
+        function closeModal(id){document.getElementById(id).classList.remove('active');}
+        function openModal(id){document.getElementById(id).classList.add('active');}
 
-        function handleAdminLogin(){
-            const id=document.getElementById('adminId').value.trim();
-            const pw=document.getElementById('adminPw').value;
-            document.getElementById('loginError').textContent='';
-            if(id===ADMIN_ID && pw===ADMIN_PW){
-                localStorage.setItem('lumiAdmin','true');
-                showApp();
-            }else{
-                document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
-            }
-        }
-
-        function adminLogout(){
-            localStorage.removeItem('lumiAdmin');
-            document.getElementById('loginScreen').classList.remove('hidden');
-            document.getElementById('appContainer').classList.remove('active');
-        }
-
-        function checkAdminLogin(){
-            if(localStorage.getItem('lumiAdmin')==='true') showApp();
-        }
-
-        function showApp(){
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('appContainer').classList.add('active');
-            const now=new Date();
-            document.getElementById('selectedMonth').value=String(now.getMonth()+1).padStart(2,'0');
-            loadAllData();
-        }
-
-        function getYM(){
-            return document.getElementById('selectedYear').value+'-'+document.getElementById('selectedMonth').value;
-        }
-
-        // Navigation
-        document.querySelectorAll('.nav-btn').forEach(n=>n.addEventListener('click',()=>{
-            document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
-            document.querySelectorAll('.section[id$="-section"]').forEach(x=>x.classList.remove('active'));
-            n.classList.add('active');
-            document.getElementById(n.dataset.nav+'-section').classList.add('active');
-        }));
-        document.querySelectorAll('.sub-btn').forEach(s=>s.addEventListener('click',()=>{
-            const parent=s.closest('.section');
-            parent.querySelectorAll('.sub-btn').forEach(x=>x.classList.remove('active'));
-            parent.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
-            s.classList.add('active');
-            document.getElementById(s.dataset.sub).classList.add('active');
-        }));
-
-        async function loadAllData(){
-            await loadEmployees();
-            await loadLeaveRequests();
-            await loadRevenueData();
-            await loadSalesDetailData();
-            renderAll();
-        }
-
-        async function loadEmployees(){
-            try{
-                const snap=await db.collection('employees').get();
-                employees=[];
-                snap.forEach(d=>employees.push({id:d.id,...d.data()}));
-            }catch(e){console.error(e);}
-        }
-
-        async function loadLeaveRequests(){
-            try{
-                const snap=await db.collection('leaveRequests').orderBy('createdAt','desc').limit(30).get();
-                leaveRequests=[];
-                snap.forEach(d=>leaveRequests.push({id:d.id,...d.data()}));
-            }catch(e){}
-        }
-
-        async function loadRevenueData(){
-            const ym=getYM();
-            try{
-                const doc=await db.collection('revenue').doc(ym).get();
-                revenueData=doc.exists?doc.data():{total:0,japan:0,japanVisitors:0,transactions:0};
-            }catch(e){revenueData={total:0,japan:0,japanVisitors:0,transactions:0};}
-        }
-
-        async function loadSalesDetailData(){
-            const ym=getYM();
-            try{
-                const doc=await db.collection('salesDetail').doc(ym).get();
-                salesDetailData=doc.exists?doc.data():{doctorSales:{},staffSales:{}};
-            }catch(e){salesDetailData={doctorSales:{},staffSales:{}};}
-        }
-
-        function formatCurrency(n){return '₩'+new Intl.NumberFormat('ko-KR').format(n||0);}
-
-        function renderAll(){
-            renderSales();
-            renderEmployees();
-            renderLeaves();
-            renderSalary();
-        }
-
-        function renderSales(){
-            const total=revenueData.total||0;
-            document.getElementById('monthlyTotal').textContent=formatCurrency(total);
-            document.getElementById('japanRevenue').textContent=formatCurrency(revenueData.japan);
-            document.getElementById('monthlyTrans').textContent=(revenueData.transactions||0)+'건';
-            document.getElementById('japanVisitors').textContent=(revenueData.japanVisitors||0)+'명';
-
-            const doctors=Object.entries(salesDetailData.doctorSales||{});
-            document.getElementById('doctorSalesTable').innerHTML=doctors.length===0?
-                '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:2rem">데이터 없음</td></tr>':
-                doctors.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td>${data.count}건</td><td class="text-success">${formatCurrency(data.amount)}</td><td>${total>0?((data.amount/total)*100).toFixed(1)+'%':'0%'}</td></tr>`).join('');
-
-            const staffs=Object.entries(salesDetailData.staffSales||{});
-            document.getElementById('staffSalesTable').innerHTML=staffs.length===0?
-                '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:2rem">데이터 없음</td></tr>':
-                staffs.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td>${data.count}건</td><td class="text-success">${formatCurrency(data.amount)}</td><td style="color:var(--gold)"><strong>${formatCurrency(Math.round(data.amount*0.01))}</strong></td></tr>`).join('');
-        }
-
-        function renderEmployees(){
-            const active=employees.filter(e=>e.isActive!==false);
-            document.getElementById('totalEmp').textContent=employees.length;
-            document.getElementById('activeEmp').textContent=active.length;
-
-            document.getElementById('employeeTable').innerHTML=employees.length===0?
-                '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:2rem">직원이 없습니다</td></tr>':
-                employees.map(e=>`<tr>
-                    <td><span class="badge badge-info">${e.id}</span></td>
-                    <td><strong>${e.name}</strong>${e.matchName?'<br><small class="text-muted">매칭: '+e.matchName+'</small>':''}</td>
-                    <td>${e.role||'-'}</td>
-                    <td>${e.joinDate||'-'}</td>
-                    <td>${e.isActive!==false?'<span class="badge badge-success">재직</span>':'<span class="badge" style="background:rgba(168,90,90,.15);color:var(--red)">퇴사</span>'}</td>
-                    <td><div class="btn-group">
-                        <button class="btn btn-sm" style="background:var(--border)" onclick="editEmployee('${e.id}')">수정</button>
-                        <button class="btn btn-sm" style="background:var(--gold);color:#fff" onclick="resetPassword('${e.id}')">비번초기화</button>
-                    </div></td>
-                </tr>`).join('');
-        }
-
-        function renderLeaves(){
-            document.getElementById('leaveTable').innerHTML=leaveRequests.length===0?
-                '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:2rem">신청 없음</td></tr>':
-                leaveRequests.slice(0,10).map(l=>{
-                    const emp=employees.find(e=>e.id===l.employeeId);
-                    const statusBadge=l.status==='pending'?'badge-warning':l.status==='approved'?'badge-success':'';
-                    return `<tr>
-                        <td>${emp?.name||l.employeeId}</td>
-                        <td>${l.type==='annual'?'연차':l.type==='half'?'반차':'오프'}</td>
-                        <td>${l.startDate}~${l.endDate}</td>
-                        <td><span class="badge ${statusBadge}">${l.status==='pending'?'대기':l.status==='approved'?'승인':'반려'}</span></td>
-                        <td>${l.status==='pending'?`<div class="btn-group">
-                            <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="approveLeave('${l.id}')">승인</button>
-                            <button class="btn btn-sm btn-danger" onclick="rejectLeave('${l.id}')">반려</button>
-                        </div>`:'-'}</td>
-                    </tr>`;
-                }).join('');
-        }
-
-        function renderSalary(){
-            const active=employees.filter(e=>e.isActive!==false);
-            let totalSum=0;
-            document.getElementById('salaryTable').innerHTML=active.length===0?
-                '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:2rem">직원이 없습니다</td></tr>':
-                active.map(e=>{
-                    const staffSales=e.matchName&&salesDetailData.staffSales[e.matchName]?salesDetailData.staffSales[e.matchName].amount:0;
-                    const incentive=Math.round(staffSales*0.01);
-                    const total=(e.baseSalary||0)+(e.fixedOT||0)+incentive;
-                    totalSum+=total;
-                    return `<tr>
-                        <td><strong>${e.name}</strong></td>
-                        <td>${formatCurrency(e.baseSalary)}</td>
-                        <td>${formatCurrency(e.fixedOT)}</td>
-                        <td style="color:var(--gold)">${formatCurrency(incentive)}</td>
-                        <td><strong>${formatCurrency(total)}</strong></td>
-                    </tr>`;
-                }).join('');
-            document.getElementById('totalSalary').textContent=formatCurrency(totalSum);
-        }
-
-        // Employee Modal
-        function generateEmpId(name,joinDate){
-            if(!name||!joinDate)return null;
-            const year=joinDate.substring(2,4);
-            const initials=getInitials(name);
+        function generateEmployeeId(name,joinDate){
+            const year=joinDate?joinDate.substring(2,4):String(new Date().getFullYear()).substring(2);
+            const initials=getKoreanInitials(name).toLowerCase();
             return year+initials;
         }
 
-        function getInitials(name){
-            const cho=['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
-            const map={'ㄱ':'g','ㄲ':'kk','ㄴ':'n','ㄷ':'d','ㄸ':'tt','ㄹ':'r','ㅁ':'m','ㅂ':'b','ㅃ':'pp','ㅅ':'s','ㅆ':'ss','ㅇ':'','ㅈ':'j','ㅉ':'jj','ㅊ':'ch','ㅋ':'k','ㅌ':'t','ㅍ':'p','ㅎ':'h'};
-            let initials='';
-            for(let i=0;i<name.length&&initials.length<3;i++){
-                const c=name.charCodeAt(i);
-                if(c>=0xAC00&&c<=0xD7A3){const idx=Math.floor((c-0xAC00)/588);initials+=map[cho[idx]]||'';}
-                else if(/[a-zA-Z]/.test(name[i])){initials+=name[i].toLowerCase();}
+        function getKoreanInitials(name){
+            const CHO=['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+            const ALPHA=['g','kk','n','d','tt','r','m','b','pp','s','ss','o','j','jj','ch','k','t','p','h'];
+            let result='';
+            for(let i=0;i<name.length&&result.length<3;i++){
+                const code=name.charCodeAt(i);
+                if(code>=0xAC00&&code<=0xD7A3){const idx=Math.floor((code-0xAC00)/588);result+=ALPHA[idx];}
+                else if(/[a-zA-Z]/.test(name[i])){result+=name[i].toLowerCase();}
             }
-            return initials.substring(0,3).padEnd(3,'x');
+            return result.substring(0,3).padEnd(3,'x');
         }
 
-        function updateAutoId(){
-            const name=document.getElementById('empName').value.trim();
-            const joinDate=document.getElementById('empJoinDate').value;
-            const preview=document.getElementById('autoIdPreview');
-            const editId=document.getElementById('empEditId').value;
-            if(editId){preview.textContent=editId+' (수정불가)';return;}
-            if(name&&joinDate){preview.textContent=generateEmpId(name,joinDate);}
-            else{preview.textContent='이름과 입사일 입력시 자동생성';}
+        function getYearsOfService(joinDate){
+            if(!joinDate)return'-';
+            const join=new Date(joinDate);const now=new Date();
+            const years=Math.floor((now-join)/(365.25*24*60*60*1000));
+            return years<1?'1년 미만':`${years+1}년차`;
         }
 
-        function openEmployeeModal(id=null){
-            document.getElementById('employeeModal').classList.add('active');
-            document.getElementById('employeeForm').reset();
-            document.getElementById('empEditId').value='';
-            document.getElementById('autoIdPreview').textContent='이름과 입사일 입력시 자동생성';
-            if(id){
-                const e=employees.find(x=>x.id===id);
-                if(e){
-                    document.getElementById('empModalTitle').textContent='직원 수정';
-                    document.getElementById('empEditId').value=e.id;
-                    document.getElementById('empName').value=e.name;
-                    document.getElementById('empJoinDate').value=e.joinDate;
-                    document.getElementById('empRole').value=e.role;
-                    document.getElementById('empBaseSalary').value=e.baseSalary;
-                    document.getElementById('empFixedOT').value=e.fixedOT||'';
-                    document.getElementById('empHourlyWage').value=e.hourlyWage||'';
-                    document.getElementById('empMatchName').value=e.matchName||'';
-                    document.getElementById('empIsActive').value=e.isActive!==false?'true':'false';
-                    updateAutoId();
-                }
-            }else{
-                document.getElementById('empModalTitle').textContent='직원 추가';
+        // Authentication
+        const ADMIN_CREDENTIALS={id:'admin',pw:'lumi2024!'};
+        function handleAdminLogin(){
+            const id=document.getElementById('adminId').value.trim();
+            const pw=document.getElementById('adminPw').value;
+            const errorEl=document.getElementById('loginError');
+            if(id===ADMIN_CREDENTIALS.id&&pw===ADMIN_CREDENTIALS.pw){
+                localStorage.setItem('lumi_admin_auth','true');
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appContainer').classList.add('active');
+                initApp();
+            }else{errorEl.textContent='ID 또는 비밀번호가 올바르지 않습니다.';}
+        }
+        function logout(){localStorage.removeItem('lumi_admin_auth');location.reload();}
+        function checkAuth(){
+            if(localStorage.getItem('lumi_admin_auth')==='true'){
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appContainer').classList.add('active');
+                initApp();
             }
         }
 
-        function closeEmployeeModal(){document.getElementById('employeeModal').classList.remove('active');}
-        function editEmployee(id){openEmployeeModal(id);}
-
-        document.getElementById('employeeForm').addEventListener('submit',async e=>{
-            e.preventDefault();
-            const editId=document.getElementById('empEditId').value;
-            const data={
-                name:document.getElementById('empName').value,
-                role:document.getElementById('empRole').value,
-                joinDate:document.getElementById('empJoinDate').value,
-                baseSalary:parseInt(document.getElementById('empBaseSalary').value)||0,
-                fixedOT:parseInt(document.getElementById('empFixedOT').value)||0,
-                hourlyWage:parseInt(document.getElementById('empHourlyWage').value)||0,
-                matchName:document.getElementById('empMatchName').value||null,
-                isActive:document.getElementById('empIsActive').value==='true',
-                updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-            };
-            try{
-                if(editId){
-                    await db.collection('employees').doc(editId).update(data);
-                    alert('수정 완료');
-                }else{
-                    const newId=generateEmpId(data.name,data.joinDate);
-                    if(!newId){alert('사번 생성 실패');return;}
-                    data.createdAt=firebase.firestore.FieldValue.serverTimestamp();
-                    await db.collection('employees').doc(newId).set(data);
-                    alert('추가 완료: '+newId);
-                }
-                closeEmployeeModal();
-                await loadEmployees();
-                renderAll();
-            }catch(err){alert('저장 실패: '+err.message);}
+        // Tab Navigation
+        document.querySelectorAll('.nav-tab').forEach(tab=>{
+            tab.addEventListener('click',function(){
+                document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById('tab-'+this.dataset.tab).classList.add('active');
+            });
+        });
+        document.querySelectorAll('.sub-tab').forEach(tab=>{
+            tab.addEventListener('click',function(){
+                const parent=this.closest('.tab-content');
+                parent.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+                parent.querySelectorAll('.sub-content').forEach(c=>c.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById('sub-'+this.dataset.sub).classList.add('active');
+            });
         });
 
-        async function resetPassword(id){
-            if(!confirm(id+' 비밀번호 초기화?\n임시: '+DEFAULT_PW))return;
-            try{
-                await db.collection('employees').doc(id).update({password:DEFAULT_PW});
-                alert('초기화 완료');
-            }catch(err){alert(err.message);}
+        // Month Selector
+        function initMonthSelector(){
+            const yearSelect=document.getElementById('yearSelect');
+            const monthSelect=document.getElementById('monthSelect');
+            yearSelect.innerHTML='';monthSelect.innerHTML='';
+            for(let y=2024;y<=2026;y++){yearSelect.innerHTML+=`<option value="${y}" ${y===currentYear?'selected':''}>${y}</option>`;}
+            for(let m=1;m<=12;m++){monthSelect.innerHTML+=`<option value="${m}" ${m===currentMonth?'selected':''}>${m}</option>`;}
+        }
+        function changeMonth(){
+            currentYear=parseInt(document.getElementById('yearSelect').value);
+            currentMonth=parseInt(document.getElementById('monthSelect').value);
+            loadAllData();
         }
 
-        // Leave
-        async function approveLeave(id){
-            if(!confirm('승인?'))return;
+        // Data Loading
+        async function loadAllData(){
+            await Promise.all([loadEmployees(),loadRevenueData(),loadSalesDetailData(),loadExpenses(),loadAttendance(),loadIncentiveItems(),loadLunchOT()]);
+            renderAll();
+        }
+        async function loadEmployees(){try{const snapshot=await db.collection('employees').get();employees=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));}catch(e){console.error('Load employees error:',e);}}
+        async function loadRevenueData(){try{const snapshot=await db.collection('revenue').get();revenueData={};snapshot.docs.forEach(doc=>{revenueData[doc.id]=doc.data();});}catch(e){console.error('Load revenue error:',e);}}
+        async function loadSalesDetailData(){try{const snapshot=await db.collection('salesDetail').get();salesDetail={};snapshot.docs.forEach(doc=>{salesDetail[doc.id]=doc.data();});}catch(e){console.error('Load sales detail error:',e);}}
+        async function loadExpenses(){
             try{
-                await db.collection('leaveRequests').doc(id).update({status:'approved',approvedAt:firebase.firestore.FieldValue.serverTimestamp()});
-                alert('승인 완료');
-                await loadLeaveRequests();
-                renderLeaves();
-            }catch(err){alert(err.message);}
+                let snapshot=await db.collection('fixedExpenses').get();
+                fixedExpenses=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+                snapshot=await db.collection('variableExpenses').where('yearMonth','==',getYM()).get();
+                variableExpenses=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+            }catch(e){console.error('Load expenses error:',e);}
+        }
+        async function loadAttendance(){
+            try{
+                const ym=getYM();
+                const snapshot=await db.collection('attendance').where('date','>=',ym+'-01').where('date','<=',ym+'-31').get();
+                attendance=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+            }catch(e){console.error('Load attendance error:',e);}
+        }
+        async function loadIncentiveItems(){try{const snapshot=await db.collection('incentiveItems').get();incentiveItems=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));}catch(e){console.error('Load incentive items error:',e);}}
+        async function loadLunchOT(){
+            try{
+                const ym=getYM();
+                const snapshot=await db.collection('lunchOT').where('date','>=',ym+'-01').where('date','<=',ym+'-31').get();
+                lunchOT=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+            }catch(e){console.error('Load lunch OT error:',e);}
         }
 
-        async function rejectLeave(id){
-            if(!confirm('반려?'))return;
-            try{
-                await db.collection('leaveRequests').doc(id).update({status:'rejected',rejectedAt:firebase.firestore.FieldValue.serverTimestamp()});
-                alert('반려 완료');
-                await loadLeaveRequests();
-                renderLeaves();
-            }catch(err){alert(err.message);}
+        // Render Functions
+        function renderAll(){
+            renderRevenueOverview();renderDoctorSales();renderStaffSales();renderJapanSales();renderUploadHistory();
+            renderExpenses();renderEmployees();renderAttendance();renderOvertime();
+            renderIncentiveItems();renderIncentiveSummary();renderSalary();renderCharts();checkBirthdays();
         }
 
-        // Revenue
-        async function saveRevenueData(){
+        function renderRevenueOverview(){
             const ym=getYM();
-            const total=parseInt((document.getElementById('inputTotalRevenue').value||'').replace(/,/g,''))||0;
-            const japan=parseInt((document.getElementById('inputJapanRevenue').value||'').replace(/,/g,''))||0;
-            const jVis=parseInt(document.getElementById('inputJapanVisitors').value)||0;
-            const trans=parseInt(document.getElementById('inputTransactions').value)||0;
-            try{
-                await db.collection('revenue').doc(ym).set({total,japan,japanVisitors:jVis,transactions:trans,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
-                revenueData={total,japan,japanVisitors:jVis,transactions:trans};
-                alert('저장 완료');
-                renderSales();
-            }catch(err){alert(err.message);}
+            const data=revenueData[ym]||{total:0,japan:0,transactions:0};
+            const prevYM=currentMonth===1?`${currentYear-1}-12`:`${currentYear}-${String(currentMonth-1).padStart(2,'0')}`;
+            const prevData=revenueData[prevYM]||{total:0};
+            const lastYearData=data2024[currentMonth]||{total:0};
+            const growth=data.total-prevData.total;
+            const yoyGrowth=data.total-lastYearData.total;
+            const avgTransaction=data.transactions?data.total/data.transactions:0;
+
+            document.getElementById('revenueCards').innerHTML=`
+                <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(data.total)}</div><div class="card-change ${growth>=0?'positive':'negative'}">전월 대비 ${growth>=0?'+':''}${formatCurrency(growth)}</div></div>
+                <div class="card"><div class="card-label">일본인 매출</div><div class="card-value">${formatCurrency(data.japan)}</div><div class="card-sub">전체의 ${data.total?Math.round(data.japan/data.total*100):0}%</div></div>
+                <div class="card"><div class="card-label">거래 건수</div><div class="card-value">${formatNumber(data.transactions)}건</div><div class="card-sub">평균 객단가 ${formatCurrency(avgTransaction)}</div></div>
+                <div class="card"><div class="card-label">전년 동월 대비</div><div class="card-value ${yoyGrowth>=0?'positive':'negative'}">${yoyGrowth>=0?'+':''}${formatCurrency(yoyGrowth)}</div><div class="card-sub">2024년 ${currentMonth}월: ${formatCurrency(lastYearData.total)}</div></div>
+            `;
         }
+
+        function renderDoctorSales(){
+            const ym=getYM();const detail=salesDetail[ym]||{};const doctorSales=detail.doctorSales||{};
+            const total=Object.values(doctorSales).reduce((sum,d)=>sum+(d.amount||0),0);
+            const sorted=Object.entries(doctorSales).sort((a,b)=>b[1].amount-a[1].amount);
+            const top=sorted[0];
+            document.getElementById('doctorCards').innerHTML=`
+                <div class="card"><div class="card-label">진료의 수</div><div class="card-value">${sorted.length}명</div></div>
+                <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(total)}</div></div>
+                <div class="card"><div class="card-label">1위</div><div class="card-value">${top?top[0]:'-'}</div><div class="card-sub">${top?formatCurrency(top[1].amount):''}</div></div>
+            `;
+            document.getElementById('doctorTable').innerHTML=sorted.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td class="text-right">${formatNumber(data.count)}건</td><td class="text-right">${formatCurrency(data.amount)}</td><td class="text-right">${total?Math.round(data.amount/total*100):0}%</td></tr>`).join('')||'<tr><td colspan="4" class="text-center">데이터 없음</td></tr>';
+        }
+
+        function renderStaffSales(){
+            const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
+            const total=Object.values(staffSales).reduce((sum,d)=>sum+(d.amount||0),0);
+            const sorted=Object.entries(staffSales).sort((a,b)=>b[1].amount-a[1].amount);
+            document.getElementById('staffSalesCards').innerHTML=`
+                <div class="card"><div class="card-label">담당직원 수</div><div class="card-value">${sorted.length}명</div></div>
+                <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(total)}</div></div>
+                <div class="card"><div class="card-label">인센티브 총액 (1%)</div><div class="card-value">${formatCurrency(total*0.01)}</div></div>
+            `;
+            document.getElementById('staffSalesTable').innerHTML=sorted.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td class="text-right">${formatNumber(data.count)}건</td><td class="text-right">${formatCurrency(data.amount)}</td><td class="text-right"><span class="badge badge-green">${formatCurrency(data.amount*0.01)}</span></td></tr>`).join('')||'<tr><td colspan="4" class="text-center">데이터 없음</td></tr>';
+        }
+
+        function renderJapanSales(){
+            const months=[];
+            for(let m=1;m<=12;m++){
+                const ym=`${currentYear}-${String(m).padStart(2,'0')}`;
+                const data=revenueData[ym]||(currentYear===2024?data2024[m]:{japan:0,japanVisitors:0});
+                months.push({month:m,...data});
+            }
+            const currentData=months[currentMonth-1];
+            const totalJapan=months.reduce((sum,m)=>sum+(m.japan||0),0);
+            const totalVisitors=months.reduce((sum,m)=>sum+(m.japanVisitors||0),0);
+            document.getElementById('japanCards').innerHTML=`
+                <div class="card"><div class="card-label">${currentMonth}월 일본인 매출</div><div class="card-value">${formatCurrency(currentData.japan)}</div></div>
+                <div class="card"><div class="card-label">${currentMonth}월 방문자</div><div class="card-value">${currentData.japanVisitors||0}명</div></div>
+                <div class="card"><div class="card-label">연간 누적</div><div class="card-value">${formatCurrency(totalJapan)}</div><div class="card-sub">${totalVisitors}명 방문</div></div>
+            `;
+            document.getElementById('japanTable').innerHTML=months.map(m=>`<tr><td>${m.month}월</td><td class="text-right">${formatCurrency(m.japan)}</td><td class="text-right">${m.japanVisitors||0}명</td><td class="text-right">${m.japanVisitors?formatCurrency(m.japan/m.japanVisitors):'-'}</td></tr>`).join('');
+        }
+
+        function renderUploadHistory(){
+            const sorted=Object.entries(revenueData).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,12);
+            document.getElementById('uploadHistory').innerHTML=sorted.map(([ym,data])=>`<tr><td>${ym}</td><td class="text-right">${formatCurrency(data.total)}</td><td class="text-right">${data.transactions||0}건</td><td>${data.uploadedAt?new Date(data.uploadedAt.toDate()).toLocaleDateString():'-'}</td></tr>`).join('')||'<tr><td colspan="4" class="text-center">업로드된 데이터 없음</td></tr>';
+        }
+
+        function renderExpenses(){
+            const fixedTotal=fixedExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
+            document.getElementById('fixedTotal').textContent=formatCurrency(fixedTotal);
+            document.getElementById('fixedCount').textContent=fixedExpenses.length+'개';
+            document.getElementById('fixedYearly').textContent=formatCurrency(fixedTotal*12);
+            document.getElementById('fixedTable').innerHTML=fixedExpenses.map(e=>`<tr><td><strong>${e.name}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="5" class="text-center">등록된 고정비 없음</td></tr>';
+
+            const variableTotal=variableExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
+            document.getElementById('variableTotal').textContent=formatCurrency(variableTotal);
+            document.getElementById('variableCount').textContent=variableExpenses.length+'건';
+            document.getElementById('variableTable').innerHTML=variableExpenses.map(e=>`<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-orange">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="5" class="text-center">등록된 유동비 없음</td></tr>';
+        }
+
+        function renderEmployees(){
+            const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',staff:'스태프'};
+            const filter=document.getElementById('attendanceFilter');
+            filter.innerHTML='<option value="all">전체 직원</option>'+employees.filter(e=>e.status==='active').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+            const otSelect=document.getElementById('otEmployee');
+            otSelect.innerHTML=employees.filter(e=>e.status==='active').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+            document.getElementById('employeeTable').innerHTML=employees.map(e=>`<tr><td><span class="badge badge-gold">${e.id}</span></td><td><strong>${e.name}</strong></td><td>${e.matchName||'-'}</td><td>${roleLabels[e.role]||e.role}</td><td>${e.joinDate||'-'}</td><td>${getYearsOfService(e.joinDate)}</td><td>${formatCurrency(e.hourly)}</td><td><span class="badge ${e.status==='active'?'badge-green':'badge-red'}">${e.status==='active'?'재직':'퇴사'}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editEmployee('${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="9" class="text-center">등록된 직원 없음</td></tr>';
+        }
+
+        function renderAttendance(){
+            const filter=document.getElementById('attendanceFilter').value;
+            let filtered=attendance;
+            if(filter!=='all'){filtered=attendance.filter(a=>a.employeeId===filter);}
+            const workDays=filtered.filter(a=>a.checkIn).length;
+            const lateDays=filtered.filter(a=>a.status==='late').length;
+            const earlyDays=filtered.filter(a=>a.status==='early').length;
+            const absentDays=filtered.filter(a=>a.status==='absent').length;
+            document.getElementById('workDays').textContent=workDays+'일';
+            document.getElementById('lateDays').textContent=lateDays+'회';
+            document.getElementById('earlyDays').textContent=earlyDays+'회';
+            document.getElementById('absentDays').textContent=absentDays+'회';
+            const sorted=filtered.sort((a,b)=>b.date.localeCompare(a.date));
+            document.getElementById('attendanceTable').innerHTML=sorted.slice(0,50).map(a=>{
+                const emp=employees.find(e=>e.id===a.employeeId);
+                const workHours=a.checkIn&&a.checkOut?calculateWorkHours(a.checkIn,a.checkOut):'-';
+                const statusBadge={normal:'<span class="badge badge-green">정상</span>',late:'<span class="badge badge-orange">지각</span>',early:'<span class="badge badge-blue">조퇴</span>',absent:'<span class="badge badge-red">결근</span>'};
+                return `<tr><td>${a.date}</td><td>${emp?emp.name:a.employeeId}</td><td>${a.checkIn||'-'}</td><td>${a.checkOut||'-'}</td><td>${workHours}</td><td>${statusBadge[a.status]||'-'}</td></tr>`;
+            }).join('')||'<tr><td colspan="6" class="text-center">근태 기록 없음</td></tr>';
+        }
+
+        function calculateWorkHours(checkIn,checkOut){
+            const [inH,inM]=checkIn.split(':').map(Number);
+            const [outH,outM]=checkOut.split(':').map(Number);
+            const minutes=(outH*60+outM)-(inH*60+inM);
+            const hours=Math.floor(minutes/60);const mins=minutes%60;
+            return `${hours}시간 ${mins}분`;
+        }
+
+        function renderOvertime(){
+            let eveningMinutes=0;
+            attendance.forEach(a=>{
+                if(a.checkOut){
+                    const [h,m]=a.checkOut.split(':').map(Number);
+                    const totalMinutes=h*60+m;
+                    if(totalMinutes>18*60){eveningMinutes+=totalMinutes-18*60;}
+                }
+            });
+            const lunchMinutes=lunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+            const totalMinutes=eveningMinutes+lunchMinutes;
+            const avgHourly=employees.length?employees.reduce((sum,e)=>sum+(e.hourly||12000),0)/employees.length:12000;
+            const totalPay=Math.round(totalMinutes/60*avgHourly*1.5);
+            document.getElementById('totalOT').textContent=Math.round(totalMinutes/60*10)/10+'시간';
+            document.getElementById('eveningOT').textContent=Math.round(eveningMinutes/60*10)/10+'시간';
+            document.getElementById('lunchOTVal').textContent=Math.round(lunchMinutes/60*10)/10+'시간';
+            document.getElementById('totalOTPay').textContent=formatCurrency(totalPay);
+            const sorted=lunchOT.sort((a,b)=>b.date.localeCompare(a.date));
+            document.getElementById('lunchOTTable').innerHTML=sorted.map(ot=>{
+                const emp=employees.find(e=>e.id===ot.employeeId);
+                return `<tr><td>${ot.date}</td><td>${emp?emp.name:ot.employeeId}</td><td>${ot.minutes}분</td><td>${ot.reason||'-'}</td><td><button class="btn btn-sm btn-danger" onclick="deleteLunchOT('${ot.id}')">삭제</button></td></tr>`;
+            }).join('')||'<tr><td colspan="5" class="text-center">점심 OT 기록 없음</td></tr>';
+        }
+
+        function renderIncentiveItems(){
+            const roleLabels={all:'전체',nurse:'간호사',coordinator:'코디네이터',staff:'스태프'};
+            document.getElementById('incentiveItemTable').innerHTML=incentiveItems.map(item=>`<tr><td><strong>${item.name}</strong></td><td>${formatCurrency(item.price)}</td><td><span class="badge badge-purple">${roleLabels[item.role]||item.role}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editIncentiveItem('${item.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteIncentiveItem('${item.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="4" class="text-center">등록된 항목 없음</td></tr>';
+        }
+
+        function renderIncentiveSummary(){
+            const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
+            const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',staff:'스태프'};
+            document.getElementById('incentiveSummaryTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
+                let salesIncentive=0;
+                if(emp.incentiveType==='staff_sales'&&emp.matchName){
+                    const sales=staffSales[emp.matchName];
+                    if(sales)salesIncentive=Math.round(sales.amount*0.01);
+                }
+                const itemIncentive=0;const total=salesIncentive+itemIncentive;
+                return `<tr><td><strong>${emp.name}</strong></td><td>${roleLabels[emp.role]||emp.role}</td><td class="text-right">${formatCurrency(salesIncentive)}</td><td class="text-right">${formatCurrency(itemIncentive)}</td><td class="text-right"><strong>${formatCurrency(total)}</strong></td></tr>`;
+            }).join('')||'<tr><td colspan="5" class="text-center">직원 없음</td></tr>';
+        }
+
+        function renderSalary(){
+            const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
+            document.getElementById('salaryTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
+                const baseSalary=(emp.hourly||12000)*209;
+                const empAttendance=attendance.filter(a=>a.employeeId===emp.id);
+                let otMinutes=0;
+                empAttendance.forEach(a=>{if(a.checkOut){const [h,m]=a.checkOut.split(':').map(Number);if(h*60+m>18*60)otMinutes+=(h*60+m)-18*60;}});
+                const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id);
+                otMinutes+=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+                const otPay=Math.round(otMinutes/60*(emp.hourly||12000)*1.5);
+                let incentive=0;
+                if(emp.incentiveType==='staff_sales'&&emp.matchName){const sales=staffSales[emp.matchName];if(sales)incentive=Math.round(sales.amount*0.01);}
+                const grossPay=baseSalary+otPay+incentive;
+                const deductions=Math.round(grossPay*0.09);
+                const netPay=grossPay-deductions;
+                return `<tr><td><strong>${emp.name}</strong></td><td>${emp.role}</td><td class="text-right">${formatCurrency(baseSalary)}</td><td class="text-right">${formatCurrency(otPay)}</td><td class="text-right">${formatCurrency(incentive)}</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(deductions)}</td><td class="text-right"><strong>${formatCurrency(netPay)}</strong></td></tr>`;
+            }).join('')||'<tr><td colspan="7" class="text-center">직원 없음</td></tr>';
+        }
+            const amount=parseInt(document.getElementById('expenseAmount').value)||0;
+            const note=document.getElementById('expenseNote').value.trim();
+            const date=document.getElementById('expenseDate').value;
+            if(!name||!amount){alert('항목명과 금액은 필수입니다.');return;}
+            const collection=type==='fixed'?'fixedExpenses':'variableExpenses';
+            const data={name,category,amount,note};
+            if(type==='variable'){data.date=date;data.yearMonth=getYM();}
+            try{
+                if(editId){await db.collection(collection).doc(editId).update(data);}
+                else{await db.collection(collection).add(data);}
+                closeModal('expenseModal');await loadExpenses();renderExpenses();
+            }catch(e){alert('저장 실패: '+e.message);}
+        }
+        function editExpense(type,id){openExpenseModal(type,id);}
+        async function deleteExpense(type,id){
+            if(!confirm('정말 삭제하시겠습니까?'))return;
+            try{const collection=type==='fixed'?'fixedExpenses':'variableExpenses';await db.collection(collection).doc(id).delete();await loadExpenses();renderExpenses();}catch(e){alert('삭제 실패: '+e.message);}
+        }
+
+        // CRUD Operations - Lunch OT
+        function openOTModal(){
+            document.getElementById('otDate').value=new Date().toISOString().split('T')[0];
+            document.getElementById('otMinutes').value='30';document.getElementById('otReason').value='';
+            openModal('otModal');
+        }
+        async function saveLunchOT(){
+            const date=document.getElementById('otDate').value;
+            const employeeId=document.getElementById('otEmployee').value;
+            const minutes=parseInt(document.getElementById('otMinutes').value)||0;
+            const reason=document.getElementById('otReason').value.trim();
+            if(!date||!employeeId||!minutes){alert('날짜, 직원, 시간을 입력해주세요.');return;}
+            try{await db.collection('lunchOT').add({date,employeeId,minutes,reason,createdAt:firebase.firestore.FieldValue.serverTimestamp()});closeModal('otModal');await loadLunchOT();renderOvertime();}catch(e){alert('저장 실패: '+e.message);}
+        }
+        async function deleteLunchOT(id){if(!confirm('정말 삭제하시겠습니까?'))return;try{await db.collection('lunchOT').doc(id).delete();await loadLunchOT();renderOvertime();}catch(e){alert('삭제 실패: '+e.message);}}
+
+        // CRUD Operations - Incentive Items
+        function openIncentiveItemModal(id=null){
+            document.getElementById('incentiveItemModalTitle').textContent=id?'인센티브 항목 수정':'인센티브 항목 추가';
+            document.getElementById('incItemEditId').value=id||'';
+            document.getElementById('incItemName').value='';document.getElementById('incItemPrice').value='10000';
+            document.getElementById('incItemRole').value='all';
+            if(id){const item=incentiveItems.find(i=>i.id===id);if(item){
+                document.getElementById('incItemName').value=item.name||'';
+                document.getElementById('incItemPrice').value=item.price||10000;
+                document.getElementById('incItemRole').value=item.role||'all';
+            }}
+            openModal('incentiveItemModal');
+        }
+        async function saveIncentiveItem(){
+            const editId=document.getElementById('incItemEditId').value;
+            const name=document.getElementById('incItemName').value.trim();
+            const price=parseInt(document.getElementById('incItemPrice').value)||0;
+            const role=document.getElementById('incItemRole').value;
+            if(!name){alert('항목명을 입력해주세요.');return;}
+            const data={name,price,role};
+            try{
+                if(editId){await db.collection('incentiveItems').doc(editId).update(data);}
+                else{await db.collection('incentiveItems').add(data);}
+                closeModal('incentiveItemModal');await loadIncentiveItems();renderIncentiveItems();
+            }catch(e){alert('저장 실패: '+e.message);}
+        }
+        function editIncentiveItem(id){openIncentiveItemModal(id);}
+        async function deleteIncentiveItem(id){if(!confirm('정말 삭제하시겠습니까?'))return;try{await db.collection('incentiveItems').doc(id).delete();await loadIncentiveItems();renderIncentiveItems();}catch(e){alert('삭제 실패: '+e.message);}}
 
         // File Upload
         const uploadZone=document.getElementById('uploadZone');
         uploadZone.addEventListener('click',()=>document.getElementById('fileInput').click());
-        uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.style.borderColor='var(--gold)';});
-        uploadZone.addEventListener('dragleave',()=>uploadZone.style.borderColor='var(--border)');
-        uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.style.borderColor='var(--border)';if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
+        uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.style.borderColor='var(--accent-gold)';});
+        uploadZone.addEventListener('dragleave',()=>{uploadZone.style.borderColor='var(--border-color)';});
+        uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.style.borderColor='var(--border-color)';if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
         function handleFileUpload(e){if(e.target.files[0])processFile(e.target.files[0]);}
 
         function processFile(file){
             const reader=new FileReader();
-            reader.onload=function(e){
+            reader.onload=async function(e){
                 try{
                     const data=new Uint8Array(e.target.result);
                     const wb=XLSX.read(data,{type:'array'});
                     const sheet=wb.Sheets[wb.SheetNames[0]];
                     const json=XLSX.utils.sheet_to_json(sheet);
-                    
                     let totalRev=0,japanRev=0,japanCount=0,year='',month='';
                     const doctorSales={},staffSales={};
-                    
                     json.forEach(row=>{
-                        const amount=parseInt(row['금액'])||0;
-                        totalRev+=amount;
-                        
-                        const doctor=row['진료의명'];
-                        if(doctor&&doctor!=='빠른예약'){
-                            if(!doctorSales[doctor])doctorSales[doctor]={count:0,amount:0};
-                            doctorSales[doctor].count++;
-                            doctorSales[doctor].amount+=amount;
-                        }
-                        
-                        const staff=row['담당직원'];
-                        if(staff){
-                            if(!staffSales[staff])staffSales[staff]={count:0,amount:0};
-                            staffSales[staff].count++;
-                            staffSales[staff].amount+=amount;
-                        }
-                        
-                        const nationality=row['국적'];
-                        if(nationality&&nationality.includes('일본')){
-                            japanRev+=amount;
-                            japanCount++;
-                        }
-                        
-                        if(row['진료일']&&!year){
-                            const d=String(row['진료일']);
-                            if(d.length>=6){year=d.substring(0,4);month=d.substring(4,6);}
-                        }
+                        const amount=parseInt(row['금액'])||0;totalRev+=amount;
+                        const doctor=row['진료의명'];if(doctor&&doctor!=='빠른예약'){if(!doctorSales[doctor])doctorSales[doctor]={count:0,amount:0};doctorSales[doctor].count++;doctorSales[doctor].amount+=amount;}
+                        const staff=row['담당직원'];if(staff){if(!staffSales[staff])staffSales[staff]={count:0,amount:0};staffSales[staff].count++;staffSales[staff].amount+=amount;}
+                        const nationality=row['국적'];if(nationality&&nationality.includes('일본')){japanRev+=amount;japanCount++;}
+                        if(row['진료일']&&!year){const d=String(row['진료일']);if(d.length>=6){year=d.substring(0,4);month=d.substring(4,6);}}
                     });
-                    
                     const ym=year+'-'+month;
-                    
-                    db.collection('revenue').doc(ym).set({
-                        total:totalRev,japan:japanRev,japanVisitors:japanCount,transactions:json.length,
-                        uploadedAt:firebase.firestore.FieldValue.serverTimestamp()
-                    },{merge:true});
-                    
-                    db.collection('salesDetail').doc(ym).set({
-                        doctorSales,staffSales,
-                        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    
+                    await db.collection('revenue').doc(ym).set({total:totalRev,japan:japanRev,japanVisitors:japanCount,transactions:json.length,uploadedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+                    await db.collection('salesDetail').doc(ym).set({doctorSales,staffSales,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
                     alert('업로드 완료!\n\n연월: '+ym+'\n건수: '+json.length+'건\n총매출: '+formatCurrency(totalRev)+'\n\n진료의: '+Object.keys(doctorSales).join(', ')+'\n담당직원: '+Object.keys(staffSales).join(', ')+'\n\n일본인매출: '+formatCurrency(japanRev)+' ('+japanCount+'건)');
-                    
-                    if(ym===getYM()){
-                        loadRevenueData().then(()=>loadSalesDetailData().then(()=>renderAll()));
-                    }
-                }catch(err){alert('파일 처리 오류: '+err.message);}
+                    if(ym===getYM()){await loadRevenueData();await loadSalesDetailData();renderAll();}else{await loadRevenueData();renderUploadHistory();}
+                }catch(err){alert('파일 처리 오류: '+err.message);console.error(err);}
             };
             reader.readAsArrayBuffer(file);
         }
 
-        // Init
-        checkAdminLogin();
+        // Export Salary
+        function exportSalary(){
+            const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
+            const rows=[['직원','직급','기본급','OT수당','인센티브','공제','실수령액']];
+            employees.filter(e=>e.status==='active').forEach(emp=>{
+                const baseSalary=(emp.hourly||12000)*209;
+                const empAttendance=attendance.filter(a=>a.employeeId===emp.id);
+                let otMinutes=0;empAttendance.forEach(a=>{if(a.checkOut){const [h,m]=a.checkOut.split(':').map(Number);if(h*60+m>18*60)otMinutes+=(h*60+m)-18*60;}});
+                const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id);
+                otMinutes+=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+                const otPay=Math.round(otMinutes/60*(emp.hourly||12000)*1.5);
+                let incentive=0;if(emp.incentiveType==='staff_sales'&&emp.matchName){const sales=staffSales[emp.matchName];if(sales)incentive=Math.round(sales.amount*0.01);}
+                const grossPay=baseSalary+otPay+incentive;const deductions=Math.round(grossPay*0.09);const netPay=grossPay-deductions;
+                rows.push([emp.name,emp.role,baseSalary,otPay,incentive,deductions,netPay]);
+            });
+            const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb,ws,'급여명세');
+            XLSX.writeFile(wb,'급여명세_'+ym+'.xlsx');
+        }
+
+        // Initialize
+        function initApp(){initMonthSelector();loadAllData();}
+        checkAuth();
     </script>
 </body>
 </html>
