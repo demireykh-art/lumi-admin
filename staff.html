@@ -96,6 +96,7 @@
             <div class="pw-modal-title">비밀번호 설정</div>
             <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:1rem;text-align:center">최초 로그인입니다. 새 비밀번호를 설정해주세요.</p>
             <form onsubmit="setupPassword(); return false;" autocomplete="on">
+                <input type="text" id="setupUsername" autocomplete="username" style="display:none" aria-hidden="true">
                 <input type="password" class="login-input" id="newPw1" placeholder="새 비밀번호 (4자 이상)" autocomplete="new-password">
                 <input type="password" class="login-input" id="newPw2" placeholder="비밀번호 확인" autocomplete="new-password">
                 <div class="login-error" id="pwError"></div>
@@ -205,18 +206,23 @@
 
         async function handleLogin(){
             const inputId=document.getElementById('loginId').value.trim();
-            const id=inputId.toLowerCase();
             const pw=document.getElementById('loginPw').value;
             document.getElementById('loginError').textContent='';
-            if(!id){document.getElementById('loginError').textContent='사번을 입력하세요';return;}
+            if(!inputId){document.getElementById('loginError').textContent='사번을 입력하세요';return;}
             if(!pw){document.getElementById('loginError').textContent='비밀번호를 입력하세요';return;}
             try{
-                const doc=await db.collection('employees').doc(id).get();
-                if(!doc.exists){document.getElementById('loginError').textContent='등록되지 않은 사번입니다 ('+id+')';return;}
+                // 소문자, 대문자, 원본 순서로 시도
+                const tryIds=[inputId.toLowerCase(),inputId.toUpperCase(),inputId];
+                let doc=null,foundId=null;
+                for(const tryId of tryIds){
+                    const d=await db.collection('employees').doc(tryId).get();
+                    if(d.exists){doc=d;foundId=tryId;break;}
+                }
+                if(!doc){document.getElementById('loginError').textContent='등록되지 않은 사번입니다 ('+inputId+')';return;}
                 const emp=doc.data();
-                if(!emp.password){currentUser={id,...emp};document.getElementById('pwSetupModal').classList.add('active');return;}
+                if(!emp.password){currentUser={id:foundId,...emp};document.getElementById('setupUsername').value=foundId;document.getElementById('pwSetupModal').classList.add('active');return;}
                 if(emp.password!==pw){document.getElementById('loginError').textContent='비밀번호가 올바르지 않습니다';return;}
-                currentUser={id,...emp};localStorage.setItem('lumiUser',id);showApp();
+                currentUser={id:foundId,...emp};localStorage.setItem('lumiUser',foundId);showApp();
             }catch(e){document.getElementById('loginError').textContent='로그인 실패: '+e.message;}
         }
         async function setupPassword(){
