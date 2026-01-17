@@ -608,6 +608,27 @@
                 return `<tr><td><strong>${emp.name}</strong></td><td>${emp.role}</td><td class="text-right">${formatCurrency(baseSalary)}</td><td class="text-right">${formatCurrency(otPay)}</td><td class="text-right">${formatCurrency(incentive)}</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(deductions)}</td><td class="text-right"><strong>${formatCurrency(netPay)}</strong></td></tr>`;
             }).join('')||'<tr><td colspan="7" class="text-center">직원 없음</td></tr>';
         }
+
+        // CRUD Operations - Expense
+        function openExpenseModal(type,id=null){
+            document.getElementById('expenseModalTitle').textContent=id?'지출 수정':'지출 추가';
+            document.getElementById('expenseEditId').value=id||'';document.getElementById('expenseType').value=type;
+            document.getElementById('expenseName').value='';document.getElementById('expenseCategory').value='기타';
+            document.getElementById('expenseAmount').value='';document.getElementById('expenseNote').value='';
+            document.getElementById('expenseDate').value=new Date().toISOString().split('T')[0];
+            document.getElementById('expenseDateGroup').style.display=type==='variable'?'block':'none';
+            if(id){const list=type==='fixed'?fixedExpenses:variableExpenses;const item=list.find(e=>e.id===id);if(item){
+                document.getElementById('expenseName').value=item.name||'';document.getElementById('expenseCategory').value=item.category||'기타';
+                document.getElementById('expenseAmount').value=item.amount||'';document.getElementById('expenseNote').value=item.note||'';
+                if(type==='variable'){document.getElementById('expenseDate').value=item.date||'';}
+            }}
+            openModal('expenseModal');
+        }
+        async function saveExpense(){
+            const editId=document.getElementById('expenseEditId').value;
+            const type=document.getElementById('expenseType').value;
+            const name=document.getElementById('expenseName').value.trim();
+            const category=document.getElementById('expenseCategory').value;
             const amount=parseInt(document.getElementById('expenseAmount').value)||0;
             const note=document.getElementById('expenseNote').value.trim();
             const date=document.getElementById('expenseDate').value;
