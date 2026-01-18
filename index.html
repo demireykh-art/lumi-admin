@@ -188,7 +188,7 @@
                 </div>
                 <div class="sub-content active" id="sub-list">
                     <div class="section-header"><div class="section-title">직원 목록</div><button class="btn btn-primary" onclick="openEmployeeModal()">+ 직원 등록</button></div>
-                    <div class="table-container"><table><thead><tr><th>사번</th><th>이름</th><th>매칭명</th><th>직급</th><th>입사일</th><th>근속</th><th>나이</th><th>시급</th><th>상태</th><th>관리</th></tr></thead><tbody id="employeeTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>사번</th><th>이름</th><th>매칭명</th><th>직급</th><th>입사일</th><th>근속</th><th>생일</th><th>나이</th><th>시급</th><th>상태</th><th>관리</th></tr></thead><tbody id="employeeTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-attendance">
                     <div class="cards-grid">
@@ -240,7 +240,7 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">시급</label><input type="number" class="form-input" id="empHourly" value="12000"></div>
-                    <div class="form-group"><label class="form-label">인센티브 유형</label><select class="form-select" id="empIncentiveType"><option value="none">없음</option><option value="revenue">매출 1%</option><option value="growth">성장분 10%</option><option value="japan">일본인 매출</option><option value="staff_sales">담당직원 매출 1%</option></select></div>
+                    <div class="form-group"><label class="form-label">인센티브 유형</label><select class="form-select" id="empIncentiveType"><option value="none">없음</option><option value="staff_sales">담당직원 매출 1%</option><option value="per_case">건별 인센티브</option><option value="special_treatment">특정 시술 (포다이스/위너확장/피지선)</option><option value="japan_direct">일본인 직접매출 (담당직원 제외)</option></select></div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">생년월일</label><input type="date" class="form-input" id="empBirthday"></div>
@@ -352,6 +352,12 @@
             const m=now.getMonth()-birth.getMonth();
             if(m<0||(m===0&&now.getDate()<birth.getDate()))age--;
             return age+'세';
+        }
+
+        function formatBirthday(birthday){
+            if(!birthday)return'-';
+            const d=new Date(birthday);
+            return `${d.getMonth()+1}월 ${d.getDate()}일`;
         }
 
         // Authentication
@@ -646,8 +652,9 @@
             otSelect.innerHTML=employees.filter(e=>e.status==='active').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
             document.getElementById('employeeTable').innerHTML=employees.map(e=>{
                 const age=getAge(e.birthday);
-                return `<tr><td><span class="badge badge-gold">${e.id}</span></td><td><strong>${e.name}</strong></td><td>${e.matchName||'-'}</td><td>${roleLabels[e.role]||e.role}</td><td>${e.joinDate||'-'}</td><td>${getYearsOfService(e.joinDate)}</td><td>${age}</td><td>${formatCurrency(e.hourly)}</td><td><span class="badge ${e.status==='active'?'badge-green':'badge-red'}">${e.status==='active'?'재직':'퇴사'}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editEmployee('${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">삭제</button></td></tr>`;
-            }).join('')||'<tr><td colspan="10" class="text-center">등록된 직원 없음</td></tr>';
+                const birthday=formatBirthday(e.birthday);
+                return `<tr><td><span class="badge badge-gold">${e.id}</span></td><td><strong>${e.name}</strong></td><td>${e.matchName||'-'}</td><td>${roleLabels[e.role]||e.role}</td><td>${e.joinDate||'-'}</td><td>${getYearsOfService(e.joinDate)}</td><td>${birthday}</td><td>${age}</td><td>${formatCurrency(e.hourly)}</td><td><span class="badge ${e.status==='active'?'badge-green':'badge-red'}">${e.status==='active'?'재직':'퇴사'}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editEmployee('${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">삭제</button></td></tr>`;
+            }).join('')||'<tr><td colspan="11" class="text-center">등록된 직원 없음</td></tr>';
         }
 
         function renderAttendance(){
@@ -739,7 +746,7 @@
                 const grossPay=baseSalary+otPay+incentive;
                 const deductions=Math.round(grossPay*0.09);
                 const netPay=grossPay-deductions;
-                return `<tr><td><strong>${emp.name}</strong></td><td>${emp.role}</td><td class="text-right">${formatCurrency(baseSalary)}</td><td class="text-right">${formatCurrency(otPay)}</td><td class="text-right">${formatCurrency(incentive)}</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(deductions)}</td><td class="text-right"><strong>${formatCurrency(netPay)}</strong></td></tr>`;
+                return `<tr><td><strong>${emp.name}</strong></td><td>${roleLabels[emp.role]||emp.role}</td><td class="text-right">${formatCurrency(baseSalary)}</td><td class="text-right">${formatCurrency(otPay)}</td><td class="text-right">${formatCurrency(incentive)}</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(deductions)}</td><td class="text-right"><strong>${formatCurrency(netPay)}</strong></td></tr>`;
             }).join('')||'<tr><td colspan="7" class="text-center">직원 없음</td></tr>';
         }
 
