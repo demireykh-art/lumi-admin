@@ -142,7 +142,7 @@
                         <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFileUpload(event)">
                     </div>
                     <div class="section"><div class="section-header"><div class="section-title">업로드 이력</div></div>
-                        <div class="table-container"><table><thead><tr><th>연월</th><th class="text-right">총매출</th><th class="text-right">건수</th><th>업로드일</th></tr></thead><tbody id="uploadHistory"></tbody></table></div>
+                        <div class="table-container"><table><thead><tr><th>연월</th><th class="text-right">총매출</th><th class="text-right">건수</th><th>업로드일</th><th>관리</th></tr></thead><tbody id="uploadHistory"></tbody></table></div>
                     </div>
                 </div>
             </div>
@@ -493,8 +493,8 @@
         }
 
         function renderUploadHistory(){
-            const sorted=Object.entries(revenueData).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,12);
-            document.getElementById('uploadHistory').innerHTML=sorted.map(([ym,data])=>`<tr><td>${ym}</td><td class="text-right">${formatCurrency(data.total)}</td><td class="text-right">${data.transactions||0}건</td><td>${data.uploadedAt?new Date(data.uploadedAt.toDate()).toLocaleDateString():'-'}</td></tr>`).join('')||'<tr><td colspan="4" class="text-center">업로드된 데이터 없음</td></tr>';
+            const sorted=Object.entries(revenueData).sort((a,b)=>b[0].localeCompare(a[0]));
+            document.getElementById('uploadHistory').innerHTML=sorted.map(([ym,data])=>`<tr><td>${ym}</td><td class="text-right">${formatCurrency(data.total)}</td><td class="text-right">${data.transactions||0}건</td><td>${data.uploadedAt?new Date(data.uploadedAt.toDate()).toLocaleDateString():'-'}</td><td><button class="btn btn-sm btn-danger" onclick="deleteRevenue('${ym}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="5" class="text-center">업로드된 데이터 없음</td></tr>';
         }
 
         function renderExpenses(){
@@ -710,23 +710,90 @@
                     const wb=XLSX.read(data,{type:'array'});
                     const sheet=wb.Sheets[wb.SheetNames[0]];
                     const json=XLSX.utils.sheet_to_json(sheet);
-                    let totalRev=0,japanRev=0,japanCount=0,year='',month='';
-                    const doctorSales={},staffSales={};
+                    
+                    // 월별로 데이터 분리
+                    const monthlyData={};
+                    
                     json.forEach(row=>{
-                        const amount=parseInt(row['금액'])||0;totalRev+=amount;
-                        const doctor=row['진료의명'];if(doctor&&doctor!=='빠른예약'){if(!doctorSales[doctor])doctorSales[doctor]={count:0,amount:0};doctorSales[doctor].count++;doctorSales[doctor].amount+=amount;}
-                        const staff=row['담당직원'];if(staff){if(!staffSales[staff])staffSales[staff]={count:0,amount:0};staffSales[staff].count++;staffSales[staff].amount+=amount;}
-                        const nationality=row['국적'];if(nationality&&nationality.includes('일본')){japanRev+=amount;japanCount++;}
-                        if(row['진료일']&&!year){const d=String(row['진료일']);if(d.length>=6){year=d.substring(0,4);month=d.substring(4,6);}}
+                        const amount=parseInt(row['금액'])||0;
+                        const dateStr=String(row['진료일']||'');
+                        if(dateStr.length<6)return; // 날짜 없으면 스킵
+                        
+                        const year=dateStr.substring(0,4);
+                        const month=dateStr.substring(4,6);
+                        const ym=year+'-'+month;
+                        
+                        // 유효한 연월인지 체크 (2020-2030 범위)
+                        const yearNum=parseInt(year);
+                        const monthNum=parseInt(month);
+                        if(yearNum<2020||yearNum>2030||monthNum<1||monthNum>12)return;
+                        
+                        if(!monthlyData[ym]){
+                            monthlyData[ym]={total:0,japan:0,japanVisitors:0,transactions:0,doctorSales:{},staffSales:{}};
+                        }
+                        
+                        monthlyData[ym].total+=amount;
+                        monthlyData[ym].transactions++;
+                        
+                        const doctor=row['진료의명'];
+                        if(doctor&&doctor!=='빠른예약'){
+                            if(!monthlyData[ym].doctorSales[doctor])monthlyData[ym].doctorSales[doctor]={count:0,amount:0};
+                            monthlyData[ym].doctorSales[doctor].count++;
+                            monthlyData[ym].doctorSales[doctor].amount+=amount;
+                        }
+                        
+                        const staff=row['담당직원'];
+                        if(staff){
+                            if(!monthlyData[ym].staffSales[staff])monthlyData[ym].staffSales[staff]={count:0,amount:0};
+                            monthlyData[ym].staffSales[staff].count++;
+                            monthlyData[ym].staffSales[staff].amount+=amount;
+                        }
+                        
+                        const nationality=row['국적'];
+                        if(nationality&&nationality.includes('일본')){
+                            monthlyData[ym].japan+=amount;
+                            monthlyData[ym].japanVisitors++;
+                        }
                     });
-                    const ym=year+'-'+month;
-                    await db.collection('revenue').doc(ym).set({total:totalRev,japan:japanRev,japanVisitors:japanCount,transactions:json.length,uploadedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
-                    await db.collection('salesDetail').doc(ym).set({doctorSales,staffSales,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
-                    alert('업로드 완료!\n\n연월: '+ym+'\n건수: '+json.length+'건\n총매출: '+formatCurrency(totalRev)+'\n\n진료의: '+Object.keys(doctorSales).join(', ')+'\n담당직원: '+Object.keys(staffSales).join(', ')+'\n\n일본인매출: '+formatCurrency(japanRev)+' ('+japanCount+'건)');
-                    if(ym===getYM()){await loadRevenueData();await loadSalesDetailData();renderAll();}else{await loadRevenueData();renderUploadHistory();}
+                    
+                    // 각 월별로 Firebase에 저장
+                    const months=Object.keys(monthlyData).sort();
+                    let savedCount=0;
+                    
+                    for(const ym of months){
+                        const d=monthlyData[ym];
+                        await db.collection('revenue').doc(ym).set({
+                            total:d.total,japan:d.japan,japanVisitors:d.japanVisitors,
+                            transactions:d.transactions,
+                            uploadedAt:firebase.firestore.FieldValue.serverTimestamp()
+                        },{merge:true});
+                        await db.collection('salesDetail').doc(ym).set({
+                            doctorSales:d.doctorSales,staffSales:d.staffSales,
+                            updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        savedCount++;
+                    }
+                    
+                    // 결과 알림
+                    const totalAll=Object.values(monthlyData).reduce((s,d)=>s+d.total,0);
+                    const transAll=Object.values(monthlyData).reduce((s,d)=>s+d.transactions,0);
+                    alert(`업로드 완료!\n\n저장된 월: ${months.join(', ')}\n총 ${savedCount}개월 데이터\n총 건수: ${transAll}건\n총 매출: ${formatCurrency(totalAll)}`);
+                    
+                    await loadRevenueData();await loadSalesDetailData();renderAll();
                 }catch(err){alert('파일 처리 오류: '+err.message);console.error(err);}
             };
             reader.readAsArrayBuffer(file);
+        }
+        
+        // 업로드 이력 삭제
+        async function deleteRevenue(ym){
+            if(!confirm(`${ym} 데이터를 삭제하시겠습니까?\n\n매출 및 상세 데이터가 모두 삭제됩니다.`))return;
+            try{
+                await db.collection('revenue').doc(ym).delete();
+                await db.collection('salesDetail').doc(ym).delete();
+                alert(`${ym} 데이터가 삭제되었습니다.`);
+                await loadRevenueData();await loadSalesDetailData();renderAll();
+            }catch(err){alert('삭제 실패: '+err.message);}
         }
 
         // Export Salary
