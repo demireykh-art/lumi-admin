@@ -198,14 +198,24 @@
                 </div>
                 <div class="sub-content" id="sub-tax">
                     <div class="expense-summary">
-                        <div class="expense-box"><div class="expense-box-label">올해 부가세 납부</div><div class="expense-box-value" id="vatTotal">₩0</div></div>
-                        <div class="expense-box"><div class="expense-box-label">올해 종소세 납부</div><div class="expense-box-value" id="incomeTotal">₩0</div></div>
-                        <div class="expense-box"><div class="expense-box-label">올해 세금 합계</div><div class="expense-box-value" id="taxTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">올해 원천세</div><div class="expense-box-value" id="withholdingTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">올해 부가세</div><div class="expense-box-value" id="vatTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">올해 종소세</div><div class="expense-box-value" id="incomeTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">세금 합계</div><div class="expense-box-value" id="taxTotal">₩0</div></div>
                     </div>
-                    <div class="section-header"><div class="section-title">부가세 (분기별)</div><button class="btn btn-primary" onclick="openTaxModal('vat')">+ 부가세 추가</button></div>
-                    <div class="table-container"><table><thead><tr><th>납부일</th><th>분기/기간</th><th>매출세액</th><th>매입세액</th><th class="text-right">납부세액</th><th>비고</th><th>관리</th></tr></thead><tbody id="vatTable"></tbody></table></div>
-                    <div class="section-header" style="margin-top:24px"><div class="section-title">종합소득세 (연간)</div><button class="btn btn-primary" onclick="openTaxModal('income')">+ 종소세 추가</button></div>
-                    <div class="table-container"><table><thead><tr><th>납부일</th><th>귀속연도</th><th>과세표준</th><th>세율</th><th class="text-right">납부세액</th><th>비고</th><th>관리</th></tr></thead><tbody id="incomeTable"></tbody></table></div>
+                    <div class="section-header"><div class="section-title">📄 세금 고지서 업로드</div></div>
+                    <div class="upload-area" id="taxDropZone" style="margin-bottom:24px">
+                        <div class="upload-icon">📋</div>
+                        <div class="upload-text">세금 고지서 PDF/이미지 파일을 드래그하거나 클릭</div>
+                        <div class="upload-hint">부가세, 종소세, 원천세(근로소득세), 지방세 납부서 자동 인식</div>
+                        <input type="file" id="taxFile" accept=".pdf,image/*" style="display:none" onchange="processTaxFile(this)" multiple>
+                    </div>
+                    <div class="section-header"><div class="section-title">원천세 (근로소득세+지방세)</div><button class="btn btn-primary" onclick="openTaxModal('withholding')">+ 원천세 추가</button></div>
+                    <div class="table-container"><table><thead><tr><th>납부일</th><th>귀속월</th><th>근로소득세</th><th>지방소득세</th><th class="text-right">합계</th><th>비고</th><th>관리</th></tr></thead><tbody id="withholdingTable"></tbody></table></div>
+                    <div class="section-header" style="margin-top:24px"><div class="section-title">부가세 (분기별)</div><button class="btn btn-primary" onclick="openTaxModal('vat')">+ 부가세 추가</button></div>
+                    <div class="table-container"><table><thead><tr><th>납부일</th><th>분기/기간</th><th class="text-right">납부세액</th><th>비고</th><th>관리</th></tr></thead><tbody id="vatTable"></tbody></table></div>
+                    <div class="section-header" style="margin-top:24px"><div class="section-title">종합소득세</div><button class="btn btn-primary" onclick="openTaxModal('income')">+ 종소세 추가</button></div>
+                    <div class="table-container"><table><thead><tr><th>납부일</th><th>귀속연도</th><th>구분</th><th class="text-right">납부세액</th><th>비고</th><th>관리</th></tr></thead><tbody id="incomeTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-expense-summary">
                     <div class="card-grid">
@@ -302,19 +312,19 @@
             <div class="modal-body">
                 <input type="hidden" id="taxEditId"><input type="hidden" id="taxType">
                 <div class="form-group"><label class="form-label">납부일 *</label><input type="date" class="form-input" id="taxDate" required></div>
-                <div id="vatFields">
-                    <div class="form-group"><label class="form-label">분기/기간</label><select class="form-select" id="taxQuarter"><option value="1분기">1분기 (1~3월)</option><option value="2분기">2분기 (4~6월)</option><option value="3분기">3분기 (7~9월)</option><option value="4분기">4분기 (10~12월)</option><option value="예정">예정신고</option><option value="확정">확정신고</option></select></div>
+                <div id="withholdingFields" style="display:none">
+                    <div class="form-group"><label class="form-label">귀속월</label><input type="month" class="form-input" id="taxAttributeMonth"></div>
                     <div class="form-row">
-                        <div class="form-group"><label class="form-label">매출세액</label><input type="number" class="form-input" id="taxSalesAmount" placeholder="0"></div>
-                        <div class="form-group"><label class="form-label">매입세액</label><input type="number" class="form-input" id="taxPurchaseAmount" placeholder="0"></div>
+                        <div class="form-group"><label class="form-label">근로소득세</label><input type="number" class="form-input" id="taxIncomeTax" placeholder="0"></div>
+                        <div class="form-group"><label class="form-label">지방소득세</label><input type="number" class="form-input" id="taxLocalTax" placeholder="0"></div>
                     </div>
+                </div>
+                <div id="vatFields" style="display:none">
+                    <div class="form-group"><label class="form-label">분기/기간</label><select class="form-select" id="taxQuarter"><option value="1기">1기 (1~6월)</option><option value="2기">2기 (7~12월)</option><option value="1기예정">1기 예정</option><option value="1기확정">1기 확정</option><option value="2기예정">2기 예정</option><option value="2기확정">2기 확정</option></select></div>
                 </div>
                 <div id="incomeFields" style="display:none">
                     <div class="form-group"><label class="form-label">귀속연도</label><select class="form-select" id="taxYear"><option value="2024">2024년</option><option value="2025">2025년</option><option value="2026">2026년</option></select></div>
-                    <div class="form-row">
-                        <div class="form-group"><label class="form-label">과세표준</label><input type="number" class="form-input" id="taxBase" placeholder="0"></div>
-                        <div class="form-group"><label class="form-label">세율 (%)</label><input type="number" class="form-input" id="taxRate" placeholder="예: 35"></div>
-                    </div>
+                    <div class="form-group"><label class="form-label">구분</label><select class="form-select" id="taxIncomeType"><option value="중간예납">중간예납</option><option value="확정신고">확정신고</option><option value="분납">분납</option></select></div>
                 </div>
                 <div class="form-group"><label class="form-label">납부세액 *</label><input type="number" class="form-input" id="taxAmount" required></div>
                 <div class="form-group"><label class="form-label">비고</label><textarea class="form-textarea" id="taxNote" rows="2"></textarea></div>
@@ -378,7 +388,7 @@
         let currentYear=new Date().getFullYear();
         let currentMonth=new Date().getMonth()+1;
         let employees=[],attendance=[],revenueData={},salesDetail={},fixedExpenses=[],variableExpenses=[],incentiveItems=[],lunchOT=[];
-        let vatTaxes=[],incomeTaxes=[],payrollData=[];
+        let vatTaxes=[],incomeTaxes=[],payrollData=[],withholdingTaxes=[];
         const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
         let revenueChart=null,compareChart=null;
 
@@ -517,6 +527,8 @@
                 vatTaxes=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
                 snapshot=await db.collection('incomeTaxes').get();
                 incomeTaxes=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+                snapshot=await db.collection('withholdingTaxes').where('year','==',String(currentYear)).get();
+                withholdingTaxes=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
                 // 급여 로드
                 snapshot=await db.collection('payroll').get();
                 payrollData=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
@@ -785,18 +797,23 @@
         }
         
         function renderTaxes(){
+            // 원천세 (근로소득세+지방세)
+            const withholdingTotal=withholdingTaxes.reduce((sum,t)=>sum+((t.incomeTax||0)+(t.localTax||0)),0);
+            document.getElementById('withholdingTotal').textContent=formatCurrency(withholdingTotal);
+            document.getElementById('withholdingTable').innerHTML=withholdingTaxes.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<tr><td>${t.date||'-'}</td><td>${t.attributeMonth||'-'}</td><td class="text-right">${formatCurrency(t.incomeTax)}</td><td class="text-right">${formatCurrency(t.localTax)}</td><td class="text-right"><strong>${formatCurrency((t.incomeTax||0)+(t.localTax||0))}</strong></td><td>${t.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editTax('withholding','${t.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTax('withholding','${t.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="7" class="text-center">등록된 원천세 내역 없음</td></tr>';
+            
             // 부가세
             const vatTotal=vatTaxes.reduce((sum,t)=>sum+(t.amount||0),0);
             document.getElementById('vatTotal').textContent=formatCurrency(vatTotal);
-            document.getElementById('vatTable').innerHTML=vatTaxes.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<tr><td>${t.date||'-'}</td><td>${t.quarter||'-'}</td><td class="text-right">${formatCurrency(t.salesAmount)}</td><td class="text-right">${formatCurrency(t.purchaseAmount)}</td><td class="text-right"><strong>${formatCurrency(t.amount)}</strong></td><td>${t.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editTax('vat','${t.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTax('vat','${t.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="7" class="text-center">등록된 부가세 내역 없음</td></tr>';
+            document.getElementById('vatTable').innerHTML=vatTaxes.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<tr><td>${t.date||'-'}</td><td>${t.quarter||'-'}</td><td class="text-right"><strong>${formatCurrency(t.amount)}</strong></td><td>${t.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editTax('vat','${t.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTax('vat','${t.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="5" class="text-center">등록된 부가세 내역 없음</td></tr>';
             
             // 종소세
             const incomeTotal=incomeTaxes.filter(t=>t.taxYear===String(currentYear)||t.taxYear===String(currentYear-1)).reduce((sum,t)=>sum+(t.amount||0),0);
             document.getElementById('incomeTotal').textContent=formatCurrency(incomeTotal);
-            document.getElementById('incomeTable').innerHTML=incomeTaxes.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<tr><td>${t.date||'-'}</td><td>${t.taxYear||'-'}년</td><td class="text-right">${formatCurrency(t.taxBase)}</td><td>${t.taxRate||'-'}%</td><td class="text-right"><strong>${formatCurrency(t.amount)}</strong></td><td>${t.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editTax('income','${t.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTax('income','${t.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="7" class="text-center">등록된 종소세 내역 없음</td></tr>';
+            document.getElementById('incomeTable').innerHTML=incomeTaxes.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<tr><td>${t.date||'-'}</td><td>${t.taxYear||'-'}년</td><td>${t.incomeType||'-'}</td><td class="text-right"><strong>${formatCurrency(t.amount)}</strong></td><td>${t.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editTax('income','${t.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTax('income','${t.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 종소세 내역 없음</td></tr>';
             
             // 합계
-            document.getElementById('taxTotal').textContent=formatCurrency(vatTotal+incomeTotal);
+            document.getElementById('taxTotal').textContent=formatCurrency(withholdingTotal+vatTotal+incomeTotal);
         }
         
         let expenseChart=null;
@@ -1174,36 +1191,39 @@
 
         // CRUD Operations - Tax
         function openTaxModal(type,id=null){
-            document.getElementById('taxModalTitle').textContent=type==='vat'?(id?'부가세 수정':'부가세 추가'):(id?'종소세 수정':'종소세 추가');
+            const titles={withholding:'원천세',vat:'부가세',income:'종소세'};
+            document.getElementById('taxModalTitle').textContent=id?titles[type]+' 수정':titles[type]+' 추가';
             document.getElementById('taxEditId').value=id||'';
             document.getElementById('taxType').value=type;
+            document.getElementById('withholdingFields').style.display=type==='withholding'?'block':'none';
             document.getElementById('vatFields').style.display=type==='vat'?'block':'none';
             document.getElementById('incomeFields').style.display=type==='income'?'block':'none';
             // 초기화
             document.getElementById('taxDate').value=new Date().toISOString().split('T')[0];
-            document.getElementById('taxQuarter').value='1분기';
-            document.getElementById('taxSalesAmount').value='';
-            document.getElementById('taxPurchaseAmount').value='';
+            document.getElementById('taxAttributeMonth').value=getYM();
+            document.getElementById('taxIncomeTax').value='';
+            document.getElementById('taxLocalTax').value='';
+            document.getElementById('taxQuarter').value='1기';
             document.getElementById('taxYear').value=String(currentYear-1);
-            document.getElementById('taxBase').value='';
-            document.getElementById('taxRate').value='';
+            document.getElementById('taxIncomeType').value='중간예납';
             document.getElementById('taxAmount').value='';
             document.getElementById('taxNote').value='';
             if(id){
-                const list=type==='vat'?vatTaxes:incomeTaxes;
+                const list=type==='withholding'?withholdingTaxes:type==='vat'?vatTaxes:incomeTaxes;
                 const item=list.find(t=>t.id===id);
                 if(item){
                     document.getElementById('taxDate').value=item.date||'';
                     document.getElementById('taxAmount').value=item.amount||'';
                     document.getElementById('taxNote').value=item.note||'';
-                    if(type==='vat'){
-                        document.getElementById('taxQuarter').value=item.quarter||'1분기';
-                        document.getElementById('taxSalesAmount').value=item.salesAmount||'';
-                        document.getElementById('taxPurchaseAmount').value=item.purchaseAmount||'';
+                    if(type==='withholding'){
+                        document.getElementById('taxAttributeMonth').value=item.attributeMonth||'';
+                        document.getElementById('taxIncomeTax').value=item.incomeTax||'';
+                        document.getElementById('taxLocalTax').value=item.localTax||'';
+                    }else if(type==='vat'){
+                        document.getElementById('taxQuarter').value=item.quarter||'1기';
                     }else{
                         document.getElementById('taxYear').value=item.taxYear||String(currentYear-1);
-                        document.getElementById('taxBase').value=item.taxBase||'';
-                        document.getElementById('taxRate').value=item.taxRate||'';
+                        document.getElementById('taxIncomeType').value=item.incomeType||'중간예납';
                     }
                 }
             }
@@ -1213,20 +1233,25 @@
             const editId=document.getElementById('taxEditId').value;
             const type=document.getElementById('taxType').value;
             const date=document.getElementById('taxDate').value;
-            const amount=parseInt(document.getElementById('taxAmount').value)||0;
             const note=document.getElementById('taxNote').value.trim();
-            if(!date||!amount){alert('납부일과 납부세액은 필수입니다.');return;}
-            const collection=type==='vat'?'vatTaxes':'incomeTaxes';
-            let data={date,amount,note,year:date.substring(0,4)};
-            if(type==='vat'){
+            if(!date){alert('납부일은 필수입니다.');return;}
+            const collections={withholding:'withholdingTaxes',vat:'vatTaxes',income:'incomeTaxes'};
+            const collection=collections[type];
+            let data={date,note,year:date.substring(0,4)};
+            if(type==='withholding'){
+                data.attributeMonth=document.getElementById('taxAttributeMonth').value;
+                data.incomeTax=parseInt(document.getElementById('taxIncomeTax').value)||0;
+                data.localTax=parseInt(document.getElementById('taxLocalTax').value)||0;
+                data.amount=data.incomeTax+data.localTax;
+            }else if(type==='vat'){
                 data.quarter=document.getElementById('taxQuarter').value;
-                data.salesAmount=parseInt(document.getElementById('taxSalesAmount').value)||0;
-                data.purchaseAmount=parseInt(document.getElementById('taxPurchaseAmount').value)||0;
+                data.amount=parseInt(document.getElementById('taxAmount').value)||0;
             }else{
                 data.taxYear=document.getElementById('taxYear').value;
-                data.taxBase=parseInt(document.getElementById('taxBase').value)||0;
-                data.taxRate=parseInt(document.getElementById('taxRate').value)||0;
+                data.incomeType=document.getElementById('taxIncomeType').value;
+                data.amount=parseInt(document.getElementById('taxAmount').value)||0;
             }
+            if(!data.amount){alert('납부세액은 필수입니다.');return;}
             try{
                 if(editId){await db.collection(collection).doc(editId).update(data);}
                 else{await db.collection(collection).add(data);}
@@ -1237,10 +1262,97 @@
         async function deleteTax(type,id){
             if(!confirm('정말 삭제하시겠습니까?'))return;
             try{
-                const collection=type==='vat'?'vatTaxes':'incomeTaxes';
-                await db.collection(collection).doc(id).delete();
+                const collections={withholding:'withholdingTaxes',vat:'vatTaxes',income:'incomeTaxes'};
+                await db.collection(collections[type]).doc(id).delete();
                 await loadExpenses();renderExpenses();
             }catch(e){alert('삭제 실패: '+e.message);}
+        }
+        
+        // Tax PDF Upload
+        function initTaxDropZone(){
+            const dropZone=document.getElementById('taxDropZone');
+            if(!dropZone)return;
+            dropZone.addEventListener('click',()=>document.getElementById('taxFile').click());
+            dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.style.borderColor='var(--primary)';dropZone.style.background='rgba(154,139,122,0.1)';});
+            dropZone.addEventListener('dragleave',e=>{e.preventDefault();dropZone.style.borderColor='#ddd';dropZone.style.background='';});
+            dropZone.addEventListener('drop',e=>{
+                e.preventDefault();
+                dropZone.style.borderColor='#ddd';dropZone.style.background='';
+                const files=e.dataTransfer.files;
+                if(files.length>0)handleTaxFiles(files);
+            });
+        }
+        
+        function processTaxFile(input){
+            if(input.files.length>0)handleTaxFiles(input.files);
+            input.value='';
+        }
+        
+        async function handleTaxFiles(files){
+            for(const file of files){
+                const fileName=file.name.toLowerCase();
+                // 파일명으로 세금 종류 추정
+                let taxInfo=null;
+                if(fileName.includes('부가')&&fileName.includes('세')){
+                    taxInfo=await parseTaxFromFileName(file,'vat');
+                }else if(fileName.includes('종합소득')||fileName.includes('종소세')){
+                    taxInfo=await parseTaxFromFileName(file,'income');
+                }else if(fileName.includes('근로')||fileName.includes('원천')){
+                    taxInfo=await parseTaxFromFileName(file,'withholding_income');
+                }else if(fileName.includes('지방')){
+                    taxInfo=await parseTaxFromFileName(file,'withholding_local');
+                }else{
+                    alert('파일명에서 세금 종류를 인식할 수 없습니다: '+file.name+'\n\n파일명에 "부가세", "종합소득세", "근로", "지방세" 키워드를 포함해주세요.');
+                    continue;
+                }
+                if(taxInfo)await saveTaxFromFile(taxInfo);
+            }
+        }
+        
+        async function parseTaxFromFileName(file,type){
+            const fileName=file.name;
+            // 금액 추출 (파일 내용이 아닌 알려진 패턴 기반)
+            // 실제로는 PDF 파싱이 필요하지만, 여기서는 수동 입력 모달을 열어줌
+            let info={type,fileName};
+            
+            // 파일명에서 연월 추출 시도
+            const ymMatch=fileName.match(/(\d{4})[\-_]?(\d{1,2})/);
+            if(ymMatch){
+                info.year=ymMatch[1];
+                info.month=ymMatch[2].padStart(2,'0');
+            }
+            
+            // 귀속월 추출 (11월귀속 등)
+            const attrMatch=fileName.match(/(\d{1,2})월\s*귀속/);
+            if(attrMatch){
+                info.attributeMonth=(info.year||currentYear)+'-'+attrMatch[1].padStart(2,'0');
+            }
+            
+            // 분기 추출
+            const quarterMatch=fileName.match(/(\d)기/);
+            if(quarterMatch){
+                info.quarter=quarterMatch[1]+'기';
+            }
+            
+            return info;
+        }
+        
+        async function saveTaxFromFile(info){
+            // 파일에서 추출한 정보로 모달 열기
+            if(info.type==='vat'){
+                openTaxModal('vat');
+                if(info.quarter)document.getElementById('taxQuarter').value=info.quarter;
+                document.getElementById('taxNote').value='파일: '+info.fileName;
+            }else if(info.type==='income'){
+                openTaxModal('income');
+                if(info.year)document.getElementById('taxYear').value=info.year;
+                document.getElementById('taxNote').value='파일: '+info.fileName;
+            }else if(info.type==='withholding_income'||info.type==='withholding_local'){
+                openTaxModal('withholding');
+                if(info.attributeMonth)document.getElementById('taxAttributeMonth').value=info.attributeMonth;
+                document.getElementById('taxNote').value='파일: '+info.fileName;
+            }
+            alert('파일 정보를 인식했습니다.\n금액을 입력하고 저장해주세요.\n\n파일: '+info.fileName);
         }
 
         // CRUD Operations - Employee
@@ -1550,7 +1662,7 @@
         }
 
         // Initialize
-        function initApp(){initMonthSelector();loadAllData();}
+        function initApp(){initMonthSelector();loadAllData();initTaxDropZone();}
         checkAuth();
     </script>
 </body>
