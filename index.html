@@ -175,7 +175,7 @@
                         <div class="expense-box"><div class="expense-box-label">전월 대비</div><div class="expense-box-value" id="variableChange">-</div></div>
                     </div>
                     <div class="section-header"><div class="section-title">유동비 목록</div><button class="btn btn-primary" onclick="openExpenseModal('variable')">+ 항목 추가</button></div>
-                    <div class="table-container"><table><thead><tr><th>날짜</th><th>항목명</th><th>카테고리</th><th class="text-right">금액</th><th>관리</th></tr></thead><tbody id="variableTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>결제일</th><th>항목명</th><th>카테고리</th><th>결제수단</th><th class="text-right">금액</th><th>관리</th></tr></thead><tbody id="variableTable"></tbody></table></div>
                 </div>
             </div>
             <div class="tab-content" id="tab-employee">
@@ -256,12 +256,13 @@
             <div class="modal-header"><div class="modal-title" id="expenseModalTitle">지출 추가</div><button class="modal-close" onclick="closeModal('expenseModal')">&times;</button></div>
             <div class="modal-body">
                 <input type="hidden" id="expenseEditId"><input type="hidden" id="expenseType">
-                <div class="form-group" id="expenseDateGroup"><label class="form-label">날짜</label><input type="date" class="form-input" id="expenseDate"></div>
+                <div class="form-group" id="expenseDateGroup"><label class="form-label">결제일</label><input type="date" class="form-input" id="expenseDate"></div>
                 <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="expenseName" required></div>
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">카테고리</label><select class="form-select" id="expenseCategory"><option value="임대료">임대료/관리비</option><option value="장비리스">장비리스/렌탈</option><option value="대출이자">대출이자</option><option value="통신비">통신비</option><option value="세무노무">세무/노무</option><option value="보험료">보험료</option><option value="복리후생">복리후생</option><option value="마케팅">마케팅</option><option value="소모품">소모품(미용)</option><option value="세금환급">세금환급대행</option><option value="시설보수">시설/보수</option><option value="기타">기타</option></select></div>
+                    <div class="form-group"><label class="form-label">카테고리</label><select class="form-select" id="expenseCategory"></select></div>
                     <div class="form-group"><label class="form-label">금액 *</label><input type="number" class="form-input" id="expenseAmount" required></div>
                 </div>
+                <div class="form-group" id="expenseCardGroup"><label class="form-label">결제수단</label><select class="form-select" id="expenseCard"><option value="롯데카드">롯데카드</option><option value="삼성카드">삼성카드</option><option value="신한카드">신한카드</option><option value="현대카드">현대카드</option><option value="KB카드">KB카드</option><option value="계좌이체">계좌이체</option><option value="현금">현금</option></select></div>
                 <div class="form-group"><label class="form-label">비고</label><textarea class="form-textarea" id="expenseNote" rows="2"></textarea></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('expenseModal')">취소</button><button class="btn btn-primary" onclick="saveExpense()">저장</button></div>
@@ -641,7 +642,7 @@
             const variableTotal=variableExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
             document.getElementById('variableTotal').textContent=formatCurrency(variableTotal);
             document.getElementById('variableCount').textContent=variableExpenses.length+'건';
-            document.getElementById('variableTable').innerHTML=variableExpenses.map(e=>`<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-orange">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="5" class="text-center">등록된 유동비 없음</td></tr>';
+            document.getElementById('variableTable').innerHTML=variableExpenses.map(e=>`<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-orange">${e.category}</span></td><td>${e.card||'-'}</td><td class="text-right">${formatCurrency(e.amount)}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 유동비 없음</td></tr>';
         }
 
         function renderEmployees(){
@@ -781,6 +782,8 @@
             document.getElementById('expenseName').value='';document.getElementById('expenseAmount').value='';document.getElementById('expenseNote').value='';
             document.getElementById('expenseDate').value=new Date().toISOString().split('T')[0];
             document.getElementById('expenseDateGroup').style.display=type==='variable'?'block':'none';
+            document.getElementById('expenseCardGroup').style.display=type==='variable'?'block':'none';
+            document.getElementById('expenseCard').value='롯데카드';
             // 카테고리 옵션 동적 변경
             const cats=type==='fixed'?fixedCategories:variableCategories;
             document.getElementById('expenseCategory').innerHTML=cats.map(c=>`<option value="${c.value}">${c.label}</option>`).join('');
@@ -788,7 +791,7 @@
             if(id){const list=type==='fixed'?fixedExpenses:variableExpenses;const item=list.find(e=>e.id===id);if(item){
                 document.getElementById('expenseName').value=item.name||'';document.getElementById('expenseCategory').value=item.category||'기타';
                 document.getElementById('expenseAmount').value=item.amount||'';document.getElementById('expenseNote').value=item.note||'';
-                if(type==='variable'){document.getElementById('expenseDate').value=item.date||'';}
+                if(type==='variable'){document.getElementById('expenseDate').value=item.date||'';document.getElementById('expenseCard').value=item.card||'롯데카드';}
             }}
             openModal('expenseModal');
         }
@@ -800,10 +803,11 @@
             const amount=parseInt(document.getElementById('expenseAmount').value)||0;
             const note=document.getElementById('expenseNote').value.trim();
             const date=document.getElementById('expenseDate').value;
+            const card=document.getElementById('expenseCard').value;
             if(!name||!amount){alert('항목명과 금액은 필수입니다.');return;}
             const collection=type==='fixed'?'fixedExpenses':'variableExpenses';
             const data={name,category,amount,note};
-            if(type==='variable'){data.date=date;data.yearMonth=getYM();}
+            if(type==='variable'){data.date=date;data.card=card;data.yearMonth=getYM();}
             try{
                 if(editId){await db.collection(collection).doc(editId).update(data);}
                 else{await db.collection(collection).add(data);}
