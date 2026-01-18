@@ -337,17 +337,18 @@
         }
 
         // Authentication
-        const ADMIN_CREDENTIALS={id:'admin',pw:'lumi2024!'};
+        const ADMIN_ID='adminhighgo';
+        const ADMIN_PW='gndls-asdk!jd-As';
         function handleAdminLogin(){
             const id=document.getElementById('adminId').value.trim();
             const pw=document.getElementById('adminPw').value;
-            const errorEl=document.getElementById('loginError');
-            if(id===ADMIN_CREDENTIALS.id&&pw===ADMIN_CREDENTIALS.pw){
+            document.getElementById('loginError').textContent='';
+            if(id===ADMIN_ID&&pw===ADMIN_PW){
                 localStorage.setItem('lumi_admin_auth','true');
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('appContainer').classList.add('active');
                 initApp();
-            }else{errorEl.textContent='ID 또는 비밀번호가 올바르지 않습니다.';}
+            }else{document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';}
         }
         function logout(){localStorage.removeItem('lumi_admin_auth');location.reload();}
         function checkAuth(){
