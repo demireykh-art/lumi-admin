@@ -158,6 +158,7 @@
                 <div class="sub-tabs">
                     <div class="sub-tab active" data-sub="fixed">고정비</div>
                     <div class="sub-tab" data-sub="variable">유동비</div>
+                    <div class="sub-tab" data-sub="expense-summary">지출 분석</div>
                 </div>
                 <div class="sub-content active" id="sub-fixed">
                     <div class="expense-summary">
@@ -165,8 +166,8 @@
                         <div class="expense-box"><div class="expense-box-label">항목 수</div><div class="expense-box-value" id="fixedCount">0개</div></div>
                         <div class="expense-box"><div class="expense-box-label">연간 예상</div><div class="expense-box-value" id="fixedYearly">₩0</div></div>
                     </div>
-                    <div class="section-header"><div class="section-title">고정비 목록</div><button class="btn btn-primary" onclick="openExpenseModal('fixed')">+ 항목 추가</button></div>
-                    <div class="table-container"><table><thead><tr><th>항목명</th><th>카테고리</th><th class="text-right">월 금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="fixedTable"></tbody></table></div>
+                    <div class="section-header"><div class="section-title">고정비 목록</div><div><select class="form-select" id="fixedSort" onchange="renderExpenses()" style="width:auto;display:inline-block;margin-right:8px"><option value="date-desc">날짜 최신순</option><option value="date-asc">날짜 오래된순</option><option value="amount-desc">금액 높은순</option><option value="amount-asc">금액 낮은순</option><option value="category">카테고리순</option></select><button class="btn btn-primary" onclick="openExpenseModal('fixed')">+ 항목 추가</button></div></div>
+                    <div class="table-container"><table><thead><tr><th>날짜</th><th>항목명</th><th>카테고리</th><th class="text-right">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="fixedTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-variable">
                     <div class="expense-summary">
@@ -174,8 +175,23 @@
                         <div class="expense-box"><div class="expense-box-label">건수</div><div class="expense-box-value" id="variableCount">0건</div></div>
                         <div class="expense-box"><div class="expense-box-label">전월 대비</div><div class="expense-box-value" id="variableChange">-</div></div>
                     </div>
-                    <div class="section-header"><div class="section-title">유동비 목록</div><button class="btn btn-primary" onclick="openExpenseModal('variable')">+ 항목 추가</button></div>
+                    <div class="section-header"><div class="section-title">유동비 목록</div><div><select class="form-select" id="variableSort" onchange="renderExpenses()" style="width:auto;display:inline-block;margin-right:8px"><option value="date-desc">날짜 최신순</option><option value="date-asc">날짜 오래된순</option><option value="amount-desc">금액 높은순</option><option value="amount-asc">금액 낮은순</option><option value="category">카테고리순</option></select><button class="btn btn-primary" onclick="openExpenseModal('variable')">+ 항목 추가</button></div></div>
                     <div class="table-container"><table><thead><tr><th>결제일</th><th>항목명</th><th>카테고리</th><th>결제수단</th><th class="text-right">금액</th><th>관리</th></tr></thead><tbody id="variableTable"></tbody></table></div>
+                </div>
+                <div class="sub-content" id="sub-expense-summary">
+                    <div class="card-grid">
+                        <div class="card"><div class="card-title">월 총 지출</div><div class="card-value" id="totalExpense">₩0</div><div class="card-sub">고정비 + 유동비</div></div>
+                        <div class="card"><div class="card-title">월 매출</div><div class="card-value" id="monthRevenue">₩0</div><div class="card-sub" id="monthRevenueDate">-</div></div>
+                        <div class="card"><div class="card-title">월 수익 (추정)</div><div class="card-value" id="monthProfit">₩0</div><div class="card-sub">매출 - 지출</div></div>
+                        <div class="card"><div class="card-title">수익률</div><div class="card-value" id="profitRate">0%</div><div class="card-sub">수익/매출</div></div>
+                    </div>
+                    <div class="section-header"><div class="section-title">월별 지출 추이</div></div>
+                    <div class="chart-container"><canvas id="expenseChart"></canvas></div>
+                    <div class="section-header" style="margin-top:24px"><div class="section-title">카테고리별 지출</div></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+                        <div><h4 style="margin-bottom:12px">고정비</h4><div id="fixedByCategory"></div></div>
+                        <div><h4 style="margin-bottom:12px">유동비</h4><div id="variableByCategory"></div></div>
+                    </div>
                 </div>
             </div>
             <div class="tab-content" id="tab-employee">
@@ -633,16 +649,119 @@
         }
 
         function renderExpenses(){
+            // 정렬 함수
+            const sortExpenses=(list,sortKey)=>{
+                const sorted=[...list];
+                switch(sortKey){
+                    case 'date-desc':sorted.sort((a,b)=>(b.date||'').localeCompare(a.date||''));break;
+                    case 'date-asc':sorted.sort((a,b)=>(a.date||'').localeCompare(b.date||''));break;
+                    case 'amount-desc':sorted.sort((a,b)=>(b.amount||0)-(a.amount||0));break;
+                    case 'amount-asc':sorted.sort((a,b)=>(a.amount||0)-(b.amount||0));break;
+                    case 'category':sorted.sort((a,b)=>(a.category||'').localeCompare(b.category||''));break;
+                }
+                return sorted;
+            };
+            
+            // 고정비
+            const fixedSort=document.getElementById('fixedSort')?.value||'date-desc';
+            const sortedFixed=sortExpenses(fixedExpenses,fixedSort);
             const fixedTotal=fixedExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
             document.getElementById('fixedTotal').textContent=formatCurrency(fixedTotal);
             document.getElementById('fixedCount').textContent=fixedExpenses.length+'개';
             document.getElementById('fixedYearly').textContent=formatCurrency(fixedTotal*12);
-            document.getElementById('fixedTable').innerHTML=fixedExpenses.map(e=>`<tr><td><strong>${e.name}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="5" class="text-center">등록된 고정비 없음</td></tr>';
+            document.getElementById('fixedTable').innerHTML=sortedFixed.map(e=>`<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 고정비 없음</td></tr>';
 
+            // 유동비
+            const variableSort=document.getElementById('variableSort')?.value||'date-desc';
+            const sortedVariable=sortExpenses(variableExpenses,variableSort);
             const variableTotal=variableExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
             document.getElementById('variableTotal').textContent=formatCurrency(variableTotal);
             document.getElementById('variableCount').textContent=variableExpenses.length+'건';
-            document.getElementById('variableTable').innerHTML=variableExpenses.map(e=>`<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-orange">${e.category}</span></td><td>${e.card||'-'}</td><td class="text-right">${formatCurrency(e.amount)}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 유동비 없음</td></tr>';
+            document.getElementById('variableTable').innerHTML=sortedVariable.map(e=>`<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-orange">${e.category}</span></td><td>${e.card||'-'}</td><td class="text-right">${formatCurrency(e.amount)}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 유동비 없음</td></tr>';
+            
+            // 지출 분석 렌더링
+            renderExpenseAnalysis();
+        }
+        
+        let expenseChart=null;
+        function renderExpenseAnalysis(){
+            const ym=getYM();
+            const fixedTotal=fixedExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
+            const variableTotal=variableExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
+            const totalExpense=fixedTotal+variableTotal;
+            
+            // 월 매출
+            const rev=revenueData[ym];
+            const monthRevenue=rev?rev.total:0;
+            const monthProfit=monthRevenue-totalExpense;
+            const profitRate=monthRevenue>0?((monthProfit/monthRevenue)*100).toFixed(1):0;
+            
+            document.getElementById('totalExpense').textContent=formatCurrency(totalExpense);
+            document.getElementById('monthRevenue').textContent=formatCurrency(monthRevenue);
+            document.getElementById('monthRevenueDate').textContent=rev?`${ym.substring(0,4)}년 ${parseInt(ym.substring(4))}월`:'데이터 없음';
+            document.getElementById('monthProfit').textContent=formatCurrency(monthProfit);
+            document.getElementById('monthProfit').style.color=monthProfit>=0?'var(--accent-green)':'var(--accent-red)';
+            document.getElementById('profitRate').textContent=profitRate+'%';
+            document.getElementById('profitRate').style.color=monthProfit>=0?'var(--accent-green)':'var(--accent-red)';
+            
+            // 카테고리별 지출
+            const fixedByCategory={};
+            fixedExpenses.forEach(e=>{fixedByCategory[e.category]=(fixedByCategory[e.category]||0)+e.amount;});
+            const variableByCategory={};
+            variableExpenses.forEach(e=>{variableByCategory[e.category]=(variableByCategory[e.category]||0)+e.amount;});
+            
+            const renderCategoryList=(data,total)=>{
+                const sorted=Object.entries(data).sort((a,b)=>b[1]-a[1]);
+                return sorted.map(([cat,amt])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee"><span>${cat}</span><span><strong>${formatCurrency(amt)}</strong> <span style="color:#999">(${((amt/total)*100).toFixed(1)}%)</span></span></div>`).join('')||'<div style="color:#999;padding:8px 0">데이터 없음</div>';
+            };
+            document.getElementById('fixedByCategory').innerHTML=renderCategoryList(fixedByCategory,fixedTotal||1);
+            document.getElementById('variableByCategory').innerHTML=renderCategoryList(variableByCategory,variableTotal||1);
+            
+            // 월별 지출 차트
+            renderExpenseChart();
+        }
+        
+        function renderExpenseChart(){
+            const year=currentYear;
+            const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+            const fixedData=[];const variableData=[];const revenueDataArr=[];const profitData=[];
+            
+            for(let m=1;m<=12;m++){
+                const ym=year+String(m).padStart(2,'0');
+                // 고정비는 현재 등록된 금액을 매월 동일하게 가정
+                const fixedTotal=fixedExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
+                // 유동비는 해당 월 데이터만 (yearMonth 기준)
+                const varTotal=variableExpenses.filter(e=>e.yearMonth===ym).reduce((sum,e)=>sum+(e.amount||0),0);
+                const rev=revenueData[ym];
+                const monthRev=rev?rev.total:0;
+                
+                fixedData.push(fixedTotal/10000);
+                variableData.push(varTotal/10000);
+                revenueDataArr.push(monthRev/10000);
+                profitData.push((monthRev-fixedTotal-varTotal)/10000);
+            }
+            
+            const ctx=document.getElementById('expenseChart');
+            if(!ctx)return;
+            if(expenseChart)expenseChart.destroy();
+            expenseChart=new Chart(ctx,{
+                type:'bar',
+                data:{
+                    labels:months,
+                    datasets:[
+                        {label:'매출',data:revenueDataArr,type:'line',borderColor:'rgba(154,139,122,1)',backgroundColor:'rgba(154,139,122,0.1)',fill:true,tension:0.3,yAxisID:'y'},
+                        {label:'고정비',data:fixedData,backgroundColor:'rgba(59,130,246,0.7)',stack:'expense',yAxisID:'y'},
+                        {label:'유동비',data:variableData,backgroundColor:'rgba(249,115,22,0.7)',stack:'expense',yAxisID:'y'},
+                        {label:'수익',data:profitData,type:'line',borderColor:'rgba(34,197,94,1)',borderDash:[5,5],pointStyle:'rectRot',pointRadius:4,yAxisID:'y'}
+                    ]
+                },
+                options:{
+                    responsive:true,
+                    interaction:{mode:'index',intersect:false},
+                    scales:{y:{beginAtZero:true,ticks:{callback:v=>v.toLocaleString()+'만'}}},
+                    plugins:{tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.raw.toLocaleString()+'만원'}}}
+                }
+            });
         }
 
         function renderEmployees(){
@@ -755,11 +874,9 @@
         const fixedCategories=[
             {value:'인건비',label:'인건비(급여)'},
             {value:'4대보험',label:'4대보험'},
+            {value:'세금_원천세',label:'세금-원천세'},
             {value:'임대료',label:'임대료/관리비'},
             {value:'공과금',label:'공과금(전기/가스/수도)'},
-            {value:'세금_원천세',label:'세금-원천세'},
-            {value:'세금_부가세',label:'세금-부가세'},
-            {value:'세금_종소세',label:'세금-종합소득세'},
             {value:'장비리스',label:'장비리스/렌탈'},
             {value:'대출이자',label:'대출이자'},
             {value:'통신_인터넷',label:'인터넷'},
@@ -776,6 +893,9 @@
             {value:'기타',label:'기타'}
         ];
         const variableCategories=[
+            {value:'세금_부가세',label:'세금-부가세'},
+            {value:'세금_종소세',label:'세금-종합소득세'},
+            {value:'세금_기타',label:'세금-기타'},
             {value:'의료소모품',label:'의료소모품'},
             {value:'미용소모품',label:'미용소모품'},
             {value:'사무용품',label:'사무/비품'},
@@ -793,7 +913,7 @@
             document.getElementById('expenseEditId').value=id||'';document.getElementById('expenseType').value=type;
             document.getElementById('expenseName').value='';document.getElementById('expenseAmount').value='';document.getElementById('expenseNote').value='';
             document.getElementById('expenseDate').value=new Date().toISOString().split('T')[0];
-            document.getElementById('expenseDateGroup').style.display=type==='variable'?'block':'none';
+            document.getElementById('expenseDateGroup').style.display='block';  // 고정비/유동비 모두 날짜 표시
             document.getElementById('expenseCardGroup').style.display=type==='variable'?'block':'none';
             document.getElementById('expenseCard').value='롯데카드';
             // 카테고리 옵션 동적 변경
@@ -803,7 +923,8 @@
             if(id){const list=type==='fixed'?fixedExpenses:variableExpenses;const item=list.find(e=>e.id===id);if(item){
                 document.getElementById('expenseName').value=item.name||'';document.getElementById('expenseCategory').value=item.category||'기타';
                 document.getElementById('expenseAmount').value=item.amount||'';document.getElementById('expenseNote').value=item.note||'';
-                if(type==='variable'){document.getElementById('expenseDate').value=item.date||'';document.getElementById('expenseCard').value=item.card||'롯데카드';}
+                document.getElementById('expenseDate').value=item.date||'';
+                if(type==='variable'){document.getElementById('expenseCard').value=item.card||'롯데카드';}
             }}
             openModal('expenseModal');
         }
@@ -818,8 +939,9 @@
             const card=document.getElementById('expenseCard').value;
             if(!name||!amount){alert('항목명과 금액은 필수입니다.');return;}
             const collection=type==='fixed'?'fixedExpenses':'variableExpenses';
-            const data={name,category,amount,note};
-            if(type==='variable'){data.date=date;data.card=card;data.yearMonth=getYM();}
+            const data={name,category,amount,note,date};
+            if(type==='variable'){data.card=card;}
+            data.yearMonth=date?date.substring(0,7).replace('-',''):getYM();
             try{
                 if(editId){await db.collection(collection).doc(editId).update(data);}
                 else{await db.collection(collection).add(data);}
