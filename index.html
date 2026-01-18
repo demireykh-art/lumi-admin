@@ -8,6 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root{--bg-primary:#faf9f7;--bg-secondary:#fff;--bg-card:#fff;--accent-gold:#9a8b7a;--accent-dark:#2c2c2c;--accent-green:#5a7a5a;--accent-red:#a85a5a;--accent-blue:#5a6a7a;--accent-orange:#c4956a;--accent-purple:#7a6a8a;--text-primary:#2c2c2c;--text-secondary:#6b6b6b;--text-muted:#999;--border-color:#e8e4df}
@@ -1290,48 +1291,135 @@
         
         async function handleTaxFiles(files){
             for(const file of files){
-                const fileName=file.name.toLowerCase();
-                // 파일명으로 세금 종류 추정
-                let taxInfo=null;
-                if(fileName.includes('부가')&&fileName.includes('세')){
-                    taxInfo=await parseTaxFromFileName(file,'vat');
-                }else if(fileName.includes('종합소득')||fileName.includes('종소세')){
-                    taxInfo=await parseTaxFromFileName(file,'income');
-                }else if(fileName.includes('근로')||fileName.includes('원천')){
-                    taxInfo=await parseTaxFromFileName(file,'withholding_income');
-                }else if(fileName.includes('지방')){
-                    taxInfo=await parseTaxFromFileName(file,'withholding_local');
-                }else{
-                    alert('파일명에서 세금 종류를 인식할 수 없습니다: '+file.name+'\n\n파일명에 "부가세", "종합소득세", "근로", "지방세" 키워드를 포함해주세요.');
-                    continue;
+                try{
+                    const fileName=file.name.toLowerCase();
+                    let taxType=null;
+                    
+                    // 파일명으로 세금 종류 추정
+                    if(fileName.includes('부가')&&(fileName.includes('세')||fileName.includes('가치'))){
+                        taxType='vat';
+                    }else if(fileName.includes('종합소득')||fileName.includes('종소세')){
+                        taxType='income';
+                    }else if(fileName.includes('근로')||fileName.includes('원천')){
+                        taxType='withholding_income';
+                    }else if(fileName.includes('지방')){
+                        taxType='withholding_local';
+                    }else{
+                        alert('파일명에서 세금 종류를 인식할 수 없습니다: '+file.name+'\n\n파일명에 "부가세", "종합소득세", "근로", "지방세" 키워드를 포함해주세요.');
+                        continue;
+                    }
+                    
+                    // PDF에서 텍스트 추출
+                    let pdfText='';
+                    if(file.type==='application/pdf'){
+                        pdfText=await extractPdfText(file);
+                    }
+                    
+                    // 파일명 + PDF 텍스트에서 정보 추출
+                    const taxInfo=parseTaxInfo(file.name,pdfText,taxType);
+                    await saveTaxFromFile(taxInfo);
+                }catch(err){
+                    console.error('파일 처리 오류:',err);
+                    alert('파일 처리 중 오류: '+err.message);
                 }
-                if(taxInfo)await saveTaxFromFile(taxInfo);
             }
         }
         
-        async function parseTaxFromFileName(file,type){
-            const fileName=file.name;
-            // 금액 추출 (파일 내용이 아닌 알려진 패턴 기반)
-            // 실제로는 PDF 파싱이 필요하지만, 여기서는 수동 입력 모달을 열어줌
-            let info={type,fileName};
+        async function extractPdfText(file){
+            return new Promise((resolve,reject)=>{
+                const reader=new FileReader();
+                reader.onload=async function(e){
+                    try{
+                        pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                        const pdf=await pdfjsLib.getDocument({data:e.target.result}).promise;
+                        let text='';
+                        for(let i=1;i<=pdf.numPages;i++){
+                            const page=await pdf.getPage(i);
+                            const content=await page.getTextContent();
+                            text+=content.items.map(item=>item.str).join(' ')+'\n';
+                        }
+                        resolve(text);
+                    }catch(err){reject(err);}
+                };
+                reader.onerror=()=>reject(new Error('파일 읽기 실패'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        function parseTaxInfo(fileName,pdfText,taxType){
+            const info={type:taxType,fileName};
+            const combinedText=fileName+' '+pdfText;
             
-            // 파일명에서 연월 추출 시도
-            const ymMatch=fileName.match(/(\d{4})[\-_]?(\d{1,2})/);
-            if(ymMatch){
-                info.year=ymMatch[1];
-                info.month=ymMatch[2].padStart(2,'0');
+            // "계" 다음의 금액 찾기 (국세 납부서 패턴: 계 4,099,000)
+            const totalMatch=pdfText.match(/계\s*[\n\s]*([0-9,]+)/);
+            if(totalMatch){
+                info.amount=parseInt(totalMatch[1].replace(/,/g,''));
             }
             
-            // 귀속월 추출 (11월귀속 등)
-            const attrMatch=fileName.match(/(\d{1,2})월\s*귀속/);
+            // "합 계" 또는 "합계" 패턴 (지방세 납부서)
+            if(!info.amount){
+                const sumMatch=pdfText.match(/합\s*계\s*[\n\s]*([0-9,]+)/);
+                if(sumMatch)info.amount=parseInt(sumMatch[1].replace(/,/g,''));
+            }
+            
+            // 납부금액 패턴
+            if(!info.amount){
+                const payMatch=pdfText.match(/납부금액\s*[\n\s]*([0-9,]+)/);
+                if(payMatch)info.amount=parseInt(payMatch[1].replace(/,/g,''));
+            }
+            
+            // 부가가치세/종합소득세 금액 패턴
+            if(!info.amount){
+                const vatMatch=pdfText.match(/부가가치세\s*[\n\s]*([0-9,]+)/);
+                if(vatMatch)info.amount=parseInt(vatMatch[1].replace(/,/g,''));
+            }
+            if(!info.amount){
+                const incomeMatch=pdfText.match(/종합소득세\s*[\n\s]*([0-9,]+)/);
+                if(incomeMatch)info.amount=parseInt(incomeMatch[1].replace(/,/g,''));
+            }
+            
+            // 근로소득세(갑) 금액
+            if(!info.amount&&taxType==='withholding_income'){
+                const workMatch=pdfText.match(/근로소득세\s*[(\(]?\s*갑\s*[)\)]?\s*[\n\s]*([0-9,]+)/);
+                if(workMatch)info.amount=parseInt(workMatch[1].replace(/,/g,''));
+            }
+            
+            // 지방소득세 금액
+            if(!info.amount&&taxType==='withholding_local'){
+                const localMatch=pdfText.match(/지방소득세\s*[\n\s]*([0-9,]+)/);
+                if(localMatch)info.amount=parseInt(localMatch[1].replace(/,/g,''));
+            }
+            
+            // 납부기한 추출
+            const dateMatch=pdfText.match(/납부기한[일]?\s*[\n\s:]*(\d{4})[년\-\.]\s*(\d{1,2})[월\-\.]\s*(\d{1,2})/);
+            if(dateMatch){
+                info.dueDate=dateMatch[1]+'-'+dateMatch[2].padStart(2,'0')+'-'+dateMatch[3].padStart(2,'0');
+            }
+            
+            // 귀속월 추출 (11월 귀속 또는 2025년 11월)
+            const attrMatch=combinedText.match(/(\d{1,2})월\s*귀속/);
             if(attrMatch){
-                info.attributeMonth=(info.year||currentYear)+'-'+attrMatch[1].padStart(2,'0');
+                const yearMatch=combinedText.match(/(\d{4})\s*년/);
+                const year=yearMatch?yearMatch[1]:String(currentYear);
+                info.attributeMonth=year+'-'+attrMatch[1].padStart(2,'0');
             }
             
-            // 분기 추출
-            const quarterMatch=fileName.match(/(\d)기/);
-            if(quarterMatch){
-                info.quarter=quarterMatch[1]+'기';
+            // 연도/기분 추출 (2025년 2기분)
+            const periodMatch=pdfText.match(/(\d{4})\s*년\s*(\d)\s*기/);
+            if(periodMatch){
+                info.year=periodMatch[1];
+                info.quarter=periodMatch[2]+'기';
+            }
+            
+            // 귀속연도 (종소세)
+            if(taxType==='income'){
+                const taxYearMatch=combinedText.match(/(\d{4})\s*[년_]/);
+                if(taxYearMatch)info.taxYear=taxYearMatch[1];
+                
+                // 중간예납 여부
+                if(combinedText.includes('중간예납'))info.incomeType='중간예납';
+                else if(combinedText.includes('확정'))info.incomeType='확정신고';
+                else if(combinedText.includes('분납'))info.incomeType='분납';
             }
             
             return info;
@@ -1342,17 +1430,32 @@
             if(info.type==='vat'){
                 openTaxModal('vat');
                 if(info.quarter)document.getElementById('taxQuarter').value=info.quarter;
+                if(info.amount)document.getElementById('taxAmount').value=info.amount;
+                if(info.dueDate)document.getElementById('taxDate').value=info.dueDate;
                 document.getElementById('taxNote').value='파일: '+info.fileName;
             }else if(info.type==='income'){
                 openTaxModal('income');
-                if(info.year)document.getElementById('taxYear').value=info.year;
+                if(info.taxYear)document.getElementById('taxYear').value=info.taxYear;
+                if(info.incomeType)document.getElementById('taxIncomeType').value=info.incomeType;
+                if(info.amount)document.getElementById('taxAmount').value=info.amount;
+                if(info.dueDate)document.getElementById('taxDate').value=info.dueDate;
                 document.getElementById('taxNote').value='파일: '+info.fileName;
-            }else if(info.type==='withholding_income'||info.type==='withholding_local'){
+            }else if(info.type==='withholding_income'){
                 openTaxModal('withholding');
                 if(info.attributeMonth)document.getElementById('taxAttributeMonth').value=info.attributeMonth;
+                if(info.amount)document.getElementById('taxIncomeTax').value=info.amount;
+                if(info.dueDate)document.getElementById('taxDate').value=info.dueDate;
+                document.getElementById('taxNote').value='파일: '+info.fileName;
+            }else if(info.type==='withholding_local'){
+                openTaxModal('withholding');
+                if(info.attributeMonth)document.getElementById('taxAttributeMonth').value=info.attributeMonth;
+                if(info.amount)document.getElementById('taxLocalTax').value=info.amount;
+                if(info.dueDate)document.getElementById('taxDate').value=info.dueDate;
                 document.getElementById('taxNote').value='파일: '+info.fileName;
             }
-            alert('파일 정보를 인식했습니다.\n금액을 입력하고 저장해주세요.\n\n파일: '+info.fileName);
+            
+            const amountStr=info.amount?formatCurrency(info.amount):'인식 실패';
+            alert(`📄 세금 고지서 인식 완료!\n\n세금 종류: ${info.type==='vat'?'부가세':info.type==='income'?'종소세':'원천세'}\n금액: ${amountStr}\n\n내용을 확인하고 저장해주세요.`);
         }
 
         // CRUD Operations - Employee
