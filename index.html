@@ -27,6 +27,7 @@
         .logo-sub{font-size:.7rem;letter-spacing:3px;color:var(--text-muted)}.logo-main{font-size:1.4rem;font-weight:500;letter-spacing:2px}
         .header-right{display:flex;align-items:center;gap:1rem}.month-selector{display:flex;align-items:center;gap:.5rem;background:var(--bg-primary);padding:.5rem 1rem;border:1px solid var(--border-color)}
         .month-selector select{border:none;background:transparent;font-size:.9rem;cursor:pointer;padding:.25rem}
+        .month-arrow{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--border-color);cursor:pointer;font-size:.8rem;color:var(--text-muted);transition:all .2s}.month-arrow:hover{border-color:var(--accent-gold);color:var(--accent-gold)}
         .logout-btn{padding:.5rem 1rem;background:none;border:1px solid var(--border-color);cursor:pointer;font-size:.85rem;color:var(--text-secondary)}
         .logout-btn:hover{background:var(--bg-primary)}
         .nav-tabs{display:flex;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);padding:0 2rem;overflow-x:auto}
@@ -96,8 +97,10 @@
                 <div class="logo"><div class="logo-text"><div class="logo-sub">THE CLINIC</div><div class="logo-main">LUMI</div></div></div>
                 <div class="header-right">
                     <div class="month-selector">
-                        <select id="yearSelect" onchange="changeMonth()"></select><span>년</span>
-                        <select id="monthSelect" onchange="changeMonth()"></select><span>월</span>
+                        <button class="month-arrow" onclick="changeMonth(-1)">◀</button>
+                        <select id="yearSelect" onchange="loadData()"></select><span>년</span>
+                        <select id="monthSelect" onchange="loadData()"></select><span>월</span>
+                        <button class="month-arrow" onclick="changeMonth(1)">▶</button>
                     </div>
                     <button class="logout-btn" onclick="logout()">로그아웃</button>
                 </div>
@@ -280,9 +283,9 @@
             <div class="modal-header"><div class="modal-title" id="incentiveItemModalTitle">인센티브 항목 추가</div><button class="modal-close" onclick="closeModal('incentiveItemModal')">&times;</button></div>
             <div class="modal-body">
                 <input type="hidden" id="incItemEditId">
-                <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="incItemName" placeholder="예: 시술 보조, 상담 성공"></div>
-                <div class="form-group"><label class="form-label">단가 (건당)</label><input type="number" class="form-input" id="incItemPrice" value="10000"></div>
-                <div class="form-group"><label class="form-label">적용 직급</label><select class="form-select" id="incItemRole"><option value="all">전체</option><option value="nurse">간호사</option><option value="coordinator">코디네이터</option><option value="staff">스태프</option></select></div>
+                <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="incItemName" placeholder="예: 관리 지정, 시술 보조"></div>
+                <div class="form-group"><label class="form-label">단가 (건당)</label><input type="number" class="form-input" id="incItemPrice" value="50000"></div>
+                <div class="form-group"><label class="form-label">적용 직원 (복수 선택 가능)</label><div id="incItemEmployees" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);padding:.75rem;background:#fff"></div></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('incentiveItemModal')">취소</button><button class="btn btn-primary" onclick="saveIncentiveItem()">저장</button></div>
         </div>
@@ -298,6 +301,7 @@
         let currentYear=new Date().getFullYear();
         let currentMonth=new Date().getMonth()+1;
         let employees=[],attendance=[],revenueData={},salesDetail={},fixedExpenses=[],variableExpenses=[],incentiveItems=[],lunchOT=[];
+        const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',staff:'스태프'};
         let revenueChart=null,compareChart=null;
 
         // 2024년 데이터
@@ -386,11 +390,20 @@
             for(let y=2024;y<=2026;y++){yearSelect.innerHTML+=`<option value="${y}" ${y===currentYear?'selected':''}>${y}</option>`;}
             for(let m=1;m<=12;m++){monthSelect.innerHTML+=`<option value="${m}" ${m===currentMonth?'selected':''}>${m}</option>`;}
         }
-        function changeMonth(){
-            currentYear=parseInt(document.getElementById('yearSelect').value);
-            currentMonth=parseInt(document.getElementById('monthSelect').value);
+        function changeMonth(delta){
+            if(typeof delta === 'number'){
+                currentMonth+=delta;
+                if(currentMonth>12){currentMonth=1;currentYear++;}
+                if(currentMonth<1){currentMonth=12;currentYear--;}
+                document.getElementById('yearSelect').value=currentYear;
+                document.getElementById('monthSelect').value=currentMonth;
+            }else{
+                currentYear=parseInt(document.getElementById('yearSelect').value);
+                currentMonth=parseInt(document.getElementById('monthSelect').value);
+            }
             loadAllData();
         }
+        function loadData(){changeMonth();}
 
         // Data Loading
         async function loadAllData(){
@@ -573,8 +586,10 @@
         }
 
         function renderIncentiveItems(){
-            const roleLabels={all:'전체',nurse:'간호사',coordinator:'코디네이터',staff:'스태프'};
-            document.getElementById('incentiveItemTable').innerHTML=incentiveItems.map(item=>`<tr><td><strong>${item.name}</strong></td><td>${formatCurrency(item.price)}</td><td><span class="badge badge-purple">${roleLabels[item.role]||item.role}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editIncentiveItem('${item.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteIncentiveItem('${item.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="4" class="text-center">등록된 항목 없음</td></tr>';
+            document.getElementById('incentiveItemTable').innerHTML=incentiveItems.map(item=>{
+                const empNames=item.employees?.length?item.employees.map(id=>employees.find(e=>e.id===id)?.name||id).join(', '):'전체';
+                return `<tr><td><strong>${item.name}</strong></td><td>${formatCurrency(item.price)}</td><td><span class="badge badge-purple">${empNames}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editIncentiveItem('${item.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteIncentiveItem('${item.id}')">삭제</button></td></tr>`;
+            }).join('')||'<tr><td colspan="4" class="text-center">등록된 항목 없음</td></tr>';
         }
 
         function renderIncentiveSummary(){
@@ -669,12 +684,14 @@
         function openIncentiveItemModal(id=null){
             document.getElementById('incentiveItemModalTitle').textContent=id?'인센티브 항목 수정':'인센티브 항목 추가';
             document.getElementById('incItemEditId').value=id||'';
-            document.getElementById('incItemName').value='';document.getElementById('incItemPrice').value='10000';
-            document.getElementById('incItemRole').value='all';
+            document.getElementById('incItemName').value='';
+            document.getElementById('incItemPrice').value='50000';
+            const selectedEmps=id?incentiveItems.find(i=>i.id===id)?.employees||[]:[];
+            const container=document.getElementById('incItemEmployees');
+            container.innerHTML=employees.filter(e=>e.status==='active').map(e=>`<label style="display:block;padding:.4rem 0;cursor:pointer"><input type="checkbox" name="incEmp" value="${e.id}" ${selectedEmps.includes(e.id)?'checked':''}> ${e.name} (${roleLabels[e.role]||e.role})</label>`).join('')||'<div style="color:var(--text-muted)">등록된 직원 없음</div>';
             if(id){const item=incentiveItems.find(i=>i.id===id);if(item){
                 document.getElementById('incItemName').value=item.name||'';
-                document.getElementById('incItemPrice').value=item.price||10000;
-                document.getElementById('incItemRole').value=item.role||'all';
+                document.getElementById('incItemPrice').value=item.price||50000;
             }}
             openModal('incentiveItemModal');
         }
@@ -682,9 +699,9 @@
             const editId=document.getElementById('incItemEditId').value;
             const name=document.getElementById('incItemName').value.trim();
             const price=parseInt(document.getElementById('incItemPrice').value)||0;
-            const role=document.getElementById('incItemRole').value;
+            const selectedEmps=Array.from(document.querySelectorAll('input[name="incEmp"]:checked')).map(cb=>cb.value);
             if(!name){alert('항목명을 입력해주세요.');return;}
-            const data={name,price,role};
+            const data={name,price,employees:selectedEmps};
             try{
                 if(editId){await db.collection('incentiveItems').doc(editId).update(data);}
                 else{await db.collection('incentiveItems').add(data);}
