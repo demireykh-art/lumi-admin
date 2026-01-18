@@ -1087,18 +1087,24 @@
                 try{
                     const data=new Uint8Array(e.target.result);
                     const workbook=XLSX.read(data,{type:'array'});
-                    const sheet=workbook.Sheets[workbook.SheetNames[0]];
-                    const json=XLSX.utils.sheet_to_json(sheet);
                     
-                    if(json.length===0){alert('데이터가 없습니다.');return;}
+                    // "4.임금대장" 시트 찾기, 없으면 첫번째 시트
+                    let sheetName=workbook.SheetNames.find(n=>n.includes('임금대장'))||workbook.SheetNames[0];
+                    const sheet=workbook.Sheets[sheetName];
+                    const json=XLSX.utils.sheet_to_json(sheet,{header:1});
                     
-                    // 컬럼명 매핑 (다양한 형식 지원)
-                    const findCol=(row,names)=>{for(let n of names){if(row[n]!==undefined)return row[n];}return 0;};
+                    if(json.length<10){alert('데이터가 부족합니다.');return;}
                     
+                    // 연월 추출 (행1에서 "2025 년    12 월" 형식)
                     let yearMonth=getYM();
-                    // 파일명에서 월 추출 시도 (예: 202501_급여대장.xlsx)
-                    const match=file.name.match(/(\d{4})[\-_]?(\d{2})/);
-                    if(match)yearMonth=match[1]+'-'+match[2];
+                    const row1=json[1];
+                    if(row1&&row1[0]){
+                        const ymMatch=String(row1[0]).match(/(\d{4})\s*년\s*(\d{1,2})\s*월/);
+                        if(ymMatch)yearMonth=ymMatch[1]+'-'+ymMatch[2].padStart(2,'0');
+                    }
+                    // 파일명에서도 시도
+                    const fileMatch=file.name.match(/(\d{4})[\-_]?(\d{2})/);
+                    if(fileMatch&&!row1)yearMonth=fileMatch[1]+'-'+fileMatch[2];
                     
                     // 기존 해당월 데이터 삭제
                     const existing=await db.collection('payroll').where('yearMonth','==',yearMonth).get();
@@ -1108,15 +1114,20 @@
                     let totalNet=0;
                     let count=0;
                     
-                    for(const row of json){
-                        const name=row['성명']||row['이름']||row['직원명']||'';
-                        if(!name||name.includes('합계')||name.includes('총'))continue;
+                    // 루미의원 형식: 행8부터 데이터, 컬럼 인덱스 고정
+                    // 0:번호, 1:성명, 11:기본급, 33:지급합계, 46:공제합계, 47:차인지급액
+                    for(let i=8;i<json.length;i++){
+                        const row=json[i];
+                        if(!row||!row[1])continue;
                         
-                        const basePay=parseInt(findCol(row,['기본급','기본급여','급여']))||0;
-                        const allowance=parseInt(findCol(row,['수당','제수당','수당합계','기타수당']))||0;
-                        const grossPay=parseInt(findCol(row,['총지급액','지급총액','지급액계']))||(basePay+allowance);
-                        const deduction=parseInt(findCol(row,['공제합계','공제총액','공제액계','총공제']))||0;
-                        const netPay=parseInt(findCol(row,['차인지급액','실수령액','실지급액']))||(grossPay-deduction);
+                        const name=String(row[1]||'').trim();
+                        if(!name||name.includes('합계')||name.includes('총')||name==='NaN')continue;
+                        
+                        const basePay=parseInt(row[11])||0;
+                        const grossPay=parseInt(row[33])||0;
+                        const deduction=parseInt(row[46])||0;
+                        const netPay=parseInt(row[47])||0;
+                        const allowance=grossPay-basePay;
                         
                         if(netPay===0&&grossPay===0)continue;
                         
@@ -1124,7 +1135,7 @@
                             yearMonth,
                             name,
                             basePay,
-                            allowance,
+                            allowance:allowance>0?allowance:0,
                             grossPay,
                             deduction,
                             netPay,
@@ -1135,8 +1146,13 @@
                         count++;
                     }
                     
+                    if(count===0){
+                        alert('유효한 급여 데이터를 찾을 수 없습니다.\n시트명: '+sheetName);
+                        return;
+                    }
+                    
                     await batch.commit();
-                    alert(`${yearMonth} 급여대장 업로드 완료!\n직원 ${count}명, 차인지급액 합계: ${formatCurrency(totalNet)}`);
+                    alert(`${yearMonth} 급여대장 업로드 완료!\n직원 ${count}명\n차인지급액 합계: ${formatCurrency(totalNet)}`);
                     input.value='';
                     await loadExpenses();
                     renderExpenses();
