@@ -446,7 +446,72 @@
         function renderAll(){
             renderRevenueOverview();renderDoctorSales();renderStaffSales();renderJapanSales();renderUploadHistory();
             renderExpenses();renderEmployees();renderAttendance();renderOvertime();
-            renderIncentiveItems();renderIncentiveSummary();renderSalary();renderCharts();checkBirthdays();
+            renderIncentiveItems();renderIncentiveSummary();renderSalary();renderCharts();
+        }
+
+        // Chart instances
+        // revenueChart, compareChart already declared above
+
+        function renderCharts(){
+            const labels=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+            
+            // 현재 연도 데이터
+            const currentYearData=labels.map((_,i)=>{
+                const ym=`${currentYear}-${String(i+1).padStart(2,'0')}`;
+                return (revenueData[ym]?.total||0)/100000000;
+            });
+            
+            // 전년도 데이터 (2024년 baseline 또는 Firebase)
+            const lastYearData=labels.map((_,i)=>{
+                if(currentYear===2025){
+                    return (data2024[i+1]?.total||0)/100000000;
+                }else{
+                    const ym=`${currentYear-1}-${String(i+1).padStart(2,'0')}`;
+                    return (revenueData[ym]?.total||0)/100000000;
+                }
+            });
+            
+            // 월별 매출 추이 차트
+            const ctx1=document.getElementById('revenueChart');
+            if(ctx1){
+                if(revenueChart)revenueChart.destroy();
+                revenueChart=new Chart(ctx1,{
+                    type:'line',
+                    data:{
+                        labels,
+                        datasets:[
+                            {label:`${currentYear}년`,data:currentYearData,borderColor:'#9a8b7a',backgroundColor:'rgba(154,139,122,0.1)',fill:true,tension:0.4},
+                            {label:`${currentYear-1}년`,data:lastYearData,borderColor:'#ccc',borderDash:[5,5],fill:false,tension:0.4}
+                        ]
+                    },
+                    options:{
+                        responsive:true,maintainAspectRatio:false,
+                        plugins:{legend:{position:'top'}},
+                        scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'억'}}}
+                    }
+                });
+            }
+            
+            // 연도별 비교 차트 (막대)
+            const ctx2=document.getElementById('compareChart');
+            if(ctx2){
+                if(compareChart)compareChart.destroy();
+                compareChart=new Chart(ctx2,{
+                    type:'bar',
+                    data:{
+                        labels,
+                        datasets:[
+                            {label:`${currentYear-1}년`,data:lastYearData,backgroundColor:'rgba(200,200,200,0.7)'},
+                            {label:`${currentYear}년`,data:currentYearData,backgroundColor:'rgba(154,139,122,0.8)'}
+                        ]
+                    },
+                    options:{
+                        responsive:true,maintainAspectRatio:false,
+                        plugins:{legend:{position:'top'}},
+                        scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'억'}}}
+                    }
+                });
+            }
         }
 
         function renderRevenueOverview(){
@@ -703,6 +768,81 @@
         async function deleteExpense(type,id){
             if(!confirm('정말 삭제하시겠습니까?'))return;
             try{const collection=type==='fixed'?'fixedExpenses':'variableExpenses';await db.collection(collection).doc(id).delete();await loadExpenses();renderExpenses();}catch(e){alert('삭제 실패: '+e.message);}
+        }
+
+        // CRUD Operations - Employee
+        function generateEmployeeId(name,joinDate){
+            const year=joinDate?joinDate.substring(2,4):String(new Date().getFullYear()).substring(2);
+            const CHO=['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+            const ALPHA=['g','kk','n','d','tt','r','m','b','pp','s','ss','o','j','jj','ch','k','t','p','h'];
+            let initials='';
+            for(let i=0;i<name.length&&initials.length<3;i++){
+                const code=name.charCodeAt(i);
+                if(code>=0xAC00&&code<=0xD7A3){initials+=ALPHA[Math.floor((code-0xAC00)/588)];}
+                else if(/[a-zA-Z]/.test(name[i])){initials+=name[i].toLowerCase();}
+            }
+            return year+initials.substring(0,3).padEnd(3,'x');
+        }
+        function openEmployeeModal(id=null){
+            document.getElementById('employeeModalTitle').textContent=id?'직원 수정':'직원 등록';
+            document.getElementById('empEditId').value=id||'';
+            document.getElementById('empName').value='';
+            document.getElementById('empMatchName').value='';
+            document.getElementById('empRole').value='staff';
+            document.getElementById('empJoinDate').value='';
+            document.getElementById('empHourly').value='12000';
+            document.getElementById('empIncentiveType').value='none';
+            document.getElementById('empBirthday').value='';
+            document.getElementById('empStatus').value='active';
+            document.getElementById('empId').value='';
+            if(id){
+                const emp=employees.find(e=>e.id===id);
+                if(emp){
+                    document.getElementById('empName').value=emp.name||'';
+                    document.getElementById('empMatchName').value=emp.matchName||'';
+                    document.getElementById('empRole').value=emp.role||'staff';
+                    document.getElementById('empJoinDate').value=emp.joinDate||'';
+                    document.getElementById('empHourly').value=emp.hourly||12000;
+                    document.getElementById('empIncentiveType').value=emp.incentiveType||'none';
+                    document.getElementById('empBirthday').value=emp.birthday||'';
+                    document.getElementById('empStatus').value=emp.status||'active';
+                    document.getElementById('empId').value=emp.id;
+                }
+            }
+            openModal('employeeModal');
+        }
+        function editEmployee(id){openEmployeeModal(id);}
+        async function saveEmployee(){
+            const editId=document.getElementById('empEditId').value;
+            const name=document.getElementById('empName').value.trim();
+            const joinDate=document.getElementById('empJoinDate').value;
+            if(!name||!joinDate){alert('이름과 입사일은 필수입니다.');return;}
+            const empId=editId||generateEmployeeId(name,joinDate);
+            const data={
+                name,
+                matchName:document.getElementById('empMatchName').value.trim(),
+                role:document.getElementById('empRole').value,
+                joinDate,
+                hourly:parseInt(document.getElementById('empHourly').value)||12000,
+                incentiveType:document.getElementById('empIncentiveType').value,
+                birthday:document.getElementById('empBirthday').value,
+                status:document.getElementById('empStatus').value
+            };
+            try{
+                await db.collection('employees').doc(empId).set(data,{merge:true});
+                closeModal('employeeModal');
+                await loadEmployees();
+                renderAll();
+                alert(editId?'직원 정보가 수정되었습니다.':'직원이 등록되었습니다.\n사번: '+empId);
+            }catch(e){alert('저장 실패: '+e.message);}
+        }
+        async function deleteEmployee(id){
+            if(!confirm('정말 삭제하시겠습니까?'))return;
+            try{
+                await db.collection('employees').doc(id).delete();
+                await loadEmployees();
+                renderAll();
+            }catch(e){alert('삭제 실패: '+e.message);}
         }
 
         // CRUD Operations - Lunch OT
