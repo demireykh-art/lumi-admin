@@ -158,6 +158,8 @@
                 <div class="sub-tabs">
                     <div class="sub-tab active" data-sub="fixed">고정비</div>
                     <div class="sub-tab" data-sub="variable">유동비</div>
+                    <div class="sub-tab" data-sub="payroll">인건비</div>
+                    <div class="sub-tab" data-sub="tax">세금</div>
                     <div class="sub-tab" data-sub="expense-summary">지출 분석</div>
                 </div>
                 <div class="sub-content active" id="sub-fixed">
@@ -177,6 +179,33 @@
                     </div>
                     <div class="section-header"><div class="section-title">유동비 목록</div><div><select class="form-select" id="variableSort" onchange="renderExpenses()" style="width:auto;display:inline-block;margin-right:8px"><option value="date-desc">날짜 최신순</option><option value="date-asc">날짜 오래된순</option><option value="amount-desc">금액 높은순</option><option value="amount-asc">금액 낮은순</option><option value="category">카테고리순</option></select><button class="btn btn-primary" onclick="openExpenseModal('variable')">+ 항목 추가</button></div></div>
                     <div class="table-container"><table><thead><tr><th>결제일</th><th>항목명</th><th>카테고리</th><th>결제수단</th><th class="text-right">금액</th><th>관리</th></tr></thead><tbody id="variableTable"></tbody></table></div>
+                </div>
+                <div class="sub-content" id="sub-payroll">
+                    <div class="expense-summary">
+                        <div class="expense-box"><div class="expense-box-label">이번 달 총 인건비</div><div class="expense-box-value" id="payrollTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">차인지급액 합계</div><div class="expense-box-value" id="payrollNetTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">직원 수</div><div class="expense-box-value" id="payrollCount">0명</div></div>
+                    </div>
+                    <div class="section-header"><div class="section-title">급여대장 업로드</div></div>
+                    <div class="upload-area" onclick="document.getElementById('payrollFile').click()" style="margin-bottom:24px">
+                        <div class="upload-icon">📋</div>
+                        <div class="upload-text">급여대장 엑셀 파일 업로드</div>
+                        <div class="upload-hint">지원 형식: .xlsx, .xls</div>
+                        <input type="file" id="payrollFile" accept=".xlsx,.xls" style="display:none" onchange="processPayrollFile(this)">
+                    </div>
+                    <div class="section-header"><div class="section-title">월별 급여 내역</div><div><select class="form-select" id="payrollMonth" onchange="renderPayroll()" style="width:auto"><option value="">전체</option></select></div></div>
+                    <div class="table-container"><table><thead><tr><th>지급월</th><th>직원명</th><th>기본급</th><th>수당</th><th>공제</th><th class="text-right">차인지급액</th><th>관리</th></tr></thead><tbody id="payrollTable"></tbody></table></div>
+                </div>
+                <div class="sub-content" id="sub-tax">
+                    <div class="expense-summary">
+                        <div class="expense-box"><div class="expense-box-label">올해 부가세 납부</div><div class="expense-box-value" id="vatTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">올해 종소세 납부</div><div class="expense-box-value" id="incomeTotal">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">올해 세금 합계</div><div class="expense-box-value" id="taxTotal">₩0</div></div>
+                    </div>
+                    <div class="section-header"><div class="section-title">부가세 (분기별)</div><button class="btn btn-primary" onclick="openTaxModal('vat')">+ 부가세 추가</button></div>
+                    <div class="table-container"><table><thead><tr><th>납부일</th><th>분기/기간</th><th>매출세액</th><th>매입세액</th><th class="text-right">납부세액</th><th>비고</th><th>관리</th></tr></thead><tbody id="vatTable"></tbody></table></div>
+                    <div class="section-header" style="margin-top:24px"><div class="section-title">종합소득세 (연간)</div><button class="btn btn-primary" onclick="openTaxModal('income')">+ 종소세 추가</button></div>
+                    <div class="table-container"><table><thead><tr><th>납부일</th><th>귀속연도</th><th>과세표준</th><th>세율</th><th class="text-right">납부세액</th><th>비고</th><th>관리</th></tr></thead><tbody id="incomeTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-expense-summary">
                     <div class="card-grid">
@@ -267,6 +296,32 @@
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('employeeModal')">취소</button><button class="btn btn-primary" onclick="saveEmployee()">저장</button></div>
         </div>
     </div>
+    <div class="modal" id="taxModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title" id="taxModalTitle">세금 추가</div><button class="modal-close" onclick="closeModal('taxModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="taxEditId"><input type="hidden" id="taxType">
+                <div class="form-group"><label class="form-label">납부일 *</label><input type="date" class="form-input" id="taxDate" required></div>
+                <div id="vatFields">
+                    <div class="form-group"><label class="form-label">분기/기간</label><select class="form-select" id="taxQuarter"><option value="1분기">1분기 (1~3월)</option><option value="2분기">2분기 (4~6월)</option><option value="3분기">3분기 (7~9월)</option><option value="4분기">4분기 (10~12월)</option><option value="예정">예정신고</option><option value="확정">확정신고</option></select></div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">매출세액</label><input type="number" class="form-input" id="taxSalesAmount" placeholder="0"></div>
+                        <div class="form-group"><label class="form-label">매입세액</label><input type="number" class="form-input" id="taxPurchaseAmount" placeholder="0"></div>
+                    </div>
+                </div>
+                <div id="incomeFields" style="display:none">
+                    <div class="form-group"><label class="form-label">귀속연도</label><select class="form-select" id="taxYear"><option value="2024">2024년</option><option value="2025">2025년</option><option value="2026">2026년</option></select></div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">과세표준</label><input type="number" class="form-input" id="taxBase" placeholder="0"></div>
+                        <div class="form-group"><label class="form-label">세율 (%)</label><input type="number" class="form-input" id="taxRate" placeholder="예: 35"></div>
+                    </div>
+                </div>
+                <div class="form-group"><label class="form-label">납부세액 *</label><input type="number" class="form-input" id="taxAmount" required></div>
+                <div class="form-group"><label class="form-label">비고</label><textarea class="form-textarea" id="taxNote" rows="2"></textarea></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('taxModal')">취소</button><button class="btn btn-primary" onclick="saveTax()">저장</button></div>
+        </div>
+    </div>
     <div class="modal" id="expenseModal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="expenseModalTitle">지출 추가</div><button class="modal-close" onclick="closeModal('expenseModal')">&times;</button></div>
@@ -323,6 +378,7 @@
         let currentYear=new Date().getFullYear();
         let currentMonth=new Date().getMonth()+1;
         let employees=[],attendance=[],revenueData={},salesDetail={},fixedExpenses=[],variableExpenses=[],incentiveItems=[],lunchOT=[];
+        let vatTaxes=[],incomeTaxes=[],payrollData=[];
         const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
         let revenueChart=null,compareChart=null;
 
@@ -456,6 +512,14 @@
                 fixedExpenses=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
                 snapshot=await db.collection('variableExpenses').where('yearMonth','==',getYM()).get();
                 variableExpenses=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+                // 세금 로드 (올해 데이터)
+                snapshot=await db.collection('vatTaxes').where('year','==',String(currentYear)).get();
+                vatTaxes=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+                snapshot=await db.collection('incomeTaxes').get();
+                incomeTaxes=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
+                // 급여 로드
+                snapshot=await db.collection('payroll').get();
+                payrollData=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));
             }catch(e){console.error('Load expenses error:',e);}
         }
         async function loadAttendance(){
@@ -679,8 +743,60 @@
             document.getElementById('variableCount').textContent=variableExpenses.length+'건';
             document.getElementById('variableTable').innerHTML=sortedVariable.map(e=>`<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-orange">${e.category}</span></td><td>${e.card||'-'}</td><td class="text-right">${formatCurrency(e.amount)}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 유동비 없음</td></tr>';
             
+            // 급여 렌더링
+            renderPayroll();
+            
+            // 세금 렌더링
+            renderTaxes();
+            
             // 지출 분석 렌더링
             renderExpenseAnalysis();
+        }
+        
+        function renderPayroll(){
+            const ym=getYM();
+            const filterMonth=document.getElementById('payrollMonth')?.value||'';
+            
+            // 월 선택 드롭다운 업데이트
+            const months=[...new Set(payrollData.map(p=>p.yearMonth))].sort().reverse();
+            const monthSelect=document.getElementById('payrollMonth');
+            if(monthSelect){
+                const currentVal=monthSelect.value;
+                monthSelect.innerHTML='<option value="">전체</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
+                monthSelect.value=currentVal||'';
+            }
+            
+            // 필터링
+            let filtered=payrollData;
+            if(filterMonth){filtered=payrollData.filter(p=>p.yearMonth===filterMonth);}
+            else{filtered=payrollData.filter(p=>p.yearMonth===ym);}
+            
+            // 합계 계산
+            const totalGross=filtered.reduce((sum,p)=>sum+(p.grossPay||0),0);
+            const totalNet=filtered.reduce((sum,p)=>sum+(p.netPay||0),0);
+            const empCount=filtered.length;
+            
+            document.getElementById('payrollTotal').textContent=formatCurrency(totalGross);
+            document.getElementById('payrollNetTotal').textContent=formatCurrency(totalNet);
+            document.getElementById('payrollCount').textContent=empCount+'명';
+            
+            // 테이블
+            document.getElementById('payrollTable').innerHTML=filtered.sort((a,b)=>(b.yearMonth||'').localeCompare(a.yearMonth||'')||(a.name||'').localeCompare(b.name||'')).map(p=>`<tr><td>${p.yearMonth||'-'}</td><td><strong>${p.name||'-'}</strong></td><td class="text-right">${formatCurrency(p.basePay)}</td><td class="text-right">${formatCurrency(p.allowance)}</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(p.deduction)}</td><td class="text-right"><strong>${formatCurrency(p.netPay)}</strong></td><td><button class="btn btn-sm btn-danger" onclick="deletePayroll('${p.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="7" class="text-center">등록된 급여 내역 없음</td></tr>';
+        }
+        
+        function renderTaxes(){
+            // 부가세
+            const vatTotal=vatTaxes.reduce((sum,t)=>sum+(t.amount||0),0);
+            document.getElementById('vatTotal').textContent=formatCurrency(vatTotal);
+            document.getElementById('vatTable').innerHTML=vatTaxes.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<tr><td>${t.date||'-'}</td><td>${t.quarter||'-'}</td><td class="text-right">${formatCurrency(t.salesAmount)}</td><td class="text-right">${formatCurrency(t.purchaseAmount)}</td><td class="text-right"><strong>${formatCurrency(t.amount)}</strong></td><td>${t.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editTax('vat','${t.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTax('vat','${t.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="7" class="text-center">등록된 부가세 내역 없음</td></tr>';
+            
+            // 종소세
+            const incomeTotal=incomeTaxes.filter(t=>t.taxYear===String(currentYear)||t.taxYear===String(currentYear-1)).reduce((sum,t)=>sum+(t.amount||0),0);
+            document.getElementById('incomeTotal').textContent=formatCurrency(incomeTotal);
+            document.getElementById('incomeTable').innerHTML=incomeTaxes.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t=>`<tr><td>${t.date||'-'}</td><td>${t.taxYear||'-'}년</td><td class="text-right">${formatCurrency(t.taxBase)}</td><td>${t.taxRate||'-'}%</td><td class="text-right"><strong>${formatCurrency(t.amount)}</strong></td><td>${t.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editTax('income','${t.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteTax('income','${t.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="7" class="text-center">등록된 종소세 내역 없음</td></tr>';
+            
+            // 합계
+            document.getElementById('taxTotal').textContent=formatCurrency(vatTotal+incomeTotal);
         }
         
         let expenseChart=null;
@@ -688,7 +804,9 @@
             const ym=getYM();
             const fixedTotal=fixedExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
             const variableTotal=variableExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
-            const totalExpense=fixedTotal+variableTotal;
+            // 인건비 (해당월)
+            const payrollTotal=payrollData.filter(p=>p.yearMonth===ym).reduce((sum,p)=>sum+(p.netPay||0),0);
+            const totalExpense=fixedTotal+variableTotal+payrollTotal;
             
             // 월 매출
             const rev=revenueData[ym];
@@ -697,8 +815,9 @@
             const profitRate=monthRevenue>0?((monthProfit/monthRevenue)*100).toFixed(1):0;
             
             document.getElementById('totalExpense').textContent=formatCurrency(totalExpense);
+            document.getElementById('totalExpense').nextElementSibling.textContent=`고정비 + 유동비 + 인건비`;
             document.getElementById('monthRevenue').textContent=formatCurrency(monthRevenue);
-            document.getElementById('monthRevenueDate').textContent=rev?`${ym.substring(0,4)}년 ${parseInt(ym.substring(4))}월`:'데이터 없음';
+            document.getElementById('monthRevenueDate').textContent=rev?`${ym.substring(0,4)}년 ${parseInt(ym.substring(5))}월`:'데이터 없음';
             document.getElementById('monthProfit').textContent=formatCurrency(monthProfit);
             document.getElementById('monthProfit').style.color=monthProfit>=0?'var(--accent-green)':'var(--accent-red)';
             document.getElementById('profitRate').textContent=profitRate+'%';
@@ -707,6 +826,8 @@
             // 카테고리별 지출
             const fixedByCategory={};
             fixedExpenses.forEach(e=>{fixedByCategory[e.category]=(fixedByCategory[e.category]||0)+e.amount;});
+            // 인건비를 고정비 카테고리에 추가
+            if(payrollTotal>0)fixedByCategory['인건비']=payrollTotal;
             const variableByCategory={};
             variableExpenses.forEach(e=>{variableByCategory[e.category]=(variableByCategory[e.category]||0)+e.amount;});
             
@@ -853,6 +974,15 @@
 
         function renderSalary(){
             const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
+            // 급여대장 업로드 데이터가 있으면 우선 사용
+            const monthPayroll=payrollData.filter(p=>p.yearMonth===ym);
+            if(monthPayroll.length>0){
+                document.getElementById('salaryTable').innerHTML=monthPayroll.map(p=>{
+                    return `<tr><td><strong>${p.name}</strong></td><td>-</td><td class="text-right">${formatCurrency(p.basePay)}</td><td class="text-right">${formatCurrency(p.allowance)}</td><td class="text-right">-</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(p.deduction)}</td><td class="text-right"><strong>${formatCurrency(p.netPay)}</strong></td></tr>`;
+                }).join('');
+                return;
+            }
+            // 급여대장이 없으면 기존 계산 방식
             document.getElementById('salaryTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
                 const baseSalary=(emp.hourly||12000)*209;
                 const empAttendance=attendance.filter(a=>a.employeeId===emp.id);
@@ -872,9 +1002,6 @@
 
         // CRUD Operations - Expense
         const fixedCategories=[
-            {value:'인건비',label:'인건비(급여)'},
-            {value:'4대보험',label:'4대보험'},
-            {value:'세금_원천세',label:'세금-원천세'},
             {value:'임대료',label:'임대료/관리비'},
             {value:'공과금',label:'공과금(전기/가스/수도)'},
             {value:'장비리스',label:'장비리스/렌탈'},
@@ -893,9 +1020,6 @@
             {value:'기타',label:'기타'}
         ];
         const variableCategories=[
-            {value:'세금_부가세',label:'세금-부가세'},
-            {value:'세금_종소세',label:'세금-종합소득세'},
-            {value:'세금_기타',label:'세금-기타'},
             {value:'의료소모품',label:'의료소모품'},
             {value:'미용소모품',label:'미용소모품'},
             {value:'사무용품',label:'사무/비품'},
@@ -952,6 +1076,155 @@
         async function deleteExpense(type,id){
             if(!confirm('정말 삭제하시겠습니까?'))return;
             try{const collection=type==='fixed'?'fixedExpenses':'variableExpenses';await db.collection(collection).doc(id).delete();await loadExpenses();renderExpenses();}catch(e){alert('삭제 실패: '+e.message);}
+        }
+
+        // CRUD Operations - Payroll
+        async function processPayrollFile(input){
+            const file=input.files[0];
+            if(!file)return;
+            const reader=new FileReader();
+            reader.onload=async function(e){
+                try{
+                    const data=new Uint8Array(e.target.result);
+                    const workbook=XLSX.read(data,{type:'array'});
+                    const sheet=workbook.Sheets[workbook.SheetNames[0]];
+                    const json=XLSX.utils.sheet_to_json(sheet);
+                    
+                    if(json.length===0){alert('데이터가 없습니다.');return;}
+                    
+                    // 컬럼명 매핑 (다양한 형식 지원)
+                    const findCol=(row,names)=>{for(let n of names){if(row[n]!==undefined)return row[n];}return 0;};
+                    
+                    let yearMonth=getYM();
+                    // 파일명에서 월 추출 시도 (예: 202501_급여대장.xlsx)
+                    const match=file.name.match(/(\d{4})[\-_]?(\d{2})/);
+                    if(match)yearMonth=match[1]+'-'+match[2];
+                    
+                    // 기존 해당월 데이터 삭제
+                    const existing=await db.collection('payroll').where('yearMonth','==',yearMonth).get();
+                    const batch=db.batch();
+                    existing.docs.forEach(doc=>batch.delete(doc.ref));
+                    
+                    let totalNet=0;
+                    let count=0;
+                    
+                    for(const row of json){
+                        const name=row['성명']||row['이름']||row['직원명']||'';
+                        if(!name||name.includes('합계')||name.includes('총'))continue;
+                        
+                        const basePay=parseInt(findCol(row,['기본급','기본급여','급여']))||0;
+                        const allowance=parseInt(findCol(row,['수당','제수당','수당합계','기타수당']))||0;
+                        const grossPay=parseInt(findCol(row,['총지급액','지급총액','지급액계']))||(basePay+allowance);
+                        const deduction=parseInt(findCol(row,['공제합계','공제총액','공제액계','총공제']))||0;
+                        const netPay=parseInt(findCol(row,['차인지급액','실수령액','실지급액']))||(grossPay-deduction);
+                        
+                        if(netPay===0&&grossPay===0)continue;
+                        
+                        const payrollDoc={
+                            yearMonth,
+                            name,
+                            basePay,
+                            allowance,
+                            grossPay,
+                            deduction,
+                            netPay,
+                            uploadedAt:firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        batch.set(db.collection('payroll').doc(),payrollDoc);
+                        totalNet+=netPay;
+                        count++;
+                    }
+                    
+                    await batch.commit();
+                    alert(`${yearMonth} 급여대장 업로드 완료!\n직원 ${count}명, 차인지급액 합계: ${formatCurrency(totalNet)}`);
+                    input.value='';
+                    await loadExpenses();
+                    renderExpenses();
+                }catch(err){
+                    console.error(err);
+                    alert('파일 처리 오류: '+err.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        async function deletePayroll(id){
+            if(!confirm('정말 삭제하시겠습니까?'))return;
+            try{
+                await db.collection('payroll').doc(id).delete();
+                await loadExpenses();renderExpenses();
+            }catch(e){alert('삭제 실패: '+e.message);}
+        }
+
+        // CRUD Operations - Tax
+        function openTaxModal(type,id=null){
+            document.getElementById('taxModalTitle').textContent=type==='vat'?(id?'부가세 수정':'부가세 추가'):(id?'종소세 수정':'종소세 추가');
+            document.getElementById('taxEditId').value=id||'';
+            document.getElementById('taxType').value=type;
+            document.getElementById('vatFields').style.display=type==='vat'?'block':'none';
+            document.getElementById('incomeFields').style.display=type==='income'?'block':'none';
+            // 초기화
+            document.getElementById('taxDate').value=new Date().toISOString().split('T')[0];
+            document.getElementById('taxQuarter').value='1분기';
+            document.getElementById('taxSalesAmount').value='';
+            document.getElementById('taxPurchaseAmount').value='';
+            document.getElementById('taxYear').value=String(currentYear-1);
+            document.getElementById('taxBase').value='';
+            document.getElementById('taxRate').value='';
+            document.getElementById('taxAmount').value='';
+            document.getElementById('taxNote').value='';
+            if(id){
+                const list=type==='vat'?vatTaxes:incomeTaxes;
+                const item=list.find(t=>t.id===id);
+                if(item){
+                    document.getElementById('taxDate').value=item.date||'';
+                    document.getElementById('taxAmount').value=item.amount||'';
+                    document.getElementById('taxNote').value=item.note||'';
+                    if(type==='vat'){
+                        document.getElementById('taxQuarter').value=item.quarter||'1분기';
+                        document.getElementById('taxSalesAmount').value=item.salesAmount||'';
+                        document.getElementById('taxPurchaseAmount').value=item.purchaseAmount||'';
+                    }else{
+                        document.getElementById('taxYear').value=item.taxYear||String(currentYear-1);
+                        document.getElementById('taxBase').value=item.taxBase||'';
+                        document.getElementById('taxRate').value=item.taxRate||'';
+                    }
+                }
+            }
+            openModal('taxModal');
+        }
+        async function saveTax(){
+            const editId=document.getElementById('taxEditId').value;
+            const type=document.getElementById('taxType').value;
+            const date=document.getElementById('taxDate').value;
+            const amount=parseInt(document.getElementById('taxAmount').value)||0;
+            const note=document.getElementById('taxNote').value.trim();
+            if(!date||!amount){alert('납부일과 납부세액은 필수입니다.');return;}
+            const collection=type==='vat'?'vatTaxes':'incomeTaxes';
+            let data={date,amount,note,year:date.substring(0,4)};
+            if(type==='vat'){
+                data.quarter=document.getElementById('taxQuarter').value;
+                data.salesAmount=parseInt(document.getElementById('taxSalesAmount').value)||0;
+                data.purchaseAmount=parseInt(document.getElementById('taxPurchaseAmount').value)||0;
+            }else{
+                data.taxYear=document.getElementById('taxYear').value;
+                data.taxBase=parseInt(document.getElementById('taxBase').value)||0;
+                data.taxRate=parseInt(document.getElementById('taxRate').value)||0;
+            }
+            try{
+                if(editId){await db.collection(collection).doc(editId).update(data);}
+                else{await db.collection(collection).add(data);}
+                closeModal('taxModal');await loadExpenses();renderExpenses();
+            }catch(e){alert('저장 실패: '+e.message);}
+        }
+        function editTax(type,id){openTaxModal(type,id);}
+        async function deleteTax(type,id){
+            if(!confirm('정말 삭제하시겠습니까?'))return;
+            try{
+                const collection=type==='vat'?'vatTaxes':'incomeTaxes';
+                await db.collection(collection).doc(id).delete();
+                await loadExpenses();renderExpenses();
+            }catch(e){alert('삭제 실패: '+e.message);}
         }
 
         // CRUD Operations - Employee
