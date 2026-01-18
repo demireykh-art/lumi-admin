@@ -751,13 +751,40 @@
         }
 
         // CRUD Operations - Expense
+        const fixedCategories=[
+            {value:'임대료',label:'임대료/관리비'},
+            {value:'장비리스',label:'장비리스/렌탈'},
+            {value:'대출이자',label:'대출이자'},
+            {value:'통신비',label:'통신비'},
+            {value:'세무노무',label:'세무/노무'},
+            {value:'보험료',label:'보험료'},
+            {value:'복리후생',label:'복리후생'},
+            {value:'마케팅',label:'마케팅'},
+            {value:'기타',label:'기타'}
+        ];
+        const variableCategories=[
+            {value:'의료소모품',label:'의료소모품'},
+            {value:'미용소모품',label:'미용소모품'},
+            {value:'사무용품',label:'사무/비품'},
+            {value:'시설보수',label:'시설/보수'},
+            {value:'인테리어',label:'인테리어'},
+            {value:'장비수리',label:'장비수리'},
+            {value:'세금환급',label:'세금환급대행'},
+            {value:'접대비',label:'접대/회식'},
+            {value:'교통비',label:'교통/주차'},
+            {value:'교육비',label:'교육/세미나'},
+            {value:'기타',label:'기타'}
+        ];
         function openExpenseModal(type,id=null){
-            document.getElementById('expenseModalTitle').textContent=id?'지출 수정':'지출 추가';
+            document.getElementById('expenseModalTitle').textContent=id?(type==='fixed'?'고정비 수정':'유동비 수정'):(type==='fixed'?'고정비 추가':'유동비 추가');
             document.getElementById('expenseEditId').value=id||'';document.getElementById('expenseType').value=type;
-            document.getElementById('expenseName').value='';document.getElementById('expenseCategory').value='기타';
-            document.getElementById('expenseAmount').value='';document.getElementById('expenseNote').value='';
+            document.getElementById('expenseName').value='';document.getElementById('expenseAmount').value='';document.getElementById('expenseNote').value='';
             document.getElementById('expenseDate').value=new Date().toISOString().split('T')[0];
             document.getElementById('expenseDateGroup').style.display=type==='variable'?'block':'none';
+            // 카테고리 옵션 동적 변경
+            const cats=type==='fixed'?fixedCategories:variableCategories;
+            document.getElementById('expenseCategory').innerHTML=cats.map(c=>`<option value="${c.value}">${c.label}</option>`).join('');
+            document.getElementById('expenseCategory').value='기타';
             if(id){const list=type==='fixed'?fixedExpenses:variableExpenses;const item=list.find(e=>e.id===id);if(item){
                 document.getElementById('expenseName').value=item.name||'';document.getElementById('expenseCategory').value=item.category||'기타';
                 document.getElementById('expenseAmount').value=item.amount||'';document.getElementById('expenseNote').value=item.note||'';
