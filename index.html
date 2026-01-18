@@ -128,15 +128,20 @@
                 </div>
                 <div class="sub-content" id="sub-doctor">
                     <div class="cards-grid" id="doctorCards"></div>
-                    <div class="table-container"><table><thead><tr><th>진료의</th><th class="text-right">건수</th><th class="text-right">매출</th><th class="text-right">점유율</th></tr></thead><tbody id="doctorTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>진료의</th><th class="text-right">환자 수</th><th class="text-right">매출</th><th class="text-right">객단가</th><th class="text-right">점유율</th></tr></thead><tbody id="doctorTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-staff">
                     <div class="cards-grid" id="staffSalesCards"></div>
-                    <div class="table-container"><table><thead><tr><th>담당직원</th><th class="text-right">건수</th><th class="text-right">매출</th><th class="text-right">인센티브(1%)</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>담당직원</th><th class="text-right">환자 수</th><th class="text-right">매출</th><th class="text-right">객단가</th><th class="text-right">인센티브(1%)</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-japan">
                     <div class="cards-grid" id="japanCards"></div>
-                    <div class="table-container"><table><thead><tr><th>월</th><th class="text-right">일본인 매출</th><th class="text-right">방문자 수</th><th class="text-right">객단가</th></tr></thead><tbody id="japanTable"></tbody></table></div>
+                    <div class="section"><div class="section-header"><div class="section-title">담당직원별 일본인 매출</div></div>
+                        <div class="table-container"><table><thead><tr><th>담당직원</th><th class="text-right">환자 수</th><th class="text-right">매출</th><th class="text-right">객단가</th><th class="text-right">점유율</th></tr></thead><tbody id="japanStaffTable"></tbody></table></div>
+                    </div>
+                    <div class="section"><div class="section-header"><div class="section-title">월별 일본인 매출</div></div>
+                        <div class="table-container"><table><thead><tr><th>월</th><th class="text-right">일본인 매출</th><th class="text-right">환자 수</th><th class="text-right">객단가</th></tr></thead><tbody id="japanTable"></tbody></table></div>
+                    </div>
                 </div>
                 <div class="sub-content" id="sub-upload">
                     <div class="upload-zone" id="uploadZone">
@@ -446,18 +451,19 @@
 
         function renderRevenueOverview(){
             const ym=getYM();
-            const data=revenueData[ym]||{total:0,japan:0,transactions:0};
+            const data=revenueData[ym]||{total:0,japan:0,transactions:0,patients:0};
             const prevYM=currentMonth===1?`${currentYear-1}-12`:`${currentYear}-${String(currentMonth-1).padStart(2,'0')}`;
             const prevData=revenueData[prevYM]||{total:0};
             const lastYearData=data2024[currentMonth]||{total:0};
             const growth=data.total-prevData.total;
             const yoyGrowth=data.total-lastYearData.total;
-            const avgTransaction=data.transactions?data.total/data.transactions:0;
+            const patientCount=data.patients||0;
+            const avgPerPatient=patientCount?Math.round(data.total/patientCount):0;
 
             document.getElementById('revenueCards').innerHTML=`
                 <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(data.total)}</div><div class="card-change ${growth>=0?'positive':'negative'}">전월 대비 ${growth>=0?'+':''}${formatCurrency(growth)}</div></div>
                 <div class="card"><div class="card-label">일본인 매출</div><div class="card-value">${formatCurrency(data.japan)}</div><div class="card-sub">전체의 ${data.total?Math.round(data.japan/data.total*100):0}%</div></div>
-                <div class="card"><div class="card-label">거래 건수</div><div class="card-value">${formatNumber(data.transactions)}건</div><div class="card-sub">평균 객단가 ${formatCurrency(avgTransaction)}</div></div>
+                <div class="card"><div class="card-label">환자 수</div><div class="card-value">${formatNumber(patientCount)}명</div><div class="card-sub">객단가 ${formatCurrency(avgPerPatient)}</div></div>
                 <div class="card"><div class="card-label">전년 동월 대비</div><div class="card-value ${yoyGrowth>=0?'positive':'negative'}">${yoyGrowth>=0?'+':''}${formatCurrency(yoyGrowth)}</div><div class="card-sub">2024년 ${currentMonth}월: ${formatCurrency(lastYearData.total)}</div></div>
             `;
         }
@@ -465,6 +471,7 @@
         function renderDoctorSales(){
             const ym=getYM();const detail=salesDetail[ym]||{};const doctorSales=detail.doctorSales||{};
             const total=Object.values(doctorSales).reduce((sum,d)=>sum+(d.amount||0),0);
+            const totalPatients=Object.values(doctorSales).reduce((sum,d)=>sum+(d.patients||0),0);
             const sorted=Object.entries(doctorSales).sort((a,b)=>b[1].amount-a[1].amount);
             const top=sorted[0];
             document.getElementById('doctorCards').innerHTML=`
@@ -472,37 +479,71 @@
                 <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(total)}</div></div>
                 <div class="card"><div class="card-label">1위</div><div class="card-value">${top?top[0]:'-'}</div><div class="card-sub">${top?formatCurrency(top[1].amount):''}</div></div>
             `;
-            document.getElementById('doctorTable').innerHTML=sorted.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td class="text-right">${formatNumber(data.count)}건</td><td class="text-right">${formatCurrency(data.amount)}</td><td class="text-right">${total?Math.round(data.amount/total*100):0}%</td></tr>`).join('')||'<tr><td colspan="4" class="text-center">데이터 없음</td></tr>';
+            document.getElementById('doctorTable').innerHTML=sorted.map(([name,data])=>{
+                const patients=data.patients||0;
+                const avgPerPatient=patients?Math.round(data.amount/patients):0;
+                return `<tr><td><strong>${name}</strong></td><td class="text-right">${formatNumber(patients)}명</td><td class="text-right">${formatCurrency(data.amount)}</td><td class="text-right">${formatCurrency(avgPerPatient)}</td><td class="text-right">${total?Math.round(data.amount/total*100):0}%</td></tr>`;
+            }).join('')||'<tr><td colspan="5" class="text-center">데이터 없음</td></tr>';
         }
 
         function renderStaffSales(){
             const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
             const total=Object.values(staffSales).reduce((sum,d)=>sum+(d.amount||0),0);
+            const totalPatients=Object.values(staffSales).reduce((sum,d)=>sum+(d.patients||0),0);
             const sorted=Object.entries(staffSales).sort((a,b)=>b[1].amount-a[1].amount);
             document.getElementById('staffSalesCards').innerHTML=`
                 <div class="card"><div class="card-label">담당직원 수</div><div class="card-value">${sorted.length}명</div></div>
                 <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(total)}</div></div>
                 <div class="card"><div class="card-label">인센티브 총액 (1%)</div><div class="card-value">${formatCurrency(total*0.01)}</div></div>
             `;
-            document.getElementById('staffSalesTable').innerHTML=sorted.map(([name,data])=>`<tr><td><strong>${name}</strong></td><td class="text-right">${formatNumber(data.count)}건</td><td class="text-right">${formatCurrency(data.amount)}</td><td class="text-right"><span class="badge badge-green">${formatCurrency(data.amount*0.01)}</span></td></tr>`).join('')||'<tr><td colspan="4" class="text-center">데이터 없음</td></tr>';
+            document.getElementById('staffSalesTable').innerHTML=sorted.map(([name,data])=>{
+                const patients=data.patients||0;
+                const avgPerPatient=patients?Math.round(data.amount/patients):0;
+                return `<tr><td><strong>${name}</strong></td><td class="text-right">${formatNumber(patients)}명</td><td class="text-right">${formatCurrency(data.amount)}</td><td class="text-right">${formatCurrency(avgPerPatient)}</td><td class="text-right"><span class="badge badge-green">${formatCurrency(data.amount*0.01)}</span></td></tr>`;
+            }).join('')||'<tr><td colspan="5" class="text-center">데이터 없음</td></tr>';
         }
 
         function renderJapanSales(){
+            const ym=getYM();
+            const detail=salesDetail[ym]||{};
+            const japanStaffSales=detail.japanStaffSales||{};
+            const currentRevenue=revenueData[ym]||{japan:0,japanVisitors:0};
+            
+            // 월별 데이터
             const months=[];
             for(let m=1;m<=12;m++){
-                const ym=`${currentYear}-${String(m).padStart(2,'0')}`;
-                const data=revenueData[ym]||(currentYear===2024?data2024[m]:{japan:0,japanVisitors:0});
+                const monthYM=`${currentYear}-${String(m).padStart(2,'0')}`;
+                const data=revenueData[monthYM]||(currentYear===2024?data2024[m]:{japan:0,japanVisitors:0});
                 months.push({month:m,...data});
             }
-            const currentData=months[currentMonth-1];
             const totalJapan=months.reduce((sum,m)=>sum+(m.japan||0),0);
             const totalVisitors=months.reduce((sum,m)=>sum+(m.japanVisitors||0),0);
+            const currentVisitors=currentRevenue.japanVisitors||0;
+            const avgPrice=currentVisitors?Math.round(currentRevenue.japan/currentVisitors):0;
+            
             document.getElementById('japanCards').innerHTML=`
-                <div class="card"><div class="card-label">${currentMonth}월 일본인 매출</div><div class="card-value">${formatCurrency(currentData.japan)}</div></div>
-                <div class="card"><div class="card-label">${currentMonth}월 방문자</div><div class="card-value">${currentData.japanVisitors||0}명</div></div>
+                <div class="card"><div class="card-label">${currentMonth}월 일본인 매출</div><div class="card-value">${formatCurrency(currentRevenue.japan)}</div></div>
+                <div class="card"><div class="card-label">${currentMonth}월 환자 수</div><div class="card-value">${currentVisitors}명</div><div class="card-sub">고유 차트번호 기준</div></div>
+                <div class="card"><div class="card-label">${currentMonth}월 객단가</div><div class="card-value">${formatCurrency(avgPrice)}</div></div>
                 <div class="card"><div class="card-label">연간 누적</div><div class="card-value">${formatCurrency(totalJapan)}</div><div class="card-sub">${totalVisitors}명 방문</div></div>
             `;
-            document.getElementById('japanTable').innerHTML=months.map(m=>`<tr><td>${m.month}월</td><td class="text-right">${formatCurrency(m.japan)}</td><td class="text-right">${m.japanVisitors||0}명</td><td class="text-right">${m.japanVisitors?formatCurrency(m.japan/m.japanVisitors):'-'}</td></tr>`).join('');
+            
+            // 담당직원별 일본인 매출
+            const staffTotal=Object.values(japanStaffSales).reduce((s,d)=>s+(d.amount||0),0);
+            const sorted=Object.entries(japanStaffSales).sort((a,b)=>b[1].amount-a[1].amount);
+            document.getElementById('japanStaffTable').innerHTML=sorted.map(([name,data])=>{
+                const patientCount=data.patients||0;
+                const avgPerPatient=patientCount?Math.round(data.amount/patientCount):0;
+                const share=staffTotal?Math.round(data.amount/staffTotal*100):0;
+                return `<tr><td><strong>${name}</strong></td><td class="text-right">${patientCount}명</td><td class="text-right">${formatCurrency(data.amount)}</td><td class="text-right">${formatCurrency(avgPerPatient)}</td><td class="text-right">${share}%</td></tr>`;
+            }).join('')||'<tr><td colspan="5" class="text-center">데이터 없음</td></tr>';
+            
+            // 월별 테이블
+            document.getElementById('japanTable').innerHTML=months.map(m=>{
+                const visitors=m.japanVisitors||0;
+                const avg=visitors?Math.round(m.japan/visitors):0;
+                return `<tr><td>${m.month}월</td><td class="text-right">${formatCurrency(m.japan)}</td><td class="text-right">${visitors}명</td><td class="text-right">${formatCurrency(avg)}</td></tr>`;
+            }).join('');
         }
 
         function renderUploadHistory(){
@@ -734,42 +775,68 @@
                     json.forEach(row=>{
                         const amount=parseInt(row['금액'])||0;
                         const dateStr=String(row['진료일']||'');
-                        if(dateStr.length<6)return; // 날짜 없으면 스킵
+                        if(dateStr.length<6)return;
                         
                         const year=dateStr.substring(0,4);
                         const month=dateStr.substring(4,6);
                         const ym=year+'-'+month;
                         
-                        // 유효한 연월인지 체크 (2020-2030 범위)
                         const yearNum=parseInt(year);
                         const monthNum=parseInt(month);
                         if(yearNum<2020||yearNum>2030||monthNum<1||monthNum>12)return;
                         
                         if(!monthlyData[ym]){
-                            monthlyData[ym]={total:0,japan:0,japanVisitors:0,transactions:0,doctorSales:{},staffSales:{}};
+                            monthlyData[ym]={
+                                total:0,japan:0,transactions:0,
+                                patients:new Set(),  // 전체 고유 환자
+                                doctorSales:{},staffSales:{},
+                                japanCharts:{},japanStaffSales:{}
+                            };
                         }
                         
+                        const chartNo=row['차트번호'];
                         monthlyData[ym].total+=amount;
                         monthlyData[ym].transactions++;
+                        if(chartNo)monthlyData[ym].patients.add(chartNo);  // 고유 환자 추적
                         
                         const doctor=row['진료의명'];
                         if(doctor&&doctor!=='빠른예약'){
-                            if(!monthlyData[ym].doctorSales[doctor])monthlyData[ym].doctorSales[doctor]={count:0,amount:0};
+                            if(!monthlyData[ym].doctorSales[doctor]){
+                                monthlyData[ym].doctorSales[doctor]={count:0,amount:0,patients:new Set()};
+                            }
                             monthlyData[ym].doctorSales[doctor].count++;
                             monthlyData[ym].doctorSales[doctor].amount+=amount;
+                            if(chartNo)monthlyData[ym].doctorSales[doctor].patients.add(chartNo);
                         }
                         
                         const staff=row['담당직원'];
                         if(staff){
-                            if(!monthlyData[ym].staffSales[staff])monthlyData[ym].staffSales[staff]={count:0,amount:0};
+                            if(!monthlyData[ym].staffSales[staff]){
+                                monthlyData[ym].staffSales[staff]={count:0,amount:0,patients:new Set()};
+                            }
                             monthlyData[ym].staffSales[staff].count++;
                             monthlyData[ym].staffSales[staff].amount+=amount;
+                            if(chartNo)monthlyData[ym].staffSales[staff].patients.add(chartNo);
                         }
                         
+                        // 일본인 매출 처리 (차트번호 기반)
                         const nationality=row['국적'];
                         if(nationality&&nationality.includes('일본')){
                             monthlyData[ym].japan+=amount;
-                            monthlyData[ym].japanVisitors++;
+                            // 차트번호로 고유 환자 추적
+                            if(chartNo){
+                                if(!monthlyData[ym].japanCharts[chartNo]){
+                                    monthlyData[ym].japanCharts[chartNo]={amount:0,staff:staff||'미지정'};
+                                }
+                                monthlyData[ym].japanCharts[chartNo].amount+=amount;
+                            }
+                            // 담당직원별 일본인 매출
+                            const staffKey=staff||'미지정';
+                            if(!monthlyData[ym].japanStaffSales[staffKey]){
+                                monthlyData[ym].japanStaffSales[staffKey]={patients:new Set(),amount:0};
+                            }
+                            monthlyData[ym].japanStaffSales[staffKey].amount+=amount;
+                            if(chartNo)monthlyData[ym].japanStaffSales[staffKey].patients.add(chartNo);
                         }
                     });
                     
@@ -779,13 +846,49 @@
                     
                     for(const ym of months){
                         const d=monthlyData[ym];
+                        // 전체 고유 환자 수
+                        const patientCount=d.patients.size;
+                        // 일본인 고유 환자 수
+                        const japanVisitors=Object.keys(d.japanCharts).length;
+                        
+                        // doctorSales의 Set을 숫자로 변환
+                        const doctorSalesForDB={};
+                        for(const[doc,data]of Object.entries(d.doctorSales||{})){
+                            doctorSalesForDB[doc]={
+                                count:data.count,
+                                amount:data.amount,
+                                patients:data.patients.size
+                            };
+                        }
+                        // staffSales의 Set을 숫자로 변환
+                        const staffSalesForDB={};
+                        for(const[staff,data]of Object.entries(d.staffSales||{})){
+                            staffSalesForDB[staff]={
+                                count:data.count,
+                                amount:data.amount,
+                                patients:data.patients.size
+                            };
+                        }
+                        // japanStaffSales의 Set을 숫자로 변환
+                        const japanStaffSalesForDB={};
+                        for(const[staff,data]of Object.entries(d.japanStaffSales||{})){
+                            japanStaffSalesForDB[staff]={
+                                patients:data.patients.size,
+                                amount:data.amount
+                            };
+                        }
+                        
                         await db.collection('revenue').doc(ym).set({
-                            total:d.total,japan:d.japan,japanVisitors:d.japanVisitors,
+                            total:d.total,japan:d.japan,
+                            japanVisitors:japanVisitors,
                             transactions:d.transactions,
+                            patients:patientCount,
                             uploadedAt:firebase.firestore.FieldValue.serverTimestamp()
                         },{merge:true});
                         await db.collection('salesDetail').doc(ym).set({
-                            doctorSales:d.doctorSales,staffSales:d.staffSales,
+                            doctorSales:doctorSalesForDB,
+                            staffSales:staffSalesForDB,
+                            japanStaffSales:japanStaffSalesForDB,
                             updatedAt:firebase.firestore.FieldValue.serverTimestamp()
                         });
                         savedCount++;
@@ -793,8 +896,8 @@
                     
                     // 결과 알림
                     const totalAll=Object.values(monthlyData).reduce((s,d)=>s+d.total,0);
-                    const transAll=Object.values(monthlyData).reduce((s,d)=>s+d.transactions,0);
-                    alert(`업로드 완료!\n\n저장된 월: ${months.join(', ')}\n총 ${savedCount}개월 데이터\n총 건수: ${transAll}건\n총 매출: ${formatCurrency(totalAll)}`);
+                    const patientsAll=Object.values(monthlyData).reduce((s,d)=>s+d.patients.size,0);
+                    alert(`업로드 완료!\n\n저장된 월: ${months.join(', ')}\n총 ${savedCount}개월 데이터\n총 환자: ${patientsAll}명\n총 매출: ${formatCurrency(totalAll)}`);
                     
                     await loadRevenueData();await loadSalesDetailData();renderAll();
                 }catch(err){alert('파일 처리 오류: '+err.message);console.error(err);}
