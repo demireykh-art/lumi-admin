@@ -54,6 +54,7 @@
         .badge-green{background:rgba(90,122,90,.15);color:var(--accent-green)}.badge-red{background:rgba(168,90,90,.15);color:var(--accent-red)}
         .badge-blue{background:rgba(90,106,122,.15);color:var(--accent-blue)}.badge-orange{background:rgba(196,149,106,.15);color:var(--accent-orange)}
         .badge-purple{background:rgba(122,106,138,.15);color:var(--accent-purple)}.badge-gold{background:rgba(154,139,122,.15);color:var(--accent-gold)}
+        .badge-green{background:rgba(90,122,90,.15);color:var(--accent-green)}
         .btn{padding:.5rem 1rem;border:none;cursor:pointer;font-size:.85rem;transition:all .2s}
         .btn-primary{background:var(--accent-gold);color:#fff}.btn-primary:hover{background:#8a7b6a}
         .btn-secondary{background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-primary)}.btn-secondary:hover{background:var(--border-color)}
@@ -169,7 +170,15 @@
                         <div class="expense-box"><div class="expense-box-label">항목 수</div><div class="expense-box-value" id="fixedCount">0개</div></div>
                         <div class="expense-box"><div class="expense-box-label">연간 예상</div><div class="expense-box-value" id="fixedYearly">₩0</div></div>
                     </div>
-                    <div class="section-header"><div class="section-title">고정비 목록</div><div><select class="form-select" id="fixedSort" onchange="renderExpenses()" style="width:auto;display:inline-block;margin-right:8px"><option value="date-desc">날짜 최신순</option><option value="date-asc">날짜 오래된순</option><option value="amount-desc">금액 높은순</option><option value="amount-asc">금액 낮은순</option><option value="category">카테고리순</option></select><button class="btn btn-primary" onclick="openExpenseModal('fixed')">+ 항목 추가</button></div></div>
+                    <div class="section-header">
+                        <div class="section-title">고정비 목록</div>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <input type="text" class="form-input" id="fixedSearch" placeholder="항목명 검색..." style="width:150px" oninput="renderExpenses()">
+                            <select class="form-select" id="fixedCategoryFilter" onchange="renderExpenses()" style="width:auto"><option value="">전체 카테고리</option></select>
+                            <select class="form-select" id="fixedSort" onchange="renderExpenses()" style="width:auto"><option value="date-desc">날짜 최신순</option><option value="date-asc">날짜 오래된순</option><option value="amount-desc">금액 높은순</option><option value="amount-asc">금액 낮은순</option><option value="category">카테고리순</option></select>
+                            <button class="btn btn-primary" onclick="openExpenseModal('fixed')">+ 항목 추가</button>
+                        </div>
+                    </div>
                     <div class="table-container"><table><thead><tr><th>날짜</th><th>항목명</th><th>카테고리</th><th class="text-right">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="fixedTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-variable">
@@ -268,9 +277,9 @@
                 </div>
                 <div class="sub-content" id="sub-incentive">
                     <div class="section-header"><div class="section-title">인센티브 항목 관리</div><button class="btn btn-primary" onclick="openIncentiveItemModal()">+ 항목 추가</button></div>
-                    <div class="table-container"><table><thead><tr><th>항목명</th><th>단가</th><th>적용 직급</th><th>관리</th></tr></thead><tbody id="incentiveItemTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>항목명</th><th>유형/단가</th><th>적용 직원</th><th>관리</th></tr></thead><tbody id="incentiveItemTable"></tbody></table></div>
                     <div class="section-header mt-1"><div class="section-title">직원별 인센티브 현황</div></div>
-                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th>매출 인센티브</th><th>항목 인센티브</th><th>합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 인센티브</th><th class="text-right">일본인 매출 인센티브</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-salary">
                     <div class="section-header"><div class="section-title">급여 명세</div><button class="btn btn-secondary" onclick="exportSalary()">엑셀 다운로드</button></div>
@@ -334,15 +343,27 @@
         </div>
     </div>
     <div class="modal" id="expenseModal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width:550px">
             <div class="modal-header"><div class="modal-title" id="expenseModalTitle">지출 추가</div><button class="modal-close" onclick="closeModal('expenseModal')">&times;</button></div>
             <div class="modal-body">
                 <input type="hidden" id="expenseEditId"><input type="hidden" id="expenseType">
                 <div class="form-group" id="expenseDateGroup"><label class="form-label">결제일</label><input type="date" class="form-input" id="expenseDate"></div>
                 <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="expenseName" required></div>
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">카테고리</label><select class="form-select" id="expenseCategory"></select></div>
+                    <div class="form-group"><label class="form-label">카테고리</label><select class="form-select" id="expenseCategory" onchange="toggleLeaseFields()"></select></div>
                     <div class="form-group"><label class="form-label">금액 *</label><input type="number" class="form-input" id="expenseAmount" required></div>
+                </div>
+                <div id="leaseFields" style="display:none;background:#f9f9f7;padding:16px;border-radius:8px;margin-bottom:16px">
+                    <div style="font-weight:600;margin-bottom:12px;color:var(--accent-gold)">📋 장비 리스 정보</div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">리스 시작일</label><input type="date" class="form-input" id="leaseStartDate"></div>
+                        <div class="form-group"><label class="form-label">리스 종료일</label><input type="date" class="form-input" id="leaseEndDate"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">결제일 (매월)</label><input type="number" class="form-input" id="leasePaymentDay" min="1" max="31" placeholder="예: 26"></div>
+                        <div class="form-group"><label class="form-label">결제수단</label><select class="form-select" id="leasePaymentMethod"><option value="롯데카드">롯데카드</option><option value="삼성카드">삼성카드</option><option value="신한카드">신한카드</option><option value="현대카드">현대카드</option><option value="KB카드">KB카드</option><option value="우리카드">우리카드</option><option value="계좌이체">계좌이체</option><option value="현금">현금</option></select></div>
+                    </div>
+                    <div class="form-group"><label class="form-label">리스사</label><input type="text" class="form-input" id="leaseCompany" placeholder="예: 오릭스, 메리츠"></div>
                 </div>
                 <div class="form-group" id="expenseCardGroup"><label class="form-label">결제수단</label><select class="form-select" id="expenseCard"><option value="롯데카드">롯데카드</option><option value="삼성카드">삼성카드</option><option value="신한카드">신한카드</option><option value="현대카드">현대카드</option><option value="KB카드">KB카드</option><option value="계좌이체">계좌이체</option><option value="현금">현금</option></select></div>
                 <div class="form-group"><label class="form-label">비고</label><textarea class="form-textarea" id="expenseNote" rows="2"></textarea></div>
@@ -371,8 +392,23 @@
             <div class="modal-header"><div class="modal-title" id="incentiveItemModalTitle">인센티브 항목 추가</div><button class="modal-close" onclick="closeModal('incentiveItemModal')">&times;</button></div>
             <div class="modal-body">
                 <input type="hidden" id="incItemEditId">
-                <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="incItemName" placeholder="예: 관리 지정, 시술 보조"></div>
-                <div class="form-group"><label class="form-label">단가 (건당)</label><input type="number" class="form-input" id="incItemPrice" value="50000"></div>
+                <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="incItemName" placeholder="예: 관리 지정, 시술 보조, 일본인 매출"></div>
+                <div class="form-group"><label class="form-label">인센티브 유형</label>
+                    <select class="form-select" id="incItemType" onchange="toggleIncItemFields()">
+                        <option value="perCase">건별 단가</option>
+                        <option value="japanSales">일본인 본인 상담매출 %</option>
+                    </select>
+                </div>
+                <div id="perCaseFields">
+                    <div class="form-group"><label class="form-label">단가 (건당)</label><input type="number" class="form-input" id="incItemPrice" value="50000"></div>
+                </div>
+                <div id="japanSalesFields" style="display:none">
+                    <div class="form-group"><label class="form-label">적용 비율 (%)</label><input type="number" class="form-input" id="incItemPercent" value="1" step="0.1" min="0" max="100"></div>
+                    <div class="form-group" style="background:#f5f5f0;padding:12px;border-radius:8px;font-size:.85rem;color:var(--text-secondary)">
+                        <strong>💡 일본인 본인 상담매출 인센티브</strong><br>
+                        매출 파일 분석 시 일본인 매출 중 해당 직원이 담당한 매출에서 설정된 비율만큼 인센티브가 계산됩니다.
+                    </div>
+                </div>
                 <div class="form-group"><label class="form-label">적용 직원 (복수 선택 가능)</label><div id="incItemEmployees" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);padding:.75rem;background:#fff"></div></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('incentiveItemModal')">취소</button><button class="btn btn-primary" onclick="saveIncentiveItem()">저장</button></div>
@@ -739,14 +775,47 @@
                 return sorted;
             };
             
+            // 고정비 카테고리 필터 드롭다운 업데이트
+            const categories=[...new Set(fixedExpenses.map(e=>e.category))].sort();
+            const categoryFilter=document.getElementById('fixedCategoryFilter');
+            if(categoryFilter){
+                const currentVal=categoryFilter.value;
+                categoryFilter.innerHTML='<option value="">전체 카테고리</option>'+categories.map(c=>`<option value="${c}">${c}</option>`).join('');
+                categoryFilter.value=currentVal||'';
+            }
+            
+            // 고정비 필터링
+            const searchText=(document.getElementById('fixedSearch')?.value||'').toLowerCase();
+            const filterCategory=document.getElementById('fixedCategoryFilter')?.value||'';
+            let filteredFixed=fixedExpenses.filter(e=>{
+                const matchSearch=!searchText||e.name.toLowerCase().includes(searchText)||(e.note||'').toLowerCase().includes(searchText);
+                const matchCategory=!filterCategory||e.category===filterCategory;
+                return matchSearch&&matchCategory;
+            });
+            
             // 고정비
             const fixedSort=document.getElementById('fixedSort')?.value||'date-desc';
-            const sortedFixed=sortExpenses(fixedExpenses,fixedSort);
+            const sortedFixed=sortExpenses(filteredFixed,fixedSort);
             const fixedTotal=fixedExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
+            const filteredTotal=filteredFixed.reduce((sum,e)=>sum+(e.amount||0),0);
             document.getElementById('fixedTotal').textContent=formatCurrency(fixedTotal);
             document.getElementById('fixedCount').textContent=fixedExpenses.length+'개';
             document.getElementById('fixedYearly').textContent=formatCurrency(fixedTotal*12);
-            document.getElementById('fixedTable').innerHTML=sortedFixed.map(e=>`<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 고정비 없음</td></tr>';
+            
+            // 고정비 테이블 - 장비리스 정보 표시 개선
+            document.getElementById('fixedTable').innerHTML=sortedFixed.map(e=>{
+                let noteDisplay=e.note||'-';
+                // 장비리스인 경우 추가 정보 표시
+                if(e.category==='장비리스/렌탈'&&(e.leaseEndDate||e.leasePaymentDay)){
+                    const leaseInfo=[];
+                    if(e.leasePaymentMethod)leaseInfo.push(e.leasePaymentMethod);
+                    if(e.leasePaymentDay)leaseInfo.push('매월 '+e.leasePaymentDay+'일');
+                    if(e.leaseEndDate)leaseInfo.push(e.leaseEndDate+' 만기');
+                    if(e.leaseCompany)leaseInfo.push(e.leaseCompany);
+                    if(leaseInfo.length>0)noteDisplay=leaseInfo.join(', ')+(e.note?' | '+e.note:'');
+                }
+                return `<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td>${noteDisplay}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`;
+            }).join('')||(searchText||filterCategory?`<tr><td colspan="6" class="text-center">검색 결과 없음 (전체 ${fixedExpenses.length}개 중)</td></tr>`:'<tr><td colspan="6" class="text-center">등록된 고정비 없음</td></tr>');
 
             // 유동비
             const variableSort=document.getElementById('variableSort')?.value||'date-desc';
@@ -764,6 +833,15 @@
             
             // 지출 분석 렌더링
             renderExpenseAnalysis();
+        }
+        
+        // 장비리스 필드 토글
+        function toggleLeaseFields(){
+            const category=document.getElementById('expenseCategory')?.value||'';
+            const leaseFields=document.getElementById('leaseFields');
+            if(leaseFields){
+                leaseFields.style.display=(category==='장비리스/렌탈')?'block':'none';
+            }
         }
         
         function renderPayroll(){
@@ -972,20 +1050,36 @@
         function renderIncentiveItems(){
             document.getElementById('incentiveItemTable').innerHTML=incentiveItems.map(item=>{
                 const empNames=item.employees?.length?item.employees.map(id=>employees.find(e=>e.id===id)?.name||id).join(', '):'전체';
-                return `<tr><td><strong>${item.name}</strong></td><td>${formatCurrency(item.price)}</td><td><span class="badge badge-purple">${empNames}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editIncentiveItem('${item.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteIncentiveItem('${item.id}')">삭제</button></td></tr>`;
+                const typeLabel=item.type==='japanSales'?`일본인 매출 ${item.percent||1}%`:`건당 ${formatCurrency(item.price)}`;
+                const typeBadge=item.type==='japanSales'?'badge-green':'badge-blue';
+                return `<tr><td><strong>${item.name}</strong></td><td><span class="badge ${typeBadge}">${typeLabel}</span></td><td><span class="badge badge-purple">${empNames}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editIncentiveItem('${item.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteIncentiveItem('${item.id}')">삭제</button></td></tr>`;
             }).join('')||'<tr><td colspan="4" class="text-center">등록된 항목 없음</td></tr>';
         }
 
         function renderIncentiveSummary(){
             const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
+            const japanStaffSales=detail.japanStaffSales||{};  // 일본인 담당별 매출
             const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
+            
             document.getElementById('incentiveSummaryTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
                 let salesIncentive=0;
+                // 기존 담당직원 매출 1% 인센티브
                 if(emp.incentiveType==='staff_sales'&&emp.matchName){
                     const sales=staffSales[emp.matchName];
                     if(sales)salesIncentive=Math.round(sales.amount*0.01);
                 }
-                const itemIncentive=0;const total=salesIncentive+itemIncentive;
+                
+                // 일본인 매출 % 인센티브 계산
+                let japanIncentive=0;
+                const japanSalesItems=incentiveItems.filter(i=>i.type==='japanSales'&&i.employees?.includes(emp.id));
+                japanSalesItems.forEach(item=>{
+                    // 직원의 matchName으로 일본인 담당 매출 찾기
+                    if(emp.matchName&&japanStaffSales[emp.matchName]){
+                        japanIncentive+=Math.round(japanStaffSales[emp.matchName]*(item.percent||1)/100);
+                    }
+                });
+                
+                const itemIncentive=japanIncentive;const total=salesIncentive+itemIncentive;
                 return `<tr><td><strong>${emp.name}</strong></td><td>${roleLabels[emp.role]||emp.role}</td><td class="text-right">${formatCurrency(salesIncentive)}</td><td class="text-right">${formatCurrency(itemIncentive)}</td><td class="text-right"><strong>${formatCurrency(total)}</strong></td></tr>`;
             }).join('')||'<tr><td colspan="5" class="text-center">직원 없음</td></tr>';
         }
@@ -1058,6 +1152,13 @@
             document.getElementById('expenseDateGroup').style.display='block';  // 고정비/유동비 모두 날짜 표시
             document.getElementById('expenseCardGroup').style.display=type==='variable'?'block':'none';
             document.getElementById('expenseCard').value='롯데카드';
+            // 장비리스 필드 초기화
+            document.getElementById('leaseFields').style.display='none';
+            document.getElementById('leaseStartDate').value='';
+            document.getElementById('leaseEndDate').value='';
+            document.getElementById('leasePaymentDay').value='';
+            document.getElementById('leasePaymentMethod').value='롯데카드';
+            document.getElementById('leaseCompany').value='';
             // 카테고리 옵션 동적 변경
             const cats=type==='fixed'?fixedCategories:variableCategories;
             document.getElementById('expenseCategory').innerHTML=cats.map(c=>`<option value="${c.value}">${c.label}</option>`).join('');
@@ -1067,7 +1168,17 @@
                 document.getElementById('expenseAmount').value=item.amount||'';document.getElementById('expenseNote').value=item.note||'';
                 document.getElementById('expenseDate').value=item.date||'';
                 if(type==='variable'){document.getElementById('expenseCard').value=item.card||'롯데카드';}
+                // 장비리스 정보 로드
+                if(item.category==='장비리스/렌탈'){
+                    document.getElementById('leaseFields').style.display='block';
+                    document.getElementById('leaseStartDate').value=item.leaseStartDate||'';
+                    document.getElementById('leaseEndDate').value=item.leaseEndDate||'';
+                    document.getElementById('leasePaymentDay').value=item.leasePaymentDay||'';
+                    document.getElementById('leasePaymentMethod').value=item.leasePaymentMethod||'롯데카드';
+                    document.getElementById('leaseCompany').value=item.leaseCompany||'';
+                }
             }}
+            toggleLeaseFields();
             openModal('expenseModal');
         }
         async function saveExpense(){
@@ -1083,6 +1194,14 @@
             const collection=type==='fixed'?'fixedExpenses':'variableExpenses';
             const data={name,category,amount,note,date};
             if(type==='variable'){data.card=card;}
+            // 장비리스 정보 저장
+            if(category==='장비리스/렌탈'){
+                data.leaseStartDate=document.getElementById('leaseStartDate').value||null;
+                data.leaseEndDate=document.getElementById('leaseEndDate').value||null;
+                data.leasePaymentDay=parseInt(document.getElementById('leasePaymentDay').value)||null;
+                data.leasePaymentMethod=document.getElementById('leasePaymentMethod').value||null;
+                data.leaseCompany=document.getElementById('leaseCompany').value.trim()||null;
+            }
             data.yearMonth=date?date.substring(0,7).replace('-',''):getYM();
             try{
                 if(editId){await db.collection(collection).doc(editId).update(data);}
@@ -1293,6 +1412,7 @@
             for(const file of files){
                 try{
                     const fileName=file.name.toLowerCase();
+                    const originalFileName=file.name;
                     let taxType=null;
                     
                     // 파일명으로 세금 종류 추정
@@ -1311,12 +1431,18 @@
                     
                     // PDF에서 텍스트 추출
                     let pdfText='';
-                    if(file.type==='application/pdf'){
-                        pdfText=await extractPdfText(file);
+                    if(file.type==='application/pdf'||fileName.endsWith('.pdf')){
+                        try{
+                            pdfText=await extractPdfText(file);
+                            console.log('📄 PDF 텍스트 추출 완료:',pdfText.substring(0,500));
+                        }catch(pdfErr){
+                            console.error('PDF 추출 실패:',pdfErr);
+                        }
                     }
                     
                     // 파일명 + PDF 텍스트에서 정보 추출
-                    const taxInfo=parseTaxInfo(file.name,pdfText,taxType);
+                    const taxInfo=parseTaxInfo(originalFileName,pdfText,taxType);
+                    console.log('📊 파싱 결과:',taxInfo);
                     await saveTaxFromFile(taxInfo);
                 }catch(err){
                     console.error('파일 처리 오류:',err);
@@ -1330,18 +1456,32 @@
                 const reader=new FileReader();
                 reader.onload=async function(e){
                     try{
+                        if(typeof pdfjsLib==='undefined'){
+                            console.error('PDF.js 라이브러리가 로드되지 않았습니다.');
+                            resolve('');
+                            return;
+                        }
                         pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                        const pdf=await pdfjsLib.getDocument({data:e.target.result}).promise;
+                        const loadingTask=pdfjsLib.getDocument({data:new Uint8Array(e.target.result)});
+                        const pdf=await loadingTask.promise;
                         let text='';
                         for(let i=1;i<=pdf.numPages;i++){
                             const page=await pdf.getPage(i);
                             const content=await page.getTextContent();
-                            text+=content.items.map(item=>item.str).join(' ')+'\n';
+                            const pageText=content.items.map(item=>item.str).join(' ');
+                            text+=pageText+'\n';
                         }
+                        console.log('📑 전체 PDF 텍스트:\n',text);
                         resolve(text);
-                    }catch(err){reject(err);}
+                    }catch(err){
+                        console.error('PDF 파싱 오류:',err);
+                        resolve('');
+                    }
                 };
-                reader.onerror=()=>reject(new Error('파일 읽기 실패'));
+                reader.onerror=()=>{
+                    console.error('파일 읽기 오류');
+                    resolve('');
+                };
                 reader.readAsArrayBuffer(file);
             });
         }
@@ -1349,77 +1489,104 @@
         function parseTaxInfo(fileName,pdfText,taxType){
             const info={type:taxType,fileName};
             const combinedText=fileName+' '+pdfText;
+            const allText=combinedText.replace(/\s+/g,' ');
             
-            // "계" 다음의 금액 찾기 (국세 납부서 패턴: 계 4,099,000)
-            const totalMatch=pdfText.match(/계\s*[\n\s]*([0-9,]+)/);
-            if(totalMatch){
-                info.amount=parseInt(totalMatch[1].replace(/,/g,''));
+            console.log('🔍 파싱 시작 - 세금종류:',taxType);
+            
+            // 금액 패턴들 (다양한 형식 지원)
+            const amountPatterns=[
+                // "계" 다음 금액 (국세 납부서)
+                /계\s*([0-9,]+)/g,
+                // "합 계" 또는 "합계" 금액
+                /합\s*계\s*([0-9,]+)/g,
+                // 납부금액
+                /납부금액\s*([0-9,]+)/g,
+                /납부세액\s*([0-9,]+)/g,
+                // 세목별 금액
+                /부가가치세\s*([0-9,]+)/g,
+                /종합소득세\s*([0-9,]+)/g,
+                /근로소득세[^\d]*([0-9,]+)/g,
+                /지방소득세[^\d]*([0-9,]+)/g,
+                // 일반 큰 금액 패턴 (1백만원 이상)
+                /([1-9][0-9]{0,2},[0-9]{3},[0-9]{3})/g,
+                /([1-9][0-9]{6,})/g
+            ];
+            
+            // 가장 큰 금액 찾기 (세금은 보통 가장 큰 금액)
+            let maxAmount=0;
+            let foundAmounts=[];
+            
+            for(const pattern of amountPatterns){
+                const matches=[...allText.matchAll(pattern)];
+                for(const match of matches){
+                    const amountStr=match[1]||match[0];
+                    const amount=parseInt(amountStr.replace(/,/g,''));
+                    if(amount>10000){// 1만원 이상만
+                        foundAmounts.push(amount);
+                        if(amount>maxAmount)maxAmount=amount;
+                    }
+                }
             }
             
-            // "합 계" 또는 "합계" 패턴 (지방세 납부서)
-            if(!info.amount){
-                const sumMatch=pdfText.match(/합\s*계\s*[\n\s]*([0-9,]+)/);
-                if(sumMatch)info.amount=parseInt(sumMatch[1].replace(/,/g,''));
+            console.log('💰 발견된 금액들:',foundAmounts);
+            
+            if(maxAmount>0){
+                info.amount=maxAmount;
             }
             
-            // 납부금액 패턴
-            if(!info.amount){
-                const payMatch=pdfText.match(/납부금액\s*[\n\s]*([0-9,]+)/);
-                if(payMatch)info.amount=parseInt(payMatch[1].replace(/,/g,''));
+            // 납부기한 추출 (다양한 형식)
+            const datePatterns=[
+                /납부기한[일]?\s*[:\s]*(\d{4})[\-년\.]?\s*(\d{1,2})[\-월\.]?\s*(\d{1,2})/,
+                /(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*까지/,
+                /(\d{4})-(\d{2})-(\d{2})/
+            ];
+            
+            for(const pattern of datePatterns){
+                const match=allText.match(pattern);
+                if(match){
+                    info.dueDate=match[1]+'-'+match[2].padStart(2,'0')+'-'+match[3].padStart(2,'0');
+                    console.log('📅 납부기한:',info.dueDate);
+                    break;
+                }
             }
             
-            // 부가가치세/종합소득세 금액 패턴
-            if(!info.amount){
-                const vatMatch=pdfText.match(/부가가치세\s*[\n\s]*([0-9,]+)/);
-                if(vatMatch)info.amount=parseInt(vatMatch[1].replace(/,/g,''));
-            }
-            if(!info.amount){
-                const incomeMatch=pdfText.match(/종합소득세\s*[\n\s]*([0-9,]+)/);
-                if(incomeMatch)info.amount=parseInt(incomeMatch[1].replace(/,/g,''));
-            }
-            
-            // 근로소득세(갑) 금액
-            if(!info.amount&&taxType==='withholding_income'){
-                const workMatch=pdfText.match(/근로소득세\s*[(\(]?\s*갑\s*[)\)]?\s*[\n\s]*([0-9,]+)/);
-                if(workMatch)info.amount=parseInt(workMatch[1].replace(/,/g,''));
-            }
-            
-            // 지방소득세 금액
-            if(!info.amount&&taxType==='withholding_local'){
-                const localMatch=pdfText.match(/지방소득세\s*[\n\s]*([0-9,]+)/);
-                if(localMatch)info.amount=parseInt(localMatch[1].replace(/,/g,''));
-            }
-            
-            // 납부기한 추출
-            const dateMatch=pdfText.match(/납부기한[일]?\s*[\n\s:]*(\d{4})[년\-\.]\s*(\d{1,2})[월\-\.]\s*(\d{1,2})/);
-            if(dateMatch){
-                info.dueDate=dateMatch[1]+'-'+dateMatch[2].padStart(2,'0')+'-'+dateMatch[3].padStart(2,'0');
-            }
-            
-            // 귀속월 추출 (11월 귀속 또는 2025년 11월)
-            const attrMatch=combinedText.match(/(\d{1,2})월\s*귀속/);
+            // 귀속월 추출
+            const attrMatch=allText.match(/(\d{1,2})월\s*귀속/);
             if(attrMatch){
-                const yearMatch=combinedText.match(/(\d{4})\s*년/);
+                const yearMatch=allText.match(/(\d{4})/);
                 const year=yearMatch?yearMatch[1]:String(currentYear);
                 info.attributeMonth=year+'-'+attrMatch[1].padStart(2,'0');
+                console.log('📆 귀속월:',info.attributeMonth);
             }
             
-            // 연도/기분 추출 (2025년 2기분)
-            const periodMatch=pdfText.match(/(\d{4})\s*년\s*(\d)\s*기/);
-            if(periodMatch){
-                info.year=periodMatch[1];
-                info.quarter=periodMatch[2]+'기';
+            // 분기 추출 (부가세)
+            const quarterMatch=allText.match(/(\d{4})\s*년?\s*(\d)\s*기/);
+            if(quarterMatch){
+                info.year=quarterMatch[1];
+                info.quarter=quarterMatch[2]+'기';
+                console.log('📊 분기:',info.quarter);
             }
             
             // 귀속연도 (종소세)
             if(taxType==='income'){
-                const taxYearMatch=combinedText.match(/(\d{4})\s*[년_]/);
-                if(taxYearMatch)info.taxYear=taxYearMatch[1];
+                const yearPatterns=[
+                    /_(\d{4})_/,
+                    /(\d{4})년?\s*귀속/,
+                    /귀속[^\d]*(\d{4})/
+                ];
+                for(const p of yearPatterns){
+                    const m=allText.match(p);
+                    if(m){info.taxYear=m[1];break;}
+                }
+                if(!info.taxYear){
+                    const y=allText.match(/(\d{4})/);
+                    if(y)info.taxYear=y[1];
+                }
                 
-                // 중간예납 여부
-                if(combinedText.includes('중간예납'))info.incomeType='중간예납';
-                else if(combinedText.includes('확정'))info.incomeType='확정신고';
-                else if(combinedText.includes('분납'))info.incomeType='분납';
+                // 구분
+                if(allText.includes('중간예납'))info.incomeType='중간예납';
+                else if(allText.includes('확정'))info.incomeType='확정신고';
+                else if(allText.includes('분납'))info.incomeType='분납';
             }
             
             return info;
@@ -1550,27 +1717,46 @@
         async function deleteLunchOT(id){if(!confirm('정말 삭제하시겠습니까?'))return;try{await db.collection('lunchOT').doc(id).delete();await loadLunchOT();renderOvertime();}catch(e){alert('삭제 실패: '+e.message);}}
 
         // CRUD Operations - Incentive Items
+        function toggleIncItemFields(){
+            const type=document.getElementById('incItemType').value;
+            document.getElementById('perCaseFields').style.display=type==='perCase'?'block':'none';
+            document.getElementById('japanSalesFields').style.display=type==='japanSales'?'block':'none';
+        }
+        
         function openIncentiveItemModal(id=null){
             document.getElementById('incentiveItemModalTitle').textContent=id?'인센티브 항목 수정':'인센티브 항목 추가';
             document.getElementById('incItemEditId').value=id||'';
             document.getElementById('incItemName').value='';
+            document.getElementById('incItemType').value='perCase';
             document.getElementById('incItemPrice').value='50000';
+            document.getElementById('incItemPercent').value='1';
+            toggleIncItemFields();
             const selectedEmps=id?incentiveItems.find(i=>i.id===id)?.employees||[]:[];
             const container=document.getElementById('incItemEmployees');
             container.innerHTML=employees.filter(e=>e.status==='active').map(e=>`<label style="display:block;padding:.4rem 0;cursor:pointer"><input type="checkbox" name="incEmp" value="${e.id}" ${selectedEmps.includes(e.id)?'checked':''}> ${e.name} (${roleLabels[e.role]||e.role})</label>`).join('')||'<div style="color:var(--text-muted)">등록된 직원 없음</div>';
             if(id){const item=incentiveItems.find(i=>i.id===id);if(item){
                 document.getElementById('incItemName').value=item.name||'';
+                document.getElementById('incItemType').value=item.type||'perCase';
                 document.getElementById('incItemPrice').value=item.price||50000;
+                document.getElementById('incItemPercent').value=item.percent||1;
+                toggleIncItemFields();
             }}
             openModal('incentiveItemModal');
         }
         async function saveIncentiveItem(){
             const editId=document.getElementById('incItemEditId').value;
             const name=document.getElementById('incItemName').value.trim();
+            const type=document.getElementById('incItemType').value;
             const price=parseInt(document.getElementById('incItemPrice').value)||0;
+            const percent=parseFloat(document.getElementById('incItemPercent').value)||1;
             const selectedEmps=Array.from(document.querySelectorAll('input[name="incEmp"]:checked')).map(cb=>cb.value);
             if(!name){alert('항목명을 입력해주세요.');return;}
-            const data={name,price,employees:selectedEmps};
+            const data={name,type,employees:selectedEmps};
+            if(type==='perCase'){
+                data.price=price;
+            }else if(type==='japanSales'){
+                data.percent=percent;
+            }
             try{
                 if(editId){await db.collection('incentiveItems').doc(editId).update(data);}
                 else{await db.collection('incentiveItems').add(data);}
