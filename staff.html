@@ -533,7 +533,7 @@
         }
         
         async function processLogin(emp,pw){
-            if(pw==='final12890-'&&(!emp.password||emp.password==='final12890-')){
+            if(pw==='fnal12890-'&&(!emp.password||emp.password==='fnal12890-')){
                 currentUser=emp;
                 document.getElementById('pwSetup').classList.add('active');
                 return;
@@ -926,10 +926,14 @@
                 return sum+(r.dates?.length||1);
             },0);
             
-            const total=currentUser.annualLeave||15;
+            // 연차: 개별 설정값 있으면 사용, 없으면 법정 자동계산
+            const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
+            const adminUsed=currentUser.usedLeave||0; // admin에서 설정한 사용 연차
+            const totalUsed=usedDays+adminUsed;
+            
             document.getElementById('leaveTotal').textContent=total;
-            document.getElementById('leaveUsed').textContent=usedDays;
-            document.getElementById('leaveRemain').textContent=total-usedDays;
+            document.getElementById('leaveUsed').textContent=totalUsed;
+            document.getElementById('leaveRemain').textContent=Math.max(0,total-totalUsed);
             
             if(leaveRequests.length>0){
                 document.getElementById('leaveHistory').innerHTML=leaveRequests.slice(0,10).map(r=>{
@@ -949,6 +953,26 @@
                 }).join('');
             }else{
                 document.getElementById('leaveHistory').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div>';
+            }
+        }
+        
+        // 법정 연차 자동계산 (근로기준법)
+        function calculateLegalAnnualLeave(joinDate){
+            if(!joinDate)return 15;
+            const join=new Date(joinDate);
+            const now=new Date();
+            const diffMs=now-join;
+            const diffDays=Math.floor(diffMs/(1000*60*60*24));
+            const years=Math.floor(diffDays/365);
+            
+            if(years<1){
+                // 1년 미만: 1개월 개근 시 1일 (최대 11일)
+                const months=Math.floor(diffDays/30);
+                return Math.min(months,11);
+            }else{
+                // 1년 이상: 15일 + 2년마다 1일 추가 (최대 25일)
+                const extraDays=Math.floor((years-1)/2);
+                return Math.min(15+extraDays,25);
             }
         }
         

@@ -326,6 +326,17 @@
                     <div class="form-group"><label class="form-label">생년월일</label><input type="date" class="form-input" id="empBirthday"></div>
                     <div class="form-group"><label class="form-label">상태</label><select class="form-select" id="empStatus"><option value="active">재직</option><option value="inactive">퇴사</option></select></div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">연차 (법정 자동계산: <span id="autoAnnualLeave">0</span>일)</label>
+                        <input type="number" class="form-input" id="empAnnualLeave" placeholder="미입력시 자동계산">
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">개별 설정 시 입력, 비우면 법정 기준 자동</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">사용 연차</label>
+                        <input type="number" class="form-input" id="empUsedLeave" value="0" min="0">
+                    </div>
+                </div>
                 <input type="hidden" id="empId">
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('employeeModal')">취소</button><button class="btn btn-primary" onclick="saveEmployee()">저장</button></div>
@@ -1012,10 +1023,10 @@
         }
         
         async function resetPassword(empId,empName){
-            if(!confirm(`${empName}님의 비밀번호를 초기화하시겠습니까?\n\n초기 비밀번호: final12890-`))return;
+            if(!confirm(`${empName}님의 비밀번호를 초기화하시겠습니까?\n\n초기 비밀번호: fnal12890-`))return;
             try{
-                await db.collection('employees').doc(empId).update({password:'final12890-'});
-                alert(`${empName}님의 비밀번호가 초기화되었습니다.\n\n초기 비밀번호: final12890-`);
+                await db.collection('employees').doc(empId).update({password:'fnal12890-'});
+                alert(`${empName}님의 비밀번호가 초기화되었습니다.\n\n초기 비밀번호: fnal12890-`);
                 await loadEmployees();renderEmployees();
             }catch(e){alert('초기화 실패: '+e.message);}
         }
@@ -1738,6 +1749,9 @@
             document.getElementById('empIncentiveType').value='none';
             document.getElementById('empBirthday').value='';
             document.getElementById('empStatus').value='active';
+            document.getElementById('empAnnualLeave').value='';
+            document.getElementById('empUsedLeave').value='0';
+            document.getElementById('autoAnnualLeave').textContent='0';
             document.getElementById('empId').value='';
             if(id){
                 const emp=employees.find(e=>e.id===id);
@@ -1751,11 +1765,43 @@
                     document.getElementById('empIncentiveType').value=emp.incentiveType||'none';
                     document.getElementById('empBirthday').value=emp.birthday||'';
                     document.getElementById('empStatus').value=emp.status||'active';
+                    document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
+                    document.getElementById('empUsedLeave').value=emp.usedLeave||0;
                     document.getElementById('empId').value=emp.id;
+                    // 법정 연차 자동계산 표시
+                    const autoLeave=calculateLegalAnnualLeave(emp.joinDate);
+                    document.getElementById('autoAnnualLeave').textContent=autoLeave;
                 }
             }
             openModal('employeeModal');
         }
+        
+        // 법정 연차 자동계산 (근로기준법)
+        function calculateLegalAnnualLeave(joinDate){
+            if(!joinDate)return 0;
+            const join=new Date(joinDate);
+            const now=new Date();
+            const diffMs=now-join;
+            const diffDays=Math.floor(diffMs/(1000*60*60*24));
+            const years=Math.floor(diffDays/365);
+            
+            if(years<1){
+                // 1년 미만: 1개월 개근 시 1일 (최대 11일)
+                const months=Math.floor(diffDays/30);
+                return Math.min(months,11);
+            }else{
+                // 1년 이상: 15일 + 2년마다 1일 추가 (최대 25일)
+                const extraDays=Math.floor((years-1)/2);
+                return Math.min(15+extraDays,25);
+            }
+        }
+        
+        // 입사일 변경 시 법정 연차 자동계산
+        document.getElementById('empJoinDate')?.addEventListener('change',function(){
+            const autoLeave=calculateLegalAnnualLeave(this.value);
+            document.getElementById('autoAnnualLeave').textContent=autoLeave;
+        });
+        
         // 연봉 입력 시 시급 자동 계산 (연봉 ÷ 2508시간)
         document.getElementById('empSalary')?.addEventListener('input',function(){
             const salary=parseInt(this.value)||0;
@@ -1782,6 +1828,10 @@
             }
             
             const salary=parseInt(document.getElementById('empSalary').value)||0;
+            const annualLeaveInput=document.getElementById('empAnnualLeave').value;
+            const annualLeave=annualLeaveInput?parseInt(annualLeaveInput):null; // null이면 자동계산 사용
+            const usedLeave=parseInt(document.getElementById('empUsedLeave').value)||0;
+            
             const data={
                 name,
                 matchName:document.getElementById('empMatchName').value.trim(),
@@ -1791,7 +1841,9 @@
                 hourly:parseInt(document.getElementById('empHourly').value)||12000,
                 incentiveType:document.getElementById('empIncentiveType').value,
                 birthday:document.getElementById('empBirthday').value,
-                status:document.getElementById('empStatus').value
+                status:document.getElementById('empStatus').value,
+                annualLeave:annualLeave,
+                usedLeave:usedLeave
             };
             try{
                 await db.collection('employees').doc(empId).set(data,{merge:true});
