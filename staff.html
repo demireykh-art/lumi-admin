@@ -132,13 +132,14 @@
         <div class="login-logo">THE CLINIC</div>
         <div class="login-title">LUMI</div>
         <form class="login-form" onsubmit="attemptLogin(); return false;">
-            <input type="text" class="login-input" id="empIdInput" placeholder="사번" autocomplete="username">
+            <input type="text" class="login-input" id="empIdInput" placeholder="아이디" autocomplete="username">
             <div class="pw-wrap">
                 <input type="password" class="login-input" id="empPwInput" placeholder="비밀번호" autocomplete="current-password">
                 <button type="button" class="pw-toggle" onclick="togglePw('empPwInput',this)">👁</button>
             </div>
             <div class="login-error" id="loginError"></div>
             <button type="submit" class="login-btn">로그인</button>
+            <button type="button" class="login-btn" id="biometricBtn" style="display:none;margin-top:.5rem;background:var(--primary)" onclick="biometricLogin()">🔐 생체인식 로그인</button>
         </form>
     </div>
     
@@ -263,7 +264,6 @@
                 <div class="card">
                     <div class="card-title">내 정보</div>
                     <div class="info-row"><span class="info-label">이름</span><span class="info-value" id="infoName">-</span></div>
-                    <div class="info-row"><span class="info-label">사번</span><span class="info-value" id="infoId">-</span></div>
                     <div class="info-row"><span class="info-label">직급</span><span class="info-value" id="infoRole">-</span></div>
                     <div class="info-row"><span class="info-label">입사일</span><span class="info-value" id="infoJoinDate">-</span></div>
                     <div class="info-row"><span class="info-label">근속기간</span><span class="info-value" id="infoTenure">-</span></div>
@@ -278,6 +278,12 @@
                     <div class="info-row"><span class="info-label">실수령액</span><span class="info-value" id="infoNetPay">-</span></div>
                     <div class="info-row"><span class="info-label">OT수당</span><span class="info-value" id="infoOT">-</span></div>
                     <div class="info-row"><span class="info-label">인센티브</span><span class="info-value" id="infoIncentive">-</span></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">🔐 생체인식 로그인</div>
+                    <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem">Face ID 또는 지문으로 빠르게 로그인하세요.</p>
+                    <button class="btn btn-gold" onclick="registerBiometric()" id="biometricRegisterBtn">생체인식 등록</button>
+                    <div id="biometricStatus" style="font-size:.85rem;color:var(--text-muted);margin-top:.5rem;text-align:center"></div>
                 </div>
             </div>
         </div>
@@ -437,6 +443,8 @@
         let payrollData=[];
         let selectedLeaveDates=[];
         let userLocation=null;
+        let autoLogoutTimer=null;
+        let autoLogoutMinutes=10; // 기본 10분, admin에서 설정 가능
         
         const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
         
@@ -505,11 +513,11 @@
             const pw=document.getElementById('empPwInput').value;
             document.getElementById('loginError').textContent='';
             
-            if(!empId||!pw){document.getElementById('loginError').textContent='사번과 비밀번호를 입력해주세요.';return;}
+            if(!empId||!pw){document.getElementById('loginError').textContent='아이디와 비밀번호를 입력해주세요.';return;}
             
             try{
                 const doc=await db.collection('employees').doc(empId).get();
-                if(!doc.exists){document.getElementById('loginError').textContent='등록되지 않은 사번입니다.';return;}
+                if(!doc.exists){document.getElementById('loginError').textContent='등록되지 않은 아이디입니다.';return;}
                 
                 const emp={id:doc.id,...doc.data()};
                 
@@ -553,9 +561,15 @@
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
             checkLocation();
             loadAllData();
+            loadSettings();
+            startAutoLogoutTimer();
         }
         
-        function logout(){localStorage.removeItem('lumi_staff_user');location.reload();}
+        function logout(){
+            clearAutoLogoutTimer();
+            localStorage.removeItem('lumi_staff_user');
+            location.reload();
+        }
         
         function checkAuth(){
             const saved=localStorage.getItem('lumi_staff_user');
@@ -564,6 +578,149 @@
                     currentUser=JSON.parse(saved);
                     if(currentUser&&currentUser.id)showApp();
                 }catch(e){localStorage.removeItem('lumi_staff_user');}
+            }
+            // 생체인식 버튼 표시 여부 확인
+            checkBiometricAvailable();
+        }
+        
+        // 자동 로그아웃 타이머
+        async function loadSettings(){
+            try{
+                const doc=await db.collection('settings').doc('staff').get();
+                if(doc.exists){
+                    const data=doc.data();
+                    autoLogoutMinutes=data.autoLogoutMinutes||10;
+                }
+            }catch(e){console.error('설정 로드 오류:',e);}
+        }
+        
+        function startAutoLogoutTimer(){
+            clearAutoLogoutTimer();
+            if(autoLogoutMinutes<=0)return; // 0이면 자동 로그아웃 비활성화
+            autoLogoutTimer=setTimeout(()=>{
+                alert('장시간 미사용으로 자동 로그아웃됩니다.');
+                logout();
+            },autoLogoutMinutes*60*1000);
+        }
+        
+        function clearAutoLogoutTimer(){
+            if(autoLogoutTimer){
+                clearTimeout(autoLogoutTimer);
+                autoLogoutTimer=null;
+            }
+        }
+        
+        function resetAutoLogoutTimer(){
+            if(currentUser)startAutoLogoutTimer();
+        }
+        
+        // 사용자 활동 감지 (터치, 클릭, 스크롤)
+        ['touchstart','click','scroll','keydown'].forEach(event=>{
+            document.addEventListener(event,resetAutoLogoutTimer,{passive:true});
+        });
+        
+        // 생체인식 로그인 (WebAuthn)
+        function checkBiometricAvailable(){
+            const btn=document.getElementById('biometricBtn');
+            const hasCredential=localStorage.getItem('lumi_biometric_credential');
+            if(window.PublicKeyCredential&&hasCredential){
+                btn.style.display='block';
+            }
+        }
+        
+        async function biometricLogin(){
+            try{
+                const credentialId=localStorage.getItem('lumi_biometric_credential');
+                const userId=localStorage.getItem('lumi_biometric_user');
+                if(!credentialId||!userId){
+                    alert('등록된 생체인식 정보가 없습니다.\n먼저 일반 로그인 후 생체인식을 등록해주세요.');
+                    return;
+                }
+                
+                // WebAuthn 인증 요청
+                const challenge=new Uint8Array(32);
+                crypto.getRandomValues(challenge);
+                
+                const credential=await navigator.credentials.get({
+                    publicKey:{
+                        challenge:challenge,
+                        timeout:60000,
+                        allowCredentials:[{
+                            id:Uint8Array.from(atob(credentialId),c=>c.charCodeAt(0)),
+                            type:'public-key',
+                            transports:['internal']
+                        }],
+                        userVerification:'required'
+                    }
+                });
+                
+                if(credential){
+                    // 인증 성공 - 저장된 사용자 정보로 로그인
+                    const doc=await db.collection('employees').doc(userId).get();
+                    if(doc.exists){
+                        currentUser={id:doc.id,...doc.data()};
+                        localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                        showApp();
+                    }else{
+                        alert('사용자 정보를 찾을 수 없습니다.');
+                    }
+                }
+            }catch(e){
+                console.error('생체인식 오류:',e);
+                if(e.name==='NotAllowedError'){
+                    alert('생체인식이 취소되었습니다.');
+                }else{
+                    alert('생체인식 로그인 실패: '+e.message);
+                }
+            }
+        }
+        
+        async function registerBiometric(){
+            if(!window.PublicKeyCredential){
+                alert('이 브라우저는 생체인식을 지원하지 않습니다.');
+                return;
+            }
+            if(!currentUser){
+                alert('먼저 로그인해주세요.');
+                return;
+            }
+            
+            try{
+                const challenge=new Uint8Array(32);
+                crypto.getRandomValues(challenge);
+                
+                const credential=await navigator.credentials.create({
+                    publicKey:{
+                        challenge:challenge,
+                        rp:{name:'THE CLINIC LUMI',id:location.hostname},
+                        user:{
+                            id:Uint8Array.from(currentUser.id,c=>c.charCodeAt(0)),
+                            name:currentUser.id,
+                            displayName:currentUser.name||currentUser.id
+                        },
+                        pubKeyCredParams:[{alg:-7,type:'public-key'},{alg:-257,type:'public-key'}],
+                        authenticatorSelection:{
+                            authenticatorAttachment:'platform',
+                            userVerification:'required'
+                        },
+                        timeout:60000
+                    }
+                });
+                
+                if(credential){
+                    // 자격증명 ID 저장
+                    const credentialId=btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+                    localStorage.setItem('lumi_biometric_credential',credentialId);
+                    localStorage.setItem('lumi_biometric_user',currentUser.id);
+                    alert('생체인식이 등록되었습니다!\n다음 로그인부터 Face ID/지문으로 로그인할 수 있습니다.');
+                }
+            }catch(e){
+                console.error('생체인식 등록 오류:',e);
+                if(e.name==='NotAllowedError'){
+                    alert('생체인식 등록이 취소되었습니다.');
+                }else{
+                    alert('생체인식 등록 실패: '+e.message);
+                }
             }
         }
         
@@ -837,7 +994,6 @@
         
         function renderInfo(){
             document.getElementById('infoName').textContent=currentUser.name||'-';
-            document.getElementById('infoId').textContent=currentUser.id||'-';
             document.getElementById('infoRole').textContent=roleLabels[currentUser.role]||currentUser.role||'-';
             document.getElementById('infoJoinDate').textContent=currentUser.joinDate||'-';
             document.getElementById('infoTenure').textContent=getTenure(currentUser.joinDate);
@@ -847,7 +1003,28 @@
             const select=document.getElementById('salaryMonth');
             select.innerHTML=months.length>0?months.map(m=>`<option value="${m}">${m.replace('-','년 ')}월</option>`).join(''):'<option value="">데이터 없음</option>';
             
+            // 생체인식 상태 표시
+            const bioStatus=document.getElementById('biometricStatus');
+            const hasCredential=localStorage.getItem('lumi_biometric_credential');
+            if(hasCredential){
+                bioStatus.innerHTML='✅ 등록됨 - <a href="#" onclick="removeBiometric();return false;" style="color:var(--red)">해제</a>';
+            }else if(!window.PublicKeyCredential){
+                bioStatus.textContent='⚠️ 이 브라우저에서 지원되지 않습니다';
+                document.getElementById('biometricRegisterBtn').style.display='none';
+            }else{
+                bioStatus.textContent='미등록';
+            }
+            
             renderSalary();
+        }
+        
+        function removeBiometric(){
+            if(confirm('생체인식 등록을 해제하시겠습니까?')){
+                localStorage.removeItem('lumi_biometric_credential');
+                localStorage.removeItem('lumi_biometric_user');
+                renderInfo();
+                alert('생체인식이 해제되었습니다.');
+            }
         }
         
         function renderSalary(){
