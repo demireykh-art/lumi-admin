@@ -433,7 +433,7 @@
         // Global State
         let currentYear=new Date().getFullYear();
         let currentMonth=new Date().getMonth()+1;
-        let employees=[],attendance=[],revenueData={},salesDetail={},fixedExpenses=[],variableExpenses=[],incentiveItems=[],lunchOT=[];
+        let employees=[],attendance=[],revenueData={},salesDetail={},fixedExpenses=[],variableExpenses=[],incentiveItems=[],lunchOT=[],incentiveRecords=[];
         let vatTaxes=[],incomeTaxes=[],payrollData=[],withholdingTaxes=[];
         const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
         let revenueChart=null,compareChart=null;
@@ -556,7 +556,7 @@
 
         // Data Loading
         async function loadAllData(){
-            await Promise.all([loadEmployees(),loadRevenueData(),loadSalesDetailData(),loadExpenses(),loadAttendance(),loadIncentiveItems(),loadLunchOT()]);
+            await Promise.all([loadEmployees(),loadRevenueData(),loadSalesDetailData(),loadExpenses(),loadAttendance(),loadIncentiveItems(),loadIncentiveRecords(),loadLunchOT()]);
             renderAll();
         }
         async function loadEmployees(){try{const snapshot=await db.collection('employees').get();employees=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));}catch(e){console.error('Load employees error:',e);}}
@@ -588,6 +588,7 @@
             }catch(e){console.error('Load attendance error:',e);}
         }
         async function loadIncentiveItems(){try{const snapshot=await db.collection('incentiveItems').get();incentiveItems=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));}catch(e){console.error('Load incentive items error:',e);}}
+        async function loadIncentiveRecords(){try{const snapshot=await db.collection('incentiveRecords').get();incentiveRecords=snapshot.docs.map(doc=>({id:doc.id,...doc.data()}));}catch(e){console.error('Load incentive records error:',e);}}
         async function loadLunchOT(){
             try{
                 const ym=getYM();
