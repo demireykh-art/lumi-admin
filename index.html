@@ -254,7 +254,7 @@
                 </div>
                 <div class="sub-content active" id="sub-list">
                     <div class="section-header"><div class="section-title">직원 목록</div><button class="btn btn-primary" onclick="openEmployeeModal()">+ 직원 등록</button></div>
-                    <div class="table-container"><table><thead><tr><th>사번</th><th>이름</th><th>매칭명</th><th>직급</th><th>입사일</th><th>근속</th><th>생일</th><th>나이</th><th>시급</th><th>상태</th><th>비밀번호</th><th>관리</th></tr></thead><tbody id="employeeTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>사번</th><th>이름</th><th>매칭명</th><th>직급</th><th>입사일</th><th>근속</th><th>생일</th><th>나이</th><th>연봉</th><th>시급</th><th>상태</th><th>비밀번호</th><th>관리</th></tr></thead><tbody id="employeeTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-attendance">
                     <div class="cards-grid">
@@ -305,7 +305,8 @@
                     <div class="form-group"><label class="form-label">입사일 *</label><input type="date" class="form-input" id="empJoinDate" required></div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">시급</label><input type="number" class="form-input" id="empHourly" value="12000"></div>
+                    <div class="form-group"><label class="form-label">연봉 (만원)</label><input type="number" class="form-input" id="empSalary" placeholder="예: 3000 (3천만원)"></div>
+                    <div class="form-group"><label class="form-label">시급 (자동계산: 연봉÷2508)</label><input type="number" class="form-input" id="empHourly" value="12000" readonly style="background:#f5f5f0"></div>
                     <div class="form-group"><label class="form-label">인센티브 유형</label><select class="form-select" id="empIncentiveType"><option value="none">없음</option><option value="staff_sales">담당직원 매출 1%</option><option value="per_case">건별 인센티브</option><option value="special_treatment">특정 시술 (포다이스/위너확장/피지선)</option><option value="japan_direct">일본인 직접매출 (담당직원 제외)</option></select></div>
                 </div>
                 <div class="form-row">
@@ -992,7 +993,7 @@
                 const age=getAge(e.birthday);
                 const birthday=formatBirthday(e.birthday);
                 const pwStatus=e.password?'<span class="badge badge-green">설정됨</span>':'<span class="badge badge-orange">미설정</span>';
-                return `<tr><td><span class="badge badge-gold">${e.id}</span></td><td><strong>${e.name}</strong></td><td>${e.matchName||'-'}</td><td>${roleLabels[e.role]||e.role}</td><td>${e.joinDate||'-'}</td><td>${getYearsOfService(e.joinDate)}</td><td>${birthday}</td><td>${age}</td><td>${formatCurrency(e.hourly)}</td><td><span class="badge ${e.status==='active'?'badge-green':'badge-red'}">${e.status==='active'?'재직':'퇴사'}</span></td><td>${pwStatus}</td><td><button class="btn btn-sm btn-secondary" onclick="editEmployee('${e.id}')">수정</button> <button class="btn btn-sm btn-gold" onclick="resetPassword('${e.id}','${e.name}')">비번초기화</button> <button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">삭제</button></td></tr>`;
+                return `<tr><td><span class="badge badge-gold">${e.id}</span></td><td><strong>${e.name}</strong></td><td>${e.matchName||'-'}</td><td>${roleLabels[e.role]||e.role}</td><td>${e.joinDate||'-'}</td><td>${getYearsOfService(e.joinDate)}</td><td>${birthday}</td><td>${age}</td><td>${e.salary?e.salary+'만원':'-'}</td><td>${formatCurrency(e.hourly)}</td><td><span class="badge ${e.status==='active'?'badge-green':'badge-red'}">${e.status==='active'?'재직':'퇴사'}</span></td><td>${pwStatus}</td><td><button class="btn btn-sm btn-secondary" onclick="editEmployee('${e.id}')">수정</button> <button class="btn btn-sm btn-gold" onclick="resetPassword('${e.id}','${e.name}')">비번초기화</button> <button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">삭제</button></td></tr>`;
             }).join('')||'<tr><td colspan="12" class="text-center">등록된 직원 없음</td></tr>';
         }
         
@@ -1656,6 +1657,7 @@
             document.getElementById('empMatchName').value='';
             document.getElementById('empRole').value='staff';
             document.getElementById('empJoinDate').value='';
+            document.getElementById('empSalary').value='';
             document.getElementById('empHourly').value='12000';
             document.getElementById('empIncentiveType').value='none';
             document.getElementById('empBirthday').value='';
@@ -1668,6 +1670,7 @@
                     document.getElementById('empMatchName').value=emp.matchName||'';
                     document.getElementById('empRole').value=emp.role||'staff';
                     document.getElementById('empJoinDate').value=emp.joinDate||'';
+                    document.getElementById('empSalary').value=emp.salary||'';
                     document.getElementById('empHourly').value=emp.hourly||12000;
                     document.getElementById('empIncentiveType').value=emp.incentiveType||'none';
                     document.getElementById('empBirthday').value=emp.birthday||'';
@@ -1677,6 +1680,12 @@
             }
             openModal('employeeModal');
         }
+        // 연봉 입력 시 시급 자동 계산 (연봉 ÷ 2508시간)
+        document.getElementById('empSalary')?.addEventListener('input',function(){
+            const salary=parseInt(this.value)||0;
+            const hourly=salary>0?Math.round(salary*10000/2508):12000;
+            document.getElementById('empHourly').value=hourly;
+        });
         function editEmployee(id){openEmployeeModal(id);}
         async function saveEmployee(){
             const editId=document.getElementById('empEditId').value;
@@ -1684,11 +1693,13 @@
             const joinDate=document.getElementById('empJoinDate').value;
             if(!name||!joinDate){alert('이름과 입사일은 필수입니다.');return;}
             const empId=editId||generateEmployeeId(name,joinDate);
+            const salary=parseInt(document.getElementById('empSalary').value)||0;
             const data={
                 name,
                 matchName:document.getElementById('empMatchName').value.trim(),
                 role:document.getElementById('empRole').value,
                 joinDate,
+                salary:salary,
                 hourly:parseInt(document.getElementById('empHourly').value)||12000,
                 incentiveType:document.getElementById('empIncentiveType').value,
                 birthday:document.getElementById('empBirthday').value,
