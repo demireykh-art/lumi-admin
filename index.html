@@ -1769,8 +1769,17 @@
             const joinDate=document.getElementById('empJoinDate').value;
             if(!name||!joinDate){alert('이름과 입사일은 필수입니다.');return;}
             
-            // ID 결정: 수정 시 기존 ID, 신규 시 자동생성
-            let empId=editId||generateEmployeeId(name,joinDate);
+            // ID 결정: 수정 시 기존 ID, 신규 시 이름을 ID로 사용
+            let empId=editId||name;
+            
+            // 신규 등록 시 이름 중복 체크
+            if(!editId){
+                const existing=await db.collection('employees').doc(name).get();
+                if(existing.exists){
+                    alert('이미 등록된 이름입니다: '+name);
+                    return;
+                }
+            }
             
             const salary=parseInt(document.getElementById('empSalary').value)||0;
             const data={

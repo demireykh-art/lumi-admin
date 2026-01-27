@@ -132,7 +132,7 @@
         <div class="login-logo">THE CLINIC</div>
         <div class="login-title">LUMI</div>
         <form class="login-form" onsubmit="attemptLogin(); return false;">
-            <input type="text" class="login-input" id="empIdInput" placeholder="아이디" autocomplete="username">
+            <input type="text" class="login-input" id="empIdInput" placeholder="이름" autocomplete="username">
             <div class="pw-wrap">
                 <input type="password" class="login-input" id="empPwInput" placeholder="비밀번호" autocomplete="current-password">
                 <button type="button" class="pw-toggle" onclick="togglePw('empPwInput',this)">👁</button>
@@ -509,33 +509,44 @@
         
         // Login
         async function attemptLogin(){
-            const empId=document.getElementById('empIdInput').value.trim().toUpperCase();
+            const inputName=document.getElementById('empIdInput').value.trim();
             const pw=document.getElementById('empPwInput').value;
             document.getElementById('loginError').textContent='';
             
-            if(!empId||!pw){document.getElementById('loginError').textContent='아이디와 비밀번호를 입력해주세요.';return;}
+            if(!inputName||!pw){document.getElementById('loginError').textContent='이름과 비밀번호를 입력해주세요.';return;}
             
             try{
-                const doc=await db.collection('employees').doc(empId).get();
-                if(!doc.exists){document.getElementById('loginError').textContent='등록되지 않은 아이디입니다.';return;}
+                // 이름 = 문서 ID
+                const doc=await db.collection('employees').doc(inputName).get();
                 
-                const emp={id:doc.id,...doc.data()};
-                
-                if(pw==='final12890-'&&(!emp.password||emp.password==='final12890-')){
-                    currentUser=emp;
-                    document.getElementById('pwSetup').classList.add('active');
+                if(!doc.exists){
+                    document.getElementById('loginError').textContent='등록되지 않은 이름입니다.';
                     return;
                 }
                 
-                if(emp.password!==pw){document.getElementById('loginError').textContent='비밀번호가 올바르지 않습니다.';return;}
-                
-                currentUser=emp;
-                localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                showApp();
+                const emp={id:doc.id,...doc.data()};
+                await processLogin(emp,pw);
             }catch(e){
                 console.error(e);
                 document.getElementById('loginError').textContent='로그인 오류: '+e.message;
             }
+        }
+        
+        async function processLogin(emp,pw){
+            if(pw==='final12890-'&&(!emp.password||emp.password==='final12890-')){
+                currentUser=emp;
+                document.getElementById('pwSetup').classList.add('active');
+                return;
+            }
+            
+            if(emp.password!==pw){
+                document.getElementById('loginError').textContent='비밀번호가 올바르지 않습니다.';
+                return;
+            }
+            
+            currentUser=emp;
+            localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+            showApp();
         }
         
         async function setupPassword(){
