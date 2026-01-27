@@ -243,6 +243,10 @@
             
             <!-- 인센티브 탭 -->
             <div class="tab-content" id="tab-incentive">
+                <div class="stats-grid" style="grid-template-columns:repeat(2,1fr)">
+                    <div class="stat-card"><div class="stat-value" id="incTotalCount">0</div><div class="stat-label">이번달 실적</div></div>
+                    <div class="stat-card green"><div class="stat-value" id="incTotalAmount">₩0</div><div class="stat-label">예상 인센티브</div></div>
+                </div>
                 <div class="card">
                     <div class="card-title">나의 인센티브 항목</div>
                     <div id="myIncentiveItems"><div style="text-align:center;color:var(--text-muted);padding:1rem">등록된 항목이 없습니다</div></div>
@@ -784,16 +788,21 @@
             const ym=getYM();
             const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
             
+            // 총 실적 건수와 금액 계산
+            let totalCount=monthRecords.length;
+            let totalAmount=0;
+            
             if(incentiveItems.length>0){
                 document.getElementById('myIncentiveItems').innerHTML=incentiveItems.map(item=>{
                     const count=monthRecords.filter(r=>r.itemId===item.id).length;
                     const typeLabel=item.type==='japanSales'?`일본인 매출 ${item.percent||1}%`:`건당 ${formatCurrency(item.price||0)}`;
-                    const total=item.type==='japanSales'?'-':(count*(item.price||0));
+                    const itemTotal=item.type==='japanSales'?0:(count*(item.price||0));
+                    if(item.type!=='japanSales')totalAmount+=itemTotal;
                     return `
                         <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
                             <div style="font-weight:600;margin-bottom:.25rem">${item.name}</div>
                             <div style="font-size:.85rem;color:var(--text-secondary)"><span class="badge badge-gold">${typeLabel}</span></div>
-                            <div style="font-size:1rem;font-weight:700;color:var(--primary);margin-top:.5rem">${count}건${typeof total==='number'?' = '+formatCurrency(total):''}</div>
+                            <div style="font-size:1rem;font-weight:700;color:var(--primary);margin-top:.5rem">${count}건${item.type!=='japanSales'?' = '+formatCurrency(itemTotal):''}</div>
                         </div>
                     `;
                 }).join('');
@@ -803,6 +812,10 @@
             }else{
                 document.getElementById('myIncentiveItems').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">등록된 항목이 없습니다</div>';
             }
+            
+            // 상단 통계 업데이트
+            document.getElementById('incTotalCount').textContent=totalCount+'건';
+            document.getElementById('incTotalAmount').textContent=formatCurrency(totalAmount);
             
             if(monthRecords.length>0){
                 document.getElementById('incentiveRecords').innerHTML=monthRecords.map(r=>{
@@ -843,14 +856,41 @@
             
             const myPayroll=payrollData.find(p=>(p.yearMonth===ym)&&(p.name===currentUser.name||p.name===currentUser.matchName));
             if(myPayroll){
+                // 노무사에서 받은 급여대장 데이터가 있으면 표시
                 document.getElementById('infoNetPay').textContent=formatCurrency(myPayroll.netPay);
-                // OT수당 = 추가연장수당 필드
+                // OT수당 = 추가연장수당 필드 (중요!)
                 document.getElementById('infoOT').textContent=formatCurrency(myPayroll.extraOT||myPayroll.additionalOT||0);
                 document.getElementById('infoIncentive').textContent=formatCurrency(myPayroll.incentive||0);
             }else{
-                document.getElementById('infoNetPay').textContent='-';
-                document.getElementById('infoOT').textContent='-';
-                document.getElementById('infoIncentive').textContent='-';
+                // 급여대장 없으면 직접 계산한 예상 값 표시
+                const monthOT=lunchOT.filter(ot=>ot.date?.startsWith(ym));
+                const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
+                const lunchMinutes=monthOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+                let afterMinutes=0;
+                monthAtt.forEach(a=>{
+                    if(a.checkOut){
+                        const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
+                        const checkOutMin=h*60+m;
+                        if(checkOutMin>18*60)afterMinutes+=checkOutMin-18*60;
+                    }
+                });
+                const totalOTMinutes=lunchMinutes+afterMinutes;
+                const hourly=currentUser.hourly||12000;
+                const estimatedOT=Math.round((totalOTMinutes/60)*hourly*1.5);
+                
+                // 인센티브 계산
+                const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
+                let estimatedIncentive=0;
+                incentiveItems.forEach(item=>{
+                    if(item.type!=='japanSales'){
+                        const count=monthRecords.filter(r=>r.itemId===item.id).length;
+                        estimatedIncentive+=count*(item.price||0);
+                    }
+                });
+                
+                document.getElementById('infoNetPay').textContent='미확정';
+                document.getElementById('infoOT').textContent=formatCurrency(estimatedOT)+' (예상)';
+                document.getElementById('infoIncentive').textContent=formatCurrency(estimatedIncentive)+' (예상)';
             }
         }
         

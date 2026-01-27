@@ -204,8 +204,8 @@
                         <div class="upload-hint">지원 형식: .xlsx, .xls</div>
                         <input type="file" id="payrollFile" accept=".xlsx,.xls" style="display:none" onchange="processPayrollFile(this)">
                     </div>
-                    <div class="section-header"><div class="section-title">월별 급여 내역</div><div><select class="form-select" id="payrollMonth" onchange="renderPayroll()" style="width:auto"><option value="">전체</option></select></div></div>
-                    <div class="table-container"><table><thead><tr><th>지급월</th><th>직원명</th><th>기본급</th><th>수당</th><th>공제</th><th class="text-right">차인지급액</th><th>관리</th></tr></thead><tbody id="payrollTable"></tbody></table></div>
+                    <div class="section-header"><div class="section-title">월별 급여 내역 (노무사 급여대장)</div><div><select class="form-select" id="payrollMonth" onchange="renderPayroll()" style="width:auto"><option value="">전체</option></select></div></div>
+                    <div class="table-container"><table><thead><tr><th>지급월</th><th>직원명</th><th class="text-right">OT수당</th><th class="text-right">인센티브</th><th class="text-right">실수령액</th><th>관리</th></tr></thead><tbody id="payrollTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-tax">
                     <div class="expense-summary">
@@ -250,7 +250,7 @@
                     <div class="sub-tab" data-sub="attendance">근태 현황</div>
                     <div class="sub-tab" data-sub="overtime">오버타임</div>
                     <div class="sub-tab" data-sub="incentive">인센티브</div>
-                    <div class="sub-tab" data-sub="salary">급여</div>
+                    <div class="sub-tab" data-sub="salary">사전급여대장</div>
                 </div>
                 <div class="sub-content active" id="sub-list">
                     <div class="section-header"><div class="section-title">직원 목록</div><button class="btn btn-primary" onclick="openEmployeeModal()">+ 직원 등록</button></div>
@@ -264,7 +264,7 @@
                         <div class="card"><div class="card-label">결근</div><div class="card-value" id="absentDays">0회</div></div>
                     </div>
                     <div class="section-header"><div class="section-title">근태 기록</div><select class="form-select" id="attendanceFilter" style="width:auto" onchange="renderAttendance()"><option value="all">전체 직원</option></select></div>
-                    <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>상태</th></tr></thead><tbody id="attendanceTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>상태</th><th>관리</th></tr></thead><tbody id="attendanceTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-overtime">
                     <div class="cards-grid">
@@ -283,8 +283,9 @@
                     <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 인센티브</th><th class="text-right">일본인 매출 인센티브</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-salary">
-                    <div class="section-header"><div class="section-title">급여 명세</div><button class="btn btn-secondary" onclick="exportSalary()">엑셀 다운로드</button></div>
-                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">기본급</th><th class="text-right">OT수당</th><th class="text-right">인센티브</th><th class="text-right">공제</th><th class="text-right">실수령액</th></tr></thead><tbody id="salaryTable"></tbody></table></div>
+                    <div class="section-header"><div class="section-title">사전급여대장 (노무사 전달용)</div><button class="btn btn-secondary" onclick="exportPrePayroll()">엑셀 다운로드</button></div>
+                    <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:1rem">직원별 직급, OT시간, 인센티브 실적을 정리하여 노무사에게 전달합니다.</p>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th>연봉</th><th class="text-right">OT시간</th><th class="text-right">예상OT수당</th><th class="text-right">인센티브 실적</th><th class="text-right">예상 인센티브</th></tr></thead><tbody id="prePayrollTable"></tbody></table></div>
                 </div>
             </div>
         </main>
@@ -313,7 +314,13 @@
                     <div class="form-group"><label class="form-label">생년월일</label><input type="date" class="form-input" id="empBirthday"></div>
                     <div class="form-group"><label class="form-label">상태</label><select class="form-select" id="empStatus"><option value="active">재직</option><option value="inactive">퇴사</option></select></div>
                 </div>
-                <div class="form-group"><label class="form-label">사번 (자동생성)</label><input type="text" class="form-input" id="empId" readonly placeholder="저장 시 자동 생성"></div>
+                <div class="form-group">
+                    <label class="form-label">사번</label>
+                    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem">
+                        <label style="font-size:.85rem"><input type="checkbox" id="empIdAuto" checked onchange="toggleEmpIdAuto()"> 자동생성</label>
+                    </div>
+                    <input type="text" class="form-input" id="empId" placeholder="자동생성됨" readonly style="background:#f5f5f0">
+                </div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('employeeModal')">취소</button><button class="btn btn-primary" onclick="saveEmployee()">저장</button></div>
         </div>
@@ -874,7 +881,7 @@
             document.getElementById('payrollCount').textContent=empCount+'명';
             
             // 테이블
-            document.getElementById('payrollTable').innerHTML=filtered.sort((a,b)=>(b.yearMonth||'').localeCompare(a.yearMonth||'')||(a.name||'').localeCompare(b.name||'')).map(p=>`<tr><td>${p.yearMonth||'-'}</td><td><strong>${p.name||'-'}</strong></td><td class="text-right">${formatCurrency(p.basePay)}</td><td class="text-right">${formatCurrency(p.allowance)}</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(p.deduction)}</td><td class="text-right"><strong>${formatCurrency(p.netPay)}</strong></td><td><button class="btn btn-sm btn-danger" onclick="deletePayroll('${p.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="7" class="text-center">등록된 급여 내역 없음</td></tr>';
+            document.getElementById('payrollTable').innerHTML=filtered.sort((a,b)=>(b.yearMonth||'').localeCompare(a.yearMonth||'')||(a.name||'').localeCompare(b.name||'')).map(p=>`<tr><td>${p.yearMonth||'-'}</td><td><strong>${p.name||'-'}</strong></td><td class="text-right">${formatCurrency(p.extraOT||0)}</td><td class="text-right">${formatCurrency(p.incentive||0)}</td><td class="text-right"><strong>${formatCurrency(p.netPay)}</strong></td><td><button class="btn btn-sm btn-danger" onclick="deletePayroll('${p.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 급여 내역 없음</td></tr>';
         }
         
         function renderTaxes(){
@@ -1018,13 +1025,38 @@
             document.getElementById('lateDays').textContent=lateDays+'회';
             document.getElementById('earlyDays').textContent=earlyDays+'회';
             document.getElementById('absentDays').textContent=absentDays+'회';
-            const sorted=filtered.sort((a,b)=>b.date.localeCompare(a.date));
+            const sorted=filtered.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
             document.getElementById('attendanceTable').innerHTML=sorted.slice(0,50).map(a=>{
                 const emp=employees.find(e=>e.id===a.employeeId);
                 const workHours=a.checkIn&&a.checkOut?calculateWorkHours(a.checkIn,a.checkOut):'-';
                 const statusBadge={normal:'<span class="badge badge-green">정상</span>',late:'<span class="badge badge-orange">지각</span>',early:'<span class="badge badge-blue">조퇴</span>',absent:'<span class="badge badge-red">결근</span>'};
-                return `<tr><td>${a.date}</td><td>${emp?emp.name:a.employeeId}</td><td>${a.checkIn||'-'}</td><td>${a.checkOut||'-'}</td><td>${workHours}</td><td>${statusBadge[a.status]||'-'}</td></tr>`;
-            }).join('')||'<tr><td colspan="6" class="text-center">근태 기록 없음</td></tr>';
+                return `<tr><td>${a.date||'-'}</td><td>${emp?emp.name:a.employeeId}</td><td>${a.checkIn||'-'}</td><td>${a.checkOut||'-'}</td><td>${workHours}</td><td>${statusBadge[a.status]||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editAttendance('${a.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteAttendance('${a.id}')">삭제</button></td></tr>`;
+            }).join('')||'<tr><td colspan="7" class="text-center">근태 기록 없음</td></tr>';
+        }
+        
+        async function editAttendance(id){
+            const att=attendance.find(a=>a.id===id);
+            if(!att)return;
+            const newCheckIn=prompt('출근 시간 (HH:MM)',att.checkIn||'09:00');
+            if(newCheckIn===null)return;
+            const newCheckOut=prompt('퇴근 시간 (HH:MM)',att.checkOut||'18:00');
+            if(newCheckOut===null)return;
+            const newStatus=prompt('상태 (normal/late/early/absent)',att.status||'normal');
+            if(newStatus===null)return;
+            try{
+                await db.collection('attendance').doc(id).update({checkIn:newCheckIn,checkOut:newCheckOut,status:newStatus});
+                await loadAttendance();renderAttendance();
+                alert('수정되었습니다.');
+            }catch(e){alert('수정 실패: '+e.message);}
+        }
+        
+        async function deleteAttendance(id){
+            if(!confirm('이 근태 기록을 삭제하시겠습니까?'))return;
+            try{
+                await db.collection('attendance').doc(id).delete();
+                await loadAttendance();renderAttendance();
+                alert('삭제되었습니다.');
+            }catch(e){alert('삭제 실패: '+e.message);}
         }
 
         function calculateWorkHours(checkIn,checkOut){
@@ -1097,30 +1129,55 @@
         }
 
         function renderSalary(){
-            const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
-            // 급여대장 업로드 데이터가 있으면 우선 사용
-            const monthPayroll=payrollData.filter(p=>p.yearMonth===ym);
-            if(monthPayroll.length>0){
-                document.getElementById('salaryTable').innerHTML=monthPayroll.map(p=>{
-                    return `<tr><td><strong>${p.name}</strong></td><td>-</td><td class="text-right">${formatCurrency(p.basePay)}</td><td class="text-right">${formatCurrency(p.allowance)}</td><td class="text-right">-</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(p.deduction)}</td><td class="text-right"><strong>${formatCurrency(p.netPay)}</strong></td></tr>`;
-                }).join('');
-                return;
-            }
-            // 급여대장이 없으면 기존 계산 방식
-            document.getElementById('salaryTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
-                const baseSalary=(emp.hourly||12000)*209;
-                const empAttendance=attendance.filter(a=>a.employeeId===emp.id);
+            const ym=getYM();
+            const detail=salesDetail[ym]||{};
+            const staffSales=detail.staffSales||{};
+            const japanStaffSales=detail.japanStaffSales||{};
+            const roleLabelsLocal={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
+            
+            // 사전급여대장 렌더링
+            document.getElementById('prePayrollTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
+                // OT 시간 계산
+                const empAttendance=attendance.filter(a=>a.employeeId===emp.id&&a.date?.startsWith(ym));
                 let otMinutes=0;
-                empAttendance.forEach(a=>{if(a.checkOut){const [h,m]=a.checkOut.split(':').map(Number);if(h*60+m>18*60)otMinutes+=(h*60+m)-18*60;}});
-                const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id);
+                empAttendance.forEach(a=>{
+                    if(a.checkOut){
+                        const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
+                        if(h*60+m>18*60)otMinutes+=(h*60+m)-18*60;
+                    }
+                });
+                const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
                 otMinutes+=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+                const otHours=(otMinutes/60).toFixed(1);
                 const otPay=Math.round(otMinutes/60*(emp.hourly||12000)*1.5);
-                let incentive=0;
-                if(emp.incentiveType==='staff_sales'&&emp.matchName){const sales=staffSales[emp.matchName];if(sales)incentive=Math.round(sales.amount*0.01);}
-                const grossPay=baseSalary+otPay+incentive;
-                const deductions=Math.round(grossPay*0.09);
-                const netPay=grossPay-deductions;
-                return `<tr><td><strong>${emp.name}</strong></td><td>${roleLabels[emp.role]||emp.role}</td><td class="text-right">${formatCurrency(baseSalary)}</td><td class="text-right">${formatCurrency(otPay)}</td><td class="text-right">${formatCurrency(incentive)}</td><td class="text-right" style="color:var(--accent-red)">-${formatCurrency(deductions)}</td><td class="text-right"><strong>${formatCurrency(netPay)}</strong></td></tr>`;
+                
+                // 인센티브 계산
+                const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
+                let incentiveCount=empRecords.length;
+                let incentiveAmount=0;
+                empRecords.forEach(r=>{
+                    const item=incentiveItems.find(i=>i.id===r.itemId);
+                    if(item&&item.type!=='japanSales'){
+                        incentiveAmount+=item.price||0;
+                    }
+                });
+                // 일본인 매출 인센티브
+                const japanItems=incentiveItems.filter(i=>i.type==='japanSales'&&i.employees?.includes(emp.id));
+                japanItems.forEach(item=>{
+                    if(emp.matchName&&japanStaffSales[emp.matchName]){
+                        incentiveAmount+=Math.round(japanStaffSales[emp.matchName]*(item.percent||1)/100);
+                    }
+                });
+                
+                return `<tr>
+                    <td><strong>${emp.name}</strong></td>
+                    <td>${roleLabelsLocal[emp.role]||emp.role}</td>
+                    <td>${emp.salary?emp.salary+'만원':'-'}</td>
+                    <td class="text-right">${otHours}H</td>
+                    <td class="text-right">${formatCurrency(otPay)}</td>
+                    <td class="text-right">${incentiveCount}건</td>
+                    <td class="text-right">${formatCurrency(incentiveAmount)}</td>
+                </tr>`;
             }).join('')||'<tr><td colspan="7" class="text-center">직원 없음</td></tr>';
         }
 
@@ -1263,8 +1320,9 @@
                     let totalNet=0;
                     let count=0;
                     
-                    // 루미의원 형식: 행8부터 데이터, 컬럼 인덱스 고정
-                    // 0:번호, 1:성명, 11:기본급, 33:지급합계, 46:공제합계, 47:차인지급액
+                    // 루미의원 급여대장 형식 (노무사 작성)
+                    // 컬럼 인덱스: 0:번호, 1:성명, 11:기본급, 14:추가연장수당(=실제OT), 19:인센티브, 33:지급합계, 46:공제합계, 47:차인지급액
+                    // 추가연장수당 = 실제 OT 금액 (중요!)
                     for(let i=8;i<json.length;i++){
                         const row=json[i];
                         if(!row||!row[1])continue;
@@ -1273,10 +1331,13 @@
                         if(!name||name.includes('합계')||name.includes('총')||name==='NaN')continue;
                         
                         const basePay=parseInt(row[11])||0;
+                        // 추가연장수당 = 실제 OT 수당 (컬럼14)
+                        const extraOT=parseInt(row[14])||0;
+                        // 인센티브 (컬럼19)
+                        const incentive=parseInt(row[19])||0;
                         const grossPay=parseInt(row[33])||0;
                         const deduction=parseInt(row[46])||0;
                         const netPay=parseInt(row[47])||0;
-                        const allowance=grossPay-basePay;
                         
                         if(netPay===0&&grossPay===0)continue;
                         
@@ -1284,10 +1345,11 @@
                             yearMonth,
                             name,
                             basePay,
-                            allowance:allowance>0?allowance:0,
+                            extraOT,      // 추가연장수당 = 실제 OT (중요!)
+                            incentive,    // 인센티브
                             grossPay,
                             deduction,
-                            netPay,
+                            netPay,       // 실수령액
                             uploadedAt:firebase.firestore.FieldValue.serverTimestamp()
                         };
                         batch.set(db.collection('payroll').doc(),payrollDoc);
@@ -1686,13 +1748,33 @@
             const hourly=salary>0?Math.round(salary*10000/2508):12000;
             document.getElementById('empHourly').value=hourly;
         });
+        function toggleEmpIdAuto(){
+            const auto=document.getElementById('empIdAuto').checked;
+            const input=document.getElementById('empId');
+            input.readOnly=auto;
+            input.style.background=auto?'#f5f5f0':'#fff';
+            input.placeholder=auto?'자동생성됨':'사번 직접 입력';
+            if(auto)input.value='';
+        }
         function editEmployee(id){openEmployeeModal(id);}
         async function saveEmployee(){
             const editId=document.getElementById('empEditId').value;
             const name=document.getElementById('empName').value.trim();
             const joinDate=document.getElementById('empJoinDate').value;
             if(!name||!joinDate){alert('이름과 입사일은 필수입니다.');return;}
-            const empId=editId||generateEmployeeId(name,joinDate);
+            
+            // 사번 결정: 수정 시 기존 ID, 신규 시 수동입력 or 자동생성
+            let empId=editId;
+            if(!editId){
+                const autoChecked=document.getElementById('empIdAuto').checked;
+                const manualId=document.getElementById('empId').value.trim().toUpperCase();
+                if(!autoChecked&&manualId){
+                    empId=manualId;
+                }else{
+                    empId=generateEmployeeId(name,joinDate);
+                }
+            }
+            
             const salary=parseInt(document.getElementById('empSalary').value)||0;
             const data={
                 name,
@@ -1952,24 +2034,65 @@
             }catch(err){alert('삭제 실패: '+err.message);}
         }
 
-        // Export Salary
-        function exportSalary(){
-            const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
-            const rows=[['직원','직급','기본급','OT수당','인센티브','공제','실수령액']];
+        // Export Pre-Payroll (노무사 전달용)
+        function exportPrePayroll(){
+            const ym=getYM();
+            const detail=salesDetail[ym]||{};
+            const japanStaffSales=detail.japanStaffSales||{};
+            const roleLabelsLocal={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
+            
+            const rows=[['직원','사번','직급','연봉(만원)','시급','OT시간(H)','예상OT수당','인센티브실적(건)','예상인센티브']];
+            
             employees.filter(e=>e.status==='active').forEach(emp=>{
-                const baseSalary=(emp.hourly||12000)*209;
-                const empAttendance=attendance.filter(a=>a.employeeId===emp.id);
-                let otMinutes=0;empAttendance.forEach(a=>{if(a.checkOut){const [h,m]=a.checkOut.split(':').map(Number);if(h*60+m>18*60)otMinutes+=(h*60+m)-18*60;}});
-                const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id);
+                // OT 계산
+                const empAttendance=attendance.filter(a=>a.employeeId===emp.id&&a.date?.startsWith(ym));
+                let otMinutes=0;
+                empAttendance.forEach(a=>{
+                    if(a.checkOut){
+                        const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
+                        if(h*60+m>18*60)otMinutes+=(h*60+m)-18*60;
+                    }
+                });
+                const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
                 otMinutes+=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+                const otHours=(otMinutes/60).toFixed(1);
                 const otPay=Math.round(otMinutes/60*(emp.hourly||12000)*1.5);
-                let incentive=0;if(emp.incentiveType==='staff_sales'&&emp.matchName){const sales=staffSales[emp.matchName];if(sales)incentive=Math.round(sales.amount*0.01);}
-                const grossPay=baseSalary+otPay+incentive;const deductions=Math.round(grossPay*0.09);const netPay=grossPay-deductions;
-                rows.push([emp.name,emp.role,baseSalary,otPay,incentive,deductions,netPay]);
+                
+                // 인센티브 계산
+                const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
+                let incentiveCount=empRecords.length;
+                let incentiveAmount=0;
+                empRecords.forEach(r=>{
+                    const item=incentiveItems.find(i=>i.id===r.itemId);
+                    if(item&&item.type!=='japanSales'){
+                        incentiveAmount+=item.price||0;
+                    }
+                });
+                // 일본인 매출 인센티브
+                const japanItems=incentiveItems.filter(i=>i.type==='japanSales'&&i.employees?.includes(emp.id));
+                japanItems.forEach(item=>{
+                    if(emp.matchName&&japanStaffSales[emp.matchName]){
+                        incentiveAmount+=Math.round(japanStaffSales[emp.matchName]*(item.percent||1)/100);
+                    }
+                });
+                
+                rows.push([
+                    emp.name,
+                    emp.id,
+                    roleLabelsLocal[emp.role]||emp.role,
+                    emp.salary||0,
+                    emp.hourly||12000,
+                    otHours,
+                    otPay,
+                    incentiveCount,
+                    incentiveAmount
+                ]);
             });
-            const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb,ws,'급여명세');
-            XLSX.writeFile(wb,'급여명세_'+ym+'.xlsx');
+            
+            const ws=XLSX.utils.aoa_to_sheet(rows);
+            const wb=XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb,ws,'사전급여대장');
+            XLSX.writeFile(wb,'사전급여대장_'+ym+'_노무사전달용.xlsx');
         }
 
         // Initialize
