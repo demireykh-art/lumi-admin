@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -14,118 +15,130 @@
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{height:100%;overflow:hidden}
         body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text)}
-        
-        .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:2rem;position:fixed;inset:0;z-index:2000;background:var(--bg)}
-        .login-screen.hidden{display:none}
-        .login-logo{font-family:'Cormorant Garamond',serif;letter-spacing:4px;color:var(--text-muted);font-size:.8rem;margin-bottom:.25rem}
-        .login-title{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:500;letter-spacing:2px;margin-bottom:2rem}
-        .login-form{width:100%;max-width:300px}
-        .login-input{width:100%;padding:1rem;background:#fff;border:1px solid var(--border);font-size:1rem;margin-bottom:.75rem}
-        .login-input:focus{outline:none;border-color:var(--primary)}
-        .login-btn{width:100%;padding:1rem;background:var(--text);border:none;color:#fff;font-size:.9rem;cursor:pointer;letter-spacing:1px}
-        .login-error{color:var(--red);font-size:.85rem;margin-bottom:.75rem;text-align:center;min-height:1.2rem}
-        .pw-wrap{position:relative}
-        .pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;margin-top:-6px}
-        
-        .pw-setup{display:none;position:fixed;inset:0;z-index:2001;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;padding:2rem}
-        .pw-setup.active{display:flex}
-        .pw-setup-title{font-size:1.2rem;font-weight:600;margin-bottom:.5rem}
-        .pw-setup-desc{color:var(--text-secondary);font-size:.9rem;margin-bottom:1.5rem;text-align:center}
-        
-        .app-container{display:none;flex-direction:column;height:100vh;height:100dvh}
-        .app-container.active{display:flex}
-        
-        .header{background:var(--bg-card);border-bottom:1px solid var(--border);padding:1rem;position:sticky;top:0;z-index:100}
-        .header-content{display:flex;justify-content:space-between;align-items:center}
-        .header-logo{font-family:'Cormorant Garamond',serif}
-        .header-logo-sub{font-size:.6rem;letter-spacing:3px;color:var(--text-muted)}
-        .header-logo-text{font-size:1.3rem;font-weight:500;letter-spacing:2px}
-        .header-user{display:flex;align-items:center;gap:.75rem}
-        .user-name{font-weight:500;font-size:.9rem}
-        .logout-btn{padding:.4rem .8rem;border:1px solid var(--border);background:transparent;font-size:.75rem;cursor:pointer;letter-spacing:1px}
-        
-        .content{flex:1;overflow-y:auto;padding:1rem;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
-        
-        .card{background:var(--bg-card);border:1px solid var(--border);padding:1.25rem;margin-bottom:1rem}
-        .card-title{font-weight:600;margin-bottom:1rem;font-size:.95rem;display:flex;justify-content:space-between;align-items:center}
-        .info-row{display:flex;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid var(--border)}
-        .info-row:last-child{border-bottom:none}
-        .info-label{color:var(--text-secondary);font-size:.9rem}
-        .info-value{font-weight:500;font-size:.9rem}
-        
-        .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem}
-        .stat-card{background:var(--bg-card);border:1px solid var(--border);padding:1rem;text-align:center}
-        .stat-value{font-size:1.4rem;font-weight:700;color:var(--primary)}
-        .stat-label{font-size:.7rem;color:var(--text-muted);margin-top:.25rem}
-        .stat-card.green .stat-value{color:var(--green)}
-        .stat-card.orange .stat-value{color:var(--orange)}
-        .stat-card.purple .stat-value{color:var(--purple)}
-        .stat-card.red .stat-value{color:var(--red)}
-        
-        .btn{width:100%;padding:1rem;border:none;font-size:.95rem;font-weight:500;cursor:pointer;margin-bottom:.75rem}
-        .btn-primary{background:var(--text);color:#fff}
-        .btn-secondary{background:var(--bg);border:1px solid var(--border);color:var(--text)}
-        .btn-gold{background:var(--primary);color:#fff}
-        .btn-green{background:var(--green);color:#fff}
-        .btn-disabled{background:#ccc;color:#666;cursor:not-allowed}
-        
-        .tab-content{display:none}
-        .tab-content.active{display:block}
-        
-        .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg-card);border-top:1px solid var(--border);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:100}
-        .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:.6rem .25rem;cursor:pointer;color:var(--text-muted);font-size:.65rem;transition:color .2s}
-        .nav-item.active{color:var(--primary)}
-        .nav-item .nav-icon{font-size:1.2rem;margin-bottom:.2rem}
-        
-        .modal{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem}
-        .modal.active{display:flex}
-        .modal-content{background:var(--bg-card);width:100%;max-width:400px;max-height:90vh;overflow-y:auto}
-        .modal-header{padding:1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-        .modal-title{font-weight:600}
-        .modal-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-muted)}
-        .modal-body{padding:1rem}
-        .modal-footer{padding:1rem;border-top:1px solid var(--border);display:flex;gap:.5rem}
-        .modal-footer .btn{margin-bottom:0}
-        
-        .form-group{margin-bottom:1rem}
-        .form-label{display:block;font-size:.85rem;color:var(--text-secondary);margin-bottom:.5rem}
-        .form-input,.form-select{width:100%;padding:.75rem;border:1px solid var(--border);font-size:.95rem;background:#fff}
-        .form-input:focus,.form-select:focus{outline:none;border-color:var(--primary)}
-        
-        .badge{display:inline-block;padding:.25rem .5rem;font-size:.75rem;border-radius:2px}
-        .badge-green{background:rgba(90,122,90,.15);color:var(--green)}
-        .badge-orange{background:rgba(196,149,106,.15);color:var(--orange)}
-        .badge-red{background:rgba(168,90,90,.15);color:var(--red)}
-        .badge-purple{background:rgba(122,106,138,.15);color:var(--purple)}
-        .badge-gold{background:rgba(154,139,122,.15);color:var(--primary)}
-        
-        .list-item{display:flex;justify-content:space-between;align-items:center;padding:.75rem 0;border-bottom:1px solid var(--border)}
-        .list-item:last-child{border-bottom:none}
-        .list-item-title{font-weight:500;font-size:.9rem}
-        .list-item-sub{font-size:.8rem;color:var(--text-muted)}
-        
-        .leave-item{padding:.75rem;background:var(--bg);margin-bottom:.5rem;border-left:3px solid var(--border)}
-        .leave-item.pending{border-left-color:var(--orange)}
-        .leave-item.approved{border-left-color:var(--green)}
-        .leave-item.rejected{border-left-color:var(--red)}
-        
-        .date-tags{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;min-height:2rem}
-        .date-tag{display:inline-flex;align-items:center;gap:.25rem;padding:.35rem .6rem;background:var(--bg);border:1px solid var(--border);font-size:.85rem}
-        .date-tag-remove{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;line-height:1}
-        
-        .progress-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:.5rem}
-        .progress-fill{height:100%;background:var(--green);transition:width .3s}
-        .progress-fill.warning{background:var(--orange)}
-        .progress-fill.danger{background:var(--red)}
-        
-        .month-select{display:flex;align-items:center;gap:.5rem}
-        .month-select select{padding:.4rem .6rem;border:1px solid var(--border);font-size:.85rem;background:#fff}
-        
-        .gps-status{font-size:.8rem;padding:.5rem;text-align:center;margin-bottom:1rem;border-radius:4px}
-        .gps-status.ok{background:rgba(90,122,90,.1);color:var(--green)}
-        .gps-status.error{background:rgba(168,90,90,.1);color:var(--red)}
-        .gps-status.loading{background:rgba(154,139,122,.1);color:var(--primary)}
-    </style>
+
+```
+    .login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:2rem;position:fixed;inset:0;z-index:2000;background:var(--bg)}
+    .login-screen.hidden{display:none}
+    .login-logo{font-family:'Cormorant Garamond',serif;letter-spacing:4px;color:var(--text-muted);font-size:.8rem;margin-bottom:.25rem}
+    .login-title{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:500;letter-spacing:2px;margin-bottom:2rem}
+    .login-form{width:100%;max-width:300px}
+    .login-input{width:100%;padding:1rem;background:#fff;border:1px solid var(--border);font-size:1rem;margin-bottom:.75rem}
+    .login-input:focus{outline:none;border-color:var(--primary)}
+    .login-btn{width:100%;padding:1rem;background:var(--text);border:none;color:#fff;font-size:.9rem;cursor:pointer;letter-spacing:1px}
+    .login-error{color:var(--red);font-size:.85rem;margin-bottom:.75rem;text-align:center;min-height:1.2rem}
+    .pw-wrap{position:relative}
+    .pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;margin-top:-6px}
+    
+    .pw-setup{display:none;position:fixed;inset:0;z-index:2001;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;padding:2rem}
+    .pw-setup.active{display:flex}
+    .pw-setup-title{font-size:1.2rem;font-weight:600;margin-bottom:.5rem}
+    .pw-setup-desc{color:var(--text-secondary);font-size:.9rem;margin-bottom:1.5rem;text-align:center}
+    
+    .app-container{display:none;flex-direction:column;height:100vh;height:100dvh}
+    .app-container.active{display:flex}
+    
+    .header{background:var(--bg-card);border-bottom:1px solid var(--border);padding:1rem;position:sticky;top:0;z-index:100}
+    .header-content{display:flex;justify-content:space-between;align-items:center}
+    .header-logo{font-family:'Cormorant Garamond',serif}
+    .header-logo-sub{font-size:.6rem;letter-spacing:3px;color:var(--text-muted)}
+    .header-logo-text{font-size:1.3rem;font-weight:500;letter-spacing:2px}
+    .header-user{display:flex;align-items:center;gap:.75rem}
+    .user-name{font-weight:500;font-size:.9rem}
+    .logout-btn{padding:.4rem .8rem;border:1px solid var(--border);background:transparent;font-size:.75rem;cursor:pointer;letter-spacing:1px}
+    
+    .content{flex:1;overflow-y:auto;padding:1rem;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+    
+    .card{background:var(--bg-card);border:1px solid var(--border);padding:1.25rem;margin-bottom:1rem}
+    .card-title{font-weight:600;margin-bottom:1rem;font-size:.95rem;display:flex;justify-content:space-between;align-items:center}
+    .info-row{display:flex;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid var(--border)}
+    .info-row:last-child{border-bottom:none}
+    .info-label{color:var(--text-secondary);font-size:.9rem}
+    .info-value{font-weight:500;font-size:.9rem}
+    
+    .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem}
+    .stat-card{background:var(--bg-card);border:1px solid var(--border);padding:1rem;text-align:center}
+    .stat-value{font-size:1.4rem;font-weight:700;color:var(--primary)}
+    .stat-label{font-size:.7rem;color:var(--text-muted);margin-top:.25rem}
+    .stat-card.green .stat-value{color:var(--green)}
+    .stat-card.orange .stat-value{color:var(--orange)}
+    .stat-card.purple .stat-value{color:var(--purple)}
+    .stat-card.red .stat-value{color:var(--red)}
+    
+    .btn{width:100%;padding:1rem;border:none;font-size:.95rem;font-weight:500;cursor:pointer;margin-bottom:.75rem}
+    .btn-primary{background:var(--text);color:#fff}
+    .btn-secondary{background:var(--bg);border:1px solid var(--border);color:var(--text)}
+    .btn-gold{background:var(--primary);color:#fff}
+    .btn-green{background:var(--green);color:#fff}
+    .btn-disabled{background:#ccc;color:#666;cursor:not-allowed}
+    
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg-card);border-top:1px solid var(--border);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:100}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:.6rem .25rem;cursor:pointer;color:var(--text-muted);font-size:.65rem;transition:color .2s}
+    .nav-item.active{color:var(--primary)}
+    .nav-item .nav-icon{font-size:1.2rem;margin-bottom:.2rem}
+    
+    .modal{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem}
+    .modal.active{display:flex}
+    .modal-content{background:var(--bg-card);width:100%;max-width:400px;max-height:90vh;overflow-y:auto}
+    .modal-header{padding:1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+    .modal-title{font-weight:600}
+    .modal-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-muted)}
+    .modal-body{padding:1rem}
+    .modal-footer{padding:1rem;border-top:1px solid var(--border);display:flex;gap:.5rem}
+    .modal-footer .btn{margin-bottom:0}
+    
+    .form-group{margin-bottom:1rem}
+    .form-label{display:block;font-size:.85rem;color:var(--text-secondary);margin-bottom:.5rem}
+    .form-input,.form-select{width:100%;padding:.75rem;border:1px solid var(--border);font-size:.95rem;background:#fff}
+    .form-input:focus,.form-select:focus{outline:none;border-color:var(--primary)}
+    
+    .badge{display:inline-block;padding:.25rem .5rem;font-size:.75rem;border-radius:2px}
+    .badge-green{background:rgba(90,122,90,.15);color:var(--green)}
+    .badge-orange{background:rgba(196,149,106,.15);color:var(--orange)}
+    .badge-red{background:rgba(168,90,90,.15);color:var(--red)}
+    .badge-purple{background:rgba(122,106,138,.15);color:var(--purple)}
+    .badge-gold{background:rgba(154,139,122,.15);color:var(--primary)}
+    
+    .list-item{display:flex;justify-content:space-between;align-items:center;padding:.75rem 0;border-bottom:1px solid var(--border)}
+    .list-item:last-child{border-bottom:none}
+    .list-item-title{font-weight:500;font-size:.9rem}
+    .list-item-sub{font-size:.8rem;color:var(--text-muted)}
+    
+    .leave-item{padding:.75rem;background:var(--bg);margin-bottom:.5rem;border-left:3px solid var(--border)}
+    .leave-item.pending{border-left-color:var(--orange)}
+    .leave-item.approved{border-left-color:var(--green)}
+    .leave-item.rejected{border-left-color:var(--red)}
+    
+    .date-tags{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;min-height:2rem}
+    .date-tag{display:inline-flex;align-items:center;gap:.25rem;padding:.35rem .6rem;background:var(--bg);border:1px solid var(--border);font-size:.85rem}
+    .date-tag-remove{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;line-height:1}
+    
+    .progress-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:.5rem}
+    .progress-fill{height:100%;background:var(--green);transition:width .3s}
+    .progress-fill.warning{background:var(--orange)}
+    .progress-fill.danger{background:var(--red)}
+    
+    .golden-slider{display:flex;gap:.5rem;overflow-x:auto;padding:.25rem 0;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+    .golden-slider::-webkit-scrollbar{height:4px}
+    .golden-slider::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+    .golden-card{flex:0 0 140px;scroll-snap-align:start;background:linear-gradient(135deg,#fff9f0,#fff);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:8px;padding:.6rem}
+    .golden-card .gc-month{font-size:.65rem;color:var(--text-muted);font-weight:600}
+    .golden-card .gc-name{font-size:.8rem;font-weight:600;color:var(--text);margin:.2rem 0}
+    .golden-card .gc-dates{font-size:.7rem;color:var(--gold);font-weight:500}
+    .golden-card .gc-tip{font-size:.65rem;color:var(--text-muted);margin-top:.3rem;padding-top:.3rem;border-top:1px dashed var(--border)}
+    
+    .month-select{display:flex;align-items:center;gap:.5rem}
+    .month-select select{padding:.4rem .6rem;border:1px solid var(--border);font-size:.85rem;background:#fff}
+    
+    .gps-status{font-size:.8rem;padding:.5rem;text-align:center;margin-bottom:1rem;border-radius:4px}
+    .gps-status.ok{background:rgba(90,122,90,.1);color:var(--green)}
+    .gps-status.error{background:rgba(168,90,90,.1);color:var(--red)}
+    .gps-status.loading{background:rgba(154,139,122,.1);color:var(--primary)}
+</style>
+```
+
 </head>
 <body>
     <div class="login-screen" id="loginScreen">
@@ -142,1201 +155,1245 @@
             <button type="button" class="login-btn" id="biometricBtn" style="display:none;margin-top:.5rem;background:var(--primary)" onclick="biometricLogin()">🔐 생체인식 로그인</button>
         </form>
     </div>
-    
-    <div class="pw-setup" id="pwSetup">
-        <div class="pw-setup-title">비밀번호 설정</div>
-        <div class="pw-setup-desc">최초 로그인입니다.<br>새 비밀번호를 설정해주세요.</div>
-        <form class="login-form" onsubmit="setupPassword(); return false;">
-            <div class="pw-wrap">
-                <input type="password" class="login-input" id="newPw1" placeholder="새 비밀번호 (4자 이상)">
-                <button type="button" class="pw-toggle" onclick="togglePw('newPw1',this)">👁</button>
-            </div>
-            <div class="pw-wrap">
-                <input type="password" class="login-input" id="newPw2" placeholder="비밀번호 확인">
-                <button type="button" class="pw-toggle" onclick="togglePw('newPw2',this)">👁</button>
-            </div>
-            <div class="login-error" id="pwError"></div>
-            <button type="submit" class="login-btn">설정 완료</button>
-        </form>
-    </div>
-    
-    <div class="app-container" id="appContainer">
-        <header class="header">
-            <div class="header-content">
-                <div class="header-logo">
-                    <div class="header-logo-sub">THE CLINIC</div>
-                    <div class="header-logo-text">LUMI</div>
-                </div>
-                <div class="header-user">
-                    <span class="user-name" id="userName">-</span>
-                    <button class="logout-btn" onclick="logout()">LOGOUT</button>
-                </div>
-            </div>
-        </header>
-        
-        <div class="content">
-            <!-- 출퇴근 탭 -->
-            <div class="tab-content active" id="tab-attendance">
-                <div class="gps-status loading" id="gpsStatus">📍 위치 확인 중...</div>
-                <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-value" id="attWorkDays">0</div><div class="stat-label">출근일</div></div>
-                    <div class="stat-card orange"><div class="stat-value" id="attLate">0</div><div class="stat-label">지각</div></div>
-                    <div class="stat-card green"><div class="stat-value" id="attEarly">0</div><div class="stat-label">조퇴</div></div>
-                </div>
-                <div class="card">
-                    <div class="card-title">오늘 근무</div>
-                    <div class="info-row"><span class="info-label">출근</span><span class="info-value" id="todayCheckIn">-</span></div>
-                    <div class="info-row"><span class="info-label">퇴근</span><span class="info-value" id="todayCheckOut">-</span></div>
-                    <div class="info-row"><span class="info-label">상태</span><span class="info-value" id="todayStatus">-</span></div>
-                </div>
-                <button class="btn btn-primary" id="checkInBtn" onclick="checkIn()">출근하기</button>
-                <button class="btn btn-gold" id="checkOutBtn" onclick="checkOut()" style="display:none">퇴근하기</button>
-            </div>
-            
-            <!-- OT 탭 -->
-            <div class="tab-content" id="tab-ot">
-                <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-value" id="otTotal">0H</div><div class="stat-label">이번달 OT</div></div>
-                    <div class="stat-card purple"><div class="stat-value" id="otLunch">0H</div><div class="stat-label">점심 OT</div></div>
-                    <div class="stat-card orange"><div class="stat-value" id="otAfter">0H</div><div class="stat-label">퇴근후 OT</div></div>
-                </div>
-                <div class="card">
-                    <div class="card-title">예상 OT수당 (세전)</div>
-                    <div class="info-row"><span class="info-label">시급 × 1.5</span><span class="info-value" id="otHourlyRate">-</span></div>
-                    <div class="info-row"><span class="info-label">예상 금액</span><span class="info-value" id="otExpected" style="color:var(--primary);font-weight:700">₩0</span></div>
-                </div>
-                <button class="btn btn-primary" onclick="openLunchOTModal()">점심 OT 입력</button>
-                <div class="card">
-                    <div class="card-title">이번 달 OT 내역</div>
-                    <div id="otList"><div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div></div>
-                </div>
-            </div>
-            
-            <!-- 식사 탭 -->
-            <div class="tab-content" id="tab-meal">
-                <div class="card">
-                    <div class="card-title">이번 달 식대 현황</div>
-                    <div class="info-row"><span class="info-label">월 한도</span><span class="info-value">₩300,000</span></div>
-                    <div class="info-row"><span class="info-label">사용 금액</span><span class="info-value" id="mealUsed">₩0</span></div>
-                    <div class="info-row"><span class="info-label">남은 금액</span><span class="info-value" id="mealRemain" style="color:var(--green);font-weight:700">₩300,000</span></div>
-                    <div class="progress-bar"><div class="progress-fill" id="mealProgress" style="width:0%"></div></div>
-                </div>
-                <button class="btn btn-primary" onclick="openMealModal()">식사 입력</button>
-                <div class="card">
-                    <div class="card-title">이번 달 식사 내역</div>
-                    <div id="mealList"><div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div></div>
-                </div>
-            </div>
-            
-            <!-- 연차 탭 -->
-            <div class="tab-content" id="tab-leave">
-                <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-value" id="leaveTotal">15</div><div class="stat-label">총 연차</div></div>
-                    <div class="stat-card orange"><div class="stat-value" id="leaveUsed">0</div><div class="stat-label">사용</div></div>
-                    <div class="stat-card green"><div class="stat-value" id="leaveRemain">15</div><div class="stat-label">잔여</div></div>
-                </div>
-                <button class="btn btn-primary" onclick="openLeaveModal()">연차 신청</button>
-                <div class="card">
-                    <div class="card-title">신청 내역</div>
-                    <div id="leaveHistory"><div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div></div>
-                </div>
-            </div>
-            
-            <!-- 인센티브 탭 -->
-            <div class="tab-content" id="tab-incentive">
-                <div class="stats-grid" style="grid-template-columns:repeat(2,1fr)">
-                    <div class="stat-card"><div class="stat-value" id="incTotalCount">0</div><div class="stat-label">이번달 실적</div></div>
-                    <div class="stat-card green"><div class="stat-value" id="incTotalAmount">₩0</div><div class="stat-label">예상 인센티브</div></div>
-                </div>
-                <div class="card">
-                    <div class="card-title">나의 인센티브 항목</div>
-                    <div id="myIncentiveItems"><div style="text-align:center;color:var(--text-muted);padding:1rem">등록된 항목이 없습니다</div></div>
-                </div>
-                <button class="btn btn-primary" onclick="openIncentiveModal()">인센티브 실적 입력</button>
-                <div class="card">
-                    <div class="card-title">이번 달 실적 내역</div>
-                    <div id="incentiveRecords"><div style="text-align:center;color:var(--text-muted);padding:1rem">입력된 실적이 없습니다</div></div>
-                </div>
-            </div>
-            
-            <!-- 내정보 탭 -->
-            <div class="tab-content" id="tab-info">
-                <div class="card">
-                    <div class="card-title">내 정보</div>
-                    <div class="info-row"><span class="info-label">이름</span><span class="info-value" id="infoName">-</span></div>
-                    <div class="info-row"><span class="info-label">직급</span><span class="info-value" id="infoRole">-</span></div>
-                    <div class="info-row"><span class="info-label">입사일</span><span class="info-value" id="infoJoinDate">-</span></div>
-                    <div class="info-row"><span class="info-label">근속기간</span><span class="info-value" id="infoTenure">-</span></div>
-                </div>
-                <div class="card">
-                    <div class="card-title">
-                        <span id="salaryTitle">급여 정보</span>
-                        <div class="month-select">
-                            <select id="salaryMonth" onchange="renderSalary()"></select>
-                        </div>
-                    </div>
-                    <div class="info-row"><span class="info-label">실수령액</span><span class="info-value" id="infoNetPay">-</span></div>
-                    <div class="info-row"><span class="info-label">OT수당</span><span class="info-value" id="infoOT">-</span></div>
-                    <div class="info-row"><span class="info-label">인센티브</span><span class="info-value" id="infoIncentive">-</span></div>
-                </div>
-                <div class="card">
-                    <div class="card-title">🔐 생체인식 로그인</div>
-                    <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem">Face ID 또는 지문으로 빠르게 로그인하세요.</p>
-                    <button class="btn btn-gold" onclick="registerBiometric()" id="biometricRegisterBtn">생체인식 등록</button>
-                    <div id="biometricStatus" style="font-size:.85rem;color:var(--text-muted);margin-top:.5rem;text-align:center"></div>
-                </div>
-            </div>
-        </div>
-        
-        <nav class="bottom-nav">
-            <div class="nav-item active" data-tab="attendance"><div class="nav-icon">📅</div>출퇴근</div>
-            <div class="nav-item" data-tab="meal"><div class="nav-icon">🍽</div>식사</div>
-            <div class="nav-item" data-tab="ot"><div class="nav-icon">⏰</div>OT</div>
-            <div class="nav-item" data-tab="leave"><div class="nav-icon">🏖</div>연차</div>
-            <div class="nav-item" data-tab="incentive"><div class="nav-icon">💎</div>인센티브</div>
-            <div class="nav-item" data-tab="info"><div class="nav-icon">👤</div>내정보</div>
-        </nav>
-    </div>
-    
-    <!-- 점심 OT 모달 -->
-    <div class="modal" id="lunchOTModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">점심 OT 입력</div>
-                <button class="modal-close" onclick="closeModal('lunchOTModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">날짜</label>
-                    <input type="date" class="form-input" id="lunchOTDate">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">시간 (분)</label>
-                    <input type="number" class="form-input" id="lunchOTMinutes" value="30" min="0" max="60">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">사유</label>
-                    <input type="text" class="form-input" id="lunchOTReason" placeholder="예: 점심시간 업무">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('lunchOTModal')">취소</button>
-                <button class="btn btn-primary" onclick="saveLunchOT()">저장</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 식사 입력 모달 -->
-    <div class="modal" id="mealModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">식사 입력</div>
-                <button class="modal-close" onclick="closeModal('mealModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">날짜</label>
-                    <input type="date" class="form-input" id="mealDate">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">금액 (원)</label>
-                    <input type="number" class="form-input" id="mealAmount" placeholder="예: 10000">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">메모</label>
-                    <input type="text" class="form-input" id="mealMemo" placeholder="예: 점심 김치찌개">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('mealModal')">취소</button>
-                <button class="btn btn-primary" onclick="saveMeal()">저장</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 연차 신청 모달 -->
-    <div class="modal" id="leaveModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">연차 신청</div>
-                <button class="modal-close" onclick="closeModal('leaveModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">유형</label>
-                    <select class="form-select" id="leaveType">
-                        <option value="연차">연차</option>
-                        <option value="반차(오전)">반차 (오전)</option>
-                        <option value="반차(오후)">반차 (오후)</option>
-                        <option value="오프">오프</option>
-                        <option value="병가">병가</option>
-                        <option value="경조사">경조사</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">날짜 추가</label>
-                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
-                        <input type="date" class="form-input" id="leaveDateInput" style="flex:1">
-                        <button class="btn btn-secondary" onclick="addLeaveDate()" style="width:auto;padding:.75rem 1rem;margin:0">추가</button>
-                    </div>
-                    <div class="date-tags" id="leaveDateTags"><span style="color:var(--text-muted);font-size:.85rem">날짜를 추가해주세요</span></div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">사유</label>
-                    <input type="text" class="form-input" id="leaveReason" placeholder="사유 입력 (선택)">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('leaveModal')">취소</button>
-                <button class="btn btn-primary" onclick="submitLeave()">신청하기</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 인센티브 입력 모달 -->
-    <div class="modal" id="incentiveModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">인센티브 실적 입력</div>
-                <button class="modal-close" onclick="closeModal('incentiveModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">항목 선택</label>
-                    <select class="form-select" id="incItemSelect">
-                        <option value="">항목 선택</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">고객명</label>
-                    <input type="text" class="form-input" id="incCustomerName" placeholder="고객 이름">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">차트번호</label>
-                    <input type="text" class="form-input" id="incChartNo" placeholder="차트번호">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('incentiveModal')">닫기</button>
-                <button class="btn btn-primary" onclick="addIncentiveRecord()">+ 1건 추가</button>
-            </div>
-        </div>
-    </div>
 
-    <script>
-        const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
-        firebase.initializeApp(firebaseConfig);
-        const db=firebase.firestore();
+```
+<div class="pw-setup" id="pwSetup">
+    <div class="pw-setup-title">비밀번호 설정</div>
+    <div class="pw-setup-desc">최초 로그인입니다.<br>새 비밀번호를 설정해주세요.</div>
+    <form class="login-form" onsubmit="setupPassword(); return false;">
+        <div class="pw-wrap">
+            <input type="password" class="login-input" id="newPw1" placeholder="새 비밀번호 (4자 이상)">
+            <button type="button" class="pw-toggle" onclick="togglePw('newPw1',this)">👁</button>
+        </div>
+        <div class="pw-wrap">
+            <input type="password" class="login-input" id="newPw2" placeholder="비밀번호 확인">
+            <button type="button" class="pw-toggle" onclick="togglePw('newPw2',this)">👁</button>
+        </div>
+        <div class="login-error" id="pwError"></div>
+        <button type="submit" class="login-btn">설정 완료</button>
+    </form>
+</div>
+
+<div class="app-container" id="appContainer">
+    <header class="header">
+        <div class="header-content">
+            <div class="header-logo">
+                <div class="header-logo-sub">THE CLINIC</div>
+                <div class="header-logo-text">LUMI</div>
+            </div>
+            <div class="header-user">
+                <span class="user-name" id="userName">-</span>
+                <button class="logout-btn" onclick="logout()">LOGOUT</button>
+            </div>
+        </div>
+    </header>
+    
+    <div class="content">
+        <!-- 출퇴근 탭 -->
+        <div class="tab-content active" id="tab-attendance">
+            <div class="gps-status loading" id="gpsStatus">📍 위치 확인 중...</div>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="attWorkDays">0</div><div class="stat-label">출근일</div></div>
+                <div class="stat-card orange"><div class="stat-value" id="attLate">0</div><div class="stat-label">지각</div></div>
+                <div class="stat-card green"><div class="stat-value" id="attEarly">0</div><div class="stat-label">조퇴</div></div>
+            </div>
+            <div class="card">
+                <div class="card-title">오늘 근무</div>
+                <div class="info-row"><span class="info-label">출근</span><span class="info-value" id="todayCheckIn">-</span></div>
+                <div class="info-row"><span class="info-label">퇴근</span><span class="info-value" id="todayCheckOut">-</span></div>
+                <div class="info-row"><span class="info-label">상태</span><span class="info-value" id="todayStatus">-</span></div>
+            </div>
+            <button class="btn btn-primary" id="checkInBtn" onclick="checkIn()">출근하기</button>
+            <button class="btn btn-gold" id="checkOutBtn" onclick="checkOut()" style="display:none">퇴근하기</button>
+        </div>
         
-        // 클리닉 위치 (GPS 출퇴근용)
-        const CLINIC_LAT=37.5037435;  // 루미클리닉 위도
-        const CLINIC_LNG=127.0892416; // 루미클리닉 경도
-        const CLINIC_RADIUS=100;   // 100m 반경
+        <!-- OT 탭 -->
+        <div class="tab-content" id="tab-ot">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="otTotal">0H</div><div class="stat-label">이번달 OT</div></div>
+                <div class="stat-card purple"><div class="stat-value" id="otLunch">0H</div><div class="stat-label">점심 OT</div></div>
+                <div class="stat-card orange"><div class="stat-value" id="otAfter">0H</div><div class="stat-label">퇴근후 OT</div></div>
+            </div>
+            <div class="card">
+                <div class="card-title">예상 OT수당 (세전)</div>
+                <div class="info-row"><span class="info-label">시급 × 1.5</span><span class="info-value" id="otHourlyRate">-</span></div>
+                <div class="info-row"><span class="info-label">예상 금액</span><span class="info-value" id="otExpected" style="color:var(--primary);font-weight:700">₩0</span></div>
+            </div>
+            <button class="btn btn-primary" onclick="openLunchOTModal()">점심 OT 입력</button>
+            <div class="card">
+                <div class="card-title">이번 달 OT 내역</div>
+                <div id="otList"><div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div></div>
+            </div>
+        </div>
         
-        let currentUser=null;
-        let attendance=[];
-        let lunchOT=[];
-        let mealRecords=[];
-        let incentiveItems=[];
-        let incentiveRecords=[];
-        let leaveRequests=[];
-        let payrollData=[];
-        let selectedLeaveDates=[];
-        let userLocation=null;
-        let autoLogoutTimer=null;
-        let autoLogoutMinutes=10; // 기본 10분, admin에서 설정 가능
+        <!-- 식사 탭 -->
+        <div class="tab-content" id="tab-meal">
+            <div class="card">
+                <div class="card-title">이번 달 식대 현황</div>
+                <div class="info-row"><span class="info-label">월 한도</span><span class="info-value">₩300,000</span></div>
+                <div class="info-row"><span class="info-label">사용 금액</span><span class="info-value" id="mealUsed">₩0</span></div>
+                <div class="info-row"><span class="info-label">남은 금액</span><span class="info-value" id="mealRemain" style="color:var(--green);font-weight:700">₩300,000</span></div>
+                <div class="progress-bar"><div class="progress-fill" id="mealProgress" style="width:0%"></div></div>
+            </div>
+            <button class="btn btn-primary" onclick="openMealModal()">식사 입력</button>
+            <div class="card">
+                <div class="card-title">이번 달 식사 내역</div>
+                <div id="mealList"><div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div></div>
+            </div>
+        </div>
         
-        const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
-        
-        function formatCurrency(n){return n?'₩'+Math.round(n).toLocaleString():'₩0';}
-        function getYM(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
-        function getToday(){return new Date().toISOString().split('T')[0];}
-        
-        function getTenure(joinDate){
-            if(!joinDate)return '-';
-            const join=new Date(joinDate);
-            const now=new Date();
-            const years=Math.floor((now-join)/(365.25*24*60*60*1000));
-            const months=Math.floor(((now-join)%(365.25*24*60*60*1000))/(30.44*24*60*60*1000));
-            if(years===0)return months>0?`${months}개월`:'1개월 미만';
-            return months>0?`${years}년 ${months}개월 (${years+1}년차)`:`만 ${years}년 (${years+1}년차)`;
-        }
-        
-        function togglePw(id,btn){
-            const inp=document.getElementById(id);
-            inp.type=inp.type==='password'?'text':'password';
-            btn.textContent=inp.type==='password'?'👁':'🙈';
-        }
-        
-        // GPS
-        function checkLocation(){
-            const status=document.getElementById('gpsStatus');
-            if(!navigator.geolocation){
-                status.className='gps-status error';
-                status.textContent='⚠️ GPS를 지원하지 않는 브라우저입니다';
-                return;
-            }
-            status.className='gps-status loading';
-            status.textContent='📍 위치 확인 중...';
+        <!-- 연차 탭 -->
+        <div class="tab-content" id="tab-leave">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value" id="leaveTotal">15</div><div class="stat-label">총 연차</div></div>
+                <div class="stat-card orange"><div class="stat-value" id="leaveUsed">0</div><div class="stat-label">사용</div></div>
+                <div class="stat-card green"><div class="stat-value" id="leaveRemain">15</div><div class="stat-label">잔여</div></div>
+            </div>
             
-            navigator.geolocation.getCurrentPosition(
-                pos=>{
-                    userLocation={lat:pos.coords.latitude,lng:pos.coords.longitude};
-                    const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
-                    if(dist<=CLINIC_RADIUS){
-                        status.className='gps-status ok';
-                        status.textContent=`✅ 클리닉 범위 내 (${Math.round(dist)}m)`;
-                    }else{
-                        status.className='gps-status error';
-                        status.textContent=`⚠️ 클리닉에서 ${Math.round(dist)}m 떨어짐 (${CLINIC_RADIUS}m 이내 필요)`;
-                    }
-                },
-                err=>{
+            <!-- 황금연휴 슬라이더 -->
+            <div class="card" style="margin-bottom:1rem;padding:.75rem">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                    <span style="font-size:.8rem;font-weight:600;color:var(--gold)">📅 2026 황금연휴</span>
+                    <span style="font-size:.7rem;color:var(--text-muted)">← 스와이프 →</span>
+                </div>
+                <div class="golden-slider" id="goldenSlider"></div>
+            </div>
+            
+            <button class="btn btn-primary" onclick="openLeaveModal()">연차 신청</button>
+            <div class="card">
+                <div class="card-title">신청 내역</div>
+                <div id="leaveHistory"><div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div></div>
+            </div>
+        </div>
+        
+        <!-- 인센티브 탭 -->
+        <div class="tab-content" id="tab-incentive">
+            <div class="stats-grid" style="grid-template-columns:repeat(2,1fr)">
+                <div class="stat-card"><div class="stat-value" id="incTotalCount">0</div><div class="stat-label">이번달 실적</div></div>
+                <div class="stat-card green"><div class="stat-value" id="incTotalAmount">₩0</div><div class="stat-label">예상 인센티브</div></div>
+            </div>
+            <div class="card">
+                <div class="card-title">나의 인센티브 항목</div>
+                <div id="myIncentiveItems"><div style="text-align:center;color:var(--text-muted);padding:1rem">등록된 항목이 없습니다</div></div>
+            </div>
+            <button class="btn btn-primary" onclick="openIncentiveModal()">인센티브 실적 입력</button>
+            <div class="card">
+                <div class="card-title">이번 달 실적 내역</div>
+                <div id="incentiveRecords"><div style="text-align:center;color:var(--text-muted);padding:1rem">입력된 실적이 없습니다</div></div>
+            </div>
+        </div>
+        
+        <!-- 내정보 탭 -->
+        <div class="tab-content" id="tab-info">
+            <div class="card">
+                <div class="card-title">내 정보</div>
+                <div class="info-row"><span class="info-label">이름</span><span class="info-value" id="infoName">-</span></div>
+                <div class="info-row"><span class="info-label">직급</span><span class="info-value" id="infoRole">-</span></div>
+                <div class="info-row"><span class="info-label">입사일</span><span class="info-value" id="infoJoinDate">-</span></div>
+                <div class="info-row"><span class="info-label">근속기간</span><span class="info-value" id="infoTenure">-</span></div>
+            </div>
+            <div class="card">
+                <div class="card-title">
+                    <span id="salaryTitle">급여 정보</span>
+                    <div class="month-select">
+                        <select id="salaryMonth" onchange="renderSalary()"></select>
+                    </div>
+                </div>
+                <div class="info-row"><span class="info-label">실수령액</span><span class="info-value" id="infoNetPay">-</span></div>
+                <div class="info-row"><span class="info-label">OT수당</span><span class="info-value" id="infoOT">-</span></div>
+                <div class="info-row"><span class="info-label">인센티브</span><span class="info-value" id="infoIncentive">-</span></div>
+            </div>
+            <div class="card">
+                <div class="card-title">🔐 생체인식 로그인</div>
+                <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem">Face ID 또는 지문으로 빠르게 로그인하세요.</p>
+                <button class="btn btn-gold" onclick="registerBiometric()" id="biometricRegisterBtn">생체인식 등록</button>
+                <div id="biometricStatus" style="font-size:.85rem;color:var(--text-muted);margin-top:.5rem;text-align:center"></div>
+            </div>
+        </div>
+    </div>
+    
+    <nav class="bottom-nav">
+        <div class="nav-item active" data-tab="attendance"><div class="nav-icon">📅</div>출퇴근</div>
+        <div class="nav-item" data-tab="meal"><div class="nav-icon">🍽</div>식사</div>
+        <div class="nav-item" data-tab="ot"><div class="nav-icon">⏰</div>OT</div>
+        <div class="nav-item" data-tab="leave"><div class="nav-icon">🏖</div>연차</div>
+        <div class="nav-item" data-tab="incentive"><div class="nav-icon">💎</div>인센티브</div>
+        <div class="nav-item" data-tab="info"><div class="nav-icon">👤</div>내정보</div>
+    </nav>
+</div>
+
+<!-- 점심 OT 모달 -->
+<div class="modal" id="lunchOTModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="modal-title">점심 OT 입력</div>
+            <button class="modal-close" onclick="closeModal('lunchOTModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">날짜</label>
+                <input type="date" class="form-input" id="lunchOTDate">
+            </div>
+            <div class="form-group">
+                <label class="form-label">시간 (분)</label>
+                <input type="number" class="form-input" id="lunchOTMinutes" value="30" min="0" max="60">
+            </div>
+            <div class="form-group">
+                <label class="form-label">사유</label>
+                <input type="text" class="form-input" id="lunchOTReason" placeholder="예: 점심시간 업무">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('lunchOTModal')">취소</button>
+            <button class="btn btn-primary" onclick="saveLunchOT()">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 식사 입력 모달 -->
+<div class="modal" id="mealModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="modal-title">식사 입력</div>
+            <button class="modal-close" onclick="closeModal('mealModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">날짜</label>
+                <input type="date" class="form-input" id="mealDate">
+            </div>
+            <div class="form-group">
+                <label class="form-label">금액 (원)</label>
+                <input type="number" class="form-input" id="mealAmount" placeholder="예: 10000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">메모</label>
+                <input type="text" class="form-input" id="mealMemo" placeholder="예: 점심 김치찌개">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('mealModal')">취소</button>
+            <button class="btn btn-primary" onclick="saveMeal()">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 연차 신청 모달 -->
+<div class="modal" id="leaveModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="modal-title">연차 신청</div>
+            <button class="modal-close" onclick="closeModal('leaveModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">유형</label>
+                <select class="form-select" id="leaveType">
+                    <option value="연차">연차</option>
+                    <option value="반차(오전)">반차 (오전)</option>
+                    <option value="반차(오후)">반차 (오후)</option>
+                    <option value="오프">오프</option>
+                    <option value="병가">병가</option>
+                    <option value="경조사">경조사</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">날짜 추가</label>
+                <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+                    <input type="date" class="form-input" id="leaveDateInput" style="flex:1">
+                    <button class="btn btn-secondary" onclick="addLeaveDate()" style="width:auto;padding:.75rem 1rem;margin:0">추가</button>
+                </div>
+                <div class="date-tags" id="leaveDateTags"><span style="color:var(--text-muted);font-size:.85rem">날짜를 추가해주세요</span></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">사유</label>
+                <input type="text" class="form-input" id="leaveReason" placeholder="사유 입력 (선택)">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('leaveModal')">취소</button>
+            <button class="btn btn-primary" onclick="submitLeave()">신청하기</button>
+        </div>
+    </div>
+</div>
+
+<!-- 인센티브 입력 모달 -->
+<div class="modal" id="incentiveModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="modal-title">인센티브 실적 입력</div>
+            <button class="modal-close" onclick="closeModal('incentiveModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">항목 선택</label>
+                <select class="form-select" id="incItemSelect">
+                    <option value="">항목 선택</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">고객명</label>
+                <input type="text" class="form-input" id="incCustomerName" placeholder="고객 이름">
+            </div>
+            <div class="form-group">
+                <label class="form-label">차트번호</label>
+                <input type="text" class="form-input" id="incChartNo" placeholder="차트번호">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('incentiveModal')">닫기</button>
+            <button class="btn btn-primary" onclick="addIncentiveRecord()">+ 1건 추가</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
+    firebase.initializeApp(firebaseConfig);
+    const db=firebase.firestore();
+    
+    // 클리닉 위치 (GPS 출퇴근용)
+    const CLINIC_LAT=37.5037435;  // 루미클리닉 위도
+    const CLINIC_LNG=127.0892416; // 루미클리닉 경도
+    const CLINIC_RADIUS=100;   // 100m 반경
+    
+    let currentUser=null;
+    let attendance=[];
+    let lunchOT=[];
+    let mealRecords=[];
+    let incentiveItems=[];
+    let incentiveRecords=[];
+    let leaveRequests=[];
+    let payrollData=[];
+    let selectedLeaveDates=[];
+    let userLocation=null;
+    let autoLogoutTimer=null;
+    let autoLogoutMinutes=10; // 기본 10분, admin에서 설정 가능
+    
+    const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
+    
+    function formatCurrency(n){return n?'₩'+Math.round(n).toLocaleString():'₩0';}
+    function getYM(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+    function getToday(){return new Date().toISOString().split('T')[0];}
+    
+    function getTenure(joinDate){
+        if(!joinDate)return '-';
+        const join=new Date(joinDate);
+        const now=new Date();
+        const years=Math.floor((now-join)/(365.25*24*60*60*1000));
+        const months=Math.floor(((now-join)%(365.25*24*60*60*1000))/(30.44*24*60*60*1000));
+        if(years===0)return months>0?`${months}개월`:'1개월 미만';
+        return months>0?`${years}년 ${months}개월 (${years+1}년차)`:`만 ${years}년 (${years+1}년차)`;
+    }
+    
+    function togglePw(id,btn){
+        const inp=document.getElementById(id);
+        inp.type=inp.type==='password'?'text':'password';
+        btn.textContent=inp.type==='password'?'👁':'🙈';
+    }
+    
+    // GPS
+    function checkLocation(){
+        const status=document.getElementById('gpsStatus');
+        if(!navigator.geolocation){
+            status.className='gps-status error';
+            status.textContent='⚠️ GPS를 지원하지 않는 브라우저입니다';
+            return;
+        }
+        status.className='gps-status loading';
+        status.textContent='📍 위치 확인 중...';
+        
+        navigator.geolocation.getCurrentPosition(
+            pos=>{
+                userLocation={lat:pos.coords.latitude,lng:pos.coords.longitude};
+                const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
+                if(dist<=CLINIC_RADIUS){
+                    status.className='gps-status ok';
+                    status.textContent=`✅ 클리닉 범위 내 (${Math.round(dist)}m)`;
+                }else{
                     status.className='gps-status error';
-                    status.textContent='⚠️ 위치 권한을 허용해주세요';
-                },
-                {enableHighAccuracy:true,timeout:10000}
-            );
-        }
-        
-        function getDistance(lat1,lng1,lat2,lng2){
-            const R=6371000;
-            const dLat=(lat2-lat1)*Math.PI/180;
-            const dLng=(lng2-lng1)*Math.PI/180;
-            const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
-            return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-        }
-        
-        // Login
-        async function attemptLogin(){
-            const inputName=document.getElementById('empIdInput').value.trim();
-            const pw=document.getElementById('empPwInput').value;
-            document.getElementById('loginError').textContent='';
-            
-            if(!inputName||!pw){document.getElementById('loginError').textContent='이름과 비밀번호를 입력해주세요.';return;}
-            
-            try{
-                // 이름 = 문서 ID
-                const doc=await db.collection('employees').doc(inputName).get();
-                
-                if(!doc.exists){
-                    document.getElementById('loginError').textContent='등록되지 않은 이름입니다.';
-                    return;
+                    status.textContent=`⚠️ 클리닉에서 ${Math.round(dist)}m 떨어짐 (${CLINIC_RADIUS}m 이내 필요)`;
                 }
-                
-                const emp={id:doc.id,...doc.data()};
-                await processLogin(emp,pw);
-            }catch(e){
-                console.error(e);
-                document.getElementById('loginError').textContent='로그인 오류: '+e.message;
-            }
-        }
+            },
+            err=>{
+                status.className='gps-status error';
+                status.textContent='⚠️ 위치 권한을 허용해주세요';
+            },
+            {enableHighAccuracy:true,timeout:10000}
+        );
+    }
+    
+    function getDistance(lat1,lng1,lat2,lng2){
+        const R=6371000;
+        const dLat=(lat2-lat1)*Math.PI/180;
+        const dLng=(lng2-lng1)*Math.PI/180;
+        const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+        return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    }
+    
+    // Login
+    async function attemptLogin(){
+        const inputName=document.getElementById('empIdInput').value.trim();
+        const pw=document.getElementById('empPwInput').value;
+        document.getElementById('loginError').textContent='';
         
-        async function processLogin(emp,pw){
-            if(pw==='fnal12890-'&&(!emp.password||emp.password==='fnal12890-')){
-                currentUser=emp;
-                document.getElementById('pwSetup').classList.add('active');
+        if(!inputName||!pw){document.getElementById('loginError').textContent='이름과 비밀번호를 입력해주세요.';return;}
+        
+        try{
+            // 이름 = 문서 ID
+            const doc=await db.collection('employees').doc(inputName).get();
+            
+            if(!doc.exists){
+                document.getElementById('loginError').textContent='등록되지 않은 이름입니다.';
                 return;
             }
             
-            if(emp.password!==pw){
-                document.getElementById('loginError').textContent='비밀번호가 올바르지 않습니다.';
-                return;
-            }
-            
+            const emp={id:doc.id,...doc.data()};
+            await processLogin(emp,pw);
+        }catch(e){
+            console.error(e);
+            document.getElementById('loginError').textContent='로그인 오류: '+e.message;
+        }
+    }
+    
+    async function processLogin(emp,pw){
+        if(pw==='fnal12890-'&&(!emp.password||emp.password==='fnal12890-')){
             currentUser=emp;
+            document.getElementById('pwSetup').classList.add('active');
+            return;
+        }
+        
+        if(emp.password!==pw){
+            document.getElementById('loginError').textContent='비밀번호가 올바르지 않습니다.';
+            return;
+        }
+        
+        currentUser=emp;
+        localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+        showApp();
+    }
+    
+    async function setupPassword(){
+        const pw1=document.getElementById('newPw1').value;
+        const pw2=document.getElementById('newPw2').value;
+        document.getElementById('pwError').textContent='';
+        
+        if(pw1.length<4){document.getElementById('pwError').textContent='4자 이상 입력해주세요.';return;}
+        if(pw1!==pw2){document.getElementById('pwError').textContent='비밀번호가 일치하지 않습니다.';return;}
+        
+        try{
+            await db.collection('employees').doc(currentUser.id).update({password:pw1});
+            currentUser.password=pw1;
             localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+            document.getElementById('pwSetup').classList.remove('active');
             showApp();
-        }
-        
-        async function setupPassword(){
-            const pw1=document.getElementById('newPw1').value;
-            const pw2=document.getElementById('newPw2').value;
-            document.getElementById('pwError').textContent='';
-            
-            if(pw1.length<4){document.getElementById('pwError').textContent='4자 이상 입력해주세요.';return;}
-            if(pw1!==pw2){document.getElementById('pwError').textContent='비밀번호가 일치하지 않습니다.';return;}
-            
+        }catch(e){document.getElementById('pwError').textContent='저장 실패: '+e.message;}
+    }
+    
+    function showApp(){
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('appContainer').classList.add('active');
+        document.getElementById('userName').textContent=currentUser.name||currentUser.id;
+        checkLocation();
+        loadAllData();
+        loadSettings();
+        startAutoLogoutTimer();
+    }
+    
+    function logout(){
+        clearAutoLogoutTimer();
+        localStorage.removeItem('lumi_staff_user');
+        location.reload();
+    }
+    
+    function checkAuth(){
+        const saved=localStorage.getItem('lumi_staff_user');
+        if(saved){
             try{
-                await db.collection('employees').doc(currentUser.id).update({password:pw1});
-                currentUser.password=pw1;
-                localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                document.getElementById('pwSetup').classList.remove('active');
-                showApp();
-            }catch(e){document.getElementById('pwError').textContent='저장 실패: '+e.message;}
+                currentUser=JSON.parse(saved);
+                if(currentUser&&currentUser.id)showApp();
+            }catch(e){localStorage.removeItem('lumi_staff_user');}
         }
-        
-        function showApp(){
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('appContainer').classList.add('active');
-            document.getElementById('userName').textContent=currentUser.name||currentUser.id;
-            checkLocation();
-            loadAllData();
-            loadSettings();
-            startAutoLogoutTimer();
-        }
-        
-        function logout(){
-            clearAutoLogoutTimer();
-            localStorage.removeItem('lumi_staff_user');
-            location.reload();
-        }
-        
-        function checkAuth(){
-            const saved=localStorage.getItem('lumi_staff_user');
-            if(saved){
-                try{
-                    currentUser=JSON.parse(saved);
-                    if(currentUser&&currentUser.id)showApp();
-                }catch(e){localStorage.removeItem('lumi_staff_user');}
+        // 생체인식 버튼 표시 여부 확인
+        checkBiometricAvailable();
+    }
+    
+    // 자동 로그아웃 타이머
+    async function loadSettings(){
+        try{
+            const doc=await db.collection('settings').doc('staff').get();
+            if(doc.exists){
+                const data=doc.data();
+                autoLogoutMinutes=data.autoLogoutMinutes||10;
             }
-            // 생체인식 버튼 표시 여부 확인
-            checkBiometricAvailable();
+        }catch(e){console.error('설정 로드 오류:',e);}
+    }
+    
+    function startAutoLogoutTimer(){
+        clearAutoLogoutTimer();
+        if(autoLogoutMinutes<=0)return; // 0이면 자동 로그아웃 비활성화
+        autoLogoutTimer=setTimeout(()=>{
+            alert('장시간 미사용으로 자동 로그아웃됩니다.');
+            logout();
+        },autoLogoutMinutes*60*1000);
+    }
+    
+    function clearAutoLogoutTimer(){
+        if(autoLogoutTimer){
+            clearTimeout(autoLogoutTimer);
+            autoLogoutTimer=null;
         }
-        
-        // 자동 로그아웃 타이머
-        async function loadSettings(){
-            try{
-                const doc=await db.collection('settings').doc('staff').get();
-                if(doc.exists){
-                    const data=doc.data();
-                    autoLogoutMinutes=data.autoLogoutMinutes||10;
+    }
+    
+    function resetAutoLogoutTimer(){
+        if(currentUser)startAutoLogoutTimer();
+    }
+    
+    // 사용자 활동 감지 (터치, 클릭, 스크롤)
+    ['touchstart','click','scroll','keydown'].forEach(event=>{
+        document.addEventListener(event,resetAutoLogoutTimer,{passive:true});
+    });
+    
+    // 생체인식 로그인 (WebAuthn)
+    function checkBiometricAvailable(){
+        const btn=document.getElementById('biometricBtn');
+        const hasCredential=localStorage.getItem('lumi_biometric_credential');
+        if(window.PublicKeyCredential&&hasCredential){
+            btn.style.display='block';
+        }
+    }
+    
+    async function biometricLogin(){
+        try{
+            const credentialId=localStorage.getItem('lumi_biometric_credential');
+            const userId=localStorage.getItem('lumi_biometric_user');
+            if(!credentialId||!userId){
+                alert('등록된 생체인식 정보가 없습니다.\n먼저 일반 로그인 후 생체인식을 등록해주세요.');
+                return;
+            }
+            
+            // WebAuthn 인증 요청
+            const challenge=new Uint8Array(32);
+            crypto.getRandomValues(challenge);
+            
+            const credential=await navigator.credentials.get({
+                publicKey:{
+                    challenge:challenge,
+                    timeout:60000,
+                    allowCredentials:[{
+                        id:Uint8Array.from(atob(credentialId),c=>c.charCodeAt(0)),
+                        type:'public-key',
+                        transports:['internal']
+                    }],
+                    userVerification:'required'
                 }
-            }catch(e){console.error('설정 로드 오류:',e);}
-        }
-        
-        function startAutoLogoutTimer(){
-            clearAutoLogoutTimer();
-            if(autoLogoutMinutes<=0)return; // 0이면 자동 로그아웃 비활성화
-            autoLogoutTimer=setTimeout(()=>{
-                alert('장시간 미사용으로 자동 로그아웃됩니다.');
-                logout();
-            },autoLogoutMinutes*60*1000);
-        }
-        
-        function clearAutoLogoutTimer(){
-            if(autoLogoutTimer){
-                clearTimeout(autoLogoutTimer);
-                autoLogoutTimer=null;
+            });
+            
+            if(credential){
+                // 인증 성공 - 저장된 사용자 정보로 로그인
+                const doc=await db.collection('employees').doc(userId).get();
+                if(doc.exists){
+                    currentUser={id:doc.id,...doc.data()};
+                    localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                    showApp();
+                }else{
+                    alert('사용자 정보를 찾을 수 없습니다.');
+                }
+            }
+        }catch(e){
+            console.error('생체인식 오류:',e);
+            if(e.name==='NotAllowedError'){
+                alert('생체인식이 취소되었습니다.');
+            }else{
+                alert('생체인식 로그인 실패: '+e.message);
             }
         }
-        
-        function resetAutoLogoutTimer(){
-            if(currentUser)startAutoLogoutTimer();
+    }
+    
+    async function registerBiometric(){
+        if(!window.PublicKeyCredential){
+            alert('이 브라우저는 생체인식을 지원하지 않습니다.');
+            return;
+        }
+        if(!currentUser){
+            alert('먼저 로그인해주세요.');
+            return;
         }
         
-        // 사용자 활동 감지 (터치, 클릭, 스크롤)
-        ['touchstart','click','scroll','keydown'].forEach(event=>{
-            document.addEventListener(event,resetAutoLogoutTimer,{passive:true});
+        try{
+            const challenge=new Uint8Array(32);
+            crypto.getRandomValues(challenge);
+            
+            const credential=await navigator.credentials.create({
+                publicKey:{
+                    challenge:challenge,
+                    rp:{name:'THE CLINIC LUMI',id:location.hostname},
+                    user:{
+                        id:Uint8Array.from(currentUser.id,c=>c.charCodeAt(0)),
+                        name:currentUser.id,
+                        displayName:currentUser.name||currentUser.id
+                    },
+                    pubKeyCredParams:[{alg:-7,type:'public-key'},{alg:-257,type:'public-key'}],
+                    authenticatorSelection:{
+                        authenticatorAttachment:'platform',
+                        userVerification:'required'
+                    },
+                    timeout:60000
+                }
+            });
+            
+            if(credential){
+                // 자격증명 ID 저장
+                const credentialId=btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+                localStorage.setItem('lumi_biometric_credential',credentialId);
+                localStorage.setItem('lumi_biometric_user',currentUser.id);
+                alert('생체인식이 등록되었습니다!\n다음 로그인부터 Face ID/지문으로 로그인할 수 있습니다.');
+            }
+        }catch(e){
+            console.error('생체인식 등록 오류:',e);
+            if(e.name==='NotAllowedError'){
+                alert('생체인식 등록이 취소되었습니다.');
+            }else{
+                alert('생체인식 등록 실패: '+e.message);
+            }
+        }
+    }
+    
+    // Data Loading - 단순 쿼리 사용 (인덱스 불필요)
+    async function loadAllData(){
+        try{
+            await Promise.all([
+                loadAttendance(),
+                loadLunchOT(),
+                loadMealRecords(),
+                loadIncentiveItems(),
+                loadIncentiveRecords(),
+                loadLeaveRequests(),
+                loadPayrollData()
+            ]);
+            renderAll();
+        }catch(e){console.error('데이터 로드 오류:',e);}
+    }
+    
+    async function loadAttendance(){
+        try{
+            const snapshot=await db.collection('attendance').where('employeeId','==',currentUser.id).get();
+            attendance=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+        }catch(e){console.error('출퇴근 로드 오류:',e);attendance=[];}
+    }
+    
+    async function loadLunchOT(){
+        try{
+            const snapshot=await db.collection('lunchOT').where('employeeId','==',currentUser.id).get();
+            lunchOT=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+        }catch(e){console.error('OT 로드 오류:',e);lunchOT=[];}
+    }
+    
+    async function loadMealRecords(){
+        try{
+            const snapshot=await db.collection('mealRecords').where('employeeId','==',currentUser.id).get();
+            mealRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+        }catch(e){console.error('식사 로드 오류:',e);mealRecords=[];}
+    }
+    
+    async function loadIncentiveItems(){
+        try{
+            const snapshot=await db.collection('incentiveItems').get();
+            const all=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+            incentiveItems=all.filter(item=>!item.employees||item.employees.length===0||item.employees.includes(currentUser.id));
+        }catch(e){console.error('인센티브 항목 로드 오류:',e);incentiveItems=[];}
+    }
+    
+    async function loadIncentiveRecords(){
+        try{
+            const snapshot=await db.collection('incentiveRecords').where('employeeId','==',currentUser.id).get();
+            incentiveRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+        }catch(e){console.error('인센티브 기록 로드 오류:',e);incentiveRecords=[];}
+    }
+    
+    async function loadLeaveRequests(){
+        try{
+            const snapshot=await db.collection('leaveRequests').where('employeeId','==',currentUser.id).get();
+            leaveRequests=snapshot.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
+                const aTime=a.createdAt?.toDate?.()?.getTime()||0;
+                const bTime=b.createdAt?.toDate?.()?.getTime()||0;
+                return bTime-aTime;
+            });
+        }catch(e){console.error('연차 로드 오류:',e);leaveRequests=[];}
+    }
+    
+    async function loadPayrollData(){
+        try{
+            const snapshot=await db.collection('payroll').get();
+            payrollData=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+        }catch(e){console.error('급여 로드 오류:',e);payrollData=[];}
+    }
+    
+    // Render
+    function renderAll(){
+        renderAttendance();
+        renderOT();
+        renderMeal();
+        renderLeave();
+        renderIncentive();
+        renderInfo();
+    }
+    
+    function renderAttendance(){
+        const ym=getYM();
+        const today=getToday();
+        const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
+        const todayAtt=attendance.find(a=>a.date===today);
+        
+        document.getElementById('attWorkDays').textContent=monthAtt.filter(a=>a.checkIn).length;
+        document.getElementById('attLate').textContent=monthAtt.filter(a=>a.status==='late').length;
+        document.getElementById('attEarly').textContent=monthAtt.filter(a=>a.status==='early').length;
+        
+        if(todayAtt){
+            document.getElementById('todayCheckIn').textContent=todayAtt.checkIn||'-';
+            document.getElementById('todayCheckOut').textContent=todayAtt.checkOut||'-';
+            const statusText=todayAtt.status==='late'?'지각':todayAtt.status==='early'?'조퇴':'정상';
+            const statusBadge=todayAtt.status==='late'?'badge-orange':todayAtt.status==='early'?'badge-red':'badge-green';
+            document.getElementById('todayStatus').innerHTML=`<span class="badge ${statusBadge}">${statusText}</span>`;
+            
+            document.getElementById('checkInBtn').style.display=todayAtt.checkOut?'none':'none';
+            document.getElementById('checkOutBtn').style.display=todayAtt.checkOut?'none':'block';
+        }else{
+            document.getElementById('todayCheckIn').textContent='-';
+            document.getElementById('todayCheckOut').textContent='-';
+            document.getElementById('todayStatus').textContent='-';
+            document.getElementById('checkInBtn').style.display='block';
+            document.getElementById('checkOutBtn').style.display='none';
+        }
+    }
+    
+    function renderOT(){
+        const ym=getYM();
+        const monthOT=lunchOT.filter(ot=>ot.date?.startsWith(ym));
+        const lunchMinutes=monthOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+        
+        // 퇴근 후 OT
+        const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
+        let afterMinutes=0;
+        monthAtt.forEach(a=>{
+            if(a.checkOut){
+                const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
+                const checkOutMin=h*60+m;
+                const endMin=18*60;
+                if(checkOutMin>endMin)afterMinutes+=checkOutMin-endMin;
+            }
         });
         
-        // 생체인식 로그인 (WebAuthn)
-        function checkBiometricAvailable(){
-            const btn=document.getElementById('biometricBtn');
-            const hasCredential=localStorage.getItem('lumi_biometric_credential');
-            if(window.PublicKeyCredential&&hasCredential){
-                btn.style.display='block';
-            }
-        }
+        const totalMinutes=lunchMinutes+afterMinutes;
+        document.getElementById('otTotal').textContent=(totalMinutes/60).toFixed(1)+'H';
+        document.getElementById('otLunch').textContent=(lunchMinutes/60).toFixed(1)+'H';
+        document.getElementById('otAfter').textContent=(afterMinutes/60).toFixed(1)+'H';
         
-        async function biometricLogin(){
-            try{
-                const credentialId=localStorage.getItem('lumi_biometric_credential');
-                const userId=localStorage.getItem('lumi_biometric_user');
-                if(!credentialId||!userId){
-                    alert('등록된 생체인식 정보가 없습니다.\n먼저 일반 로그인 후 생체인식을 등록해주세요.');
-                    return;
-                }
-                
-                // WebAuthn 인증 요청
-                const challenge=new Uint8Array(32);
-                crypto.getRandomValues(challenge);
-                
-                const credential=await navigator.credentials.get({
-                    publicKey:{
-                        challenge:challenge,
-                        timeout:60000,
-                        allowCredentials:[{
-                            id:Uint8Array.from(atob(credentialId),c=>c.charCodeAt(0)),
-                            type:'public-key',
-                            transports:['internal']
-                        }],
-                        userVerification:'required'
-                    }
-                });
-                
-                if(credential){
-                    // 인증 성공 - 저장된 사용자 정보로 로그인
-                    const doc=await db.collection('employees').doc(userId).get();
-                    if(doc.exists){
-                        currentUser={id:doc.id,...doc.data()};
-                        localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                        showApp();
-                    }else{
-                        alert('사용자 정보를 찾을 수 없습니다.');
-                    }
-                }
-            }catch(e){
-                console.error('생체인식 오류:',e);
-                if(e.name==='NotAllowedError'){
-                    alert('생체인식이 취소되었습니다.');
-                }else{
-                    alert('생체인식 로그인 실패: '+e.message);
-                }
-            }
-        }
+        // 예상 OT수당 (시급 × 1.5)
+        const hourly=currentUser.hourly||12000;
+        const otRate=Math.round(hourly*1.5);
+        const expected=Math.round(otRate*(totalMinutes/60));
+        document.getElementById('otHourlyRate').textContent=formatCurrency(otRate)+'/시간';
+        document.getElementById('otExpected').textContent=formatCurrency(expected);
         
-        async function registerBiometric(){
-            if(!window.PublicKeyCredential){
-                alert('이 브라우저는 생체인식을 지원하지 않습니다.');
-                return;
-            }
-            if(!currentUser){
-                alert('먼저 로그인해주세요.');
-                return;
-            }
+        // OT 내역
+        if(monthOT.length>0){
+            document.getElementById('otList').innerHTML=monthOT.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(ot=>`
+                <div class="list-item">
+                    <div>
+                        <div class="list-item-title">${ot.date}</div>
+                        <div class="list-item-sub">${ot.reason||'점심 OT'}</div>
+                    </div>
+                    <span class="badge badge-purple">${ot.minutes}분</span>
+                </div>
+            `).join('');
+        }else{
+            document.getElementById('otList').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div>';
+        }
+    }
+    
+    function renderMeal(){
+        const ym=getYM();
+        const monthMeals=mealRecords.filter(m=>m.date?.startsWith(ym));
+        const used=monthMeals.reduce((sum,m)=>sum+(m.amount||0),0);
+        const limit=300000;
+        const remain=Math.max(0,limit-used);
+        const percent=Math.min(100,(used/limit)*100);
+        
+        document.getElementById('mealUsed').textContent=formatCurrency(used);
+        document.getElementById('mealRemain').textContent=formatCurrency(remain);
+        document.getElementById('mealRemain').style.color=remain>0?'var(--green)':'var(--red)';
+        
+        const progressBar=document.getElementById('mealProgress');
+        progressBar.style.width=percent+'%';
+        progressBar.className='progress-fill'+(percent>90?' danger':percent>70?' warning':'');
+        
+        if(monthMeals.length>0){
+            document.getElementById('mealList').innerHTML=monthMeals.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(m=>`
+                <div class="list-item">
+                    <div>
+                        <div class="list-item-title">${m.date}</div>
+                        <div class="list-item-sub">${m.memo||'식사'}</div>
+                    </div>
+                    <span style="font-weight:600">${formatCurrency(m.amount)}</span>
+                </div>
+            `).join('');
+        }else{
+            document.getElementById('mealList').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div>';
+        }
+    }
+    
+    function renderLeave(){
+        const approved=leaveRequests.filter(r=>r.status==='approved');
+        const usedDays=approved.reduce((sum,r)=>{
+            if(r.type?.includes('반차'))return sum+0.5;
+            return sum+(r.dates?.length||1);
+        },0);
+        
+        // 연차: 개별 설정값 있으면 사용, 없으면 법정 자동계산
+        const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
+        const adminUsed=currentUser.usedLeave||0; // admin에서 설정한 사용 연차
+        const totalUsed=usedDays+adminUsed;
+        
+        document.getElementById('leaveTotal').textContent=total;
+        document.getElementById('leaveUsed').textContent=totalUsed;
+        document.getElementById('leaveRemain').textContent=Math.max(0,total-totalUsed);
+        
+        // 황금연휴 슬라이더 렌더링
+        renderGoldenSlider();
+        
+        if(leaveRequests.length>0){
+            document.getElementById('leaveHistory').innerHTML=leaveRequests.slice(0,10).map(r=>{
+                const statusClass=r.status==='approved'?'approved':r.status==='rejected'?'rejected':'pending';
+                const statusLabel=r.status==='approved'?'승인':r.status==='rejected'?'반려':'대기중';
+                const dates=r.dates?.join(', ')||'-';
+                return `
+                    <div class="leave-item ${statusClass}">
+                        <div style="display:flex;justify-content:space-between;margin-bottom:.25rem">
+                            <strong>${r.type||'연차'}</strong>
+                            <span class="badge badge-${statusClass==='approved'?'green':statusClass==='rejected'?'red':'orange'}">${statusLabel}</span>
+                        </div>
+                        <div style="font-size:.85rem;color:var(--text-secondary)">${dates}</div>
+                        ${r.reason?`<div style="font-size:.8rem;color:var(--text-muted);margin-top:.25rem">${r.reason}</div>`:''}
+                    </div>
+                `;
+            }).join('');
+        }else{
+            document.getElementById('leaveHistory').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div>';
+        }
+    }
+    
+    // 황금연휴 슬라이더 렌더링
+    function renderGoldenSlider(){
+        const container=document.getElementById('goldenSlider');
+        if(!container)return;
+        
+        const goldenHolidays=[
+            {month:'1월',name:'신정',dates:'1.1~4',tip:'1/2 연차→4일'},
+            {month:'2월',name:'설날',dates:'2.14~18',tip:'5일 연휴'},
+            {month:'3월',name:'삼일절',dates:'3.1~2',tip:'3일 연휴'},
+            {month:'5월',name:'어린이날',dates:'5.1~5',tip:'5/4 연차→5일'},
+            {month:'5월',name:'부처님오신날',dates:'5.24~25',tip:'3일 연휴'},
+            {month:'6월',name:'지방선거',dates:'6.3,6',tip:'6/4,5 연차→6일'},
+            {month:'8월',name:'광복절',dates:'8.15~17',tip:'3일 연휴'},
+            {month:'9월',name:'추석',dates:'9.24~27',tip:'4일 연휴'},
+            {month:'10월',name:'개천절~한글날',dates:'10.3~11',tip:'3일 연차→9일!'},
+            {month:'12월',name:'성탄절',dates:'12.25~27',tip:'3일 연휴'}
+        ];
+        
+        container.innerHTML=goldenHolidays.map(h=>`
+            <div class="golden-card">
+                <div class="gc-month">${h.month}</div>
+                <div class="gc-name">${h.name}</div>
+                <div class="gc-dates">📅 ${h.dates}</div>
+                <div class="gc-tip">💡 ${h.tip}</div>
+            </div>
+        `).join('');
+    }
+    
+    // 법정 연차 자동계산 (근로기준법)
+    function calculateLegalAnnualLeave(joinDate){
+        if(!joinDate)return 15;
+        const join=new Date(joinDate);
+        const now=new Date();
+        const diffMs=now-join;
+        const diffDays=Math.floor(diffMs/(1000*60*60*24));
+        const years=Math.floor(diffDays/365);
+        
+        if(years<1){
+            // 1년 미만: 1개월 개근 시 1일 (최대 11일)
+            const months=Math.floor(diffDays/30);
+            return Math.min(months,11);
+        }else{
+            // 1년 이상: 15일 + 2년마다 1일 추가 (최대 25일)
+            const extraDays=Math.floor((years-1)/2);
+            return Math.min(15+extraDays,25);
+        }
+    }
+    
+    function renderIncentive(){
+        const ym=getYM();
+        const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
+        
+        // 총 실적 건수와 금액 계산
+        let totalCount=monthRecords.length;
+        let totalAmount=0;
+        
+        if(incentiveItems.length>0){
+            document.getElementById('myIncentiveItems').innerHTML=incentiveItems.map(item=>{
+                const count=monthRecords.filter(r=>r.itemId===item.id).length;
+                const typeLabel=item.type==='japanSales'?`일본인 매출 ${item.percent||1}%`:`건당 ${formatCurrency(item.price||0)}`;
+                const itemTotal=item.type==='japanSales'?0:(count*(item.price||0));
+                if(item.type!=='japanSales')totalAmount+=itemTotal;
+                return `
+                    <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
+                        <div style="font-weight:600;margin-bottom:.25rem">${item.name}</div>
+                        <div style="font-size:.85rem;color:var(--text-secondary)"><span class="badge badge-gold">${typeLabel}</span></div>
+                        <div style="font-size:1rem;font-weight:700;color:var(--primary);margin-top:.5rem">${count}건${item.type!=='japanSales'?' = '+formatCurrency(itemTotal):''}</div>
+                    </div>
+                `;
+            }).join('');
             
-            try{
-                const challenge=new Uint8Array(32);
-                crypto.getRandomValues(challenge);
-                
-                const credential=await navigator.credentials.create({
-                    publicKey:{
-                        challenge:challenge,
-                        rp:{name:'THE CLINIC LUMI',id:location.hostname},
-                        user:{
-                            id:Uint8Array.from(currentUser.id,c=>c.charCodeAt(0)),
-                            name:currentUser.id,
-                            displayName:currentUser.name||currentUser.id
-                        },
-                        pubKeyCredParams:[{alg:-7,type:'public-key'},{alg:-257,type:'public-key'}],
-                        authenticatorSelection:{
-                            authenticatorAttachment:'platform',
-                            userVerification:'required'
-                        },
-                        timeout:60000
-                    }
-                });
-                
-                if(credential){
-                    // 자격증명 ID 저장
-                    const credentialId=btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
-                    localStorage.setItem('lumi_biometric_credential',credentialId);
-                    localStorage.setItem('lumi_biometric_user',currentUser.id);
-                    alert('생체인식이 등록되었습니다!\n다음 로그인부터 Face ID/지문으로 로그인할 수 있습니다.');
-                }
-            }catch(e){
-                console.error('생체인식 등록 오류:',e);
-                if(e.name==='NotAllowedError'){
-                    alert('생체인식 등록이 취소되었습니다.');
-                }else{
-                    alert('생체인식 등록 실패: '+e.message);
-                }
-            }
+            // 인센티브 드롭다운 업데이트
+            document.getElementById('incItemSelect').innerHTML='<option value="">항목 선택</option>'+incentiveItems.filter(i=>i.type!=='japanSales').map(i=>`<option value="${i.id}">${i.name} (${formatCurrency(i.price||0)}/건)</option>`).join('');
+        }else{
+            document.getElementById('myIncentiveItems').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">등록된 항목이 없습니다</div>';
         }
         
-        // Data Loading - 단순 쿼리 사용 (인덱스 불필요)
-        async function loadAllData(){
-            try{
-                await Promise.all([
-                    loadAttendance(),
-                    loadLunchOT(),
-                    loadMealRecords(),
-                    loadIncentiveItems(),
-                    loadIncentiveRecords(),
-                    loadLeaveRequests(),
-                    loadPayrollData()
-                ]);
-                renderAll();
-            }catch(e){console.error('데이터 로드 오류:',e);}
+        // 상단 통계 업데이트
+        document.getElementById('incTotalCount').textContent=totalCount+'건';
+        document.getElementById('incTotalAmount').textContent=formatCurrency(totalAmount);
+        
+        if(monthRecords.length>0){
+            document.getElementById('incentiveRecords').innerHTML=monthRecords.map(r=>{
+                const item=incentiveItems.find(i=>i.id===r.itemId);
+                return `
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">${item?.name||'항목'}</div>
+                            <div class="list-item-sub">${r.customerName||''} ${r.chartNo?'('+r.chartNo+')':''}</div>
+                        </div>
+                        <span class="badge badge-green">${r.date||''}</span>
+                    </div>
+                `;
+            }).join('');
+        }else{
+            document.getElementById('incentiveRecords').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">입력된 실적이 없습니다</div>';
+        }
+    }
+    
+    function renderInfo(){
+        document.getElementById('infoName').textContent=currentUser.name||'-';
+        document.getElementById('infoRole').textContent=roleLabels[currentUser.role]||currentUser.role||'-';
+        document.getElementById('infoJoinDate').textContent=currentUser.joinDate||'-';
+        document.getElementById('infoTenure').textContent=getTenure(currentUser.joinDate);
+        
+        // 급여 월 선택 드롭다운
+        const months=[...new Set(payrollData.map(p=>p.yearMonth))].sort().reverse();
+        const select=document.getElementById('salaryMonth');
+        select.innerHTML=months.length>0?months.map(m=>`<option value="${m}">${m.replace('-','년 ')}월</option>`).join(''):'<option value="">데이터 없음</option>';
+        
+        // 생체인식 상태 표시
+        const bioStatus=document.getElementById('biometricStatus');
+        const hasCredential=localStorage.getItem('lumi_biometric_credential');
+        if(hasCredential){
+            bioStatus.innerHTML='✅ 등록됨 - <a href="#" onclick="removeBiometric();return false;" style="color:var(--red)">해제</a>';
+        }else if(!window.PublicKeyCredential){
+            bioStatus.textContent='⚠️ 이 브라우저에서 지원되지 않습니다';
+            document.getElementById('biometricRegisterBtn').style.display='none';
+        }else{
+            bioStatus.textContent='미등록';
         }
         
-        async function loadAttendance(){
-            try{
-                const snapshot=await db.collection('attendance').where('employeeId','==',currentUser.id).get();
-                attendance=snapshot.docs.map(d=>({id:d.id,...d.data()}));
-            }catch(e){console.error('출퇴근 로드 오류:',e);attendance=[];}
-        }
-        
-        async function loadLunchOT(){
-            try{
-                const snapshot=await db.collection('lunchOT').where('employeeId','==',currentUser.id).get();
-                lunchOT=snapshot.docs.map(d=>({id:d.id,...d.data()}));
-            }catch(e){console.error('OT 로드 오류:',e);lunchOT=[];}
-        }
-        
-        async function loadMealRecords(){
-            try{
-                const snapshot=await db.collection('mealRecords').where('employeeId','==',currentUser.id).get();
-                mealRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
-            }catch(e){console.error('식사 로드 오류:',e);mealRecords=[];}
-        }
-        
-        async function loadIncentiveItems(){
-            try{
-                const snapshot=await db.collection('incentiveItems').get();
-                const all=snapshot.docs.map(d=>({id:d.id,...d.data()}));
-                incentiveItems=all.filter(item=>!item.employees||item.employees.length===0||item.employees.includes(currentUser.id));
-            }catch(e){console.error('인센티브 항목 로드 오류:',e);incentiveItems=[];}
-        }
-        
-        async function loadIncentiveRecords(){
-            try{
-                const snapshot=await db.collection('incentiveRecords').where('employeeId','==',currentUser.id).get();
-                incentiveRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
-            }catch(e){console.error('인센티브 기록 로드 오류:',e);incentiveRecords=[];}
-        }
-        
-        async function loadLeaveRequests(){
-            try{
-                const snapshot=await db.collection('leaveRequests').where('employeeId','==',currentUser.id).get();
-                leaveRequests=snapshot.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
-                    const aTime=a.createdAt?.toDate?.()?.getTime()||0;
-                    const bTime=b.createdAt?.toDate?.()?.getTime()||0;
-                    return bTime-aTime;
-                });
-            }catch(e){console.error('연차 로드 오류:',e);leaveRequests=[];}
-        }
-        
-        async function loadPayrollData(){
-            try{
-                const snapshot=await db.collection('payroll').get();
-                payrollData=snapshot.docs.map(d=>({id:d.id,...d.data()}));
-            }catch(e){console.error('급여 로드 오류:',e);payrollData=[];}
-        }
-        
-        // Render
-        function renderAll(){
-            renderAttendance();
-            renderOT();
-            renderMeal();
-            renderLeave();
-            renderIncentive();
+        renderSalary();
+    }
+    
+    function removeBiometric(){
+        if(confirm('생체인식 등록을 해제하시겠습니까?')){
+            localStorage.removeItem('lumi_biometric_credential');
+            localStorage.removeItem('lumi_biometric_user');
             renderInfo();
+            alert('생체인식이 해제되었습니다.');
         }
+    }
+    
+    function renderSalary(){
+        const ym=document.getElementById('salaryMonth').value||getYM();
+        document.getElementById('salaryTitle').textContent=ym.replace('-','년 ')+'월 급여 정보';
         
-        function renderAttendance(){
-            const ym=getYM();
-            const today=getToday();
-            const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
-            const todayAtt=attendance.find(a=>a.date===today);
-            
-            document.getElementById('attWorkDays').textContent=monthAtt.filter(a=>a.checkIn).length;
-            document.getElementById('attLate').textContent=monthAtt.filter(a=>a.status==='late').length;
-            document.getElementById('attEarly').textContent=monthAtt.filter(a=>a.status==='early').length;
-            
-            if(todayAtt){
-                document.getElementById('todayCheckIn').textContent=todayAtt.checkIn||'-';
-                document.getElementById('todayCheckOut').textContent=todayAtt.checkOut||'-';
-                const statusText=todayAtt.status==='late'?'지각':todayAtt.status==='early'?'조퇴':'정상';
-                const statusBadge=todayAtt.status==='late'?'badge-orange':todayAtt.status==='early'?'badge-red':'badge-green';
-                document.getElementById('todayStatus').innerHTML=`<span class="badge ${statusBadge}">${statusText}</span>`;
-                
-                document.getElementById('checkInBtn').style.display=todayAtt.checkOut?'none':'none';
-                document.getElementById('checkOutBtn').style.display=todayAtt.checkOut?'none':'block';
-            }else{
-                document.getElementById('todayCheckIn').textContent='-';
-                document.getElementById('todayCheckOut').textContent='-';
-                document.getElementById('todayStatus').textContent='-';
-                document.getElementById('checkInBtn').style.display='block';
-                document.getElementById('checkOutBtn').style.display='none';
-            }
-        }
-        
-        function renderOT(){
-            const ym=getYM();
+        const myPayroll=payrollData.find(p=>(p.yearMonth===ym)&&(p.name===currentUser.name||p.name===currentUser.matchName));
+        if(myPayroll){
+            // 노무사에서 받은 급여대장 데이터가 있으면 표시
+            document.getElementById('infoNetPay').textContent=formatCurrency(myPayroll.netPay);
+            // OT수당 = 추가연장수당 필드 (중요!)
+            document.getElementById('infoOT').textContent=formatCurrency(myPayroll.extraOT||myPayroll.additionalOT||0);
+            document.getElementById('infoIncentive').textContent=formatCurrency(myPayroll.incentive||0);
+        }else{
+            // 급여대장 없으면 직접 계산한 예상 값 표시
             const monthOT=lunchOT.filter(ot=>ot.date?.startsWith(ym));
-            const lunchMinutes=monthOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
-            
-            // 퇴근 후 OT
             const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
+            const lunchMinutes=monthOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
             let afterMinutes=0;
             monthAtt.forEach(a=>{
                 if(a.checkOut){
                     const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
                     const checkOutMin=h*60+m;
-                    const endMin=18*60;
-                    if(checkOutMin>endMin)afterMinutes+=checkOutMin-endMin;
+                    if(checkOutMin>18*60)afterMinutes+=checkOutMin-18*60;
+                }
+            });
+            const totalOTMinutes=lunchMinutes+afterMinutes;
+            const hourly=currentUser.hourly||12000;
+            const estimatedOT=Math.round((totalOTMinutes/60)*hourly*1.5);
+            
+            // 인센티브 계산
+            const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
+            let estimatedIncentive=0;
+            incentiveItems.forEach(item=>{
+                if(item.type!=='japanSales'){
+                    const count=monthRecords.filter(r=>r.itemId===item.id).length;
+                    estimatedIncentive+=count*(item.price||0);
                 }
             });
             
-            const totalMinutes=lunchMinutes+afterMinutes;
-            document.getElementById('otTotal').textContent=(totalMinutes/60).toFixed(1)+'H';
-            document.getElementById('otLunch').textContent=(lunchMinutes/60).toFixed(1)+'H';
-            document.getElementById('otAfter').textContent=(afterMinutes/60).toFixed(1)+'H';
-            
-            // 예상 OT수당 (시급 × 1.5)
-            const hourly=currentUser.hourly||12000;
-            const otRate=Math.round(hourly*1.5);
-            const expected=Math.round(otRate*(totalMinutes/60));
-            document.getElementById('otHourlyRate').textContent=formatCurrency(otRate)+'/시간';
-            document.getElementById('otExpected').textContent=formatCurrency(expected);
-            
-            // OT 내역
-            if(monthOT.length>0){
-                document.getElementById('otList').innerHTML=monthOT.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(ot=>`
-                    <div class="list-item">
-                        <div>
-                            <div class="list-item-title">${ot.date}</div>
-                            <div class="list-item-sub">${ot.reason||'점심 OT'}</div>
-                        </div>
-                        <span class="badge badge-purple">${ot.minutes}분</span>
-                    </div>
-                `).join('');
-            }else{
-                document.getElementById('otList').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div>';
-            }
+            document.getElementById('infoNetPay').textContent='미확정';
+            document.getElementById('infoOT').textContent=formatCurrency(estimatedOT)+' (예상)';
+            document.getElementById('infoIncentive').textContent=formatCurrency(estimatedIncentive)+' (예상)';
+        }
+    }
+    
+    // Actions
+    async function checkIn(){
+        if(!userLocation){
+            alert('위치를 확인할 수 없습니다. 위치 권한을 허용해주세요.');
+            checkLocation();
+            return;
         }
         
-        function renderMeal(){
-            const ym=getYM();
-            const monthMeals=mealRecords.filter(m=>m.date?.startsWith(ym));
-            const used=monthMeals.reduce((sum,m)=>sum+(m.amount||0),0);
-            const limit=300000;
-            const remain=Math.max(0,limit-used);
-            const percent=Math.min(100,(used/limit)*100);
-            
-            document.getElementById('mealUsed').textContent=formatCurrency(used);
-            document.getElementById('mealRemain').textContent=formatCurrency(remain);
-            document.getElementById('mealRemain').style.color=remain>0?'var(--green)':'var(--red)';
-            
-            const progressBar=document.getElementById('mealProgress');
-            progressBar.style.width=percent+'%';
-            progressBar.className='progress-fill'+(percent>90?' danger':percent>70?' warning':'');
-            
-            if(monthMeals.length>0){
-                document.getElementById('mealList').innerHTML=monthMeals.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(m=>`
-                    <div class="list-item">
-                        <div>
-                            <div class="list-item-title">${m.date}</div>
-                            <div class="list-item-sub">${m.memo||'식사'}</div>
-                        </div>
-                        <span style="font-weight:600">${formatCurrency(m.amount)}</span>
-                    </div>
-                `).join('');
-            }else{
-                document.getElementById('mealList').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div>';
-            }
+        const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
+        if(dist>CLINIC_RADIUS){
+            alert(`클리닉 범위 밖입니다. (현재 ${Math.round(dist)}m)\n${CLINIC_RADIUS}m 이내에서 출근해주세요.`);
+            return;
         }
         
-        function renderLeave(){
-            const approved=leaveRequests.filter(r=>r.status==='approved');
-            const usedDays=approved.reduce((sum,r)=>{
-                if(r.type?.includes('반차'))return sum+0.5;
-                return sum+(r.dates?.length||1);
-            },0);
-            
-            // 연차: 개별 설정값 있으면 사용, 없으면 법정 자동계산
-            const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
-            const adminUsed=currentUser.usedLeave||0; // admin에서 설정한 사용 연차
-            const totalUsed=usedDays+adminUsed;
-            
-            document.getElementById('leaveTotal').textContent=total;
-            document.getElementById('leaveUsed').textContent=totalUsed;
-            document.getElementById('leaveRemain').textContent=Math.max(0,total-totalUsed);
-            
-            if(leaveRequests.length>0){
-                document.getElementById('leaveHistory').innerHTML=leaveRequests.slice(0,10).map(r=>{
-                    const statusClass=r.status==='approved'?'approved':r.status==='rejected'?'rejected':'pending';
-                    const statusLabel=r.status==='approved'?'승인':r.status==='rejected'?'반려':'대기중';
-                    const dates=r.dates?.join(', ')||'-';
-                    return `
-                        <div class="leave-item ${statusClass}">
-                            <div style="display:flex;justify-content:space-between;margin-bottom:.25rem">
-                                <strong>${r.type||'연차'}</strong>
-                                <span class="badge badge-${statusClass==='approved'?'green':statusClass==='rejected'?'red':'orange'}">${statusLabel}</span>
-                            </div>
-                            <div style="font-size:.85rem;color:var(--text-secondary)">${dates}</div>
-                            ${r.reason?`<div style="font-size:.8rem;color:var(--text-muted);margin-top:.25rem">${r.reason}</div>`:''}
-                        </div>
-                    `;
-                }).join('');
-            }else{
-                document.getElementById('leaveHistory').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div>';
-            }
+        const now=new Date();
+        const time=now.toTimeString().substring(0,5);
+        const today=getToday();
+        const h=now.getHours(),m=now.getMinutes();
+        const status=(h>9||(h===9&&m>10))?'late':'normal';
+        
+        try{
+            await db.collection('attendance').add({
+                employeeId:currentUser.id,
+                employeeName:currentUser.name,
+                date:today,
+                checkIn:time,
+                status:status,
+                location:{lat:userLocation.lat,lng:userLocation.lng},
+                createdAt:firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert('출근 완료: '+time+(status==='late'?' (지각)':''));
+            await loadAttendance();
+            renderAttendance();
+        }catch(e){alert('출근 실패: '+e.message);}
+    }
+    
+    async function checkOut(){
+        if(!userLocation){
+            alert('위치를 확인할 수 없습니다.');
+            checkLocation();
+            return;
         }
         
-        // 법정 연차 자동계산 (근로기준법)
-        function calculateLegalAnnualLeave(joinDate){
-            if(!joinDate)return 15;
-            const join=new Date(joinDate);
-            const now=new Date();
-            const diffMs=now-join;
-            const diffDays=Math.floor(diffMs/(1000*60*60*24));
-            const years=Math.floor(diffDays/365);
-            
-            if(years<1){
-                // 1년 미만: 1개월 개근 시 1일 (최대 11일)
-                const months=Math.floor(diffDays/30);
-                return Math.min(months,11);
-            }else{
-                // 1년 이상: 15일 + 2년마다 1일 추가 (최대 25일)
-                const extraDays=Math.floor((years-1)/2);
-                return Math.min(15+extraDays,25);
-            }
+        const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
+        if(dist>CLINIC_RADIUS){
+            alert(`클리닉 범위 밖입니다. (현재 ${Math.round(dist)}m)`);
+            return;
         }
         
-        function renderIncentive(){
-            const ym=getYM();
-            const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
-            
-            // 총 실적 건수와 금액 계산
-            let totalCount=monthRecords.length;
-            let totalAmount=0;
-            
-            if(incentiveItems.length>0){
-                document.getElementById('myIncentiveItems').innerHTML=incentiveItems.map(item=>{
-                    const count=monthRecords.filter(r=>r.itemId===item.id).length;
-                    const typeLabel=item.type==='japanSales'?`일본인 매출 ${item.percent||1}%`:`건당 ${formatCurrency(item.price||0)}`;
-                    const itemTotal=item.type==='japanSales'?0:(count*(item.price||0));
-                    if(item.type!=='japanSales')totalAmount+=itemTotal;
-                    return `
-                        <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
-                            <div style="font-weight:600;margin-bottom:.25rem">${item.name}</div>
-                            <div style="font-size:.85rem;color:var(--text-secondary)"><span class="badge badge-gold">${typeLabel}</span></div>
-                            <div style="font-size:1rem;font-weight:700;color:var(--primary);margin-top:.5rem">${count}건${item.type!=='japanSales'?' = '+formatCurrency(itemTotal):''}</div>
-                        </div>
-                    `;
-                }).join('');
-                
-                // 인센티브 드롭다운 업데이트
-                document.getElementById('incItemSelect').innerHTML='<option value="">항목 선택</option>'+incentiveItems.filter(i=>i.type!=='japanSales').map(i=>`<option value="${i.id}">${i.name} (${formatCurrency(i.price||0)}/건)</option>`).join('');
-            }else{
-                document.getElementById('myIncentiveItems').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">등록된 항목이 없습니다</div>';
-            }
-            
-            // 상단 통계 업데이트
-            document.getElementById('incTotalCount').textContent=totalCount+'건';
-            document.getElementById('incTotalAmount').textContent=formatCurrency(totalAmount);
-            
-            if(monthRecords.length>0){
-                document.getElementById('incentiveRecords').innerHTML=monthRecords.map(r=>{
-                    const item=incentiveItems.find(i=>i.id===r.itemId);
-                    return `
-                        <div class="list-item">
-                            <div>
-                                <div class="list-item-title">${item?.name||'항목'}</div>
-                                <div class="list-item-sub">${r.customerName||''} ${r.chartNo?'('+r.chartNo+')':''}</div>
-                            </div>
-                            <span class="badge badge-green">${r.date||''}</span>
-                        </div>
-                    `;
-                }).join('');
-            }else{
-                document.getElementById('incentiveRecords').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">입력된 실적이 없습니다</div>';
-            }
-        }
+        const now=new Date();
+        const time=now.toTimeString().substring(0,5);
+        const today=getToday();
+        const todayAtt=attendance.find(a=>a.date===today);
         
-        function renderInfo(){
-            document.getElementById('infoName').textContent=currentUser.name||'-';
-            document.getElementById('infoRole').textContent=roleLabels[currentUser.role]||currentUser.role||'-';
-            document.getElementById('infoJoinDate').textContent=currentUser.joinDate||'-';
-            document.getElementById('infoTenure').textContent=getTenure(currentUser.joinDate);
-            
-            // 급여 월 선택 드롭다운
-            const months=[...new Set(payrollData.map(p=>p.yearMonth))].sort().reverse();
-            const select=document.getElementById('salaryMonth');
-            select.innerHTML=months.length>0?months.map(m=>`<option value="${m}">${m.replace('-','년 ')}월</option>`).join(''):'<option value="">데이터 없음</option>';
-            
-            // 생체인식 상태 표시
-            const bioStatus=document.getElementById('biometricStatus');
-            const hasCredential=localStorage.getItem('lumi_biometric_credential');
-            if(hasCredential){
-                bioStatus.innerHTML='✅ 등록됨 - <a href="#" onclick="removeBiometric();return false;" style="color:var(--red)">해제</a>';
-            }else if(!window.PublicKeyCredential){
-                bioStatus.textContent='⚠️ 이 브라우저에서 지원되지 않습니다';
-                document.getElementById('biometricRegisterBtn').style.display='none';
-            }else{
-                bioStatus.textContent='미등록';
-            }
-            
-            renderSalary();
-        }
+        if(!todayAtt){alert('오늘 출근 기록이 없습니다.');return;}
         
-        function removeBiometric(){
-            if(confirm('생체인식 등록을 해제하시겠습니까?')){
-                localStorage.removeItem('lumi_biometric_credential');
-                localStorage.removeItem('lumi_biometric_user');
-                renderInfo();
-                alert('생체인식이 해제되었습니다.');
-            }
-        }
+        const h=now.getHours();
+        const newStatus=h<18?'early':todayAtt.status;
         
-        function renderSalary(){
-            const ym=document.getElementById('salaryMonth').value||getYM();
-            document.getElementById('salaryTitle').textContent=ym.replace('-','년 ')+'월 급여 정보';
-            
-            const myPayroll=payrollData.find(p=>(p.yearMonth===ym)&&(p.name===currentUser.name||p.name===currentUser.matchName));
-            if(myPayroll){
-                // 노무사에서 받은 급여대장 데이터가 있으면 표시
-                document.getElementById('infoNetPay').textContent=formatCurrency(myPayroll.netPay);
-                // OT수당 = 추가연장수당 필드 (중요!)
-                document.getElementById('infoOT').textContent=formatCurrency(myPayroll.extraOT||myPayroll.additionalOT||0);
-                document.getElementById('infoIncentive').textContent=formatCurrency(myPayroll.incentive||0);
-            }else{
-                // 급여대장 없으면 직접 계산한 예상 값 표시
-                const monthOT=lunchOT.filter(ot=>ot.date?.startsWith(ym));
-                const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
-                const lunchMinutes=monthOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
-                let afterMinutes=0;
-                monthAtt.forEach(a=>{
-                    if(a.checkOut){
-                        const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
-                        const checkOutMin=h*60+m;
-                        if(checkOutMin>18*60)afterMinutes+=checkOutMin-18*60;
-                    }
-                });
-                const totalOTMinutes=lunchMinutes+afterMinutes;
-                const hourly=currentUser.hourly||12000;
-                const estimatedOT=Math.round((totalOTMinutes/60)*hourly*1.5);
-                
-                // 인센티브 계산
-                const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
-                let estimatedIncentive=0;
-                incentiveItems.forEach(item=>{
-                    if(item.type!=='japanSales'){
-                        const count=monthRecords.filter(r=>r.itemId===item.id).length;
-                        estimatedIncentive+=count*(item.price||0);
-                    }
-                });
-                
-                document.getElementById('infoNetPay').textContent='미확정';
-                document.getElementById('infoOT').textContent=formatCurrency(estimatedOT)+' (예상)';
-                document.getElementById('infoIncentive').textContent=formatCurrency(estimatedIncentive)+' (예상)';
-            }
-        }
+        try{
+            await db.collection('attendance').doc(todayAtt.id).update({
+                checkOut:time,
+                status:newStatus
+            });
+            alert('퇴근 완료: '+time+(newStatus==='early'?' (조퇴)':''));
+            await loadAttendance();
+            renderAttendance();
+        }catch(e){alert('퇴근 실패: '+e.message);}
+    }
+    
+    function openModal(id){document.getElementById(id).classList.add('active');}
+    function closeModal(id){document.getElementById(id).classList.remove('active');}
+    
+    function openLunchOTModal(){
+        document.getElementById('lunchOTDate').value=getToday();
+        document.getElementById('lunchOTMinutes').value='30';
+        document.getElementById('lunchOTReason').value='';
+        openModal('lunchOTModal');
+    }
+    
+    async function saveLunchOT(){
+        const date=document.getElementById('lunchOTDate').value;
+        const minutes=parseInt(document.getElementById('lunchOTMinutes').value)||0;
+        const reason=document.getElementById('lunchOTReason').value.trim();
         
-        // Actions
-        async function checkIn(){
-            if(!userLocation){
-                alert('위치를 확인할 수 없습니다. 위치 권한을 허용해주세요.');
-                checkLocation();
-                return;
-            }
-            
-            const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
-            if(dist>CLINIC_RADIUS){
-                alert(`클리닉 범위 밖입니다. (현재 ${Math.round(dist)}m)\n${CLINIC_RADIUS}m 이내에서 출근해주세요.`);
-                return;
-            }
-            
-            const now=new Date();
-            const time=now.toTimeString().substring(0,5);
-            const today=getToday();
-            const h=now.getHours(),m=now.getMinutes();
-            const status=(h>9||(h===9&&m>10))?'late':'normal';
-            
-            try{
-                await db.collection('attendance').add({
-                    employeeId:currentUser.id,
-                    employeeName:currentUser.name,
-                    date:today,
-                    checkIn:time,
-                    status:status,
-                    location:{lat:userLocation.lat,lng:userLocation.lng},
-                    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-                });
-                alert('출근 완료: '+time+(status==='late'?' (지각)':''));
-                await loadAttendance();
-                renderAttendance();
-            }catch(e){alert('출근 실패: '+e.message);}
-        }
+        if(!date||minutes<=0){alert('날짜와 시간을 입력해주세요.');return;}
         
-        async function checkOut(){
-            if(!userLocation){
-                alert('위치를 확인할 수 없습니다.');
-                checkLocation();
-                return;
-            }
-            
-            const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
-            if(dist>CLINIC_RADIUS){
-                alert(`클리닉 범위 밖입니다. (현재 ${Math.round(dist)}m)`);
-                return;
-            }
-            
-            const now=new Date();
-            const time=now.toTimeString().substring(0,5);
-            const today=getToday();
-            const todayAtt=attendance.find(a=>a.date===today);
-            
-            if(!todayAtt){alert('오늘 출근 기록이 없습니다.');return;}
-            
-            const h=now.getHours();
-            const newStatus=h<18?'early':todayAtt.status;
-            
-            try{
-                await db.collection('attendance').doc(todayAtt.id).update({
-                    checkOut:time,
-                    status:newStatus
-                });
-                alert('퇴근 완료: '+time+(newStatus==='early'?' (조퇴)':''));
-                await loadAttendance();
-                renderAttendance();
-            }catch(e){alert('퇴근 실패: '+e.message);}
-        }
+        try{
+            await db.collection('lunchOT').add({
+                employeeId:currentUser.id,
+                employeeName:currentUser.name,
+                date:date,
+                minutes:minutes,
+                reason:reason,
+                createdAt:firebase.firestore.FieldValue.serverTimestamp()
+            });
+            closeModal('lunchOTModal');
+            alert('점심 OT가 저장되었습니다.');
+            await loadLunchOT();
+            renderOT();
+        }catch(e){alert('저장 실패: '+e.message);}
+    }
+    
+    function openMealModal(){
+        document.getElementById('mealDate').value=getToday();
+        document.getElementById('mealAmount').value='';
+        document.getElementById('mealMemo').value='';
+        openModal('mealModal');
+    }
+    
+    async function saveMeal(){
+        const date=document.getElementById('mealDate').value;
+        const amount=parseInt(document.getElementById('mealAmount').value)||0;
+        const memo=document.getElementById('mealMemo').value.trim();
         
-        function openModal(id){document.getElementById(id).classList.add('active');}
-        function closeModal(id){document.getElementById(id).classList.remove('active');}
+        if(!date||amount<=0){alert('날짜와 금액을 입력해주세요.');return;}
         
-        function openLunchOTModal(){
-            document.getElementById('lunchOTDate').value=getToday();
-            document.getElementById('lunchOTMinutes').value='30';
-            document.getElementById('lunchOTReason').value='';
-            openModal('lunchOTModal');
-        }
+        try{
+            await db.collection('mealRecords').add({
+                employeeId:currentUser.id,
+                employeeName:currentUser.name,
+                date:date,
+                amount:amount,
+                memo:memo,
+                yearMonth:date.substring(0,7),
+                createdAt:firebase.firestore.FieldValue.serverTimestamp()
+            });
+            closeModal('mealModal');
+            alert('식사가 저장되었습니다.');
+            await loadMealRecords();
+            renderMeal();
+        }catch(e){alert('저장 실패: '+e.message);}
+    }
+    
+    function openLeaveModal(){
+        selectedLeaveDates=[];
+        document.getElementById('leaveType').value='연차';
+        document.getElementById('leaveDateInput').value='';
+        document.getElementById('leaveReason').value='';
+        renderLeaveDates();
+        openModal('leaveModal');
+    }
+    
+    function addLeaveDate(){
+        const date=document.getElementById('leaveDateInput').value;
+        if(!date){alert('날짜를 선택해주세요.');return;}
+        if(selectedLeaveDates.includes(date)){alert('이미 추가된 날짜입니다.');return;}
+        selectedLeaveDates.push(date);
+        selectedLeaveDates.sort();
+        document.getElementById('leaveDateInput').value='';
+        renderLeaveDates();
+    }
+    
+    function removeLeaveDate(date){
+        selectedLeaveDates=selectedLeaveDates.filter(d=>d!==date);
+        renderLeaveDates();
+    }
+    
+    function renderLeaveDates(){
+        const container=document.getElementById('leaveDateTags');
+        container.innerHTML=selectedLeaveDates.length>0?selectedLeaveDates.map(d=>`<div class="date-tag">${d}<button class="date-tag-remove" onclick="removeLeaveDate('${d}')">&times;</button></div>`).join(''):'<span style="color:var(--text-muted);font-size:.85rem">날짜를 추가해주세요</span>';
+    }
+    
+    async function submitLeave(){
+        const type=document.getElementById('leaveType').value;
+        const reason=document.getElementById('leaveReason').value.trim();
         
-        async function saveLunchOT(){
-            const date=document.getElementById('lunchOTDate').value;
-            const minutes=parseInt(document.getElementById('lunchOTMinutes').value)||0;
-            const reason=document.getElementById('lunchOTReason').value.trim();
-            
-            if(!date||minutes<=0){alert('날짜와 시간을 입력해주세요.');return;}
-            
-            try{
-                await db.collection('lunchOT').add({
-                    employeeId:currentUser.id,
-                    employeeName:currentUser.name,
-                    date:date,
-                    minutes:minutes,
-                    reason:reason,
-                    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-                });
-                closeModal('lunchOTModal');
-                alert('점심 OT가 저장되었습니다.');
-                await loadLunchOT();
-                renderOT();
-            }catch(e){alert('저장 실패: '+e.message);}
-        }
+        if(selectedLeaveDates.length===0){alert('날짜를 추가해주세요.');return;}
         
-        function openMealModal(){
-            document.getElementById('mealDate').value=getToday();
-            document.getElementById('mealAmount').value='';
-            document.getElementById('mealMemo').value='';
-            openModal('mealModal');
-        }
+        try{
+            await db.collection('leaveRequests').add({
+                employeeId:currentUser.id,
+                employeeName:currentUser.name,
+                type:type,
+                dates:selectedLeaveDates,
+                reason:reason,
+                status:'pending',
+                createdAt:firebase.firestore.FieldValue.serverTimestamp()
+            });
+            closeModal('leaveModal');
+            alert('연차 신청이 완료되었습니다.');
+            await loadLeaveRequests();
+            renderLeave();
+        }catch(e){alert('신청 실패: '+e.message);}
+    }
+    
+    function openIncentiveModal(){
+        document.getElementById('incCustomerName').value='';
+        document.getElementById('incChartNo').value='';
+        openModal('incentiveModal');
+    }
+    
+    async function addIncentiveRecord(){
+        const itemId=document.getElementById('incItemSelect').value;
+        const customerName=document.getElementById('incCustomerName').value.trim();
+        const chartNo=document.getElementById('incChartNo').value.trim();
         
-        async function saveMeal(){
-            const date=document.getElementById('mealDate').value;
-            const amount=parseInt(document.getElementById('mealAmount').value)||0;
-            const memo=document.getElementById('mealMemo').value.trim();
-            
-            if(!date||amount<=0){alert('날짜와 금액을 입력해주세요.');return;}
-            
-            try{
-                await db.collection('mealRecords').add({
-                    employeeId:currentUser.id,
-                    employeeName:currentUser.name,
-                    date:date,
-                    amount:amount,
-                    memo:memo,
-                    yearMonth:date.substring(0,7),
-                    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-                });
-                closeModal('mealModal');
-                alert('식사가 저장되었습니다.');
-                await loadMealRecords();
-                renderMeal();
-            }catch(e){alert('저장 실패: '+e.message);}
-        }
+        if(!itemId){alert('항목을 선택해주세요.');return;}
+        if(!customerName){alert('고객명을 입력해주세요.');return;}
         
-        function openLeaveModal(){
-            selectedLeaveDates=[];
-            document.getElementById('leaveType').value='연차';
-            document.getElementById('leaveDateInput').value='';
-            document.getElementById('leaveReason').value='';
-            renderLeaveDates();
-            openModal('leaveModal');
-        }
-        
-        function addLeaveDate(){
-            const date=document.getElementById('leaveDateInput').value;
-            if(!date){alert('날짜를 선택해주세요.');return;}
-            if(selectedLeaveDates.includes(date)){alert('이미 추가된 날짜입니다.');return;}
-            selectedLeaveDates.push(date);
-            selectedLeaveDates.sort();
-            document.getElementById('leaveDateInput').value='';
-            renderLeaveDates();
-        }
-        
-        function removeLeaveDate(date){
-            selectedLeaveDates=selectedLeaveDates.filter(d=>d!==date);
-            renderLeaveDates();
-        }
-        
-        function renderLeaveDates(){
-            const container=document.getElementById('leaveDateTags');
-            container.innerHTML=selectedLeaveDates.length>0?selectedLeaveDates.map(d=>`<div class="date-tag">${d}<button class="date-tag-remove" onclick="removeLeaveDate('${d}')">&times;</button></div>`).join(''):'<span style="color:var(--text-muted);font-size:.85rem">날짜를 추가해주세요</span>';
-        }
-        
-        async function submitLeave(){
-            const type=document.getElementById('leaveType').value;
-            const reason=document.getElementById('leaveReason').value.trim();
-            
-            if(selectedLeaveDates.length===0){alert('날짜를 추가해주세요.');return;}
-            
-            try{
-                await db.collection('leaveRequests').add({
-                    employeeId:currentUser.id,
-                    employeeName:currentUser.name,
-                    type:type,
-                    dates:selectedLeaveDates,
-                    reason:reason,
-                    status:'pending',
-                    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-                });
-                closeModal('leaveModal');
-                alert('연차 신청이 완료되었습니다.');
-                await loadLeaveRequests();
-                renderLeave();
-            }catch(e){alert('신청 실패: '+e.message);}
-        }
-        
-        function openIncentiveModal(){
+        try{
+            await db.collection('incentiveRecords').add({
+                employeeId:currentUser.id,
+                employeeName:currentUser.name,
+                itemId:itemId,
+                customerName:customerName,
+                chartNo:chartNo,
+                date:getToday(),
+                yearMonth:getYM(),
+                createdAt:firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert('실적이 추가되었습니다.');
             document.getElementById('incCustomerName').value='';
             document.getElementById('incChartNo').value='';
-            openModal('incentiveModal');
-        }
-        
-        async function addIncentiveRecord(){
-            const itemId=document.getElementById('incItemSelect').value;
-            const customerName=document.getElementById('incCustomerName').value.trim();
-            const chartNo=document.getElementById('incChartNo').value.trim();
-            
-            if(!itemId){alert('항목을 선택해주세요.');return;}
-            if(!customerName){alert('고객명을 입력해주세요.');return;}
-            
-            try{
-                await db.collection('incentiveRecords').add({
-                    employeeId:currentUser.id,
-                    employeeName:currentUser.name,
-                    itemId:itemId,
-                    customerName:customerName,
-                    chartNo:chartNo,
-                    date:getToday(),
-                    yearMonth:getYM(),
-                    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-                });
-                alert('실적이 추가되었습니다.');
-                document.getElementById('incCustomerName').value='';
-                document.getElementById('incChartNo').value='';
-                await loadIncentiveRecords();
-                renderIncentive();
-            }catch(e){alert('저장 실패: '+e.message);}
-        }
-        
-        // Tab Navigation
-        document.querySelectorAll('.nav-item').forEach(item=>{
-            item.addEventListener('click',function(){
-                document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-                this.classList.add('active');
-                document.getElementById('tab-'+this.dataset.tab).classList.add('active');
-            });
+            await loadIncentiveRecords();
+            renderIncentive();
+        }catch(e){alert('저장 실패: '+e.message);}
+    }
+    
+    // Tab Navigation
+    document.querySelectorAll('.nav-item').forEach(item=>{
+        item.addEventListener('click',function(){
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+            this.classList.add('active');
+            document.getElementById('tab-'+this.dataset.tab).classList.add('active');
         });
-        
-        // Init
-        checkAuth();
-    </script>
+    });
+    
+    // Init
+    checkAuth();
+</script>
+```
+
 </body>
 </html>
