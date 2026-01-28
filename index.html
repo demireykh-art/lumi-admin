@@ -369,8 +369,10 @@
             </div>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">연봉 (만원)</label><input type="number" class="form-input" id="empSalary" placeholder="예: 3000 (3천만원)"></div>
-                <div class="form-group"><label class="form-label">시급 (자동계산: 연봉÷2508)</label><input type="number" class="form-input" id="empHourly" value="12000" readonly style="background:#f5f5f0"></div>
-                <div class="form-group"><label class="form-label">인센티브 유형</label><select class="form-select" id="empIncentiveType"><option value="none">없음</option><option value="staff_sales">담당직원 매출 1%</option><option value="per_case">건별 인센티브</option><option value="special_treatment">특정 시술 (포다이스/위너확장/피지선)</option><option value="japan_direct">일본인 직접매출 (담당직원 제외)</option></select></div>
+                <div class="form-group">
+                    <label class="form-label">시급 <span style="font-size:.75rem;color:var(--text-muted)">(연봉입력시 자동계산, 수동수정 가능)</span></label>
+                    <input type="number" class="form-input" id="empHourly" value="12000">
+                </div>
             </div>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">생년월일</label><input type="date" class="form-input" id="empBirthday"></div>
@@ -471,18 +473,27 @@
             <div class="form-group"><label class="form-label">항목명 *</label><input type="text" class="form-input" id="incItemName" placeholder="예: 관리 지정, 시술 보조, 일본인 매출"></div>
             <div class="form-group"><label class="form-label">인센티브 유형</label>
                 <select class="form-select" id="incItemType" onchange="toggleIncItemFields()">
-                    <option value="perCase">건별 단가</option>
+                    <option value="perCase">건별 단가 (고정 금액)</option>
+                    <option value="salesPercent">담당 매출 % (매출 연동)</option>
                     <option value="japanSales">일본인 본인 상담매출 %</option>
                 </select>
             </div>
             <div id="perCaseFields">
                 <div class="form-group"><label class="form-label">단가 (건당)</label><input type="number" class="form-input" id="incItemPrice" value="50000"></div>
             </div>
+            <div id="salesPercentFields" style="display:none">
+                <div class="form-group"><label class="form-label">적용 비율 (%)</label><input type="number" class="form-input" id="incItemSalesPercent" value="1" step="0.1" min="0" max="100"></div>
+                <div class="form-group" style="background:#f5f5f0;padding:12px;border-radius:8px;font-size:.85rem;color:var(--text-secondary)">
+                    <strong>💡 담당 매출 % 인센티브</strong><br>
+                    매출 파일에서 담당직원(matchName)으로 집계된 매출 × 설정 비율로 계산됩니다.<br>
+                    <span style="color:var(--accent-gold)">예: 매출 1000만원 × 1% = 10만원</span>
+                </div>
+            </div>
             <div id="japanSalesFields" style="display:none">
                 <div class="form-group"><label class="form-label">적용 비율 (%)</label><input type="number" class="form-input" id="incItemPercent" value="1" step="0.1" min="0" max="100"></div>
                 <div class="form-group" style="background:#f5f5f0;padding:12px;border-radius:8px;font-size:.85rem;color:var(--text-secondary)">
                     <strong>💡 일본인 본인 상담매출 인센티브</strong><br>
-                    매출 파일 분석 시 일본인 매출 중 해당 직원이 담당한 매출에서 설정된 비율만큼 인센티브가 계산됩니다.
+                    매출 파일에서 일본인 매출 중 해당 직원이 담당한 매출 × 설정 비율로 계산됩니다.
                 </div>
             </div>
             <div class="form-group"><label class="form-label">적용 직원 (복수 선택 가능)</label><div id="incItemEmployees" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);padding:.75rem;background:#fff"></div></div>
@@ -1214,8 +1225,18 @@
                     return emp?emp.name:null;
                 }).filter(n=>n).join(', ')||'미지정';
             }
-            const typeLabel=item.type==='japanSales'?`일본인 매출 ${item.percent||1}%`:`건당 ${formatCurrency(item.price)}`;
-            const typeBadge=item.type==='japanSales'?'badge-green':'badge-blue';
+            let typeLabel='';
+            let typeBadge='badge-blue';
+            if(item.type==='perCase'){
+                typeLabel=`건당 ${formatCurrency(item.price)}`;
+                typeBadge='badge-blue';
+            }else if(item.type==='salesPercent'){
+                typeLabel=`담당 매출 ${item.salesPercent||1}%`;
+                typeBadge='badge-gold';
+            }else if(item.type==='japanSales'){
+                typeLabel=`일본인 매출 ${item.percent||1}%`;
+                typeBadge='badge-green';
+            }
             return `<tr><td><strong>${item.name}</strong></td><td><span class="badge ${typeBadge}">${typeLabel}</span></td><td><span class="badge badge-purple">${empNames}</span></td><td><button class="btn btn-sm btn-secondary" onclick="editIncentiveItem('${item.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteIncentiveItem('${item.id}')">삭제</button></td></tr>`;
         }).join('')||'<tr><td colspan="4" class="text-center">등록된 항목 없음</td></tr>';
     }
@@ -1227,13 +1248,16 @@
         
         document.getElementById('incentiveSummaryTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
             let salesIncentive=0;
-            // 기존 담당직원 매출 1% 인센티브
-            if(emp.incentiveType==='staff_sales'&&emp.matchName){
-                const sales=staffSales[emp.matchName];
-                if(sales)salesIncentive=Math.round(sales.amount*0.01);
-            }
             
-            // 일본인 매출 % 인센티브 계산
+            // 1. 담당 매출 % 인센티브 (salesPercent)
+            const salesPercentItems=incentiveItems.filter(i=>i.type==='salesPercent'&&i.employees?.includes(emp.id));
+            salesPercentItems.forEach(item=>{
+                if(emp.matchName&&staffSales[emp.matchName]){
+                    salesIncentive+=Math.round(staffSales[emp.matchName].amount*(item.salesPercent||1)/100);
+                }
+            });
+            
+            // 2. 일본인 매출 % 인센티브 계산
             let japanIncentive=0;
             const japanSalesItems=incentiveItems.filter(i=>i.type==='japanSales'&&i.employees?.includes(emp.id));
             japanSalesItems.forEach(item=>{
@@ -1841,7 +1865,6 @@
         document.getElementById('empJoinDate').value='';
         document.getElementById('empSalary').value='';
         document.getElementById('empHourly').value='12000';
-        document.getElementById('empIncentiveType').value='none';
         document.getElementById('empBirthday').value='';
         document.getElementById('empStatus').value='active';
         document.getElementById('empAnnualLeave').value='';
@@ -1857,7 +1880,6 @@
                 document.getElementById('empJoinDate').value=emp.joinDate||'';
                 document.getElementById('empSalary').value=emp.salary||'';
                 document.getElementById('empHourly').value=emp.hourly||12000;
-                document.getElementById('empIncentiveType').value=emp.incentiveType||'none';
                 document.getElementById('empBirthday').value=emp.birthday||'';
                 document.getElementById('empStatus').value=emp.status||'active';
                 document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
@@ -1934,7 +1956,6 @@
             joinDate,
             salary:salary,
             hourly:parseInt(document.getElementById('empHourly').value)||12000,
-            incentiveType:document.getElementById('empIncentiveType').value,
             birthday:document.getElementById('empBirthday').value,
             status:document.getElementById('empStatus').value,
             annualLeave:annualLeave,
@@ -1977,6 +1998,7 @@
     function toggleIncItemFields(){
         const type=document.getElementById('incItemType').value;
         document.getElementById('perCaseFields').style.display=type==='perCase'?'block':'none';
+        document.getElementById('salesPercentFields').style.display=type==='salesPercent'?'block':'none';
         document.getElementById('japanSalesFields').style.display=type==='japanSales'?'block':'none';
     }
     
@@ -1987,6 +2009,7 @@
         document.getElementById('incItemType').value='perCase';
         document.getElementById('incItemPrice').value='50000';
         document.getElementById('incItemPercent').value='1';
+        document.getElementById('incItemSalesPercent').value='1';
         toggleIncItemFields();
         const selectedEmps=id?incentiveItems.find(i=>i.id===id)?.employees||[]:[];
         const container=document.getElementById('incItemEmployees');
@@ -1996,6 +2019,7 @@
             document.getElementById('incItemType').value=item.type||'perCase';
             document.getElementById('incItemPrice').value=item.price||50000;
             document.getElementById('incItemPercent').value=item.percent||1;
+            document.getElementById('incItemSalesPercent').value=item.salesPercent||1;
             toggleIncItemFields();
         }}
         openModal('incentiveItemModal');
@@ -2006,22 +2030,25 @@
         const type=document.getElementById('incItemType').value;
         const price=parseInt(document.getElementById('incItemPrice').value)||0;
         const percent=parseFloat(document.getElementById('incItemPercent').value)||1;
+        const salesPercent=parseFloat(document.getElementById('incItemSalesPercent').value)||1;
         const selectedEmps=Array.from(document.querySelectorAll('input[name="incEmp"]:checked')).map(cb=>cb.value);
         if(!name){alert('항목명을 입력해주세요.');return;}
         const data={name,type,employees:selectedEmps};
         if(type==='perCase'){
             data.price=price;
+        }else if(type==='salesPercent'){
+            data.salesPercent=salesPercent;
         }else if(type==='japanSales'){
             data.percent=percent;
         }
         try{
             if(editId){await db.collection('incentiveItems').doc(editId).update(data);}
             else{await db.collection('incentiveItems').add(data);}
-            closeModal('incentiveItemModal');await loadIncentiveItems();renderIncentiveItems();
+            closeModal('incentiveItemModal');await loadIncentiveItems();renderIncentiveItems();renderIncentiveSummary();
         }catch(e){alert('저장 실패: '+e.message);}
     }
     function editIncentiveItem(id){openIncentiveItemModal(id);}
-    async function deleteIncentiveItem(id){if(!confirm('정말 삭제하시겠습니까?'))return;try{await db.collection('incentiveItems').doc(id).delete();await loadIncentiveItems();renderIncentiveItems();}catch(e){alert('삭제 실패: '+e.message);}}
+    async function deleteIncentiveItem(id){if(!confirm('정말 삭제하시겠습니까?'))return;try{await db.collection('incentiveItems').doc(id).delete();await loadIncentiveItems();renderIncentiveItems();renderIncentiveSummary();}catch(e){alert('삭제 실패: '+e.message);}}
 
     // File Upload
     const uploadZone=document.getElementById('uploadZone');
