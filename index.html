@@ -2062,16 +2062,95 @@
                 try{
                     const data=new Uint8Array(e.target.result);
                     const wb=XLSX.read(data,{type:'array'});
-                    const sheet=wb.Sheets[wb.SheetNames[0]];
-                    const json=XLSX.utils.sheet_to_json(sheet);
+                    
+                    // 시트 선택: '오더별환자리스트' 시트 우선, 없으면 두 번째 시트, 없으면 첫 번째
+                    let sheetName=wb.SheetNames[0];
+                    if(wb.SheetNames.includes('오더별환자리스트')){
+                        sheetName='오더별환자리스트';
+                    }else if(wb.SheetNames.length>1){
+                        sheetName=wb.SheetNames[1];
+                    }
+                    
+                    const sheet=wb.Sheets[sheetName];
+                    let json=XLSX.utils.sheet_to_json(sheet,{header:1}); // 헤더 없이 배열로
+                    
+                    console.log('선택된 시트:', sheetName);
+                    console.log('총 행 수:', json.length);
+                    console.log('첫 3행:', json.slice(0,3));
+                    
+                    if(json.length<3){
+                        alert('데이터가 부족합니다.');
+                        return;
+                    }
+                    
+                    // 헤더 행 찾기 (차트번호, 금액 등이 있는 행)
+                    let headerRowIndex=0;
+                    for(let i=0;i<Math.min(5,json.length);i++){
+                        const row=json[i];
+                        if(row&&(row.includes('차트번호')||row.includes('금액')||row.includes('진료일'))){
+                            headerRowIndex=i;
+                            break;
+                        }
+                    }
+                    
+                    const headers=json[headerRowIndex];
+                    console.log('헤더 행 인덱스:', headerRowIndex);
+                    console.log('컬럼 헤더:', headers);
+                    
+                    // 컬럼 인덱스 찾기
+                    const colIndex={
+                        chartNo:headers.indexOf('차트번호'),
+                        date:headers.indexOf('진료일'),
+                        doctor:headers.indexOf('진료의명'),
+                        staff:headers.indexOf('담당직원'),
+                        amount:headers.indexOf('금액'),
+                        nationality:headers.indexOf('국적'),
+                        name:headers.indexOf('이름')
+                    };
+                    
+                    console.log('컬럼 인덱스:', colIndex);
+                    
+                    // 필수 컬럼 체크
+                    if(colIndex.date===-1||colIndex.amount===-1){
+                        alert(`필수 컬럼을 찾을 수 없습니다.\n\n발견된 컬럼: ${headers.filter(h=>h).join(', ')}\n\n필요한 컬럼: 진료일, 금액`);
+                        return;
+                    }
+                    
+                    // 데이터 행 처리 (헤더 다음 행부터, 마지막 합계행 제외)
+                    const dataRows=json.slice(headerRowIndex+1);
+                    
+                    // 마지막 행이 합계인지 확인 (이름 컬럼에 '합계' 포함 또는 차트번호가 비어있으면서 금액이 큰 경우)
+                    const lastRow=dataRows[dataRows.length-1];
+                    const isLastRowTotal=lastRow&&(
+                        (colIndex.name>=0&&String(lastRow[colIndex.name]||'').includes('합계'))||
+                        (colIndex.chartNo>=0&&!lastRow[colIndex.chartNo]&&lastRow[colIndex.amount]>10000000)
+                    );
+                    
+                    const validRows=isLastRowTotal?dataRows.slice(0,-1):dataRows;
+                    console.log('마지막행 합계 여부:', isLastRowTotal);
+                    console.log('유효 데이터 행 수:', validRows.length);
                     
                     // 월별로 데이터 분리
                     const monthlyData={};
                     
-                    json.forEach(row=>{
-                        const amount=parseInt(row['금액'])||0;
-                        const dateStr=String(row['진료일']||'');
-                        if(dateStr.length<6)return;
+                    validRows.forEach(row=>{
+                        if(!row||!row.length)return;
+                        
+                        const amount=parseInt(row[colIndex.amount])||0;
+                        if(amount<=0)return;
+                        
+                        let dateStr=String(row[colIndex.date]||'');
+                        
+                        // 날짜 형식 처리
+                        if(typeof row[colIndex.date]==='number'){
+                            // 엑셀 시리얼 날짜
+                            const jsDate=new Date((row[colIndex.date]-25569)*86400*1000);
+                            dateStr=jsDate.toISOString().slice(0,10).replace(/-/g,'');
+                        }else if(dateStr.includes('-')){
+                            dateStr=dateStr.replace(/-/g,'');
+                        }
+                        
+                        if(dateStr.length<8)return;
                         
                         const year=dateStr.substring(0,4);
                         const month=dateStr.substring(4,6);
@@ -2084,18 +2163,22 @@
                         if(!monthlyData[ym]){
                             monthlyData[ym]={
                                 total:0,japan:0,transactions:0,
-                                patients:new Set(),  // 전체 고유 환자
+                                patients:new Set(),
                                 doctorSales:{},staffSales:{},
                                 japanCharts:{},japanStaffSales:{}
                             };
                         }
                         
-                        const chartNo=row['차트번호'];
+                        const chartNo=row[colIndex.chartNo];
+                        const doctor=row[colIndex.doctor];
+                        const staff=row[colIndex.staff];
+                        const nationality=row[colIndex.nationality];
+                        
                         monthlyData[ym].total+=amount;
                         monthlyData[ym].transactions++;
-                        if(chartNo)monthlyData[ym].patients.add(chartNo);  // 고유 환자 추적
+                        if(chartNo)monthlyData[ym].patients.add(chartNo);
                         
-                        const doctor=row['진료의명'];
+                        // 진료의별 매출
                         if(doctor&&doctor!=='빠른예약'){
                             if(!monthlyData[ym].doctorSales[doctor]){
                                 monthlyData[ym].doctorSales[doctor]={count:0,amount:0,patients:new Set()};
@@ -2105,7 +2188,7 @@
                             if(chartNo)monthlyData[ym].doctorSales[doctor].patients.add(chartNo);
                         }
                         
-                        const staff=row['담당직원'];
+                        // 담당직원별 매출
                         if(staff){
                             if(!monthlyData[ym].staffSales[staff]){
                                 monthlyData[ym].staffSales[staff]={count:0,amount:0,patients:new Set()};
@@ -2115,18 +2198,15 @@
                             if(chartNo)monthlyData[ym].staffSales[staff].patients.add(chartNo);
                         }
                         
-                        // 일본인 매출 처리 (차트번호 기반)
-                        const nationality=row['국적'];
-                        if(nationality&&nationality.includes('일본')){
+                        // 일본인 매출
+                        if(nationality&&String(nationality).includes('일본')){
                             monthlyData[ym].japan+=amount;
-                            // 차트번호로 고유 환자 추적
                             if(chartNo){
                                 if(!monthlyData[ym].japanCharts[chartNo]){
                                     monthlyData[ym].japanCharts[chartNo]={amount:0,staff:staff||'미지정'};
                                 }
                                 monthlyData[ym].japanCharts[chartNo].amount+=amount;
                             }
-                            // 담당직원별 일본인 매출
                             const staffKey=staff||'미지정';
                             if(!monthlyData[ym].japanStaffSales[staffKey]){
                                 monthlyData[ym].japanStaffSales[staffKey]={patients:new Set(),amount:0};
@@ -2139,6 +2219,11 @@
                     // 각 월별로 Firebase에 저장
                     const months=Object.keys(monthlyData).sort();
                     let savedCount=0;
+                    
+                    if(months.length===0){
+                        alert(`데이터 파싱 실패!\n\n컬럼은 인식되었지만 유효한 데이터가 없습니다.\n진료일 형식이나 금액을 확인해주세요.`);
+                        return;
+                    }
                     
                     for(const ym of months){
                         const d=monthlyData[ym];
