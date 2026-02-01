@@ -2253,8 +2253,9 @@
                     
                     // 마지막 행이 합계인지 확인 (이름 컬럼에 '합계' 포함 또는 차트번호가 비어있으면서 금액이 큰 경우)
                     const lastRow=dataRows[dataRows.length-1];
+                    const lastRowName=colIndex.name>=0?String(lastRow?lastRow[colIndex.name]||'':'').replace(/\s/g,''):'';
                     const isLastRowTotal=lastRow&&(
-                        (colIndex.name>=0&&String(lastRow[colIndex.name]||'').includes('합계'))||
+                        lastRowName.includes('합계')||
                         (colIndex.chartNo>=0&&!lastRow[colIndex.chartNo]&&lastRow[colIndex.amount]>10000000)
                     );
                     
