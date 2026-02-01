@@ -681,8 +681,21 @@
             if(!inputName||!pw){document.getElementById('loginError').textContent='이름과 비밀번호를 입력해주세요.';return;}
             
             try{
-                // 이름 = 문서 ID
-                const doc=await db.collection('employees').doc(inputName).get();
+                // 1차: 이름 = 문서 ID로 직접 조회
+                let doc=await db.collection('employees').doc(inputName).get();
+                
+                if(!doc.exists){
+                    // 2차: 대소문자 무시 조회 (문서ID를 소문자로)
+                    doc=await db.collection('employees').doc(inputName.toLowerCase()).get();
+                }
+                
+                if(!doc.exists){
+                    // 3차: name 필드로 검색
+                    const snap=await db.collection('employees').where('name','==',inputName).limit(1).get();
+                    if(!snap.empty){
+                        doc=snap.docs[0];
+                    }
+                }
                 
                 if(!doc.exists){
                     document.getElementById('loginError').textContent='등록되지 않은 이름입니다.';

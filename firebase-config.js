@@ -44,10 +44,17 @@ function getKoreanInitials(name){
     return result;
 }
 function getYearsOfService(joinDate){
+    if(!joinDate)return'-';
     const join=new Date(joinDate);
     const now=new Date();
-    const years=(now-join)/(365.25*24*60*60*1000);
-    return Math.max(0,years);
+    let years=now.getFullYear()-join.getFullYear();
+    let months=now.getMonth()-join.getMonth();
+    if(now.getDate()<join.getDate())months--;
+    if(months<0){years--;months+=12;}
+    if(years<0)return'-';
+    if(years===0)return months+'개월';
+    if(months===0)return years+'년';
+    return years+'년 '+months+'개월';
 }
 function getAge(birthday){
     if(!birthday)return'-';
