@@ -170,6 +170,15 @@
             .bottom-nav{padding:.5rem 1rem;gap:.5rem}
             .nav-item{font-size:.75rem;padding:.5rem .5rem}
         }
+        /* 아이패드 가로모드 최적화 */
+        @media(min-width:1024px){
+            .inv-cat-btn{padding:1rem 1.5rem;font-size:1.05rem;min-width:120px}
+            .inv-cat-btn .cat-icon{font-size:1.6rem}
+            .inv-item-row{grid-template-columns:1fr 130px 50px;padding:1rem 1.5rem}
+            .inv-item-name{font-size:1.1rem}
+            .inv-item-meta{font-size:.85rem;gap:1.2rem}
+            .inv-stock-input{width:130px;font-size:1.2rem;padding:.7rem}
+        }
     </style>
 </head>
 <body>
@@ -677,6 +686,8 @@
         }
         
         // Login
+        const LUMISTAFF_PW='lumi2026!';  // 원장님이 변경 가능
+        
         async function attemptLogin(){
             const inputName=document.getElementById('empIdInput').value.trim();
             const pw=document.getElementById('empPwInput').value;
@@ -684,28 +695,32 @@
             
             if(!inputName||!pw){document.getElementById('loginError').textContent='이름과 비밀번호를 입력해주세요.';return;}
             
+            // ─── 공용 계정: DB 조회 없이 즉시 로그인 ───
+            if(inputName==='lumistaff'||inputName==='LUMISTAFF'){
+                if(pw!==LUMISTAFF_PW){
+                    document.getElementById('loginError').textContent='공용계정 비밀번호가 올바르지 않습니다.';
+                    return;
+                }
+                currentUser={id:'lumistaff',name:'공용계정',role:'staff'};
+                localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                showApp();
+                return;
+            }
+            
+            // ─── 개인 계정: DB에서 조회 ───
             try{
-                // 1차: 이름 = 문서 ID로 직접 조회
                 let doc=await db.collection('employees').doc(inputName).get();
-                
                 if(!doc.exists){
-                    // 2차: 대소문자 무시 조회 (문서ID를 소문자로)
                     doc=await db.collection('employees').doc(inputName.toLowerCase()).get();
                 }
-                
                 if(!doc.exists){
-                    // 3차: name 필드로 검색
                     const snap=await db.collection('employees').where('name','==',inputName).limit(1).get();
-                    if(!snap.empty){
-                        doc=snap.docs[0];
-                    }
+                    if(!snap.empty) doc=snap.docs[0];
                 }
-                
                 if(!doc.exists){
                     document.getElementById('loginError').textContent='등록되지 않은 이름입니다.';
                     return;
                 }
-                
                 const emp={id:doc.id,...doc.data()};
                 await processLogin(emp,pw);
             }catch(e){
@@ -761,7 +776,7 @@
             // 개인 계정: 재고 제거 / 공용 계정: 재고+식사만
             const allTabs=['attendance','meal','ot','leave','incentive','inventory','info'];
             const sharedTabs=['inventory','meal'];
-            const personalTabs=['attendance','meal','ot','leave','incentive','info'];
+            const personalTabs=['attendance','ot','leave','incentive','info'];
             allTabs.forEach(tab=>{
                 const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
                 const content=document.getElementById('tab-'+tab);
