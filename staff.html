@@ -73,7 +73,7 @@
         .tab-content.active{display:block}
         
         .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg-card);border-top:1px solid var(--border);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:100}
-        .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:.6rem .25rem;cursor:pointer;color:var(--text-muted);font-size:.65rem;transition:color .2s}
+        .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:.5rem .15rem;cursor:pointer;color:var(--text-muted);font-size:.6rem;transition:color .2s}
         .nav-item.active{color:var(--primary)}
         .nav-item .nav-icon{font-size:1.2rem;margin-bottom:.2rem}
         
@@ -134,6 +134,29 @@
         .gps-status.ok{background:rgba(90,122,90,.1);color:var(--green)}
         .gps-status.error{background:rgba(168,90,90,.1);color:var(--red)}
         .gps-status.loading{background:rgba(154,139,122,.1);color:var(--primary)}
+        
+        /* 재고 실사 */
+        .inv-cat-filters{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap}
+        .inv-cat-btn{flex:1;min-width:0;padding:.75rem .5rem;border:2px solid var(--border);background:var(--bg-card);font-size:.9rem;font-weight:600;cursor:pointer;text-align:center;transition:all .2s;border-radius:8px}
+        .inv-cat-btn.active{border-color:var(--primary);background:var(--primary);color:#fff}
+        .inv-cat-btn .cat-icon{font-size:1.2rem;display:block;margin-bottom:.2rem}
+        .inv-cat-btn .cat-count{font-size:.7rem;font-weight:400;opacity:.7}
+        .inv-item-row{background:var(--bg-card);border:1px solid var(--border);padding:1rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem;border-radius:6px}
+        .inv-item-row.saved{border-color:var(--green);background:rgba(90,122,90,.05)}
+        .inv-item-info{flex:1;min-width:0}
+        .inv-item-name{font-weight:600;font-size:.9rem;margin-bottom:.2rem}
+        .inv-item-meta{font-size:.75rem;color:var(--text-muted);display:flex;gap:.75rem;flex-wrap:wrap}
+        .inv-item-meta span{white-space:nowrap}
+        .inv-stock-input{width:80px;padding:.6rem;border:1px solid var(--border);font-size:1rem;text-align:center;font-weight:600;border-radius:4px;background:#fff}
+        .inv-stock-input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(154,139,122,.2)}
+        .inv-stock-unit{font-size:.8rem;color:var(--text-muted);min-width:25px}
+        .inv-progress{display:flex;align-items:center;gap:.5rem;padding:.75rem 1rem;background:var(--bg-card);border:1px solid var(--border);margin-bottom:1rem;border-radius:6px;font-size:.85rem}
+        .inv-progress-bar{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+        .inv-progress-fill{height:100%;background:var(--green);transition:width .3s}
+        .inv-submit-bar{position:sticky;bottom:env(safe-area-inset-bottom,0);padding:1rem;background:var(--bg);border-top:1px solid var(--border);margin:0 -1rem}
+        .inv-submit-btn{width:100%;padding:.9rem;font-size:1rem;font-weight:600;border:none;cursor:pointer;letter-spacing:1px;border-radius:6px}
+        .inv-submit-btn.ready{background:var(--primary);color:#fff}
+        .inv-submit-btn.disabled{background:var(--border);color:var(--text-muted);pointer-events:none}
     </style>
 </head>
 <body>
@@ -309,6 +332,23 @@
                     <div id="biometricStatus" style="font-size:.85rem;color:var(--text-muted);margin-top:.5rem;text-align:center"></div>
                 </div>
             </div>
+
+            <!-- 재고 실사 탭 -->
+            <div class="tab-content" id="tab-inventory">
+                <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
+                    <div class="card-title">📦 재고 실사</div>
+                    <div class="inv-cat-filters" id="invCatButtons"></div>
+                    <div class="inv-progress" id="invProgress">
+                        <span>진행률</span>
+                        <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
+                        <span id="invProgressText">0/0</span>
+                    </div>
+                </div>
+                <div id="invAuditList" style="padding:.5rem 0"></div>
+                <div class="inv-submit-bar">
+                    <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()">실사 결과 제출</button>
+                </div>
+            </div>
         </div>
         
         <nav class="bottom-nav">
@@ -317,6 +357,7 @@
             <div class="nav-item" data-tab="ot"><div class="nav-icon">⏰</div>OT</div>
             <div class="nav-item" data-tab="leave"><div class="nav-icon">🏖</div>연차</div>
             <div class="nav-item" data-tab="incentive"><div class="nav-icon">💎</div>인센티브</div>
+            <div class="nav-item" data-tab="inventory"><div class="nav-icon">📦</div>재고</div>
             <div class="nav-item" data-tab="info"><div class="nav-icon">👤</div>내정보</div>
         </nav>
     </div>
@@ -1451,6 +1492,162 @@
             }catch(e){alert('저장 실패: '+e.message);}
         }
         
+        // ===== 재고 실사 시스템 =====
+        const INV_CATEGORIES={nursing:'간호',skin:'피부',desk:'데스크',common:'공통'};
+        const CAT_ICONS={nursing:'💉',skin:'✨',desk:'🖥️',common:'📎'};
+        let invItems=[];
+        let auditInputs={}; // {itemId: value}
+        let lastWeekAudits={}; // {itemId: lastAuditData}
+        let currentInvCat=''; // '' = 전체
+
+        async function loadInventoryForStaff(){
+            try{
+                const s=await db.collection('inventory').orderBy('name').get();
+                invItems=s.docs.map(d=>({id:d.id,...d.data()}));
+            }catch(e){console.error('Load inv:',e);}
+        }
+
+        async function loadLastWeekAudits(){
+            try{
+                const oneWeekAgo=new Date();
+                oneWeekAgo.setDate(oneWeekAgo.getDate()-14);
+                const s=await db.collection('inventoryAudits')
+                    .where('createdAt','>=',oneWeekAgo.toISOString())
+                    .orderBy('createdAt','desc').limit(500).get();
+                lastWeekAudits={};
+                s.docs.forEach(d=>{
+                    const data=d.data();
+                    if(!lastWeekAudits[data.itemId])lastWeekAudits[data.itemId]=data;
+                });
+            }catch(e){console.error('Load audits:',e);}
+        }
+
+        function renderInvCatButtons(){
+            const container=document.getElementById('invCatButtons');
+            if(!container)return;
+            const cats=[{key:'',label:'전체',icon:'📋'},{key:'nursing',label:'간호',icon:'💉'},{key:'skin',label:'피부',icon:'✨'},{key:'desk',label:'데스크',icon:'🖥️'},{key:'common',label:'공통',icon:'📎'}];
+            container.innerHTML=cats.map(c=>{
+                const count=c.key?invItems.filter(i=>i.category===c.key).length:invItems.length;
+                return `<div class="inv-cat-btn ${currentInvCat===c.key?'active':''}" onclick="setInvCat('${c.key}')">
+                    <span class="cat-icon">${c.icon}</span>${c.label}<span class="cat-count">${count}개</span>
+                </div>`;
+            }).join('');
+        }
+
+        function setInvCat(cat){
+            currentInvCat=cat;
+            renderInvCatButtons();
+            renderInvAuditList();
+        }
+
+        function renderInvAuditList(){
+            const container=document.getElementById('invAuditList');
+            if(!container)return;
+            let items=currentInvCat?invItems.filter(i=>i.category===currentInvCat):invItems;
+            items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+            
+            if(!items.length){
+                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:2rem">등록된 품목이 없습니다.</div>';
+                return;
+            }
+
+            container.innerHTML=items.map(item=>{
+                const lastAudit=lastWeekAudits[item.id];
+                const lastQty=lastAudit?lastAudit.actualStock:null;
+                const lastDate=lastAudit?new Date(lastAudit.createdAt).toLocaleDateString('ko-KR',{month:'short',day:'numeric'}):'';
+                const val=auditInputs[item.id];
+                const isSaved=val!=null&&val!=='';
+                const catLabel=INV_CATEGORIES[item.category]||'';
+                return `<div class="inv-item-row ${isSaved?'saved':''}">
+                    <div class="inv-item-info">
+                        <div class="inv-item-name">${item.name}</div>
+                        <div class="inv-item-meta">
+                            <span>${catLabel}</span>
+                            <span>단위: ${item.unit||'개'}</span>
+                            ${lastQty!=null?`<span>지난 실사: <strong>${lastQty}</strong> (${lastDate})</span>`:''}
+                        </div>
+                    </div>
+                    <input type="number" class="inv-stock-input" 
+                        id="inv-input-${item.id}"
+                        placeholder="-" step="0.01" min="0"
+                        value="${val!=null?val:''}"
+                        onchange="onInvInput('${item.id}',this.value)"
+                        oninput="onInvInput('${item.id}',this.value)"
+                        inputmode="decimal">
+                    <span class="inv-stock-unit">${item.unit||'개'}</span>
+                </div>`;
+            }).join('');
+
+            updateInvProgress();
+        }
+
+        function onInvInput(itemId,val){
+            if(val===''||val==null){
+                delete auditInputs[itemId];
+            }else{
+                auditInputs[itemId]=parseFloat(val);
+            }
+            // 즉시 행 스타일 업데이트
+            const row=document.getElementById('inv-input-'+itemId)?.closest('.inv-item-row');
+            if(row){
+                if(val!==''&&val!=null)row.classList.add('saved');
+                else row.classList.remove('saved');
+            }
+            updateInvProgress();
+        }
+
+        function updateInvProgress(){
+            const totalItems=currentInvCat?invItems.filter(i=>i.category===currentInvCat).length:invItems.length;
+            const filledItems=currentInvCat
+                ?invItems.filter(i=>i.category===currentInvCat&&auditInputs[i.id]!=null).length
+                :Object.keys(auditInputs).length;
+            const pct=totalItems?Math.round(filledItems/totalItems*100):0;
+            const fill=document.getElementById('invProgressFill');
+            const text=document.getElementById('invProgressText');
+            const btn=document.getElementById('invSubmitBtn');
+            if(fill)fill.style.width=pct+'%';
+            if(text)text.textContent=filledItems+'/'+totalItems;
+            if(btn){
+                if(filledItems>0){btn.classList.remove('disabled');btn.classList.add('ready');btn.textContent=`실사 결과 제출 (${filledItems}건)`;}
+                else{btn.classList.add('disabled');btn.classList.remove('ready');btn.textContent='실사 결과 제출';}
+            }
+        }
+
+        async function submitInventoryAudit(){
+            const entries=Object.entries(auditInputs).filter(([k,v])=>v!=null&&v!=='');
+            if(!entries.length){alert('입력된 실사 데이터가 없습니다.');return;}
+            if(!confirm(entries.length+'개 품목의 실사 데이터를 제출하시겠습니까?'))return;
+            
+            const staffName=currentUser?.name||'직원';
+            const staffId=currentUser?.id||'unknown';
+            const now=new Date().toISOString();
+            
+            try{
+                const batch=db.batch();
+                for(const[itemId,actualStock]of entries){
+                    const ref=db.collection('inventoryAudits').doc();
+                    batch.set(ref,{
+                        itemId:itemId,
+                        actualStock:actualStock,
+                        staffId:staffId,
+                        staffName:staffName,
+                        createdAt:now
+                    });
+                }
+                await batch.commit();
+                alert('✅ 실사 완료!\n\n'+entries.length+'개 품목이 제출되었습니다.\n관리자가 확인 후 시스템에 반영합니다.');
+                auditInputs={};
+                await loadLastWeekAudits();
+                renderInvAuditList();
+            }catch(e){alert('제출 실패: '+e.message);}
+        }
+
+        async function initInventoryTab(){
+            await Promise.all([loadInventoryForStaff(),loadLastWeekAudits()]);
+            renderInvCatButtons();
+            renderInvAuditList();
+        }
+
         // Tab Navigation
         document.querySelectorAll('.nav-item').forEach(item=>{
             item.addEventListener('click',function(){
@@ -1458,6 +1655,10 @@
                 document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
                 this.classList.add('active');
                 document.getElementById('tab-'+this.dataset.tab).classList.add('active');
+                // 재고 탭 진입 시 데이터 로드
+                if(this.dataset.tab==='inventory'&&!invItems.length){
+                    initInventoryTab();
+                }
             });
         });
         

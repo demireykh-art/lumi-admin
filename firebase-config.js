@@ -148,7 +148,8 @@ async function loadAllData(){
         await Promise.all([
             loadEmployees(),loadRevenueData(),loadSalesDetailData(),
             loadExpenses(),loadAttendance(),loadIncentiveItems(),
-            loadIncentiveRecords(),loadLeaveRequests(),loadLunchOT()
+            loadIncentiveRecords(),loadLeaveRequests(),loadLunchOT(),
+            typeof loadAuditRecords==='function'?loadAuditRecords():Promise.resolve()
         ]);
         
         renderAll();
@@ -219,6 +220,7 @@ function renderAll(){
     // 재고
     if(typeof renderInventory==='function')renderInventory();
     if(typeof renderRecipes==='function')renderRecipes();
+    if(typeof renderAuditReport==='function')renderAuditReport();
     // 손익
     if(typeof renderPLStatement==='function')renderPLStatement();
 }

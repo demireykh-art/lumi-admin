@@ -1,41 +1,44 @@
-/* ===== inventory.js - LUMI ERP v11 - 재고 & 레시피 관리 ===== */
+/* ===== inventory.js - LUMI ERP v11.1 재고 & 레시피 & 실사 ===== */
 
 const INV_TYPES={disposable:'1회용',portioned:'소분용',hygiene:'위생용품'};
 const INV_TYPE_CLASS={disposable:'inv-type-disposable',portioned:'inv-type-portioned',hygiene:'inv-type-hygiene'};
-const LOSS_RATE=0.10; // 소분 액체류 10% 로스율
-const BASE_HYGIENE_COST=1000; // 기본위생용품 공통 비용
+const INV_CATEGORIES={nursing:'간호',skin:'피부',desk:'데스크',common:'공통'};
+const INV_CAT_CLASS={nursing:'inv-cat-nursing',skin:'inv-cat-skin',desk:'inv-cat-desk',common:'inv-cat-common'};
+const LOSS_RATE=0.10;
+const BASE_HYGIENE_COST=1000;
 
 // ===== 재고 렌더링 =====
 function renderInventory(){
-    const tbody=document.getElementById('inventoryTable');
-    if(!tbody)return;
+    const tbody=document.getElementById('inventoryTable');if(!tbody)return;
     const search=(document.getElementById('invSearch')?.value||'').toLowerCase();
     const typeFilter=document.getElementById('invTypeFilter')?.value||'';
-    
+    const catFilter=document.getElementById('invCatFilter')?.value||'';
     let items=inventoryItems.filter(i=>{
         if(search&&!i.name?.toLowerCase().includes(search))return false;
         if(typeFilter&&i.type!==typeFilter)return false;
+        if(catFilter&&i.category!==catFilter)return false;
         return true;
     }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
 
-    if(items.length===0){
-        tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text-secondary);padding:2rem">등록된 소모품이 없습니다. 위 버튼으로 추가하세요.</td></tr>';
+    if(!items.length){
+        tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text-secondary);padding:2rem">등록된 소모품이 없습니다.</td></tr>';
     }else{
         tbody.innerHTML=items.map(item=>{
-            const typeLabel=INV_TYPES[item.type]||item.type||'-';
+            const catLabel=INV_CATEGORIES[item.category]||'-';
+            const catClass=INV_CAT_CLASS[item.category]||'';
+            const typeLabel=INV_TYPES[item.type]||'-';
             const typeClass=INV_TYPE_CLASS[item.type]||'';
-            const expiryWarn=isExpiryWarning(item.expiryDate);
             const stockLow=item.safetyStock&&item.currentStock<item.safetyStock;
             const unitCost=item.purchasePrice&&item.purchaseQty?(item.purchasePrice/item.purchaseQty):0;
             return `<tr class="${stockLow?'inv-stock-low':''}">
                 <td><strong>${item.name||'-'}</strong></td>
+                <td><span class="inv-type-badge ${catClass}">${catLabel}</span></td>
                 <td><span class="inv-type-badge ${typeClass}">${typeLabel}</span></td>
                 <td class="text-right">${formatNumber(item.currentStock||0)} ${item.unit||'개'}</td>
                 <td class="text-right">${formatNumber(item.safetyStock||0)}</td>
                 <td class="text-right">${formatCurrency(item.purchasePrice||0)}</td>
-                <td>${item.purchaseQty||'-'} ${item.purchaseUnit||''}</td>
                 <td class="text-right">${unitCost?formatCurrency(unitCost):'-'}</td>
-                <td class="${expiryWarn?'inv-expiry-warn':''}">${item.expiryDate||'-'}</td>
+                <td class="${isExpiryWarning(item.expiryDate)?'inv-expiry-warn':''}">${item.expiryDate||'-'}</td>
                 <td><div class="btn-group">
                     <button class="btn btn-sm btn-outline" onclick="editInventoryItem('${item.id}')">수정</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteInventoryItem('${item.id}')">삭제</button>
@@ -43,41 +46,30 @@ function renderInventory(){
             </tr>`;
         }).join('');
     }
-
-    // 요약 카드
-    const totalItems=inventoryItems.length;
-    const lowStock=inventoryItems.filter(i=>i.safetyStock&&i.currentStock<i.safetyStock).length;
-    const expiryWarnCount=inventoryItems.filter(i=>isExpiryWarning(i.expiryDate)).length;
-    const totalValue=inventoryItems.reduce((s,i)=>s+(i.purchasePrice||0)*(i.currentStock||0)/(i.purchaseQty||1),0);
-    
+    const total=inventoryItems.length;
+    const low=inventoryItems.filter(i=>i.safetyStock&&i.currentStock<i.safetyStock).length;
+    const expWarn=inventoryItems.filter(i=>isExpiryWarning(i.expiryDate)).length;
+    const totalVal=inventoryItems.reduce((s,i)=>s+(i.purchasePrice||0)*(i.currentStock||0)/(i.purchaseQty||1),0);
     const cards=document.getElementById('inventoryCards');
     if(cards)cards.innerHTML=`
-        <div class="card"><div class="card-label">총 품목 수</div><div class="card-value">${totalItems}개</div></div>
-        <div class="card"><div class="card-label">재고 부족 (발주 필요)</div><div class="card-value" style="color:${lowStock?'var(--red)':'var(--green)'}">${lowStock}개</div></div>
-        <div class="card"><div class="card-label">유통기한 임박 (3개월)</div><div class="card-value" style="color:${expiryWarnCount?'var(--warning)':'var(--green)'}">${expiryWarnCount}개</div></div>
-        <div class="card"><div class="card-label">총 재고 가치</div><div class="card-value">${formatCurrency(totalValue)}</div></div>
+        <div class="card"><div class="card-label">총 품목</div><div class="card-value">${total}개</div></div>
+        <div class="card"><div class="card-label">재고 부족</div><div class="card-value" style="color:${low?'var(--red)':'var(--green)'}">${low}개</div></div>
+        <div class="card"><div class="card-label">유통기한 임박</div><div class="card-value" style="color:${expWarn?'var(--warning)':'var(--green)'}">${expWarn}개</div></div>
+        <div class="card"><div class="card-label">재고 가치</div><div class="card-value">${formatCurrency(totalVal)}</div></div>
     `;
 }
-
-function isExpiryWarning(expiryDate){
-    if(!expiryDate)return false;
-    const exp=new Date(expiryDate);
-    const threeMonths=new Date();
-    threeMonths.setMonth(threeMonths.getMonth()+3);
-    return exp<=threeMonths;
-}
+function isExpiryWarning(d){if(!d)return false;const e=new Date(d),t=new Date();t.setMonth(t.getMonth()+3);return e<=t;}
 
 // ===== 재고 CRUD =====
 function openInventoryModal(id=null){
-    const modal=document.getElementById('inventoryModal');
     document.getElementById('invModalTitle').textContent=id?'소모품 수정':'소모품 등록';
     document.getElementById('invEditId').value=id||'';
-    
     if(id){
         const item=inventoryItems.find(i=>i.id===id);
         if(item){
             document.getElementById('invName').value=item.name||'';
             document.getElementById('invType').value=item.type||'disposable';
+            document.getElementById('invCategory').value=item.category||'common';
             document.getElementById('invUnit').value=item.unit||'개';
             document.getElementById('invCurrentStock').value=item.currentStock||0;
             document.getElementById('invSafetyStock').value=item.safetyStock||0;
@@ -88,25 +80,19 @@ function openInventoryModal(id=null){
             document.getElementById('invNote').value=item.note||'';
         }
     }else{
-        document.getElementById('invName').value='';
+        ['invName','invUnit','invCurrentStock','invSafetyStock','invPurchasePrice','invPurchaseUnit','invExpiryDate','invNote'].forEach(x=>document.getElementById(x).value='');
         document.getElementById('invType').value='disposable';
-        document.getElementById('invUnit').value='개';
-        document.getElementById('invCurrentStock').value='';
-        document.getElementById('invSafetyStock').value='';
-        document.getElementById('invPurchasePrice').value='';
+        document.getElementById('invCategory').value='common';
         document.getElementById('invPurchaseQty').value='1';
-        document.getElementById('invPurchaseUnit').value='';
-        document.getElementById('invExpiryDate').value='';
-        document.getElementById('invNote').value='';
     }
     openModal('inventoryModal');
 }
-
 async function saveInventoryItem(){
     const id=document.getElementById('invEditId').value;
     const data={
         name:document.getElementById('invName').value.trim(),
         type:document.getElementById('invType').value,
+        category:document.getElementById('invCategory').value,
         unit:document.getElementById('invUnit').value.trim()||'개',
         currentStock:parseFloat(document.getElementById('invCurrentStock').value)||0,
         safetyStock:parseFloat(document.getElementById('invSafetyStock').value)||0,
@@ -119,169 +105,112 @@ async function saveInventoryItem(){
     };
     if(!data.name){alert('품목명을 입력하세요.');return;}
     try{
-        if(id){await db.collection('inventory').doc(id).update(data);}
+        if(id)await db.collection('inventory').doc(id).update(data);
         else{data.createdAt=new Date().toISOString();await db.collection('inventory').add(data);}
-        closeModal('inventoryModal');
-        await loadInventory();
-        renderInventory();
+        closeModal('inventoryModal');await loadInventory();renderInventory();
         if(typeof renderDashboardCards==='function')renderDashboardCards();
     }catch(e){alert('저장 실패: '+e.message);}
 }
-
 function editInventoryItem(id){openInventoryModal(id);}
-async function deleteInventoryItem(id){
-    if(!confirm('정말 삭제하시겠습니까?'))return;
-    try{await db.collection('inventory').doc(id).delete();await loadInventory();renderInventory();}
-    catch(e){alert('삭제 실패: '+e.message);}
-}
+async function deleteInventoryItem(id){if(!confirm('정말 삭제?'))return;try{await db.collection('inventory').doc(id).delete();await loadInventory();renderInventory();}catch(e){alert('삭제 실패: '+e.message);}}
 
-// ===== 레시피 렌더링 =====
+// ===== 레시피 =====
 function renderRecipes(){
-    const tbody=document.getElementById('recipeTable');
-    if(!tbody)return;
-    
-    if(recipes.length===0){
-        tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:2rem">등록된 레시피가 없습니다.</td></tr>';
-    }else{
-        tbody.innerHTML=recipes.sort((a,b)=>(a.treatmentName||'').localeCompare(b.treatmentName||'')).map(r=>{
-            const cost=calculateRecipeCost(r);
-            const ingredientList=(r.ingredients||[]).map(ing=>{
-                const item=inventoryItems.find(i=>i.id===ing.itemId);
-                return `${item?.name||'?'} × ${ing.amount}${item?.unit||''}`;
-            }).join(', ');
-            return `<tr>
-                <td><strong>${r.treatmentName||'-'}</strong></td>
-                <td style="font-size:.8rem;max-width:300px">${ingredientList||'-'}</td>
-                <td class="text-right"><span class="recipe-cost-badge">${formatCurrency(cost)}</span></td>
-                <td class="text-right">${formatCurrency(BASE_HYGIENE_COST)}</td>
-                <td><div class="btn-group">
-                    <button class="btn btn-sm btn-outline" onclick="editRecipe('${r.id}')">수정</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteRecipe('${r.id}')">삭제</button>
-                </div></td>
-            </tr>`;
-        }).join('');
-    }
-    
-    // 레시피 요약
-    const recipeCards=document.getElementById('recipeCards');
-    if(recipeCards){
-        const totalRecipes=recipes.length;
-        const avgCost=totalRecipes?recipes.reduce((s,r)=>s+calculateRecipeCost(r),0)/totalRecipes:0;
-        recipeCards.innerHTML=`
-            <div class="card"><div class="card-label">등록된 레시피</div><div class="card-value">${totalRecipes}개</div></div>
-            <div class="card"><div class="card-label">평균 재료 원가</div><div class="card-value">${formatCurrency(avgCost)}</div></div>
-            <div class="card"><div class="card-label">기본 위생용품</div><div class="card-value">${formatCurrency(BASE_HYGIENE_COST)}/건</div></div>
-        `;
-    }
+    const tbody=document.getElementById('recipeTable');if(!tbody)return;
+    if(!recipes.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:2rem">등록된 레시피가 없습니다.</td></tr>';return;}
+    tbody.innerHTML=recipes.sort((a,b)=>(a.treatmentName||'').localeCompare(b.treatmentName||'')).map(r=>{
+        const cost=calculateRecipeCost(r);
+        const list=(r.ingredients||[]).map(ing=>{const it=inventoryItems.find(i=>i.id===ing.itemId);return `${it?.name||'?'}×${ing.amount}`;}).join(', ');
+        return `<tr><td><strong>${r.treatmentName||'-'}</strong></td><td style="font-size:.8rem;max-width:300px">${list||'-'}</td><td class="text-right"><span class="recipe-cost-badge">${formatCurrency(cost)}</span></td><td class="text-right">${formatCurrency(BASE_HYGIENE_COST)}</td><td><div class="btn-group"><button class="btn btn-sm btn-outline" onclick="editRecipe('${r.id}')">수정</button><button class="btn btn-sm btn-danger" onclick="deleteRecipe('${r.id}')">삭제</button></div></td></tr>`;
+    }).join('');
+    const rc=document.getElementById('recipeCards');
+    if(rc){const n=recipes.length,avg=n?recipes.reduce((s,r)=>s+calculateRecipeCost(r),0)/n:0;rc.innerHTML=`<div class="card"><div class="card-label">등록 레시피</div><div class="card-value">${n}개</div></div><div class="card"><div class="card-label">평균 원가</div><div class="card-value">${formatCurrency(avg)}</div></div><div class="card"><div class="card-label">기본 위생비</div><div class="card-value">${formatCurrency(BASE_HYGIENE_COST)}/건</div></div>`;}
 }
-
-// ===== 레시피 원가 계산 =====
 function calculateRecipeCost(recipe){
-    if(!recipe||!recipe.ingredients)return BASE_HYGIENE_COST;
-    let cost=BASE_HYGIENE_COST; // 기본위생용품 항상 포함
-    
-    for(const ing of recipe.ingredients){
-        const item=inventoryItems.find(i=>i.id===ing.itemId);
-        if(!item)continue;
-        const unitCost=item.purchasePrice/(item.purchaseQty||1);
-        let amount=ing.amount||0;
-        // 소분용 품목은 로스율 10% 적용
-        if(item.type==='portioned'){
-            amount=amount*(1+LOSS_RATE);
-        }
-        cost+=unitCost*amount;
-    }
+    if(!recipe?.ingredients)return BASE_HYGIENE_COST;
+    let cost=BASE_HYGIENE_COST;
+    for(const ing of recipe.ingredients){const item=inventoryItems.find(i=>i.id===ing.itemId);if(!item)continue;let amt=ing.amount||0;if(item.type==='portioned')amt*=(1+LOSS_RATE);cost+=(item.purchasePrice/(item.purchaseQty||1))*amt;}
     return cost;
 }
-
-// 특정 시술의 원가 조회 (외부에서 호출)
-function getRecipeCostByTreatment(treatmentName){
-    const recipe=recipes.find(r=>r.treatmentName===treatmentName);
-    return recipe?calculateRecipeCost(recipe):BASE_HYGIENE_COST;
-}
+function getRecipeCostByTreatment(name){const r=recipes.find(x=>x.treatmentName===name);return r?calculateRecipeCost(r):BASE_HYGIENE_COST;}
 
 // ===== 레시피 CRUD =====
 let tempIngredients=[];
-
 function openRecipeModal(id=null){
     document.getElementById('recipeModalTitle').textContent=id?'레시피 수정':'레시피 등록';
     document.getElementById('recipeEditId').value=id||'';
-    
-    if(id){
-        const r=recipes.find(x=>x.id===id);
-        if(r){
-            document.getElementById('recipeTreatment').value=r.treatmentName||'';
-            tempIngredients=[...(r.ingredients||[])];
-        }
-    }else{
-        document.getElementById('recipeTreatment').value='';
-        tempIngredients=[];
-    }
-    renderIngredientRows();
-    openModal('recipeModal');
+    if(id){const r=recipes.find(x=>x.id===id);if(r){document.getElementById('recipeTreatment').value=r.treatmentName||'';tempIngredients=[...(r.ingredients||[])];}}
+    else{document.getElementById('recipeTreatment').value='';tempIngredients=[];}
+    renderIngredientRows();openModal('recipeModal');
 }
-
 function renderIngredientRows(){
-    const container=document.getElementById('recipeIngredients');
-    container.innerHTML=tempIngredients.map((ing,idx)=>{
+    const c=document.getElementById('recipeIngredients');
+    c.innerHTML=tempIngredients.map((ing,idx)=>{
         const item=inventoryItems.find(i=>i.id===ing.itemId);
-        return `<div class="recipe-ingredient-row">
-            <select onchange="tempIngredients[${idx}].itemId=this.value">
-                <option value="">품목 선택</option>
-                ${inventoryItems.map(i=>`<option value="${i.id}" ${i.id===ing.itemId?'selected':''}>${i.name} (${INV_TYPES[i.type]||i.type})</option>`).join('')}
-            </select>
-            <input type="number" step="0.001" value="${ing.amount||''}" placeholder="소모량" onchange="tempIngredients[${idx}].amount=parseFloat(this.value)||0" style="max-width:100px">
-            <span style="font-size:.75rem;color:var(--text-secondary);min-width:30px">${item?.unit||''}</span>
-            <button class="btn btn-sm btn-danger" onclick="removeIngredient(${idx})">×</button>
-        </div>`;
+        return `<div class="recipe-ingredient-row"><select onchange="tempIngredients[${idx}].itemId=this.value;renderIngredientRows()"><option value="">품목 선택</option>${inventoryItems.map(i=>`<option value="${i.id}" ${i.id===ing.itemId?'selected':''}>${i.name} (${INV_TYPES[i.type]||i.type})</option>`).join('')}</select><input type="number" step="0.001" value="${ing.amount||''}" placeholder="소모량" onchange="tempIngredients[${idx}].amount=parseFloat(this.value)||0;renderIngredientRows()" style="max-width:100px"><span style="font-size:.75rem;color:var(--text-secondary);min-width:30px">${item?.unit||''}</span><button class="btn btn-sm btn-danger" onclick="removeIngredient(${idx})">×</button></div>`;
     }).join('');
-    
-    // 예상 원가 표시
-    const estCost=BASE_HYGIENE_COST+tempIngredients.reduce((s,ing)=>{
-        const item=inventoryItems.find(i=>i.id===ing.itemId);
-        if(!item)return s;
-        const unitCost=item.purchasePrice/(item.purchaseQty||1);
-        let amount=ing.amount||0;
-        if(item.type==='portioned')amount*=(1+LOSS_RATE);
-        return s+unitCost*amount;
-    },0);
-    document.getElementById('recipeEstCost').textContent=formatCurrency(estCost);
+    const est=BASE_HYGIENE_COST+tempIngredients.reduce((s,ing)=>{const it=inventoryItems.find(i=>i.id===ing.itemId);if(!it)return s;let a=ing.amount||0;if(it.type==='portioned')a*=(1+LOSS_RATE);return s+(it.purchasePrice/(it.purchaseQty||1))*a;},0);
+    document.getElementById('recipeEstCost').textContent=formatCurrency(est);
 }
-
-function addIngredient(){
-    tempIngredients.push({itemId:'',amount:0});
-    renderIngredientRows();
-}
-function removeIngredient(idx){
-    tempIngredients.splice(idx,1);
-    renderIngredientRows();
-}
-
+function addIngredient(){tempIngredients.push({itemId:'',amount:0});renderIngredientRows();}
+function removeIngredient(idx){tempIngredients.splice(idx,1);renderIngredientRows();}
 async function saveRecipe(){
     const id=document.getElementById('recipeEditId').value;
-    const data={
-        treatmentName:document.getElementById('recipeTreatment').value.trim(),
-        ingredients:tempIngredients.filter(i=>i.itemId&&i.amount>0),
-        updatedAt:new Date().toISOString()
-    };
+    const data={treatmentName:document.getElementById('recipeTreatment').value.trim(),ingredients:tempIngredients.filter(i=>i.itemId&&i.amount>0),updatedAt:new Date().toISOString()};
     if(!data.treatmentName){alert('시술명을 입력하세요.');return;}
-    try{
-        if(id){await db.collection('recipes').doc(id).update(data);}
-        else{data.createdAt=new Date().toISOString();await db.collection('recipes').add(data);}
-        closeModal('recipeModal');
-        await loadRecipes();
-        renderRecipes();
-    }catch(e){alert('저장 실패: '+e.message);}
+    try{if(id)await db.collection('recipes').doc(id).update(data);else{data.createdAt=new Date().toISOString();await db.collection('recipes').add(data);}closeModal('recipeModal');await loadRecipes();renderRecipes();}catch(e){alert('저장 실패: '+e.message);}
 }
-
 function editRecipe(id){openRecipeModal(id);}
-async function deleteRecipe(id){
-    if(!confirm('정말 삭제하시겠습니까?'))return;
-    try{await db.collection('recipes').doc(id).delete();await loadRecipes();renderRecipes();}
-    catch(e){alert('삭제 실패: '+e.message);}
-}
+async function deleteRecipe(id){if(!confirm('정말 삭제?'))return;try{await db.collection('recipes').doc(id).delete();await loadRecipes();renderRecipes();}catch(e){alert('삭제 실패: '+e.message);}}
 
-// ===== 발주 필요 품목 수 (대시보드용) =====
-function getLowStockCount(){
-    return inventoryItems.filter(i=>i.safetyStock&&i.currentStock<i.safetyStock).length;
+// ===== 재고 실사 리포트 (관리자) =====
+let auditRecords=[];
+async function loadAuditRecords(){
+    try{const s=await db.collection('inventoryAudits').orderBy('createdAt','desc').limit(200).get();auditRecords=s.docs.map(d=>({id:d.id,...d.data()}));}catch(e){console.error('Load audits:',e);}
 }
+function renderAuditReport(){
+    const container=document.getElementById('auditReport');if(!container)return;
+    // 최근 실사: 품목별 마지막 기록
+    const latestByItem={};
+    auditRecords.forEach(r=>{if(!latestByItem[r.itemId]||new Date(r.createdAt)>new Date(latestByItem[r.itemId].createdAt))latestByItem[r.itemId]=r;});
+    const catFilter=document.getElementById('auditCatFilter')?.value||'';
+    const items=inventoryItems.filter(i=>!catFilter||i.category===catFilter).map(item=>{
+        const audit=latestByItem[item.id];
+        const sys=item.currentStock||0;
+        const act=audit?.actualStock;
+        const diff=act!=null?(act-sys):null;
+        return{...item,audit,sys,act,diff};
+    }).sort((a,b)=>{
+        if(a.diff!=null&&b.diff==null)return -1;if(a.diff==null&&b.diff!=null)return 1;
+        if(a.diff!=null&&b.diff!=null)return Math.abs(b.diff)-Math.abs(a.diff);
+        return(a.name||'').localeCompare(b.name||'');
+    });
+    const done=items.filter(i=>i.diff!=null);
+    const diffItems=done.filter(i=>Math.abs(i.diff)>0.01);
+    container.innerHTML=`
+        <div class="cards-grid" style="margin-bottom:1rem">
+            <div class="card"><div class="card-label">실사 완료</div><div class="card-value">${done.length} / ${items.length}</div></div>
+            <div class="card"><div class="card-label">차이 발생</div><div class="card-value" style="color:${diffItems.length?'var(--red)':'var(--green)'}">${diffItems.length}개</div></div>
+            <div class="card"><div class="card-label">최근 실사</div><div class="card-value" style="font-size:.85rem">${done.length?new Date(done[0].audit.createdAt).toLocaleDateString('ko'):'없음'}</div></div>
+        </div>
+        <div class="table-container"><table>
+            <thead><tr><th>품목명</th><th>카테고리</th><th class="text-right">시스템 재고</th><th class="text-right">실재고</th><th class="text-right">차이</th><th>실사일</th><th>실사자</th></tr></thead>
+            <tbody>${items.map(i=>{
+                const dc=i.diff!=null?(Math.abs(i.diff)>0.01?(i.diff<0?'color:var(--red);font-weight:600':'color:var(--green);font-weight:600'):''):'';
+                return `<tr><td><strong>${i.name}</strong></td><td><span class="inv-type-badge ${INV_CAT_CLASS[i.category]||''}">${INV_CATEGORIES[i.category]||'-'}</span></td><td class="text-right">${formatNumber(i.sys)} ${i.unit||''}</td><td class="text-right">${i.act!=null?formatNumber(i.act):'-'}</td><td class="text-right" style="${dc}">${i.diff!=null?(i.diff>0?'+':'')+i.diff.toFixed(1):'-'}</td><td style="font-size:.8rem">${i.audit?new Date(i.audit.createdAt).toLocaleDateString('ko'):'-'}</td><td style="font-size:.8rem">${i.audit?.staffName||'-'}</td></tr>`;
+            }).join('')}</tbody>
+        </table></div>
+        ${diffItems.length?`<div style="margin-top:1rem"><button class="btn btn-primary" onclick="applyAuditToSystem()">📋 실재고를 시스템 재고에 반영</button></div>`:''}
+    `;
+}
+async function applyAuditToSystem(){
+    if(!confirm('실재고 → 시스템 재고에 반영하시겠습니까?'))return;
+    const latestByItem={};
+    auditRecords.forEach(r=>{if(!latestByItem[r.itemId]||new Date(r.createdAt)>new Date(latestByItem[r.itemId].createdAt))latestByItem[r.itemId]=r;});
+    const batch=db.batch();let cnt=0;
+    for(const[itemId,audit]of Object.entries(latestByItem)){
+        if(audit.actualStock!=null){batch.update(db.collection('inventory').doc(itemId),{currentStock:audit.actualStock,lastAuditApplied:new Date().toISOString()});cnt++;}
+    }
+    try{await batch.commit();alert(cnt+'개 품목 반영 완료');await loadInventory();renderInventory();renderAuditReport();}catch(e){alert('반영 실패: '+e.message);}
+}
+function getLowStockCount(){return inventoryItems.filter(i=>i.safetyStock&&i.currentStock<i.safetyStock).length;}
