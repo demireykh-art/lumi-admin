@@ -189,6 +189,7 @@
                         <div class="expense-box"><div class="expense-box-label">월 고정비 총액</div><div class="expense-box-value" id="fixedTotal">₩0</div></div>
                         <div class="expense-box"><div class="expense-box-label">항목 수</div><div class="expense-box-value" id="fixedCount">0개</div></div>
                         <div class="expense-box"><div class="expense-box-label">연간 예상</div><div class="expense-box-value" id="fixedYearly">₩0</div></div>
+                        <div class="expense-box"><div class="expense-box-label">이번 달 이체</div><div class="expense-box-value" id="fixedTransferStatus" style="font-size:14px">-</div></div>
                     </div>
                     <div class="section-header">
                         <div class="section-title">고정비 목록</div>
@@ -197,9 +198,10 @@
                             <select class="form-select" id="fixedCategoryFilter" onchange="renderExpenses()" style="width:auto"><option value="">전체 카테고리</option></select>
                             <select class="form-select" id="fixedSort" onchange="renderExpenses()" style="width:auto"><option value="date-desc">날짜 최신순</option><option value="date-asc">날짜 오래된순</option><option value="amount-desc">금액 높은순</option><option value="amount-asc">금액 낮은순</option><option value="category">카테고리순</option></select>
                             <button class="btn btn-primary" onclick="openExpenseModal('fixed')">+ 항목 추가</button>
+                            <button class="btn" style="background:#2e7d32;color:#fff" onclick="batchTransfer()">💸 일괄 이체</button>
                         </div>
                     </div>
-                    <div class="table-container"><table><thead><tr><th>날짜</th><th>항목명</th><th>카테고리</th><th class="text-right">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="fixedTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>날짜</th><th>항목명</th><th>카테고리</th><th class="text-right">금액</th><th>입금계좌</th><th>비고</th><th>이체</th><th>관리</th></tr></thead><tbody id="fixedTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-variable">
                     <div class="expense-summary">
@@ -448,6 +450,14 @@
                     <div class="form-group"><label class="form-label">리스사</label><input type="text" class="form-input" id="leaseCompany" placeholder="예: 오릭스, 메리츠"></div>
                 </div>
                 <div class="form-group" id="expenseCardGroup"><label class="form-label">결제수단</label><select class="form-select" id="expenseCard"><option value="롯데카드">롯데카드</option><option value="삼성카드">삼성카드</option><option value="신한카드">신한카드</option><option value="현대카드">현대카드</option><option value="KB카드">KB카드</option><option value="계좌이체">계좌이체</option><option value="현금">현금</option></select></div>
+                <div id="transferFields" style="background:#f0f5f0;padding:16px;border-radius:8px;margin-bottom:16px">
+                    <div style="font-weight:600;margin-bottom:12px;color:#2e7d32">🏦 이체 정보 (선택)</div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">입금은행</label><select class="form-select" id="transferBank"><option value="">선택안함</option><option value="신한">신한</option><option value="국민">국민</option><option value="우리">우리</option><option value="하나">하나</option><option value="농협">농협</option><option value="기업">기업</option><option value="SC제일">SC제일</option><option value="씨티">씨티</option><option value="카카오뱅크">카카오뱅크</option><option value="토스뱅크">토스뱅크</option><option value="케이뱅크">케이뱅크</option><option value="대구">대구</option><option value="부산">부산</option><option value="경남">경남</option><option value="광주">광주</option><option value="전북">전북</option><option value="제주">제주</option><option value="수협">수협</option><option value="새마을금고">새마을금고</option><option value="신협">신협</option><option value="우체국">우체국</option><option value="산업">산업</option></select></div>
+                        <div class="form-group"><label class="form-label">계좌번호</label><input type="text" class="form-input" id="transferAccount" placeholder="숫자만 입력"></div>
+                    </div>
+                    <div class="form-group"><label class="form-label">예금주</label><input type="text" class="form-input" id="transferHolder" placeholder="예금주명"></div>
+                </div>
                 <div class="form-group"><label class="form-label">비고</label><textarea class="form-textarea" id="expenseNote" rows="2"></textarea></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('expenseModal')">취소</button><button class="btn btn-primary" onclick="saveExpense()">저장</button></div>
@@ -967,6 +977,14 @@
             document.getElementById('fixedTotal').textContent=formatCurrency(fixedTotal);
             document.getElementById('fixedCount').textContent=fixedExpenses.length+'개';
             document.getElementById('fixedYearly').textContent=formatCurrency(fixedTotal*12);
+            // 이체 현황 업데이트
+            const ym=getYM();
+            const transferItems=fixedExpenses.filter(e=>e.transferBank&&e.transferAccount);
+            const doneItems=transferItems.filter(e=>e.lastTransferYM===ym);
+            const transferEl=document.getElementById('fixedTransferStatus');
+            if(transferItems.length>0){
+                transferEl.innerHTML=`<span style="color:${doneItems.length===transferItems.length?'#2e7d32':'#e65100'}">${doneItems.length}/${transferItems.length} 완료</span>`;
+            } else { transferEl.textContent='-'; }
             
             // 고정비 테이블 - 장비리스 정보 표시 개선
             document.getElementById('fixedTable').innerHTML=sortedFixed.map(e=>{
@@ -980,8 +998,8 @@
                     if(e.leaseCompany)leaseInfo.push(e.leaseCompany);
                     if(leaseInfo.length>0)noteDisplay=leaseInfo.join(', ')+(e.note?' | '+e.note:'');
                 }
-                return `<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td>${noteDisplay}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`;
-            }).join('')||(searchText||filterCategory?`<tr><td colspan="6" class="text-center">검색 결과 없음 (전체 ${fixedExpenses.length}개 중)</td></tr>`:'<tr><td colspan="6" class="text-center">등록된 고정비 없음</td></tr>');
+                return `<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.transferBank&&e.transferAccount?`<span style="font-size:12px">${e.transferBank} ${e.transferAccount}${e.transferHolder?' ('+e.transferHolder+')':''}</span>`:'<span style="color:#aaa;font-size:12px">미등록</span>'}</td><td>${noteDisplay}</td><td>${e.transferBank&&e.transferAccount?(e.lastTransferYM===getYM()?`<span style="color:#2e7d32;font-size:12px;font-weight:600;cursor:pointer" onclick="doTransfer('${e.id}')" title="클릭하여 재이체">✅ ${e.lastTransferDate?e.lastTransferDate.substring(5):''}</span>`:`<button class="btn btn-sm" style="background:#2e7d32;color:#fff;white-space:nowrap" onclick="doTransfer('${e.id}')">💸 이체</button>`):'<span style="color:#ccc">-</span>'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`;
+            }).join('')||(searchText||filterCategory?`<tr><td colspan="8" class="text-center">검색 결과 없음 (전체 ${fixedExpenses.length}개 중)</td></tr>`:'<tr><td colspan="8" class="text-center">등록된 고정비 없음</td></tr>');
 
             // 유동비
             const variableSort=document.getElementById('variableSort')?.value||'date-desc';
@@ -1481,6 +1499,11 @@
             document.getElementById('expenseDateGroup').style.display='block';  // 고정비/유동비 모두 날짜 표시
             document.getElementById('expenseCardGroup').style.display=type==='variable'?'block':'none';
             document.getElementById('expenseCard').value='롯데카드';
+            // 이체 정보 초기화
+            document.getElementById('transferFields').style.display=type==='fixed'?'block':'none';
+            document.getElementById('transferBank').value='';
+            document.getElementById('transferAccount').value='';
+            document.getElementById('transferHolder').value='';
             // 장비리스 필드 초기화
             document.getElementById('leaseFields').style.display='none';
             document.getElementById('leaseStartDate').value='';
@@ -1497,6 +1520,12 @@
                 document.getElementById('expenseAmount').value=item.amount||'';document.getElementById('expenseNote').value=item.note||'';
                 document.getElementById('expenseDate').value=item.date||'';
                 if(type==='variable'){document.getElementById('expenseCard').value=item.card||'롯데카드';}
+                // 이체 정보 로드
+                if(type==='fixed'){
+                    document.getElementById('transferBank').value=item.transferBank||'';
+                    document.getElementById('transferAccount').value=item.transferAccount||'';
+                    document.getElementById('transferHolder').value=item.transferHolder||'';
+                }
                 // 장비리스 정보 로드
                 if(item.category==='장비리스/렌탈'){
                     document.getElementById('leaseFields').style.display='block';
@@ -1523,6 +1552,12 @@
             const collection=type==='fixed'?'fixedExpenses':'variableExpenses';
             const data={name,category,amount,note,date};
             if(type==='variable'){data.card=card;}
+            // 이체 정보 저장 (고정비만)
+            if(type==='fixed'){
+                data.transferBank=document.getElementById('transferBank').value||null;
+                data.transferAccount=document.getElementById('transferAccount').value.replace(/[^0-9]/g,'')||null;
+                data.transferHolder=document.getElementById('transferHolder').value.trim()||null;
+            }
             // 장비리스 정보 저장
             if(category==='장비리스/렌탈'){
                 data.leaseStartDate=document.getElementById('leaseStartDate').value||null;
@@ -1542,6 +1577,124 @@
         async function deleteExpense(type,id){
             if(!confirm('정말 삭제하시겠습니까?'))return;
             try{const collection=type==='fixed'?'fixedExpenses':'variableExpenses';await db.collection(collection).doc(id).delete();await loadExpenses();renderExpenses();}catch(e){alert('삭제 실패: '+e.message);}
+        }
+        // 이체 기능
+        function doTransfer(id){
+            const item=fixedExpenses.find(e=>e.id===id);
+            if(!item||!item.transferBank||!item.transferAccount)return alert('이체 정보가 없습니다.');
+            openTransferModal(item);
+        }
+        function openTransferModal(item){
+            const bankCodes={'신한':'088','국민':'004','우리':'020','하나':'081','농협':'011','기업':'003','SC제일':'023','씨티':'027','카카오뱅크':'090','토스뱅크':'092','케이뱅크':'089','대구':'031','부산':'032','경남':'039','광주':'034','전북':'037','제주':'035','수협':'007','새마을금고':'045','신협':'048','우체국':'071','산업':'002'};
+            const bankCode=bankCodes[item.transferBank]||'088';
+            const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+            let html=`<div style="text-align:center;padding:20px 0">
+                <div style="font-size:18px;font-weight:700;margin-bottom:20px">💸 ${item.name} 이체</div>
+                <div style="background:#f5f5f0;border-radius:12px;padding:20px;margin-bottom:20px;text-align:left">
+                    <div style="display:grid;grid-template-columns:80px 1fr;gap:12px;font-size:15px">
+                        <span style="color:#888">입금은행</span><strong>${item.transferBank}은행</strong>
+                        <span style="color:#888">계좌번호</span><strong id="transferAcctDisplay">${item.transferAccount}</strong>
+                        <span style="color:#888">예금주</span><strong>${item.transferHolder||'-'}</strong>
+                        <span style="color:#888">이체금액</span><strong style="color:#2e7d32;font-size:17px">${formatCurrency(item.amount)}</strong>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <button class="btn btn-primary" style="background:#2e7d32;padding:14px;font-size:15px" onclick="copyTransferInfo('${item.transferBank}','${item.transferAccount}','${item.transferHolder||''}',${item.amount},'${item.name}')">📋 이체 정보 복사</button>`;
+            if(isMobile){
+                // 신한SOL뱅크 딥링크 (앱 열기)
+                html+=`<button class="btn" style="background:#0046ff;color:#fff;padding:14px;font-size:15px" onclick="openSOLApp()">🏦 신한 SOL뱅크 열기</button>
+                    <button class="btn" style="background:#1e3a5f;color:#fff;padding:14px;font-size:15px" onclick="openSOLBizApp()">🏢 신한 SOL Biz 열기</button>`;
+            }
+            html+=`<button class="btn" style="background:#e3a008;color:#fff;padding:14px;font-size:15px" onclick="markTransferDone('${item.id}')">✅ 이체 완료 기록</button>
+                </div>
+                <div id="transferCopyResult" style="margin-top:12px;color:#2e7d32;font-weight:600;display:none">✅ 복사 완료!</div>
+            </div>`;
+            // 모달 동적 생성
+            let modal=document.getElementById('transferModal');
+            if(!modal){modal=document.createElement('div');modal.id='transferModal';modal.className='modal';modal.innerHTML=`<div class="modal-content" style="max-width:420px"><div class="modal-header"><div class="modal-title">이체 실행</div><button class="modal-close" onclick="closeModal('transferModal')">&times;</button></div><div class="modal-body" id="transferModalBody"></div></div>`;document.body.appendChild(modal);}
+            document.getElementById('transferModalBody').innerHTML=html;
+            openModal('transferModal');
+        }
+        function copyTransferInfo(bank,account,holder,amount,name){
+            const text=`[${name}]\n입금은행: ${bank}은행\n계좌번호: ${account}\n예금주: ${holder||'-'}\n이체금액: ${amount.toLocaleString()}원`;
+            navigator.clipboard.writeText(account).then(()=>{
+                const r=document.getElementById('transferCopyResult');
+                r.style.display='block';r.textContent='✅ 계좌번호 복사 완료! ('+account+')';
+                setTimeout(()=>{r.style.display='none';},3000);
+            }).catch(()=>{
+                // fallback
+                const ta=document.createElement('textarea');ta.value=account;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+                const r=document.getElementById('transferCopyResult');r.style.display='block';r.textContent='✅ 계좌번호 복사 완료!';
+                setTimeout(()=>{r.style.display='none';},3000);
+            });
+        }
+        function openSOLApp(){
+            // 신한 SOL뱅크 앱 열기 시도
+            const schemes=['shinhan-solbank://','sbankmoasign://','newsolbank://'];
+            const androidPkg='com.shinhan.sbanking';
+            const iosStore='https://apps.apple.com/kr/app/id357484932';
+            const isAndroid=/Android/i.test(navigator.userAgent);
+            if(isAndroid){
+                // intent 스킴 사용
+                location.href='intent://#Intent;scheme=shinhan-solbank;package='+androidPkg+';end';
+            } else {
+                // iOS: custom scheme 시도 → 실패 시 앱스토어
+                const start=Date.now();
+                location.href='shinhan-solbank://';
+                setTimeout(()=>{if(Date.now()-start<2000)location.href=iosStore;},1500);
+            }
+        }
+        function openSOLBizApp(){
+            const isAndroid=/Android/i.test(navigator.userAgent);
+            if(isAndroid){
+                location.href='intent://#Intent;scheme=shinhan-solbiz;package=com.shinhan.bizbank;end';
+            } else {
+                const start=Date.now();
+                location.href='shinhan-solbiz://';
+                setTimeout(()=>{if(Date.now()-start<2000)location.href='https://apps.apple.com/kr/app/id587766126';},1500);
+            }
+        }
+        async function markTransferDone(id){
+            const now=new Date();
+            const ym=now.getFullYear()+('0'+(now.getMonth()+1)).slice(-2);
+            const dateStr=now.toISOString().split('T')[0];
+            const timeStr=now.toTimeString().split(' ')[0].substring(0,5);
+            try{
+                await db.collection('fixedExpenses').doc(id).update({
+                    lastTransferDate:dateStr,
+                    lastTransferTime:timeStr,
+                    lastTransferYM:ym
+                });
+                await loadExpenses();renderExpenses();
+                closeModal('transferModal');
+                alert('✅ 이체 완료가 기록되었습니다. ('+dateStr+' '+timeStr+')');
+            }catch(e){alert('기록 실패: '+e.message);}
+        }
+        function batchTransfer(){
+            const ym=getYM();
+            const pending=fixedExpenses.filter(e=>e.transferBank&&e.transferAccount&&e.lastTransferYM!==ym);
+            if(pending.length===0)return alert('✅ 이번 달 이체가 모두 완료되었습니다!');
+            const totalAmount=pending.reduce((s,e)=>s+(e.amount||0),0);
+            let html=`<div style="padding:10px 0">
+                <div style="font-size:16px;font-weight:700;margin-bottom:16px">📋 미이체 항목 (${pending.length}건, 총 ${formatCurrency(totalAmount)})</div>
+                <div style="max-height:400px;overflow-y:auto">`;
+            pending.forEach((e,i)=>{
+                html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:${i%2?'#fff':'#f9f9f7'};border-radius:8px;margin-bottom:6px">
+                    <div>
+                        <div style="font-weight:600">${e.name}</div>
+                        <div style="font-size:12px;color:#888">${e.transferBank} ${e.transferAccount} ${e.transferHolder?'('+e.transferHolder+')':''}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <strong style="color:#2e7d32">${formatCurrency(e.amount)}</strong>
+                        <button class="btn btn-sm" style="background:#2e7d32;color:#fff" onclick="doTransfer('${e.id}')">이체</button>
+                    </div>
+                </div>`;
+            });
+            html+=`</div></div>`;
+            let modal=document.getElementById('batchTransferModal');
+            if(!modal){modal=document.createElement('div');modal.id='batchTransferModal';modal.className='modal';modal.innerHTML=`<div class="modal-content" style="max-width:520px"><div class="modal-header"><div class="modal-title">💸 일괄 이체</div><button class="modal-close" onclick="closeModal('batchTransferModal')">&times;</button></div><div class="modal-body" id="batchTransferBody"></div></div>`;document.body.appendChild(modal);}
+            document.getElementById('batchTransferBody').innerHTML=html;
+            openModal('batchTransferModal');
         }
 
         // CRUD Operations - Payroll
