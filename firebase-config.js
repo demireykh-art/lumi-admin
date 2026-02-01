@@ -64,13 +64,15 @@ function formatBirthday(birthday){
 }
 
 // ===== Auth =====
+const ADMIN_ID='adminhighgo';
+const ADMIN_PW='gndls-asdk!jd-As';
+
 function handleAdminLogin(){
-    const id=document.getElementById('adminId').value.toLowerCase().trim();
+    const id=document.getElementById('adminId').value.trim();
     const pw=document.getElementById('adminPw').value;
-    const validIds=['admin','lumi','manager'];
-    const validPw='lumi2026';
-    if(validIds.includes(id)&&pw===validPw){
-        localStorage.setItem('lumi_admin_auth',JSON.stringify({id:id,time:Date.now()}));
+    document.getElementById('loginError').textContent='';
+    if(id===ADMIN_ID&&pw===ADMIN_PW){
+        localStorage.setItem('lumi_admin_auth','true');
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('appContainer').classList.add('active');
         initApp();
@@ -80,17 +82,11 @@ function handleAdminLogin(){
 }
 function logout(){localStorage.removeItem('lumi_admin_auth');location.reload();}
 function checkAuth(){
-    const auth=localStorage.getItem('lumi_admin_auth');
-    if(auth){
-        try{
-            const data=JSON.parse(auth);
-            if(Date.now()-data.time<24*60*60*1000){
-                document.getElementById('loginScreen').classList.add('hidden');
-                document.getElementById('appContainer').classList.add('active');
-                initApp();
-                return;
-            }
-        }catch(e){}
+    if(localStorage.getItem('lumi_admin_auth')==='true'){
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('appContainer').classList.add('active');
+        initApp();
+        return;
     }
     document.getElementById('loginScreen').classList.remove('hidden');
 }
