@@ -843,20 +843,6 @@
                 </tr>`;
             });
             
-            // 김옥경 (담당 매출만 표시, 인센티브는 비보험 기반이므로 아래 테이블에서)
-            const okData=staffSales['김옥경']||{amount:0,patients:0};
-            const okPatients=okData.patients||0;
-            const okAvg=okPatients?Math.round(okData.amount/okPatients):0;
-            mainRows+=`<tr>
-                <td><strong>김옥경</strong></td>
-                <td class="text-right">${formatNumber(okPatients)}명</td>
-                <td class="text-right">${formatCurrency(okData.amount)}</td>
-                <td class="text-right">${formatCurrency(okAvg)}</td>
-                <td class="text-right">-</td>
-                <td class="text-right">-</td>
-                <td class="text-right"><small style="color:#888">아래 비보험 기반</small></td>
-            </tr>`;
-            
             document.getElementById('staffSalesTable').innerHTML=mainRows||'<tr><td colspan="7" class="text-center">데이터 없음</td></tr>';
             
             // 비보험 매출 기반 인센티브 (김옥경 0.9%, 신인해 0.1%)
