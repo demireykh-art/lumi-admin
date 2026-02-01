@@ -1218,8 +1218,8 @@
                 salesBasedIncentive=Math.round(okNiBase*0.009);
                 salesDetailHTML=`
                     <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>비보험 매출 0.9%</span><span style="font-weight:700">${formatCurrency(salesBasedIncentive)}</span></div>
-                        <div style="font-size:.85rem;color:var(--text-secondary)">대상매출: ${formatCurrency(okNiBase)} (비보험 전체 - 코디 담당분 제외)</div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>비보험 전체 상담매출 0.9%</span><span style="font-weight:700">${formatCurrency(salesBasedIncentive)}</span></div>
+                        <div style="font-size:.85rem;color:var(--text-secondary)">대상매출: ${formatCurrency(okNiBase)}</div>
                     </div>
                 `;
                 card.style.display='block';
