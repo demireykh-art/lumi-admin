@@ -1204,8 +1204,8 @@
                 salesBasedIncentive=salesInc+jpVisitInc;
                 salesDetailHTML=`
                     <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>담당 매출 1%</span><span style="font-weight:700">${formatCurrency(salesInc)}</span></div>
-                        <div style="font-size:.85rem;color:var(--text-secondary)">담당 매출: ${formatCurrency(sd.amount)} (${sd.patients||0}명, 객단가 ${formatCurrency(sd.patients?Math.round(sd.amount/(sd.patients||1)):0)})</div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>본인 담당 매출 1%</span><span style="font-weight:700">${formatCurrency(salesInc)}</span></div>
+                        <div style="font-size:.85rem;color:var(--text-secondary)">본인매출: ${formatCurrency(sd.amount)} (${sd.patients||0}명, 객단가 ${formatCurrency(sd.patients?Math.round(sd.amount/(sd.patients||1)):0)})</div>
                     </div>
                     <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
                         <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>일본인 내원 (${jpPatients}명 × ₩10,000)</span><span style="font-weight:700">${formatCurrency(jpVisitInc)}</span></div>
@@ -1219,7 +1219,7 @@
                 salesDetailHTML=`
                     <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
                         <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>비보험 매출 0.9%</span><span style="font-weight:700">${formatCurrency(salesBasedIncentive)}</span></div>
-                        <div style="font-size:.85rem;color:var(--text-secondary)">대상 매출: ${formatCurrency(okNiBase)} (비보험 전체 - 박보미 - 박지윤)</div>
+                        <div style="font-size:.85rem;color:var(--text-secondary)">대상매출: ${formatCurrency(okNiBase)} (비보험 전체 - 코디 담당분 제외)</div>
                     </div>
                 `;
                 card.style.display='block';
