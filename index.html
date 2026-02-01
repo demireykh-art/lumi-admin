@@ -148,7 +148,12 @@
                 </div>
                 <div class="sub-content" id="sub-staff">
                     <div class="cards-grid" id="staffSalesCards"></div>
-                    <div class="table-container"><table><thead><tr><th>담당직원</th><th class="text-right">환자 수</th><th class="text-right">매출</th><th class="text-right">객단가</th><th class="text-right">인센티브(1%)</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
+                    <div class="section"><div class="section-header"><div class="section-title">담당직원별 매출 & 인센티브</div></div>
+                        <div class="table-container"><table><thead><tr><th>담당직원</th><th class="text-right">환자 수</th><th class="text-right">담당 매출</th><th class="text-right">객단가</th><th class="text-right">일본인 내원</th><th class="text-right">일본인 매출</th><th class="text-right">인센티브</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
+                    </div>
+                    <div class="section"><div class="section-header"><div class="section-title">비보험 매출 기반 인센티브 (김옥경 · 신인해)</div></div>
+                        <div class="table-container"><table><thead><tr><th>직원</th><th class="text-right">대상 매출</th><th class="text-right">비율</th><th class="text-right">인센티브</th><th>비고</th></tr></thead><tbody id="nonInsuranceIncentiveTable"></tbody></table></div>
+                    </div>
                 </div>
                 <div class="sub-content" id="sub-japan">
                     <div class="cards-grid" id="japanCards"></div>
@@ -340,7 +345,7 @@
                     <div class="section-header"><div class="section-title">인센티브 항목 관리</div><button class="btn btn-primary" onclick="openIncentiveItemModal()">+ 항목 추가</button></div>
                     <div class="table-container"><table><thead><tr><th>항목명</th><th>유형/단가</th><th>적용 직원</th><th>관리</th></tr></thead><tbody id="incentiveItemTable"></tbody></table></div>
                     <div class="section-header mt-1"><div class="section-title">직원별 인센티브 현황</div></div>
-                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 인센티브</th><th class="text-right">일본인 매출 인센티브</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 기반</th><th class="text-right">건별/기타</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-salary">
                     <div class="section-header"><div class="section-title">사전급여대장 (노무사 전달용)</div><button class="btn btn-secondary" onclick="exportPrePayroll()">엑셀 다운로드</button></div>
@@ -749,7 +754,7 @@
 
         function renderRevenueOverview(){
             const ym=getYM();
-            const data=revenueData[ym]||{total:0,japan:0,transactions:0,patients:0};
+            const data=revenueData[ym]||{total:0,japan:0,nonInsurance:0,transactions:0,patients:0,nonInsurancePatients:0,japanVisitors:0};
             const prevYM=currentMonth===1?`${currentYear-1}-12`:`${currentYear}-${String(currentMonth-1).padStart(2,'0')}`;
             const prevData=revenueData[prevYM]||{total:0};
             const lastYearData=data2024[currentMonth]||{total:0};
@@ -757,11 +762,17 @@
             const yoyGrowth=data.total-lastYearData.total;
             const patientCount=data.patients||0;
             const avgPerPatient=patientCount?Math.round(data.total/patientCount):0;
+            const niTotal=data.nonInsurance||0;
+            const niPatients=data.nonInsurancePatients||0;
+            const niAvg=niPatients?Math.round(niTotal/niPatients):0;
+            const jpTotal=data.japan||0;
+            const jpVisitors=data.japanVisitors||0;
+            const jpAvg=jpVisitors?Math.round(jpTotal/jpVisitors):0;
 
             document.getElementById('revenueCards').innerHTML=`
-                <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(data.total)}</div><div class="card-change ${growth>=0?'positive':'negative'}">전월 대비 ${growth>=0?'+':''}${formatCurrency(growth)}</div></div>
-                <div class="card"><div class="card-label">일본인 매출</div><div class="card-value">${formatCurrency(data.japan)}</div><div class="card-sub">전체의 ${data.total?Math.round(data.japan/data.total*100):0}%</div></div>
-                <div class="card"><div class="card-label">환자 수</div><div class="card-value">${formatNumber(patientCount)}명</div><div class="card-sub">객단가 ${formatCurrency(avgPerPatient)}</div></div>
+                <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(data.total)}</div><div class="card-sub">${formatNumber(patientCount)}명 · 객단가 ${formatCurrency(avgPerPatient)}</div><div class="card-change ${growth>=0?'positive':'negative'}">전월 대비 ${growth>=0?'+':''}${formatCurrency(growth)}</div></div>
+                <div class="card"><div class="card-label">비보험 매출</div><div class="card-value">${formatCurrency(niTotal)}</div><div class="card-sub">${formatNumber(niPatients)}명 · 객단가 ${formatCurrency(niAvg)}</div><div class="card-change">전체의 ${data.total?Math.round(niTotal/data.total*100):0}%</div></div>
+                <div class="card"><div class="card-label">일본인 매출</div><div class="card-value">${formatCurrency(jpTotal)}</div><div class="card-sub">${jpVisitors}명 · 객단가 ${formatCurrency(jpAvg)}</div><div class="card-change">전체의 ${data.total?Math.round(jpTotal/data.total*100):0}%</div></div>
                 <div class="card"><div class="card-label">전년 동월 대비</div><div class="card-value ${yoyGrowth>=0?'positive':'negative'}">${yoyGrowth>=0?'+':''}${formatCurrency(yoyGrowth)}</div><div class="card-sub">2024년 ${currentMonth}월: ${formatCurrency(lastYearData.total)}</div></div>
             `;
         }
@@ -785,20 +796,100 @@
         }
 
         function renderStaffSales(){
-            const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
-            const total=Object.values(staffSales).reduce((sum,d)=>sum+(d.amount||0),0);
-            const totalPatients=Object.values(staffSales).reduce((sum,d)=>sum+(d.patients||0),0);
-            const sorted=Object.entries(staffSales).sort((a,b)=>b[1].amount-a[1].amount);
+            const ym=getYM();const detail=salesDetail[ym]||{};
+            const staffSales=detail.staffSales||{};
+            const japanStaffSales=detail.japanStaffSales||{};
+            const rev=revenueData[ym]||{total:0,nonInsurance:0};
+            
+            // 박보미, 박지윤 담당 매출 합계
+            const bomiSales=(staffSales['박보미']||{}).amount||0;
+            const jiyoonSales=(staffSales['박지윤']||{}).amount||0;
+            const niTotal=rev.nonInsurance||0;
+            const niExcluded=niTotal-bomiSales-jiyoonSales; // 김옥경 대상 (비보험-박보미-박지윤)
+            
+            // 카드: 전체 매출, 비보험 매출, 담당직원 매출
+            const staffTotal=Object.values(staffSales).reduce((sum,d)=>sum+(d.amount||0),0);
             document.getElementById('staffSalesCards').innerHTML=`
-                <div class="card"><div class="card-label">담당직원 수</div><div class="card-value">${sorted.length}명</div></div>
-                <div class="card"><div class="card-label">총 매출</div><div class="card-value">${formatCurrency(total)}</div></div>
-                <div class="card"><div class="card-label">인센티브 총액 (1%)</div><div class="card-value">${formatCurrency(total*0.01)}</div></div>
+                <div class="card"><div class="card-label">전체 매출</div><div class="card-value">${formatCurrency(rev.total)}</div></div>
+                <div class="card"><div class="card-label">비보험 매출</div><div class="card-value">${formatCurrency(niTotal)}</div></div>
+                <div class="card"><div class="card-label">담당직원 매출 합계</div><div class="card-value">${formatCurrency(staffTotal)}</div></div>
             `;
-            document.getElementById('staffSalesTable').innerHTML=sorted.map(([name,data])=>{
+            
+            // 박보미, 박지윤 테이블 (담당매출 1% + 일본인 건당 1만원)
+            const mainStaff=['박보미','박지윤'];
+            let mainRows='';
+            let totalIncentive=0;
+            
+            mainStaff.forEach(name=>{
+                const data=staffSales[name]||{amount:0,patients:0,count:0};
+                const jpData=japanStaffSales[name]||{amount:0,patients:0};
                 const patients=data.patients||0;
-                const avgPerPatient=patients?Math.round(data.amount/patients):0;
-                return `<tr><td><strong>${name}</strong></td><td class="text-right">${formatNumber(patients)}명</td><td class="text-right">${formatCurrency(data.amount)}</td><td class="text-right">${formatCurrency(avgPerPatient)}</td><td class="text-right"><span class="badge badge-green">${formatCurrency(data.amount*0.01)}</span></td></tr>`;
-            }).join('')||'<tr><td colspan="5" class="text-center">데이터 없음</td></tr>';
+                const avgPrice=patients?Math.round(data.amount/patients):0;
+                const jpPatients=jpData.patients||0;
+                const jpAmount=jpData.amount||0;
+                const salesInc=Math.round(data.amount*0.01);
+                const jpVisitInc=jpPatients*10000;
+                const totalInc=salesInc+jpVisitInc;
+                totalIncentive+=totalInc;
+                
+                mainRows+=`<tr>
+                    <td><strong>${name}</strong></td>
+                    <td class="text-right">${formatNumber(patients)}명</td>
+                    <td class="text-right">${formatCurrency(data.amount)}</td>
+                    <td class="text-right">${formatCurrency(avgPrice)}</td>
+                    <td class="text-right">${jpPatients}명</td>
+                    <td class="text-right">${formatCurrency(jpAmount)}</td>
+                    <td class="text-right"><span class="badge badge-green">${formatCurrency(totalInc)}</span><br><small style="color:#888">매출1%: ${formatCurrency(salesInc)} + 일본${jpPatients}명: ${formatCurrency(jpVisitInc)}</small></td>
+                </tr>`;
+            });
+            
+            // 김옥경 (담당 매출만 표시, 인센티브는 비보험 기반이므로 아래 테이블에서)
+            const okData=staffSales['김옥경']||{amount:0,patients:0};
+            const okPatients=okData.patients||0;
+            const okAvg=okPatients?Math.round(okData.amount/okPatients):0;
+            mainRows+=`<tr>
+                <td><strong>김옥경</strong></td>
+                <td class="text-right">${formatNumber(okPatients)}명</td>
+                <td class="text-right">${formatCurrency(okData.amount)}</td>
+                <td class="text-right">${formatCurrency(okAvg)}</td>
+                <td class="text-right">-</td>
+                <td class="text-right">-</td>
+                <td class="text-right"><small style="color:#888">아래 비보험 기반</small></td>
+            </tr>`;
+            
+            document.getElementById('staffSalesTable').innerHTML=mainRows||'<tr><td colspan="7" class="text-center">데이터 없음</td></tr>';
+            
+            // 비보험 매출 기반 인센티브 (김옥경 0.9%, 신인해 0.1%)
+            const bomiNi=(staffSales['박보미']||{}).niAmount||0;
+            const jiyoonNi=(staffSales['박지윤']||{}).niAmount||0;
+            const okNiBase=Math.max(0,niTotal-bomiNi-jiyoonNi);
+            const okInc=Math.round(okNiBase*0.009);
+            const shinInc=Math.round(niTotal*0.001);
+            totalIncentive+=okInc+shinInc;
+            
+            document.getElementById('nonInsuranceIncentiveTable').innerHTML=`
+                <tr>
+                    <td><strong>김옥경</strong></td>
+                    <td class="text-right">${formatCurrency(okNiBase)}</td>
+                    <td class="text-right">0.9%</td>
+                    <td class="text-right"><span class="badge badge-green">${formatCurrency(okInc)}</span></td>
+                    <td><small>비보험 매출 - 박보미 - 박지윤</small></td>
+                </tr>
+                <tr>
+                    <td><strong>신인해</strong></td>
+                    <td class="text-right">${formatCurrency(niTotal)}</td>
+                    <td class="text-right">0.1%</td>
+                    <td class="text-right"><span class="badge badge-green">${formatCurrency(shinInc)}</span></td>
+                    <td><small>비보험 매출 전체</small></td>
+                </tr>
+                <tr style="font-weight:bold;border-top:2px solid #ccc">
+                    <td>합계</td>
+                    <td></td>
+                    <td></td>
+                    <td class="text-right"><span class="badge badge-gold">${formatCurrency(totalIncentive)}</span></td>
+                    <td><small>전체 인센티브 (피부관리사 별도)</small></td>
+                </tr>
+            `;
         }
 
         function renderJapanSales(){
@@ -1241,33 +1332,56 @@
 
         function renderIncentiveSummary(){
             const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
-            const japanStaffSales=detail.japanStaffSales||{};  // 일본인 담당별 매출
+            const japanStaffSales=detail.japanStaffSales||{};
+            const rev=revenueData[ym]||{total:0,nonInsurance:0};
+            const niTotal=rev.nonInsurance||0;
+            const bomiNi=(staffSales['박보미']||{}).niAmount||0;
+            const jiyoonNi=(staffSales['박지윤']||{}).niAmount||0;
+            const okNiBase=Math.max(0,niTotal-bomiNi-jiyoonNi);
             const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
             
             document.getElementById('incentiveSummaryTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
                 let salesIncentive=0;
-                
-                // 1. 담당 매출 % 인센티브 (salesPercent)
-                const salesPercentItems=incentiveItems.filter(i=>i.type==='salesPercent'&&i.employees?.includes(emp.id));
-                salesPercentItems.forEach(item=>{
-                    if(emp.matchName&&staffSales[emp.matchName]){
-                        salesIncentive+=Math.round(staffSales[emp.matchName].amount*(item.salesPercent||1)/100);
-                    }
-                });
-                
-                // 2. 일본인 매출 % 인센티브 계산
                 let japanIncentive=0;
-                const japanSalesItems=incentiveItems.filter(i=>i.type==='japanSales'&&i.employees?.includes(emp.id));
-                japanSalesItems.forEach(item=>{
-                    // 직원의 matchName으로 일본인 담당 매출 찾기
-                    if(emp.matchName&&japanStaffSales[emp.matchName]){
-                        japanIncentive+=Math.round(japanStaffSales[emp.matchName]*(item.percent||1)/100);
-                    }
+                let niIncentive=0;
+                const name=emp.matchName||emp.name;
+                
+                // 박보미, 박지윤: 담당매출 1% + 일본인 건당 1만원
+                if(name==='박보미'||name==='박지윤'){
+                    const sd=staffSales[name]||{amount:0};
+                    salesIncentive=Math.round(sd.amount*0.01);
+                    const jpd=japanStaffSales[name]||{patients:0};
+                    japanIncentive=(jpd.patients||0)*10000;
+                }
+                // 김옥경: 비보험(박보미+박지윤제외) 0.9%
+                else if(name==='김옥경'){
+                    niIncentive=Math.round(okNiBase*0.009);
+                }
+                // 신인해: 비보험 전체 0.1%
+                else if(name==='신인해'){
+                    niIncentive=Math.round(niTotal*0.001);
+                }
+                
+                // 피부관리사 등 기존 건별 인센티브
+                const perCaseItems=incentiveItems.filter(i=>i.type==='perCase'&&i.employees?.includes(emp.id));
+                const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
+                let perCaseIncentive=0;
+                empRecords.forEach(r=>{
+                    const item=incentiveItems.find(i=>i.id===r.itemId);
+                    if(item&&item.type==='perCase')perCaseIncentive+=item.price||0;
                 });
                 
-                const itemIncentive=japanIncentive;const total=salesIncentive+itemIncentive;
-                return `<tr><td><strong>${emp.name}</strong></td><td>${roleLabels[emp.role]||emp.role}</td><td class="text-right">${formatCurrency(salesIncentive)}</td><td class="text-right">${formatCurrency(itemIncentive)}</td><td class="text-right"><strong>${formatCurrency(total)}</strong></td></tr>`;
-            }).join('')||'<tr><td colspan="5" class="text-center">직원 없음</td></tr>';
+                const total=salesIncentive+japanIncentive+niIncentive+perCaseIncentive;
+                if(total===0&&!['박보미','박지윤','김옥경','신인해'].includes(name)&&perCaseIncentive===0)return '';
+                
+                let detail2='';
+                if(salesIncentive>0)detail2+=`매출1%: ${formatCurrency(salesIncentive)}`;
+                if(japanIncentive>0)detail2+=(detail2?' + ':'')+ `일본인: ${formatCurrency(japanIncentive)}`;
+                if(niIncentive>0)detail2+=`비보험: ${formatCurrency(niIncentive)}`;
+                if(perCaseIncentive>0)detail2+=(detail2?' + ':'')+`건별: ${formatCurrency(perCaseIncentive)}`;
+                
+                return `<tr><td><strong>${emp.name}</strong></td><td>${roleLabels[emp.role]||emp.role}</td><td class="text-right">${formatCurrency(salesIncentive+niIncentive)}</td><td class="text-right">${formatCurrency(japanIncentive+perCaseIncentive)}</td><td class="text-right"><strong>${formatCurrency(total)}</strong><br><small style="color:#888">${detail2}</small></td></tr>`;
+            }).filter(r=>r).join('')||'<tr><td colspan="5" class="text-center">직원 없음</td></tr>';
         }
 
         function renderSalary(){
@@ -1275,6 +1389,11 @@
             const detail=salesDetail[ym]||{};
             const staffSales=detail.staffSales||{};
             const japanStaffSales=detail.japanStaffSales||{};
+            const rev=revenueData[ym]||{total:0,nonInsurance:0};
+            const niTotal=rev.nonInsurance||0;
+            const bomiNi=(staffSales['박보미']||{}).niAmount||0;
+            const jiyoonNi=(staffSales['박지윤']||{}).niAmount||0;
+            const okNiBase=Math.max(0,niTotal-bomiNi-jiyoonNi);
             const roleLabelsLocal={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
             
             // 사전급여대장 렌더링
@@ -1293,21 +1412,33 @@
                 const otHours=(otMinutes/60).toFixed(1);
                 const otPay=Math.round(otMinutes/60*(emp.hourly||12000)*1.5);
                 
-                // 인센티브 계산
+                // 인센티브 계산 (새 구조)
+                const name=emp.matchName||emp.name;
+                let incentiveAmount=0;
+                
+                // 박보미/박지윤: 담당매출 1% + 일본인 건당 1만원
+                if(name==='박보미'||name==='박지윤'){
+                    const sd=staffSales[name]||{amount:0};
+                    incentiveAmount+=Math.round(sd.amount*0.01);
+                    const jpd=japanStaffSales[name]||{patients:0};
+                    incentiveAmount+=(jpd.patients||0)*10000;
+                }
+                // 김옥경: 비보험(박보미+박지윤제외) 0.9%
+                else if(name==='김옥경'){
+                    incentiveAmount+=Math.round(okNiBase*0.009);
+                }
+                // 신인해: 비보험 전체 0.1%
+                else if(name==='신인해'){
+                    incentiveAmount+=Math.round(niTotal*0.001);
+                }
+                
+                // 피부관리사 등 건별 인센티브
                 const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
                 let incentiveCount=empRecords.length;
-                let incentiveAmount=0;
                 empRecords.forEach(r=>{
                     const item=incentiveItems.find(i=>i.id===r.itemId);
-                    if(item&&item.type!=='japanSales'){
+                    if(item&&item.type==='perCase'){
                         incentiveAmount+=item.price||0;
-                    }
-                });
-                // 일본인 매출 인센티브
-                const japanItems=incentiveItems.filter(i=>i.type==='japanSales'&&i.employees?.includes(emp.id));
-                japanItems.forEach(item=>{
-                    if(emp.matchName&&japanStaffSales[emp.matchName]){
-                        incentiveAmount+=Math.round(japanStaffSales[emp.matchName]*(item.percent||1)/100);
                     }
                 });
                 
@@ -1317,7 +1448,7 @@
                     <td>${emp.salary?emp.salary+'만원':'-'}</td>
                     <td class="text-right">${otHours}H</td>
                     <td class="text-right">${formatCurrency(otPay)}</td>
-                    <td class="text-right">${incentiveCount}건</td>
+                    <td class="text-right">${incentiveCount>0?incentiveCount+'건':'-'}</td>
                     <td class="text-right">${formatCurrency(incentiveAmount)}</td>
                 </tr>`;
             }).join('')||'<tr><td colspan="7" class="text-center">직원 없음</td></tr>';
@@ -2105,7 +2236,8 @@
                         staff:headers.indexOf('담당직원'),
                         amount:headers.indexOf('금액'),
                         nationality:headers.indexOf('국적'),
-                        name:headers.indexOf('이름')
+                        name:headers.indexOf('이름'),
+                        vat:headers.indexOf('부가세')
                     };
                     
                     console.log('컬럼 인덱스:', colIndex);
@@ -2162,8 +2294,8 @@
                         
                         if(!monthlyData[ym]){
                             monthlyData[ym]={
-                                total:0,japan:0,transactions:0,
-                                patients:new Set(),
+                                total:0,japan:0,nonInsurance:0,transactions:0,
+                                patients:new Set(),nonInsurancePatients:new Set(),
                                 doctorSales:{},staffSales:{},
                                 japanCharts:{},japanStaffSales:{}
                             };
@@ -2173,10 +2305,18 @@
                         const doctor=row[colIndex.doctor];
                         const staff=row[colIndex.staff];
                         const nationality=row[colIndex.nationality];
+                        const vatFlag=colIndex.vat>=0?String(row[colIndex.vat]||'').trim():'';
+                        const isNonInsurance=(vatFlag==='O');
                         
                         monthlyData[ym].total+=amount;
                         monthlyData[ym].transactions++;
                         if(chartNo)monthlyData[ym].patients.add(chartNo);
+                        
+                        // 비보험 매출 (부가세='O')
+                        if(isNonInsurance){
+                            monthlyData[ym].nonInsurance+=amount;
+                            if(chartNo)monthlyData[ym].nonInsurancePatients.add(chartNo);
+                        }
                         
                         // 진료의별 매출
                         if(doctor&&doctor!=='빠른예약'){
@@ -2191,11 +2331,15 @@
                         // 담당직원별 매출
                         if(staff){
                             if(!monthlyData[ym].staffSales[staff]){
-                                monthlyData[ym].staffSales[staff]={count:0,amount:0,patients:new Set()};
+                                monthlyData[ym].staffSales[staff]={count:0,amount:0,patients:new Set(),niAmount:0,niPatients:new Set()};
                             }
                             monthlyData[ym].staffSales[staff].count++;
                             monthlyData[ym].staffSales[staff].amount+=amount;
                             if(chartNo)monthlyData[ym].staffSales[staff].patients.add(chartNo);
+                            if(isNonInsurance){
+                                monthlyData[ym].staffSales[staff].niAmount+=amount;
+                                if(chartNo)monthlyData[ym].staffSales[staff].niPatients.add(chartNo);
+                            }
                         }
                         
                         // 일본인 매출
@@ -2247,7 +2391,9 @@
                             staffSalesForDB[staff]={
                                 count:data.count,
                                 amount:data.amount,
-                                patients:data.patients.size
+                                patients:data.patients.size,
+                                niAmount:data.niAmount||0,
+                                niPatients:data.niPatients?data.niPatients.size:0
                             };
                         }
                         // japanStaffSales의 Set을 숫자로 변환
@@ -2261,6 +2407,8 @@
                         
                         await db.collection('revenue').doc(ym).set({
                             total:d.total,japan:d.japan,
+                            nonInsurance:d.nonInsurance,
+                            nonInsurancePatients:d.nonInsurancePatients.size,
                             japanVisitors:japanVisitors,
                             transactions:d.transactions,
                             patients:patientCount,
