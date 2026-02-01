@@ -339,6 +339,7 @@ function openEmployeeModal(id=null){
     document.getElementById('empAnnualLeave').value='';
     document.getElementById('empUsedLeave').value='0';
     document.getElementById('autoAnnualLeave').textContent='0';
+    document.getElementById('empIsIncentiveTarget').checked=false;
     document.getElementById('empId').value='';
     if(id){
         const emp=employees.find(e=>e.id===id);
@@ -353,6 +354,7 @@ function openEmployeeModal(id=null){
             document.getElementById('empStatus').value=emp.status||'active';
             document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
+            document.getElementById('empIsIncentiveTarget').checked=!!emp.isIncentiveTarget;
             document.getElementById('empId').value=emp.id;
             // 법정 연차 자동계산 표시
             const autoLeave=calculateLegalAnnualLeave(emp.joinDate);
@@ -428,7 +430,8 @@ async function saveEmployee(){
         birthday:document.getElementById('empBirthday').value,
         status:document.getElementById('empStatus').value,
         annualLeave:annualLeave,
-        usedLeave:usedLeave
+        usedLeave:usedLeave,
+        isIncentiveTarget:document.getElementById('empIsIncentiveTarget').checked
     };
     try{
         await db.collection('employees').doc(empId).set(data,{merge:true});

@@ -398,6 +398,15 @@
                         <input type="number" class="form-input" id="empUsedLeave" value="0" min="0">
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group" style="display:flex;align-items:center;gap:.75rem;padding-top:1rem">
+                        <label class="form-label" style="margin:0;cursor:pointer;display:flex;align-items:center;gap:.5rem">
+                            <input type="checkbox" id="empIsIncentiveTarget" style="width:18px;height:18px;accent-color:var(--primary)">
+                            💎 인센티브 대상자
+                        </label>
+                        <span style="font-size:.75rem;color:var(--text-muted)">체크 시 Staff App에 인센티브 탭 노출</span>
+                    </div>
+                </div>
                 <input type="hidden" id="empId">
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('employeeModal')">취소</button><button class="btn btn-primary" onclick="saveEmployee()">저장</button></div>
