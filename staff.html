@@ -685,65 +685,92 @@
             return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
         }
         
-        // Login
-        const LUMISTAFF_PW='lumi2026!';  // 원장님이 변경 가능
+        // ===== Login System =====
+        // 비밀번호를 config 컬렉션에서 읽어옴 (하드코딩 방지)
+        let configPasswords={staff_pw:'lumi2026!'}; // fallback 기본값
+        
+        async function loadConfigPasswords(){
+            try{
+                const doc=await db.collection('config').doc('passwords').get();
+                if(doc.exists){
+                    const data=doc.data();
+                    if(data.staff_pw) configPasswords.staff_pw=data.staff_pw;
+                }
+            }catch(e){console.warn('config 로드 실패, 기본값 사용:',e);}
+        }
         
         async function attemptLogin(){
             const inputName=document.getElementById('empIdInput').value.trim();
             const pw=document.getElementById('empPwInput').value;
-            document.getElementById('loginError').textContent='';
+            const errEl=document.getElementById('loginError');
+            errEl.textContent='';
             
-            if(!inputName||!pw){document.getElementById('loginError').textContent='이름과 비밀번호를 입력해주세요.';return;}
+            if(!inputName||!pw){errEl.textContent='이름과 비밀번호를 입력해주세요.';return;}
             
-            // ─── 공용 계정: DB 조회 없이 즉시 로그인 ───
-            if(inputName==='lumistaff'||inputName==='LUMISTAFF'){
-                if(pw!==LUMISTAFF_PW){
-                    document.getElementById('loginError').textContent='공용계정 비밀번호가 올바르지 않습니다.';
+            // db 안전 체크
+            if(typeof db==='undefined'){errEl.textContent='시스템 초기화 중입니다. 잠시 후 다시 시도해주세요.';return;}
+            
+            // ─── 1) lumistaff 공용 계정: 최상단 분기 ───
+            if(inputName.toLowerCase()==='lumistaff'){
+                // DB에서 최신 비밀번호 로드
+                await loadConfigPasswords();
+                if(pw!==configPasswords.staff_pw){
+                    errEl.textContent='공용계정 비밀번호가 올바르지 않습니다.';
                     return;
                 }
-                currentUser={id:'lumistaff',name:'공용계정',role:'staff'};
+                currentUser={id:'lumistaff',name:'공용계정',role:'shared'};
                 localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
                 showApp();
                 return;
             }
             
-            // ─── 개인 계정: DB에서 조회 ───
+            // ─── 2) 개인 계정: DB에서 직원 조회 후 비밀번호 대조 ───
             try{
+                // 항상 최신 데이터로 조회 (배열 캐시 미사용)
+                let empDoc=null;
+                
+                // 2-1. 문서ID = 이름으로 직접 조회
                 let doc=await db.collection('employees').doc(inputName).get();
-                if(!doc.exists){
+                if(doc.exists) empDoc=doc;
+                
+                // 2-2. 소문자 변환 시도
+                if(!empDoc){
                     doc=await db.collection('employees').doc(inputName.toLowerCase()).get();
+                    if(doc.exists) empDoc=doc;
                 }
-                if(!doc.exists){
+                
+                // 2-3. name 필드로 검색
+                if(!empDoc){
                     const snap=await db.collection('employees').where('name','==',inputName).limit(1).get();
-                    if(!snap.empty) doc=snap.docs[0];
+                    if(!snap.empty) empDoc=snap.docs[0];
                 }
-                if(!doc.exists){
-                    document.getElementById('loginError').textContent='등록되지 않은 이름입니다.';
+                
+                if(!empDoc){
+                    errEl.textContent='등록되지 않은 이름입니다.';
                     return;
                 }
-                const emp={id:doc.id,...doc.data()};
-                await processLogin(emp,pw);
-            }catch(e){
-                console.error(e);
-                document.getElementById('loginError').textContent='로그인 오류: '+e.message;
-            }
-        }
-        
-        async function processLogin(emp,pw){
-            if(pw==='fnal12890-'&&(!emp.password||emp.password==='fnal12890-')){
+                
+                const emp={id:empDoc.id,...empDoc.data()};
+                
+                // 초기 비밀번호 처리 (마스터키)
+                if(pw==='fnal12890-'&&(!emp.password||emp.password==='fnal12890-')){
+                    currentUser=emp;
+                    document.getElementById('pwSetup').classList.add('active');
+                    return;
+                }
+                
+                if(emp.password!==pw){
+                    errEl.textContent='비밀번호가 올바르지 않습니다.';
+                    return;
+                }
+                
                 currentUser=emp;
-                document.getElementById('pwSetup').classList.add('active');
-                return;
+                localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                showApp();
+            }catch(e){
+                console.error('로그인 오류:',e);
+                errEl.textContent='로그인 오류: '+e.message;
             }
-            
-            if(emp.password!==pw){
-                document.getElementById('loginError').textContent='비밀번호가 올바르지 않습니다.';
-                return;
-            }
-            
-            currentUser=emp;
-            localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-            showApp();
         }
         
         async function setupPassword(){
@@ -773,36 +800,46 @@
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
 
             const shared=isSharedAccount();
-            // 개인 계정: 재고 제거 / 공용 계정: 재고+식사만
             const allTabs=['attendance','meal','ot','leave','incentive','inventory','info'];
+            // 공용: 재고+식사 / 개인: 출퇴근+OT+연차+인센티브+내정보
             const sharedTabs=['inventory','meal'];
             const personalTabs=['attendance','ot','leave','incentive','info'];
+
+            // 모든 탭 먼저 숨기기
             allTabs.forEach(tab=>{
                 const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
                 const content=document.getElementById('tab-'+tab);
-                let show;
-                if(shared) show=sharedTabs.includes(tab);
-                else show=personalTabs.includes(tab);
-                if(nav)nav.style.display=show?'':'none';
-                if(content)content.style.display=show?'':'none';
+                if(nav)nav.style.display='none';
+                if(content)content.style.display='none';
             });
-            // 인센티브 탭 조건부 (개인계정만)
+
+            // 해당 계정 타입에 맞는 탭만 표시
+            const visibleTabs=shared?sharedTabs:personalTabs;
+            visibleTabs.forEach(tab=>{
+                const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
+                const content=document.getElementById('tab-'+tab);
+                if(nav)nav.style.display='';
+                if(content)content.style.display='';
+            });
+
+            // 인센티브 탭 조건부 (개인계정 + isIncentiveTarget인 경우만)
             if(!shared&&!currentUser.isIncentiveTarget){
                 const incNav=document.querySelector('.nav-item[data-tab="incentive"]');
                 const incTab=document.getElementById('tab-incentive');
                 if(incNav)incNav.style.display='none';
                 if(incTab)incTab.style.display='none';
             }
-            // 공용 계정 기본탭 = 재고
-            if(shared){
-                document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-                const invNav=document.querySelector('.nav-item[data-tab="inventory"]');
-                const invTab=document.getElementById('tab-inventory');
-                if(invNav)invNav.classList.add('active');
-                if(invTab)invTab.classList.add('active');
-                initInventoryTab();
-            }
+
+            // 활성 탭 설정
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+            const defaultTab=shared?'inventory':'attendance';
+            const defNav=document.querySelector(`.nav-item[data-tab="${defaultTab}"]`);
+            const defTab=document.getElementById('tab-'+defaultTab);
+            if(defNav)defNav.classList.add('active');
+            if(defTab)defTab.classList.add('active');
+
+            if(shared) initInventoryTab();
             checkLocation();
             loadAllData();
             loadSettings();
@@ -816,14 +853,19 @@
         }
         
         function checkAuth(){
+            // db 안전 체크
+            if(typeof db==='undefined'){
+                setTimeout(checkAuth,300);
+                return;
+            }
             const saved=localStorage.getItem('lumi_staff_user');
             if(saved){
                 try{
                     currentUser=JSON.parse(saved);
                     if(currentUser&&currentUser.id)showApp();
+                    else localStorage.removeItem('lumi_staff_user');
                 }catch(e){localStorage.removeItem('lumi_staff_user');}
             }
-            // 생체인식 버튼 표시 여부 확인
             checkBiometricAvailable();
         }
         

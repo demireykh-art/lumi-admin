@@ -71,22 +71,33 @@ function formatBirthday(birthday){
     return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
-// ===== Auth =====
+// ===== Auth (config DB 기반) =====
 const ADMIN_ID='adminhighgo';
-const ADMIN_PW='gndls-asdk!jd-As';
+const DEFAULT_ADMIN_PW='gndls-asdk!jd-As';
+const DEFAULT_STAFF_PW='lumi2026!';
 
-function handleAdminLogin(){
+async function handleAdminLogin(){
     const id=document.getElementById('adminId').value.trim();
     const pw=document.getElementById('adminPw').value;
     document.getElementById('loginError').textContent='';
-    if(id===ADMIN_ID&&pw===ADMIN_PW){
-        localStorage.setItem('lumi_admin_auth','true');
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('appContainer').classList.add('active');
-        initApp();
-    }else{
+    if(id!==ADMIN_ID){
         document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
+        return;
     }
+    // DB에서 비밀번호 확인
+    let adminPw=DEFAULT_ADMIN_PW;
+    try{
+        const doc=await db.collection('config').doc('passwords').get();
+        if(doc.exists&&doc.data().admin_pw) adminPw=doc.data().admin_pw;
+    }catch(e){console.warn('config 로드 실패, 기본값 사용');}
+    if(pw!==adminPw){
+        document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
+        return;
+    }
+    localStorage.setItem('lumi_admin_auth','true');
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('appContainer').classList.add('active');
+    initApp();
 }
 function logout(){localStorage.removeItem('lumi_admin_auth');location.reload();}
 function checkAuth(){
@@ -97,6 +108,42 @@ function checkAuth(){
         return;
     }
     document.getElementById('loginScreen').classList.remove('hidden');
+}
+
+// ===== 비밀번호 설정 관리 =====
+async function loadConfigForSettings(){
+    try{
+        const doc=await db.collection('config').doc('passwords').get();
+        if(doc.exists){
+            const d=doc.data();
+            const el1=document.getElementById('cfgAdminPw');
+            const el2=document.getElementById('cfgStaffPw');
+            if(el1)el1.value=d.admin_pw||'';
+            if(el2)el2.value=d.staff_pw||'';
+        }
+    }catch(e){console.warn('config 로드 실패:',e);}
+}
+async function saveConfigPasswords(){
+    const adminPw=document.getElementById('cfgAdminPw').value.trim();
+    const staffPw=document.getElementById('cfgStaffPw').value.trim();
+    const msg=document.getElementById('cfgPwMsg');
+    if(!adminPw&&!staffPw){msg.innerHTML='<span style="color:var(--red)">하나 이상의 비밀번호를 입력해주세요.</span>';return;}
+    const data={};
+    if(adminPw) data.admin_pw=adminPw;
+    if(staffPw) data.staff_pw=staffPw;
+    data.updatedAt=new Date().toISOString();
+    try{
+        await db.collection('config').doc('passwords').set(data,{merge:true});
+        msg.innerHTML='<span style="color:var(--green)">✅ 저장 완료</span>';
+        setTimeout(()=>{msg.innerHTML='';},2000);
+    }catch(e){msg.innerHTML='<span style="color:var(--red)">저장 실패: '+e.message+'</span>';}
+}
+async function saveStaffSettings(){
+    const val=parseInt(document.getElementById('cfgAutoLogout')?.value)||10;
+    try{
+        await db.collection('settings').doc('staff').set({autoLogoutMinutes:val},{merge:true});
+        alert('✅ Staff 설정 저장 완료');
+    }catch(e){alert('저장 실패: '+e.message);}
 }
 
 // ===== Navigation =====
@@ -239,9 +286,10 @@ function renderAll(){
 async function initApp(){
     initMonthSelector();
     initNavigation();
-    await loadAllData(); // 재고/레시피 선 로딩 후 나머지 로드 후 렌더
+    await loadAllData();
     if(typeof initTaxDropZone==='function')initTaxDropZone();
     if(typeof loadStaffSettings==='function')loadStaffSettings();
+    if(typeof loadConfigForSettings==='function')loadConfigForSettings();
 }
 
 // Auto-check auth on load

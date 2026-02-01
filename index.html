@@ -50,6 +50,7 @@
             <div class="nav-tab" data-tab="employee">직원관리</div>
             <div class="nav-tab" data-tab="inventory">재고관리</div>
             <div class="nav-tab" data-tab="pl">손익 리포트</div>
+            <div class="nav-tab" data-tab="settings">⚙ 설정</div>
         </nav>
         <!-- Dashboard Top Cards -->
         <div class="dashboard-strip" id="dashboardStrip"></div>
@@ -356,6 +357,41 @@
                 </div>
                 <div id="plContainer">
                     <div style="text-align:center;padding:3rem;color:var(--text-secondary)">데이터를 불러오는 중...</div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tab-settings">
+                <div class="section-header">
+                    <div class="section-title">⚙ 시스템 설정</div>
+                </div>
+                <div class="card" style="max-width:500px">
+                    <div class="card-label" style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">🔐 비밀번호 관리</div>
+                    <div class="form-group">
+                        <label class="form-label">관리자 비밀번호</label>
+                        <div style="display:flex;gap:.5rem">
+                            <input type="password" class="form-input" id="cfgAdminPw" placeholder="새 관리자 비밀번호">
+                            <button class="btn btn-outline" onclick="togglePw('cfgAdminPw',this)" style="min-width:40px">👁</button>
+                        </div>
+                        <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.25rem">index.html 관리자 로그인 비밀번호</div>
+                    </div>
+                    <div class="form-group" style="margin-top:1rem">
+                        <label class="form-label">공용계정(lumistaff) 비밀번호</label>
+                        <div style="display:flex;gap:.5rem">
+                            <input type="password" class="form-input" id="cfgStaffPw" placeholder="새 lumistaff 비밀번호">
+                            <button class="btn btn-outline" onclick="togglePw('cfgStaffPw',this)" style="min-width:40px">👁</button>
+                        </div>
+                        <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.25rem">staff.html 공용 재고/식사 계정 비밀번호</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveConfigPasswords()" style="margin-top:1.5rem;width:100%">비밀번호 저장</button>
+                    <div id="cfgPwMsg" style="text-align:center;margin-top:.5rem;font-size:.85rem"></div>
+                </div>
+                <div class="card" style="max-width:500px;margin-top:1rem">
+                    <div class="card-label" style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">📱 Staff App 설정</div>
+                    <div class="form-group">
+                        <label class="form-label">자동 로그아웃 (분)</label>
+                        <input type="number" class="form-input" id="cfgAutoLogout" value="10" min="1" max="120" style="width:120px">
+                    </div>
+                    <button class="btn btn-outline" onclick="saveStaffSettings()" style="margin-top:.5rem">저장</button>
                 </div>
             </div>
 
