@@ -123,6 +123,12 @@ function calculatePL(){
     });
     const variableCost=monthVariable.reduce((s,e)=>s+(e.amount||0),0);
     
+    // 복리후생비 (식대) - mealRecords에서 해당 월 합산
+    let welfareCost=0;
+    if(typeof mealAllRecords!=='undefined'&&mealAllRecords.length>0){
+        welfareCost=mealAllRecords.filter(m=>(m.yearMonth||m.date?.substring(0,7))===ym).reduce((s,m)=>s+(m.amount||0),0);
+    }
+    
     // 세금 (이번달)
     const monthTax=[
         ...withholdingTaxes.filter(t=>(t.date||'').startsWith(ym)),
@@ -130,12 +136,12 @@ function calculatePL(){
         ...incomeTaxes.filter(t=>(t.date||'').startsWith(ym))
     ].reduce((s,t)=>s+(t.amount||0),0);
     
-    const totalExpense=materialCost+laborCost+fixedCost+variableCost;
+    const totalExpense=materialCost+laborCost+fixedCost+variableCost+welfareCost;
     const netProfit=totalRevenue-totalExpense;
     
     return{
         totalRevenue,doctorRevenue,
-        materialCost,laborCost,fixedCost,variableCost,monthTax,
+        materialCost,laborCost,fixedCost,variableCost,welfareCost,monthTax,
         totalExpense,netProfit,
         treatmentCosts,totalTreatmentCount,matchedTreatments,unmatchedTreatments
     };
@@ -210,6 +216,10 @@ function renderPLStatement(){
                 <span class="pl-label">유동비 (기타 비용)</span>
                 <span class="pl-value negative">${formatCurrency(pl.variableCost)}</span>
             </div>
+            ${pl.welfareCost?`<div class="pl-row">
+                <span class="pl-label">복리후생비 (식대)</span>
+                <span class="pl-value negative">${formatCurrency(pl.welfareCost)}</span>
+            </div>`:''}
             <div class="pl-row subtotal">
                 <span class="pl-label">총 비용</span>
                 <span class="pl-value negative">${formatCurrency(pl.totalExpense)}</span>
@@ -251,9 +261,9 @@ function renderPLCharts(pl){
         plExpenseChart=new Chart(expCtx,{
             type:'doughnut',
             data:{
-                labels:['재료비','인건비','고정비','유동비'],
-                datasets:[{data:[pl.materialCost,pl.laborCost,pl.fixedCost,pl.variableCost],
-                    backgroundColor:['#e67e22','#3498db','#9a8b7a','#95a5a6']}]
+                labels:['재료비','인건비','고정비','유동비','복리후생비'],
+                datasets:[{data:[pl.materialCost,pl.laborCost,pl.fixedCost,pl.variableCost,pl.welfareCost||0],
+                    backgroundColor:['#e67e22','#3498db','#9a8b7a','#95a5a6','#27ae60']}]
             },
             options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:12}}}}}
         });

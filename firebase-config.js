@@ -13,6 +13,7 @@ let fixedExpenses=[],variableExpenses=[];
 let incentiveItems=[],lunchOT=[],incentiveRecords=[],leaveRequests=[];
 let vatTaxes=[],incomeTaxes=[],payrollData=[],withholdingTaxes=[];
 let inventoryItems=[],recipes=[];
+let mealAllRecords=[];
 let revenueChart=null,compareChart=null;
 
 const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
@@ -149,7 +150,8 @@ async function loadAllData(){
             loadEmployees(),loadRevenueData(),loadSalesDetailData(),
             loadExpenses(),loadAttendance(),loadIncentiveItems(),
             loadIncentiveRecords(),loadLeaveRequests(),loadLunchOT(),
-            typeof loadAuditRecords==='function'?loadAuditRecords():Promise.resolve()
+            typeof loadAuditRecords==='function'?loadAuditRecords():Promise.resolve(),
+            loadMealAllRecords()
         ]);
         
         renderAll();
@@ -182,6 +184,7 @@ async function loadAttendance(){
 async function loadIncentiveItems(){try{const s=await db.collection('incentiveItems').get();incentiveItems=s.docs.map(d=>({id:d.id,...d.data()}));}catch(e){console.error('Load incentiveItems:',e);}}
 async function loadIncentiveRecords(){try{const s=await db.collection('incentiveRecords').get();incentiveRecords=s.docs.map(d=>({id:d.id,...d.data()}));}catch(e){console.error('Load incentiveRecords:',e);}}
 async function loadLeaveRequests(){try{const s=await db.collection('leaveRequests').get();leaveRequests=s.docs.map(d=>({id:d.id,...d.data()}));}catch(e){console.error('Load leaveRequests:',e);}}
+async function loadMealAllRecords(){try{const s=await db.collection('mealRecords').get();mealAllRecords=s.docs.map(d=>({id:d.id,...d.data()}));}catch(e){console.error('Load mealRecords:',e);}}
 async function loadLunchOT(){
     try{
         const ym=getYM();

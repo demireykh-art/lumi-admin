@@ -40,6 +40,7 @@ function renderInventory(){
                 <td class="text-right">${unitCost?formatCurrency(unitCost):'-'}</td>
                 <td class="${isExpiryWarning(item.expiryDate)?'inv-expiry-warn':''}">${item.expiryDate||'-'}</td>
                 <td><div class="btn-group">
+                    ${item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none">🛒</a>`:''}
                     <button class="btn btn-sm btn-outline" onclick="editInventoryItem('${item.id}')">수정</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteInventoryItem('${item.id}')">삭제</button>
                 </div></td>
@@ -78,9 +79,10 @@ function openInventoryModal(id=null){
             document.getElementById('invPurchaseUnit').value=item.purchaseUnit||'';
             document.getElementById('invExpiryDate').value=item.expiryDate||'';
             document.getElementById('invNote').value=item.note||'';
+            document.getElementById('invPurchaseLink').value=item.purchaseLink||'';
         }
     }else{
-        ['invName','invUnit','invCurrentStock','invSafetyStock','invPurchasePrice','invPurchaseUnit','invExpiryDate','invNote'].forEach(x=>document.getElementById(x).value='');
+        ['invName','invUnit','invCurrentStock','invSafetyStock','invPurchasePrice','invPurchaseUnit','invExpiryDate','invNote','invPurchaseLink'].forEach(x=>document.getElementById(x).value='');
         document.getElementById('invType').value='disposable';
         document.getElementById('invCategory').value='common';
         document.getElementById('invPurchaseQty').value='1';
@@ -101,6 +103,7 @@ async function saveInventoryItem(){
         purchaseUnit:document.getElementById('invPurchaseUnit').value.trim(),
         expiryDate:document.getElementById('invExpiryDate').value||null,
         note:document.getElementById('invNote').value.trim(),
+        purchaseLink:document.getElementById('invPurchaseLink').value.trim(),
         updatedAt:new Date().toISOString()
     };
     if(!data.name){alert('품목명을 입력하세요.');return;}
@@ -187,11 +190,17 @@ function renderAuditReport(){
     });
     const done=items.filter(i=>i.diff!=null);
     const diffItems=done.filter(i=>Math.abs(i.diff)>0.01);
+    const totalLossQty=diffItems.filter(i=>i.diff<0).reduce((s,i)=>s+Math.abs(i.diff),0);
+    const totalLossCost=diffItems.filter(i=>i.diff<0).reduce((s,i)=>{
+        const unitCost=i.purchasePrice&&i.purchaseQty?(i.purchasePrice/i.purchaseQty):0;
+        return s+Math.abs(i.diff)*unitCost;
+    },0);
     container.innerHTML=`
         <div class="cards-grid" style="margin-bottom:1rem">
             <div class="card"><div class="card-label">실사 완료</div><div class="card-value">${done.length} / ${items.length}</div></div>
             <div class="card"><div class="card-label">차이 발생</div><div class="card-value" style="color:${diffItems.length?'var(--red)':'var(--green)'}">${diffItems.length}개</div></div>
-            <div class="card"><div class="card-label">최근 실사</div><div class="card-value" style="font-size:.85rem">${done.length?new Date(done[0].audit.createdAt).toLocaleDateString('ko'):'없음'}</div></div>
+            <div class="card"><div class="card-label">Loss 수량</div><div class="card-value" style="color:${totalLossQty?'var(--red)':'var(--green)'}">${totalLossQty.toFixed(1)}</div></div>
+            <div class="card"><div class="card-label">Loss 추정 비용</div><div class="card-value" style="color:${totalLossCost?'var(--red)':'var(--green)'}">${formatCurrency(totalLossCost)}</div></div>
         </div>
         <div class="table-container"><table>
             <thead><tr><th>품목명</th><th>카테고리</th><th class="text-right">시스템 재고</th><th class="text-right">실재고</th><th class="text-right">차이</th><th>실사일</th><th>실사자</th></tr></thead>

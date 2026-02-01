@@ -564,6 +564,7 @@
                     <div class="form-group"><label class="form-label">구매 수량 (단위당)</label><input type="number" class="form-input" id="invPurchaseQty" step="0.01" min="0.01" value="1"></div>
                 </div>
                 <div class="form-group"><label class="form-label">구매 단위 (예: 1Box=100개, 1Bottle=500ml)</label><input type="text" class="form-input" id="invPurchaseUnit" placeholder="예: 1Box, 1Bottle"></div>
+                <div class="form-group"><label class="form-label">구매 링크 (쿠팡/네이버 URL)</label><input type="url" class="form-input" id="invPurchaseLink" placeholder="https://..."></div>
                 <div class="form-group"><label class="form-label">비고</label><textarea class="form-textarea" id="invNote" rows="2"></textarea></div>
             </div>
             <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('inventoryModal')">취소</button><button class="btn btn-primary" onclick="saveInventoryItem()">저장</button></div>

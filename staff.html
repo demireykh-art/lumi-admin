@@ -157,6 +157,15 @@
         .inv-submit-btn{width:100%;padding:.9rem;font-size:1rem;font-weight:600;border:none;cursor:pointer;letter-spacing:1px;border-radius:6px}
         .inv-submit-btn.ready{background:var(--primary);color:#fff}
         .inv-submit-btn.disabled{background:var(--border);color:var(--text-muted);pointer-events:none}
+        /* 태블릿/아이패드 반응형 */
+        @media(min-width:768px){
+            .inv-item-row{padding:1rem 1.2rem}
+            .inv-item-name{font-size:1rem}
+            .inv-item-meta{font-size:.8rem;gap:1rem}
+            .inv-stock-input{width:100px;font-size:1.1rem}
+            .inv-cat-btn{padding:1rem;font-size:1rem}
+            .inv-cat-btn .cat-icon{font-size:1.5rem}
+        }
     </style>
 </head>
 <body>
@@ -253,7 +262,7 @@
                     <div class="info-row"><span class="info-label">남은 금액</span><span class="info-value" id="mealRemain" style="color:var(--green);font-weight:700">₩300,000</span></div>
                     <div class="progress-bar"><div class="progress-fill" id="mealProgress" style="width:0%"></div></div>
                 </div>
-                <button class="btn btn-primary" onclick="openMealModal()">식사 입력</button>
+                <button class="btn btn-primary" onclick="openMealModal()">🍽 식사 정산</button>
                 <div class="card">
                     <div class="card-title">이번 달 식사 내역</div>
                     <div id="mealList"><div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div></div>
@@ -396,9 +405,9 @@
     
     <!-- 식사 입력 모달 -->
     <div class="modal" id="mealModal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width:460px">
             <div class="modal-header">
-                <div class="modal-title">식사 입력</div>
+                <div class="modal-title">🍽 식사 정산</div>
                 <button class="modal-close" onclick="closeModal('mealModal')">&times;</button>
             </div>
             <div class="modal-body">
@@ -407,17 +416,27 @@
                     <input type="date" class="form-input" id="mealDate">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">금액 (원)</label>
-                    <input type="number" class="form-input" id="mealAmount" placeholder="예: 10000">
+                    <label class="form-label">총 결제 금액 (원)</label>
+                    <input type="number" class="form-input" id="mealTotalAmount" placeholder="예: 50000" oninput="onMealTotalChange()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">메모</label>
                     <input type="text" class="form-input" id="mealMemo" placeholder="예: 점심 김치찌개">
                 </div>
+                <div style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.5rem">
+                    <label class="form-label" style="font-weight:700">참여 인원 선택</label>
+                    <div id="mealStaffList" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem"></div>
+                </div>
+                <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+                    <button class="btn btn-outline" id="mealModeEven" style="flex:1;font-size:.85rem" onclick="setMealMode('even')">1/N 균등</button>
+                    <button class="btn btn-outline" id="mealModeManual" style="flex:1;font-size:.85rem" onclick="setMealMode('manual')">개별 입력</button>
+                </div>
+                <div id="mealSplitDetail"></div>
+                <div id="mealValidation" style="font-size:.8rem;margin-top:.5rem;min-height:1.2rem"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('mealModal')">취소</button>
-                <button class="btn btn-primary" onclick="saveMeal()">저장</button>
+                <button class="btn btn-secondary" onclick="closeModal('mealModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" id="mealSaveBtn" onclick="saveMealGroup()" style="flex:2">정산 저장</button>
             </div>
         </div>
     </div>
@@ -712,19 +731,50 @@
             }catch(e){document.getElementById('pwError').textContent='저장 실패: '+e.message;}
         }
         
+        // 공용 계정 ID 목록
+        const SHARED_ACCOUNTS={lumi_skin:'skin',lumi_nurse:'nursing',lumi_desk:'desk'};
+        function isSharedAccount(){return !!SHARED_ACCOUNTS[currentUser?.id];}
+        function getSharedCategory(){return SHARED_ACCOUNTS[currentUser?.id]||'';}
+
         function showApp(){
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('appContainer').classList.add('active');
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
-            // 인센티브 탭 조건부 노출
-            const incNav=document.querySelector('.nav-item[data-tab="incentive"]');
-            const incTab=document.getElementById('tab-incentive');
-            if(currentUser.isIncentiveTarget){
-                if(incNav)incNav.style.display='';
-                if(incTab)incTab.style.display='';
-            }else{
-                if(incNav)incNav.style.display='none';
-                if(incTab)incTab.style.display='none';
+
+            const shared=isSharedAccount();
+            // 공용 계정: 재고+식사만, 개인 계정: 전체
+            const allTabs=['attendance','meal','ot','leave','incentive','inventory','info'];
+            const sharedTabs=['inventory','meal'];
+            allTabs.forEach(tab=>{
+                const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
+                const content=document.getElementById('tab-'+tab);
+                if(shared){
+                    const show=sharedTabs.includes(tab);
+                    if(nav)nav.style.display=show?'':'none';
+                    if(content)content.style.display=show?'':'none';
+                }else{
+                    if(nav)nav.style.display='';
+                    if(content)content.style.display='';
+                }
+            });
+            // 인센티브 탭 조건부 (개인계정만)
+            if(!shared){
+                const incNav=document.querySelector('.nav-item[data-tab="incentive"]');
+                const incTab=document.getElementById('tab-incentive');
+                if(!currentUser.isIncentiveTarget){
+                    if(incNav)incNav.style.display='none';
+                    if(incTab)incTab.style.display='none';
+                }
+            }
+            // 공용 계정 기본탭 = 재고
+            if(shared){
+                document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+                const invNav=document.querySelector('.nav-item[data-tab="inventory"]');
+                const invTab=document.getElementById('tab-inventory');
+                if(invNav)invNav.classList.add('active');
+                if(invTab)invTab.classList.add('active');
+                initInventoryTab();
             }
             checkLocation();
             loadAllData();
@@ -924,9 +974,17 @@
         
         async function loadMealRecords(){
             try{
-                const snapshot=await db.collection('mealRecords').where('employeeId','==',currentUser.id).get();
+                let snapshot;
+                if(isSharedAccount()){
+                    // 공용 계정: 이번달 전체 식대 로드
+                    const ym=getYM();
+                    snapshot=await db.collection('mealRecords').where('yearMonth','==',ym).get();
+                }else{
+                    snapshot=await db.collection('mealRecords').where('employeeId','==',currentUser.id).get();
+                }
                 mealRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('식사 로드 오류:',e);mealRecords=[];}
+        }
         }
         
         async function loadIncentiveItems(){
@@ -1468,30 +1526,162 @@
         
         function openMealModal(){
             document.getElementById('mealDate').value=getToday();
-            document.getElementById('mealAmount').value='';
+            document.getElementById('mealTotalAmount').value='';
             document.getElementById('mealMemo').value='';
+            mealMode='even';
+            mealSelectedStaff={};
+            mealManualAmounts={};
+            loadMealStaffList();
+            setMealMode('even');
+            document.getElementById('mealSplitDetail').innerHTML='';
+            document.getElementById('mealValidation').innerHTML='';
             openModal('mealModal');
         }
-        
-        async function saveMeal(){
-            const date=document.getElementById('mealDate').value;
-            const amount=parseInt(document.getElementById('mealAmount').value)||0;
-            const memo=document.getElementById('mealMemo').value.trim();
-            
-            if(!date||amount<=0){alert('날짜와 금액을 입력해주세요.');return;}
-            
+
+        let mealMode='even'; // 'even' or 'manual'
+        let mealAllStaff=[];
+        let mealSelectedStaff={};
+        let mealManualAmounts={};
+
+        async function loadMealStaffList(){
             try{
-                await db.collection('mealRecords').add({
-                    employeeId:currentUser.id,
-                    employeeName:currentUser.name,
-                    date:date,
-                    amount:amount,
-                    memo:memo,
-                    yearMonth:date.substring(0,7),
-                    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+                const s=await db.collection('employees').where('status','==','active').get();
+                mealAllStaff=s.docs.map(d=>({id:d.id,...d.data()})).filter(e=>!SHARED_ACCOUNTS[e.id]);
+            }catch(e){mealAllStaff=[];}
+            renderMealStaffList();
+        }
+
+        function renderMealStaffList(){
+            const container=document.getElementById('mealStaffList');
+            if(!container)return;
+            container.innerHTML=mealAllStaff.map(emp=>{
+                const sel=!!mealSelectedStaff[emp.id];
+                return `<button style="padding:.4rem .7rem;border:1px solid ${sel?'var(--primary)':'var(--border)'};background:${sel?'var(--primary)':'var(--bg-card)'};color:${sel?'#fff':'var(--text)'};font-size:.8rem;cursor:pointer;border-radius:4px" onclick="toggleMealStaff('${emp.id}')">${emp.name||emp.id}</button>`;
+            }).join('');
+        }
+
+        function toggleMealStaff(id){
+            if(mealSelectedStaff[id])delete mealSelectedStaff[id];
+            else mealSelectedStaff[id]=true;
+            renderMealStaffList();
+            renderMealSplit();
+        }
+
+        function setMealMode(mode){
+            mealMode=mode;
+            document.getElementById('mealModeEven').className='btn '+(mode==='even'?'btn-primary':'btn-outline');
+            document.getElementById('mealModeManual').className='btn '+(mode==='manual'?'btn-primary':'btn-outline');
+            renderMealSplit();
+        }
+
+        function onMealTotalChange(){renderMealSplit();}
+
+        function renderMealSplit(){
+            const container=document.getElementById('mealSplitDetail');
+            const selected=Object.keys(mealSelectedStaff);
+            const total=parseInt(document.getElementById('mealTotalAmount').value)||0;
+            if(!selected.length||!total){container.innerHTML='';validateMeal();return;}
+
+            if(mealMode==='even'){
+                const perPerson=Math.round(total/selected.length);
+                container.innerHTML=selected.map(id=>{
+                    const emp=mealAllStaff.find(e=>e.id===id);
+                    const name=emp?.name||id;
+                    const remain=getMealRemain(id);
+                    const over=perPerson>remain;
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
+                        <span>${name} <span style="font-size:.7rem;color:var(--text-muted)">잔액 ${formatCurrency(remain)}</span></span>
+                        <span style="font-weight:600;${over?'color:var(--red)':''}">₩${perPerson.toLocaleString()}${over?' ⚠':''}
+                        </span>
+                    </div>`;
+                }).join('');
+            }else{
+                container.innerHTML=selected.map(id=>{
+                    const emp=mealAllStaff.find(e=>e.id===id);
+                    const name=emp?.name||id;
+                    const remain=getMealRemain(id);
+                    const val=mealManualAmounts[id]||'';
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);gap:.5rem">
+                        <span style="min-width:50px">${name} <span style="font-size:.7rem;color:var(--text-muted)">잔액 ${formatCurrency(remain)}</span></span>
+                        <input type="number" value="${val}" placeholder="금액" style="width:90px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="mealManualAmounts['${id}']=parseInt(this.value)||0;validateMeal()">
+                    </div>`;
+                }).join('');
+            }
+            validateMeal();
+        }
+
+        function getMealRemain(empId){
+            const ym=getYM();
+            const used=mealRecords.filter(m=>m.employeeId===empId&&m.date?.startsWith(ym)).reduce((s,m)=>s+(m.amount||0),0);
+            return Math.max(0,300000-used);
+        }
+
+        function validateMeal(){
+            const el=document.getElementById('mealValidation');
+            const selected=Object.keys(mealSelectedStaff);
+            const total=parseInt(document.getElementById('mealTotalAmount').value)||0;
+            const btn=document.getElementById('mealSaveBtn');
+            if(!selected.length||!total){el.innerHTML='';btn.disabled=true;return;}
+
+            let errors=[];
+            if(mealMode==='even'){
+                const pp=Math.round(total/selected.length);
+                selected.forEach(id=>{
+                    const remain=getMealRemain(id);
+                    const emp=mealAllStaff.find(e=>e.id===id);
+                    if(pp>remain)errors.push(`${emp?.name||id}: 잔액 초과 (${formatCurrency(pp)} > ${formatCurrency(remain)})`);
                 });
+            }else{
+                const sum=selected.reduce((s,id)=>s+(mealManualAmounts[id]||0),0);
+                if(sum!==total)errors.push(`입력 합계(${formatCurrency(sum)}) ≠ 총액(${formatCurrency(total)})`);
+                selected.forEach(id=>{
+                    const amt=mealManualAmounts[id]||0;
+                    const remain=getMealRemain(id);
+                    const emp=mealAllStaff.find(e=>e.id===id);
+                    if(amt>remain)errors.push(`${emp?.name||id}: 잔액 초과`);
+                });
+            }
+            if(errors.length){
+                el.innerHTML='<div style="color:var(--red)">⚠ '+errors.join('<br>')+'</div>';
+                btn.disabled=true;
+            }else{
+                el.innerHTML='<div style="color:var(--green)">✅ 정산 가능</div>';
+                btn.disabled=false;
+            }
+        }
+
+        async function saveMealGroup(){
+            const date=document.getElementById('mealDate').value;
+            const total=parseInt(document.getElementById('mealTotalAmount').value)||0;
+            const memo=document.getElementById('mealMemo').value.trim();
+            const selected=Object.keys(mealSelectedStaff);
+            if(!date||!total||!selected.length){alert('날짜, 금액, 인원을 모두 입력해주세요.');return;}
+
+            const batch=db.batch();
+            const groupId=Date.now().toString(36);
+            for(const empId of selected){
+                let amount;
+                if(mealMode==='even')amount=Math.round(total/selected.length);
+                else amount=mealManualAmounts[empId]||0;
+                if(amount<=0)continue;
+                const ref=db.collection('mealRecords').doc();
+                batch.set(ref,{
+                    employeeId:empId,
+                    employeeName:mealAllStaff.find(e=>e.id===empId)?.name||empId,
+                    date,amount,memo,
+                    yearMonth:date.substring(0,7),
+                    groupId,
+                    totalAmount:total,
+                    splitMode:mealMode,
+                    headCount:selected.length,
+                    createdBy:currentUser?.name||currentUser?.id||'staff',
+                    createdAt:new Date().toISOString()
+                });
+            }
+            try{
+                await batch.commit();
                 closeModal('mealModal');
-                alert('식사가 저장되었습니다.');
+                alert('✅ '+selected.length+'명 식대 정산 완료');
                 await loadMealRecords();
                 renderMeal();
             }catch(e){alert('저장 실패: '+e.message);}
@@ -1633,7 +1823,15 @@
         function renderInvAuditList(){
             const container=document.getElementById('invAuditList');
             if(!container)return;
-            let items=currentInvCat?invItems.filter(i=>i.category===currentInvCat):invItems;
+            // 공용 계정: 해당 파트 + 공통만 표시
+            let items=invItems;
+            const sharedCat=getSharedCategory();
+            if(sharedCat){
+                items=items.filter(i=>i.category===sharedCat||i.category==='common');
+            }
+            if(currentInvCat){
+                items=items.filter(i=>i.category===currentInvCat);
+            }
             items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
             
             if(!items.length){
@@ -1649,14 +1847,15 @@
                 const isSaved=val!=null&&val!=='';
                 const catLabel=INV_CATEGORIES[item.category]||'';
                 const isLow=item.safetyStock&&item.currentStock<item.safetyStock;
-                return `<div class="inv-item-row ${isSaved?'saved':''}">
+                const sysStock=item.currentStock||0;
+                return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}">
                     <div class="inv-item-info">
                         <div class="inv-item-name">${item.name}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':''}</div>
                         <div class="inv-item-meta">
                             <span>${catLabel}</span>
-                            <span>단위: ${item.unit||'개'}</span>
-                            ${isLow?`<span style="color:var(--red)">재고 ${item.currentStock||0} / 안전 ${item.safetyStock}</span>`:''}
-                            ${lastQty!=null?`<span>지난 실사: <strong>${lastQty}</strong> (${lastDate})</span>`:''}
+                            <span>시스템: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
+                            ${isLow?`<span style="color:var(--red)">안전재고: ${item.safetyStock}</span>`:''}
+                            ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
                         </div>
                     </div>
                     <input type="number" class="inv-stock-input" 
@@ -1664,7 +1863,7 @@
                         placeholder="-" step="0.01" min="0"
                         value="${val!=null?val:''}"
                         onchange="onInvInput('${item.id}',this.value)"
-                        oninput="onInvInput('${item.id}',this.value)"
+                        oninput="onInvInputLive('${item.id}',this.value)"
                         inputmode="decimal">
                     <span class="inv-stock-unit">${item.unit||'개'}</span>
                 </div>`;
@@ -1673,14 +1872,13 @@
             updateInvProgress();
         }
 
-        function onInvInput(itemId,val){
+        function onInvInputLive(itemId,val){
             if(val===''||val==null){
                 delete auditInputs[itemId];
             }else{
                 auditInputs[itemId]=parseFloat(val);
             }
-            // 즉시 행 스타일 업데이트
-            const row=document.getElementById('inv-input-'+itemId)?.closest('.inv-item-row');
+            const row=document.getElementById('inv-row-'+itemId);
             if(row){
                 if(val!==''&&val!=null)row.classList.add('saved');
                 else row.classList.remove('saved');
@@ -1705,33 +1903,51 @@
             }
         }
 
+        // 개별 품목 즉시 저장 (onchange 시 Firebase 트랜잭션)
+        async function onInvInput(itemId,val){
+            onInvInputLive(itemId,val);
+            if(val===''||val==null)return;
+            const actualStock=parseFloat(val);
+            const item=invItems.find(i=>i.id===itemId);
+            if(!item)return;
+            const staffName=currentUser?.name||currentUser?.id||'staff';
+            try{
+                const ref=db.collection('inventory').doc(itemId);
+                await db.runTransaction(async tx=>{
+                    const doc=await tx.get(ref);
+                    const prevStock=doc.data()?.currentStock||0;
+                    tx.update(ref,{currentStock:actualStock,lastAuditAt:new Date().toISOString(),lastAuditBy:staffName});
+                    // inventoryLogs 기록
+                    const logRef=db.collection('inventoryLogs').doc();
+                    tx.set(logRef,{
+                        itemId,itemName:item.name,
+                        prevStock,newStock:actualStock,diff:actualStock-prevStock,
+                        type:'audit',staffName,
+                        createdAt:new Date().toISOString()
+                    });
+                });
+                // inventoryAudits에도 기록 (관리자 리포트용)
+                await db.collection('inventoryAudits').add({
+                    itemId,actualStock,
+                    staffId:currentUser?.id||'unknown',staffName,
+                    createdAt:new Date().toISOString()
+                });
+                // 로컬 데이터 동기화
+                if(item)item.currentStock=actualStock;
+                const row=document.getElementById('inv-row-'+itemId);
+                if(row)row.classList.add('saved');
+            }catch(e){console.error('실사 저장 오류:',e);}
+        }
+
         async function submitInventoryAudit(){
             const entries=Object.entries(auditInputs).filter(([k,v])=>v!=null&&v!=='');
             if(!entries.length){alert('입력된 실사 데이터가 없습니다.');return;}
-            if(!confirm(entries.length+'개 품목의 실사 데이터를 제출하시겠습니까?'))return;
-            
-            const staffName=currentUser?.name||'직원';
-            const staffId=currentUser?.id||'unknown';
-            const now=new Date().toISOString();
-            
-            try{
-                const batch=db.batch();
-                for(const[itemId,actualStock]of entries){
-                    const ref=db.collection('inventoryAudits').doc();
-                    batch.set(ref,{
-                        itemId:itemId,
-                        actualStock:actualStock,
-                        staffId:staffId,
-                        staffName:staffName,
-                        createdAt:now
-                    });
-                }
-                await batch.commit();
-                alert('✅ 실사 완료!\n\n'+entries.length+'개 품목이 제출되었습니다.\n관리자가 확인 후 시스템에 반영합니다.');
-                auditInputs={};
-                await loadLastWeekAudits();
-                renderInvAuditList();
-            }catch(e){alert('제출 실패: '+e.message);}
+            alert('✅ '+entries.length+'개 품목 실사 완료!\n\n각 품목은 입력 즉시 시스템에 반영되었습니다.');
+            auditInputs={};
+            await loadInventoryForStaff();
+            await loadLastWeekAudits();
+            renderInvAuditList();
+            renderLowStockAlert();
         }
 
         async function initInventoryTab(){
