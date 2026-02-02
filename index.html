@@ -137,7 +137,7 @@
                         <div class="expense-box"><div class="expense-box-label">전월 대비</div><div class="expense-box-value" id="variableChange">-</div></div>
                     </div>
                     <div class="section-header"><div class="section-title">유동비 목록</div><div><select class="form-select" id="variableSort" onchange="renderExpenses()" style="width:auto;display:inline-block;margin-right:8px"><option value="date-desc">날짜 최신순</option><option value="date-asc">날짜 오래된순</option><option value="amount-desc">금액 높은순</option><option value="amount-asc">금액 낮은순</option><option value="category">카테고리순</option></select><button class="btn btn-primary" onclick="openExpenseModal('variable')">+ 항목 추가</button></div></div>
-                    <div class="table-container"><table><thead><tr><th>결제일</th><th>항목명</th><th>카테고리</th><th>결제수단</th><th class="text-right">금액</th><th>관리</th></tr></thead><tbody id="variableTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>결제일</th><th>항목명</th><th>거래처</th><th>카테고리</th><th>결제수단</th><th class="text-right">금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="variableTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-payroll">
                     <div class="expense-summary">
@@ -195,7 +195,7 @@
                                 <button class="btn btn-primary" id="expBulkSaveBtn" onclick="saveExpensesBulk()" style="font-size:.85rem">💾 일괄 저장</button>
                             </div>
                         </div>
-                        <div class="table-container"><table><thead><tr><th>출처</th><th>거래일</th><th>가맹점명</th><th>분류</th><th class="text-right">금액</th><th>제외</th><th>삭제</th></tr></thead><tbody id="expPreviewTable"></tbody></table></div>
+                        <div class="table-container"><table><thead><tr><th>출처</th><th>거래일</th><th>가맹점명</th><th>분류</th><th class="text-right">금액</th><th>비고</th><th>제외</th><th>삭제</th></tr></thead><tbody id="expPreviewTable"></tbody></table></div>
                         <div style="display:flex;gap:1.5rem;margin-top:1rem;flex-wrap:wrap" id="expPreviewSummary"></div>
                     </div>
                 </div>

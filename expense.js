@@ -69,7 +69,12 @@ function renderExpenses(){
     const variableTotal=variableExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
     document.getElementById('variableTotal').textContent=formatCurrency(variableTotal);
     document.getElementById('variableCount').textContent=variableExpenses.length+'건';
-    document.getElementById('variableTable').innerHTML=sortedVariable.map(e=>`<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-orange">${e.category}</span></td><td>${e.card||'-'}</td><td class="text-right">${formatCurrency(e.amount)}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-center">등록된 유동비 없음</td></tr>';
+    document.getElementById('variableTable').innerHTML=sortedVariable.map(e=>{
+        const merchant=e.merchant||'';
+        const note=e.note||'';
+        const catBadge=getCategoryBadge(e.category);
+        return `<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td style="font-size:.85rem;color:#555;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${merchant}">${merchant||'-'}</td><td>${catBadge}</td><td>${e.card||'-'}</td><td class="text-right">${formatCurrency(e.amount)}</td><td style="font-size:.8rem;color:#777;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${note}">${note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`;
+    }).join('')||'<tr><td colspan="8" class="text-center">등록된 유동비 없음</td></tr>';
     
     // 급여 렌더링
     renderPayroll();
@@ -853,6 +858,22 @@ async function saveTaxFromFile(info){
 /* ===== 멀티 지출 데이터 통합 업로더 ===== */
 let expUploadParsed=[];
 
+// 카테고리별 배지 색상
+function getCategoryBadge(cat){
+    const colors={
+        '소모품비':['#1565c0','#e3f2fd'],
+        '복리후생비':['#2e7d32','#e8f5e9'],
+        '공과금':['#e65100','#fff3e0'],
+        '리스료':['#6a1b9a','#f3e5f5'],
+        '차량유지비':['#00838f','#e0f7fa'],
+        '접대비':['#ad1457','#fce4ec'],
+        '금융/이체':['#757575','#f5f5f5'],
+        '기타':['#555','#f0f0f0']
+    };
+    const [fg,bg]=colors[cat]||colors['기타'];
+    return `<span style="display:inline-block;font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:10px;color:${fg};background:${bg};white-space:nowrap">${cat}</span>`;
+}
+
 // 자동 분류 키워드 매핑
 const EXP_CATEGORY_RULES=[
     {category:'금융/이체',keywords:['카드대금','현대카드','삼성카드','신한카드','KB카드','롯데카드','우리카드','비씨카드','하나카드','체크카드','자동이체','대출이자','원리금','적금','예금','보험료','국민연금','건강보험','고용보험','산재보험'],exclude:true},
@@ -979,7 +1000,7 @@ function parseSamsungCard(rows,fileName){
         const amount=normalizeAmount(r[iAmt]);
         if(!date||!amount)continue;
         const cls=classifyExpense(name);
-        results.push({source:'삼성카드',date,name,amount,category:cls.category,exclude:cls.exclude,fileName});
+        results.push({source:'삼성카드',date,name,amount,category:cls.category,exclude:cls.exclude,fileName,note:'[삼성카드] '+name});
     }
     return results;
 }
@@ -1006,7 +1027,7 @@ function parseShinhanCard(rows,fileName){
         const amount=normalizeAmount(r[iAmt]);
         if(!date||!amount)continue;
         const cls=classifyExpense(name);
-        results.push({source:'신한카드',date,name,amount,category:cls.category,exclude:cls.exclude,fileName});
+        results.push({source:'신한카드',date,name,amount,category:cls.category,exclude:cls.exclude,fileName,note:'[신한카드] '+name});
     }
     return results;
 }
@@ -1020,7 +1041,8 @@ function parseShinhanBank(rows,fileName){
     if(headerIdx<0)headerIdx=6;
     const header=rows[headerIdx].map(h=>(h||'').replace(/\s/g,''));
     const iDate=header.findIndex(h=>h.includes('거래일자')||h.includes('거래일'));
-    const iName=header.findIndex(h=>h.includes('내용')||h.includes('적요')||h.includes('거래내용'));
+    const iName=header.findIndex(h=>h.includes('내용')||h.includes('거래내용'));
+    const iMemo=header.findIndex(h=>h.includes('적요'));
     const iOut=header.findIndex(h=>h.includes('출금'));
     if(iDate<0||iOut<0)return [];
     
@@ -1029,11 +1051,19 @@ function parseShinhanBank(rows,fileName){
         const r=rows[i];
         if(!r||r.length<3)continue;
         const date=normalizeDate(r[iDate]);
-        const name=(r[iName]||'').trim();
+        // 내용 → 적요 fallback
+        let name=(iName>=0?(r[iName]||'').trim():'');
+        const memo=(iMemo>=0?(r[iMemo]||'').trim():'');
+        if(!name&&memo) name=memo;
+        const displayName=name||(memo||'(내용없음)');
         const amount=normalizeAmount(r[iOut]);
         if(!date||!amount)continue;
-        const cls=classifyExpense(name);
-        results.push({source:'신한은행',date,name,amount,category:cls.category,exclude:cls.exclude,fileName});
+        const cls=classifyExpense(displayName);
+        // note: 원본 내용+적요 모두 기록
+        const noteParts=['[신한은행]'];
+        if(name)noteParts.push(name);
+        if(memo&&memo!==name)noteParts.push('(적요:'+memo+')');
+        results.push({source:'신한은행',date,name:displayName,amount,category:cls.category,exclude:cls.exclude,fileName,note:noteParts.join(' ')});
     }
     return results;
 }
@@ -1055,7 +1085,7 @@ function parseGenericCSV(rows,fileName){
         const amount=normalizeAmount(r[iAmt]);
         if(!date||!amount)continue;
         const cls=classifyExpense(name);
-        results.push({source:'기타CSV',date,name,amount,category:cls.category,exclude:cls.exclude,fileName});
+        results.push({source:'기타CSV',date,name,amount,category:cls.category,exclude:cls.exclude,fileName,note:'[기타] '+name});
     }
     return results;
 }
@@ -1160,15 +1190,17 @@ function renderExpUploadPreview(){
     tbody.innerHTML=items.map((d,i)=>{
         const realIdx=expUploadParsed.indexOf(d);
         const rowStyle=d.exclude?'opacity:.5;text-decoration:line-through;':'';
-        const catColor=d.exclude?'#999':d.category==='복리후생비'?'#2e7d32':d.category==='소모품비'?'#1565c0':d.category==='공과금'?'#e65100':d.category==='리스료'?'#6a1b9a':'#333';
+        const catBadge=d.exclude?'<span style="font-size:.75rem;color:#999">금융/이체</span>':getCategoryBadge(d.category);
+        const noteText=(d.note||'').replace(/"/g,'&quot;');
         return `<tr style="${rowStyle}">
             <td><span style="font-size:.75rem;background:#f5f5f5;padding:2px 6px;border-radius:3px">${d.source}</span></td>
             <td>${d.date}</td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name}">${d.name}</td>
-            <td><select onchange="expUploadParsed[${realIdx}].category=this.value;expUploadParsed[${realIdx}].exclude=this.value==='금융/이체';renderExpUploadSummary()" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px;color:${catColor}">
+            <td><select onchange="expUploadParsed[${realIdx}].category=this.value;expUploadParsed[${realIdx}].exclude=this.value==='금융/이체';renderExpUploadPreview()" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px">
                 ${['소모품비','복리후생비','공과금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${d.category===c?' selected':''}>${c}</option>`).join('')}
-            </select></td>
+            </select> ${catBadge}</td>
             <td class="text-right" style="font-weight:600">${formatCurrency(d.amount)}</td>
+            <td style="font-size:.8rem;color:#777;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noteText}">${d.note||'-'}</td>
             <td style="text-align:center"><input type="checkbox" ${d.exclude?'checked':''} onchange="expUploadParsed[${realIdx}].exclude=this.checked;renderExpUploadPreview()"></td>
             <td style="text-align:center"><button onclick="expUploadParsed.splice(${realIdx},1);renderExpUploadPreview()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:1rem">✕</button></td>
         </tr>`;
@@ -1248,7 +1280,8 @@ async function saveExpensesBulk(){
                     amount:item.amount,
                     category:item.category,
                     card:item.source,
-                    note:'[업로드] '+item.fileName,
+                    note:item.note||('['+item.source+'] '+item.name),
+                    merchant:item.name,
                     yearMonth:item.date.substring(0,7),
                     createdAt:new Date().toISOString(),
                     uploadBatch:true
