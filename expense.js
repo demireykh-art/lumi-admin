@@ -868,6 +868,7 @@ function getCategoryBadge(cat){
         '차량유지비':['#00838f','#e0f7fa'],
         '접대비':['#ad1457','#fce4ec'],
         '금융/이체':['#757575','#f5f5f5'],
+        '세금':['#b71c1c','#ffebee'],
         '기타':['#555','#f0f0f0']
     };
     const [fg,bg]=colors[cat]||colors['기타'];
@@ -878,7 +879,8 @@ function getCategoryBadge(cat){
 const EXP_CATEGORY_RULES=[
     {category:'금융/이체',keywords:['카드대금','현대카드','삼성카드','신한카드','KB카드','롯데카드','우리카드','비씨카드','하나카드','체크카드','자동이체','대출이자','원리금','적금','예금','보험료','국민연금','건강보험','고용보험','산재보험'],exclude:true},
     {category:'리스료',keywords:['캐피탈','리스','렌탈','오릭스','메리츠','JB우리','한국캐피탈','아주캐피탈']},
-    {category:'공과금',keywords:['에너지','전력','한전','수도','도시가스','쉴더스','세금','국세','지방세','관리비','통신비','KT','SKT','LG유플','인터넷']},
+    {category:'공과금',keywords:['에너지','전력','한전','수도','도시가스','쉴더스','관리비','통신비','KT','SKT','LG유플','인터넷']},
+    {category:'세금',keywords:['세금','국세','지방세','원천세','부가세','종합소득세','종소세','주민세','재산세','자동차세','취득세','등록세','면허세','환경개선부담금']},
     {category:'복리후생비',keywords:['배달의민족','우아한형제들','요기요','쿠팡이츠','식당','컬리','편의점','CU','씨유','GS25','지에스','세븐일레','이마트24','카페','커피','스타벅스','투썸','이디야','빽다방','메가커피','컴포즈','더벤티','할리스','엔제리너스','아웃백','빕스','피자','치킨','맥도날드','버거킹','서브웨이','김밥','분식','한솥','본죽','죽','베이커리','빵','떡','족발','보쌈','삼겹','고기','갈비','냉면','국밥','설렁탕','찌개','백반','도시락','밥','반찬','다래연','식자재','마라','양꼬치','초밥','회','돈까스','우동','라멘','파스타','샐러드','샌드위치','토스트']},
     {category:'소모품비',keywords:['네이버','쿠팡','지마켓','올리브영','옥션','11번가','위메프','티몬','다이소','오피스','문구','약국','드럭','마트','홈플러스','롯데마트','코스트코','트레이더스']},
     {category:'차량유지비',keywords:['주유','SK에너지','GS칼텍스','현대오일','S-OIL','주차','하이패스','톨게이트','세차','타이어']},
@@ -1220,7 +1222,7 @@ function renderExpUploadPreview(){
             <td>${d.date}</td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name}">${d.name}</td>
             <td><select onchange="applyMerchantCategory('${d.name.replace(/'/g,"\\'")}',this.value)" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px">
-                ${['소모품비','복리후생비','공과금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${d.category===c?' selected':''}>${c}</option>`).join('')}
+                ${['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${d.category===c?' selected':''}>${c}</option>`).join('')}
             </select> ${catBadge}</td>
             <td class="text-right" style="font-weight:600">${formatCurrency(d.amount)}</td>
             <td style="font-size:.8rem;color:#777;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noteText}">${d.note||'-'}</td>
@@ -1287,7 +1289,7 @@ function renderMerchantGroupPanel(){
                         <span style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</span>
                         <span style="color:#999;font-size:.7rem">${g.count}건</span>
                         <select onchange="applyMerchantCategory('${escapedName}',this.value)" style="font-size:.78rem;padding:1px 3px;border:1px solid #ddd;border-radius:3px">
-                            ${['소모품비','복리후생비','공과금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${g.category===c?' selected':''}>${c}</option>`).join('')}
+                            ${['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${g.category===c?' selected':''}>${c}</option>`).join('')}
                         </select>
                         ${badge}
                     </div>`;
@@ -1331,6 +1333,10 @@ async function saveExpensesBulk(){
     const items=expUploadParsed.filter(d=>!d.exclude);
     if(!items.length){alert('저장할 항목이 없습니다.');return;}
     
+    // 세금 / 유동비 분리
+    const taxItems=items.filter(d=>d.category==='세금');
+    const expItems=items.filter(d=>d.category!=='세금');
+    
     // 카테고리별 합계 계산
     const byCat={};
     items.forEach(d=>{byCat[d.category]=(byCat[d.category]||0)+d.amount;});
@@ -1342,46 +1348,80 @@ async function saveExpensesBulk(){
     const monthSummary=Object.entries(byMonth).sort().map(([ym,amt])=>`  ${ym}: ${formatCurrency(amt)}`).join('\n');
     
     const total=items.reduce((s,d)=>s+d.amount,0);
+    const taxNote=taxItems.length?`\n\n⚠ 세금 ${taxItems.length}건은 세금 탭(원천세)에 저장됩니다.`:'';
     
-    if(!confirm(`📊 저장 전 요약\n━━━━━━━━━━━━━━━━━━\n\n[카테고리별 합계]\n${catSummary}\n\n[월별 합계]\n${monthSummary}\n\n━━━━━━━━━━━━━━━━━━\n총 ${items.length}건 / ${formatCurrency(total)}\n\n유동비에 저장하시겠습니까?`))return;
+    if(!confirm(`📊 저장 전 요약\n━━━━━━━━━━━━━━━━━━\n\n[카테고리별 합계]\n${catSummary}\n\n[월별 합계]\n${monthSummary}\n\n━━━━━━━━━━━━━━━━━━\n총 ${items.length}건 / ${formatCurrency(total)}${taxNote}\n\n저장하시겠습니까?`))return;
     
     const btn=document.getElementById('expBulkSaveBtn');
     btn.disabled=true;btn.textContent='저장 중...';
     
     try{
-        // 기존 데이터와 중복 체크
-        const existingKeys=new Set(variableExpenses.map(e=>`${e.date}|${e.name}|${e.amount}`));
-        const newItems=items.filter(d=>!existingKeys.has(`${d.date}|${d.name}|${d.amount}`));
-        const skipCount=items.length-newItems.length;
-        
-        // Firestore batch (500건 제한이므로 분할)
         const batchSize=450;
-        let savedCount=0;
-        for(let i=0;i<newItems.length;i+=batchSize){
-            const chunk=newItems.slice(i,i+batchSize);
-            const batch=db.batch();
-            for(const item of chunk){
-                const ref=db.collection('variableExpenses').doc();
-                batch.set(ref,{
-                    date:item.date,
-                    name:item.name,
-                    amount:item.amount,
-                    category:item.category,
-                    card:item.source,
-                    note:item.note||('['+item.source+'] '+item.name),
-                    merchant:item.name,
-                    yearMonth:item.date.substring(0,7),
-                    createdAt:new Date().toISOString(),
-                    uploadBatch:true
-                });
+        let savedExpCount=0,savedTaxCount=0,skipCount=0;
+        
+        // ── 유동비 저장 ──
+        if(expItems.length){
+            const existingKeys=new Set(variableExpenses.map(e=>`${e.date}|${e.name}|${e.amount}`));
+            const newExp=expItems.filter(d=>!existingKeys.has(`${d.date}|${d.name}|${d.amount}`));
+            skipCount+=expItems.length-newExp.length;
+            
+            for(let i=0;i<newExp.length;i+=batchSize){
+                const chunk=newExp.slice(i,i+batchSize);
+                const batch=db.batch();
+                for(const item of chunk){
+                    const ref=db.collection('variableExpenses').doc();
+                    batch.set(ref,{
+                        date:item.date,
+                        name:item.name,
+                        amount:item.amount,
+                        category:item.category,
+                        card:item.source,
+                        note:item.note||('['+item.source+'] '+item.name),
+                        merchant:item.name,
+                        yearMonth:item.date.substring(0,7),
+                        createdAt:new Date().toISOString(),
+                        uploadBatch:true
+                    });
+                }
+                await batch.commit();
+                savedExpCount+=chunk.length;
             }
-            await batch.commit();
-            savedCount+=chunk.length;
         }
         
-        let msg=`✅ ${savedCount}건 저장 완료!`;
-        if(skipCount>0) msg+=`\n🔄 ${skipCount}건은 이미 존재하여 건너뜀`;
-        alert(msg);
+        // ── 세금 저장 (withholdingTaxes) ──
+        if(taxItems.length){
+            const existingTaxKeys=new Set(withholdingTaxes.map(t=>`${t.date}|${t.note}|${(t.incomeTax||0)+(t.localTax||0)}`));
+            const newTax=taxItems.filter(d=>!existingTaxKeys.has(`${d.date}|${d.note}|${d.amount}`));
+            skipCount+=taxItems.length-newTax.length;
+            
+            for(let i=0;i<newTax.length;i+=batchSize){
+                const chunk=newTax.slice(i,i+batchSize);
+                const batch=db.batch();
+                for(const item of chunk){
+                    // 지방세인지 소득세인지 추정
+                    const isLocal=(item.name||'').includes('지방');
+                    const ref=db.collection('withholdingTaxes').doc();
+                    batch.set(ref,{
+                        date:item.date,
+                        attributeMonth:item.date.substring(0,7),
+                        incomeTax:isLocal?0:item.amount,
+                        localTax:isLocal?item.amount:0,
+                        note:item.note||('['+item.source+'] '+item.name),
+                        createdAt:new Date().toISOString(),
+                        uploadBatch:true
+                    });
+                }
+                await batch.commit();
+                savedTaxCount+=chunk.length;
+            }
+        }
+        
+        let msg=[];
+        if(savedExpCount) msg.push(`유동비 ${savedExpCount}건`);
+        if(savedTaxCount) msg.push(`세금 ${savedTaxCount}건`);
+        let result=`✅ 저장 완료! (${msg.join(' + ')})`;
+        if(skipCount>0) result+=`\n🔄 ${skipCount}건은 이미 존재하여 건너뜀`;
+        alert(result);
         
         // 데이터 리로드
         await loadExpenses();
@@ -1391,7 +1431,7 @@ async function saveExpensesBulk(){
         // 업로드 초기화
         expUploadParsed=[];
         document.getElementById('expUploadPreview').style.display='none';
-        document.getElementById('expUploadStatus').innerHTML='✅ 저장 완료. 유동비 탭에서 확인하세요.';
+        document.getElementById('expUploadStatus').innerHTML='✅ 저장 완료. 유동비/세금 탭에서 확인하세요.';
     }catch(e){
         alert('저장 실패: '+e.message);
     }finally{
