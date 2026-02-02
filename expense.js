@@ -1070,8 +1070,7 @@ async function handleExpenseFiles(files){
     let allParsed=[];
     for(const file of files){
         try{
-            const text=await readFileAsText(file);
-            const rows=parseCSVRows(text);
+            const rows=await readFileAsRows(file);
             const parsed=detectAndParse(rows,file.name);
             allParsed.push(...parsed);
             statusEl.innerHTML+=`<br>✅ <strong>${file.name}</strong>: ${parsed.length}건 인식 (${parsed.length>0?parsed[0].source:'?'})`;
@@ -1098,13 +1097,44 @@ async function handleExpenseFiles(files){
     renderExpUploadPreview();
 }
 
-function readFileAsText(file){
+// CSV/XLS/XLSX → 2차원 배열로 통합 변환
+function readFileAsRows(file){
     return new Promise((resolve,reject)=>{
-        const reader=new FileReader();
-        reader.onload=()=>resolve(reader.result);
-        reader.onerror=()=>reject(new Error('파일 읽기 실패'));
-        // 한글 인코딩 시도: EUC-KR → UTF-8 fallback
-        reader.readAsText(file,'EUC-KR');
+        const ext=(file.name||'').split('.').pop().toLowerCase();
+        
+        if(ext==='xls'||ext==='xlsx'){
+            // 엑셀: SheetJS(XLSX)로 파싱
+            const reader=new FileReader();
+            reader.onload=function(e){
+                try{
+                    const data=new Uint8Array(e.target.result);
+                    const wb=XLSX.read(data,{type:'array',cellDates:false,raw:false});
+                    // 첫 번째 시트 사용
+                    const ws=wb.Sheets[wb.SheetNames[0]];
+                    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+                    resolve(rows.map(r=>r.map(c=>String(c||''))));
+                }catch(err){reject(new Error('엑셀 파싱 실패: '+err.message));}
+            };
+            reader.onerror=()=>reject(new Error('파일 읽기 실패'));
+            reader.readAsArrayBuffer(file);
+        }else{
+            // CSV: EUC-KR 우선 시도 → 깨지면 UTF-8
+            const reader=new FileReader();
+            reader.onload=function(){
+                let text=reader.result;
+                // EUC-KR 디코딩 확인 (한글 깨짐 감지)
+                if(text.includes('�')){
+                    const reader2=new FileReader();
+                    reader2.onload=()=>resolve(parseCSVRows(reader2.result));
+                    reader2.onerror=()=>reject(new Error('파일 읽기 실패'));
+                    reader2.readAsText(file,'UTF-8');
+                    return;
+                }
+                resolve(parseCSVRows(text));
+            };
+            reader.onerror=()=>reject(new Error('파일 읽기 실패'));
+            reader.readAsText(file,'EUC-KR');
+        }
     });
 }
 

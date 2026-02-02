@@ -180,10 +180,10 @@
                     <div class="section-header"><div class="section-title">📤 카드/은행 명세 통합 업로드</div></div>
                     <div id="expUploadZone" style="border:2px dashed var(--border);border-radius:12px;padding:2.5rem;text-align:center;cursor:pointer;background:var(--bg-card);transition:all .2s;margin-bottom:1.5rem" ondragover="event.preventDefault();this.style.borderColor='var(--accent-gold)';this.style.background='#faf6ee'" ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg-card)'" ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--bg-card)';handleExpenseFiles(event.dataTransfer.files)" onclick="document.getElementById('expUploadInput').click()">
                         <div style="font-size:2.5rem;margin-bottom:.5rem">📎</div>
-                        <div style="font-weight:700;font-size:1.05rem;margin-bottom:.3rem">CSV 파일을 드래그하거나 클릭하세요</div>
-                        <div style="font-size:.85rem;color:var(--text-secondary)">삼성카드 · 신한카드(사업자) · 신한은행 CSV 자동 인식</div>
+                        <div style="font-weight:700;font-size:1.05rem;margin-bottom:.3rem">CSV / 엑셀 파일을 드래그하거나 클릭하세요</div>
+                        <div style="font-size:.85rem;color:var(--text-secondary)">삼성카드 · 신한카드(사업자) · 신한은행 CSV/XLS/XLSX 자동 인식</div>
                         <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.5rem">⚠ 승인일/거래일 기준 월별 귀속 · 카드대금 이체 자동 제외</div>
-                        <input type="file" id="expUploadInput" accept=".csv" style="display:none" onchange="handleExpenseFiles(this.files)" multiple>
+                        <input type="file" id="expUploadInput" accept=".csv,.xls,.xlsx" style="display:none" onchange="handleExpenseFiles(this.files)" multiple>
                     </div>
                     <div id="expUploadStatus" style="display:none;margin-bottom:1rem;padding:1rem;border-radius:8px;background:#f0f5f0;font-size:.9rem"></div>
                     <div id="expUploadPreview" style="display:none">
