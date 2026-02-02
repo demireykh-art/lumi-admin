@@ -849,3 +849,401 @@ async function saveTaxFromFile(info){
 }
 
 // CRUD Operations - Employee
+
+/* ===== 멀티 지출 데이터 통합 업로더 ===== */
+let expUploadParsed=[];
+
+// 자동 분류 키워드 매핑
+const EXP_CATEGORY_RULES=[
+    {category:'금융/이체',keywords:['카드대금','현대카드','삼성카드','신한카드','KB카드','롯데카드','우리카드','비씨카드','하나카드','체크카드','자동이체','대출이자','원리금','적금','예금','보험료','국민연금','건강보험','고용보험','산재보험'],exclude:true},
+    {category:'리스료',keywords:['캐피탈','리스','렌탈','오릭스','메리츠','JB우리','한국캐피탈','아주캐피탈']},
+    {category:'공과금',keywords:['에너지','전력','한전','수도','도시가스','쉴더스','세금','국세','지방세','관리비','통신비','KT','SKT','LG유플','인터넷']},
+    {category:'복리후생비',keywords:['배달의민족','요기요','쿠팡이츠','식당','컬리','편의점','CU','GS25','세븐일레','이마트24','카페','스타벅스','투썸','이디야','빽다방','메가커피','아웃백','빕스','피자','치킨','맥도날드','버거킹','서브웨이','김밥','분식','한솥']},
+    {category:'소모품비',keywords:['네이버','쿠팡','지마켓','올리브영','옥션','11번가','위메프','티몬','다이소','오피스','문구','약국','드럭','마트','홈플러스','롯데마트','코스트코','트레이더스']},
+    {category:'차량유지비',keywords:['주유','SK에너지','GS칼텍스','현대오일','S-OIL','주차','하이패스','톨게이트','세차','타이어']},
+    {category:'접대비',keywords:['골프','라운지','호텔','리조트']},
+];
+
+function classifyExpense(name){
+    const n=(name||'').toLowerCase().replace(/\s/g,'');
+    for(const rule of EXP_CATEGORY_RULES){
+        for(const kw of rule.keywords){
+            if(n.includes(kw.toLowerCase().replace(/\s/g,''))) return {category:rule.category,exclude:!!rule.exclude};
+        }
+    }
+    return {category:'기타',exclude:false};
+}
+
+// CSV 파싱 유틸 (쉼표 내 따옴표 처리)
+function parseCSVLine(line){
+    const result=[];let cur='';let inQ=false;
+    for(let i=0;i<line.length;i++){
+        const c=line[i];
+        if(c==='"'){inQ=!inQ;}
+        else if(c===','&&!inQ){result.push(cur.trim().replace(/^"|"$/g,''));cur='';}
+        else{cur+=c;}
+    }
+    result.push(cur.trim().replace(/^"|"$/g,''));
+    return result;
+}
+
+function parseCSVRows(text){
+    return text.split(/\r?\n/).filter(l=>l.trim()).map(l=>parseCSVLine(l));
+}
+
+// 날짜 정규화 (여러 형식 지원)
+function normalizeDate(raw){
+    if(!raw)return '';
+    let s=raw.replace(/['"]/g,'').trim();
+    // 공백·특수문자 앞뒤 정리
+    s=s.replace(/^\s+|\s+$/g,'');
+    
+    // 1) 20260115 (8자리 숫자)
+    if(/^\d{8}$/.test(s)) return s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8);
+    
+    // 2) 2026-01-15, 2026/01/15, 2026.01.15, 2026.1.5 (4자리 연도 + 구분자)
+    let m=s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+    if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    
+    // 3) 01/15/2026, 01-15-2026 (MM/DD/YYYY - 4자리 연도가 뒤에 오는 경우)
+    m=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if(m){
+        const a=parseInt(m[1]),b=parseInt(m[2]);
+        if(a<=12) return m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');
+        return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+    }
+    
+    // 4) 26-01-15, 26/01/15, 26.01.15 (2자리 연도 + 구분자)
+    m=s.match(/^(\d{2})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+    if(m) return '20'+m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    
+    // 5) 2026년 01월 15일 / 2026년1월5일 (한글 형식)
+    m=s.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일?/);
+    if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    
+    // 6) 260115 (6자리 - YYMMDD)
+    if(/^\d{6}$/.test(s)) return '20'+s.slice(0,2)+'-'+s.slice(2,4)+'-'+s.slice(4,6);
+    
+    // 7) ISO datetime (2026-01-15T09:30:00)
+    m=s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if(m) return m[1];
+    
+    return s;
+}
+
+// 금액 정규화
+function normalizeAmount(raw){
+    if(!raw)return 0;
+    const s=String(raw).replace(/[",\s원₩]/g,'');
+    return Math.abs(parseInt(s))||0;
+}
+
+// ===== 파일별 파싱 로직 =====
+
+function detectAndParse(rows,fileName){
+    const fn=(fileName||'').toLowerCase();
+    const headerText=rows.slice(0,8).map(r=>r.join(',')).join('\n').toLowerCase();
+    
+    // 삼성카드: '승인일자' 헤더 존재
+    if(headerText.includes('승인일자')&&(headerText.includes('승인금액')||fn.includes('삼성'))){
+        return parseSamsungCard(rows,fileName);
+    }
+    // 신한카드(사업자): '거래일' + '이용금액' 존재 (상단 4행 skip)
+    if((headerText.includes('이용금액')||fn.includes('신한카드'))&&headerText.includes('거래일')){
+        return parseShinhanCard(rows,fileName);
+    }
+    // 신한은행: '출금' 컬럼 존재 (상단 6행 skip)
+    if(headerText.includes('출금')&&(headerText.includes('거래일자')||fn.includes('신한은행')||fn.includes('은행'))){
+        return parseShinhanBank(rows,fileName);
+    }
+    // 자동 감지 실패 시 헤더 기반 추정
+    return parseGenericCSV(rows,fileName);
+}
+
+function parseSamsungCard(rows,fileName){
+    // 헤더행 찾기
+    let headerIdx=rows.findIndex(r=>r.some(c=>(c||'').includes('승인일자')));
+    if(headerIdx<0)return [];
+    const header=rows[headerIdx].map(h=>(h||'').replace(/\s/g,''));
+    const iDate=header.findIndex(h=>h.includes('승인일자'));
+    const iName=header.findIndex(h=>h.includes('가맹점명')||h.includes('이용가맹점'));
+    const iAmt=header.findIndex(h=>h.includes('승인금액')||h.includes('이용금액'));
+    if(iDate<0||iAmt<0)return [];
+    
+    const results=[];
+    for(let i=headerIdx+1;i<rows.length;i++){
+        const r=rows[i];
+        if(!r||r.length<3)continue;
+        const date=normalizeDate(r[iDate]);
+        const name=(r[iName]||'').trim();
+        const amount=normalizeAmount(r[iAmt]);
+        if(!date||!amount)continue;
+        const cls=classifyExpense(name);
+        results.push({source:'삼성카드',date,name,amount,category:cls.category,exclude:cls.exclude,fileName});
+    }
+    return results;
+}
+
+function parseShinhanCard(rows,fileName){
+    // 상단 4행 제외 후 헤더 찾기
+    let headerIdx=-1;
+    for(let i=0;i<Math.min(rows.length,10);i++){
+        if(rows[i].some(c=>(c||'').includes('거래일'))){headerIdx=i;break;}
+    }
+    if(headerIdx<0)headerIdx=4;
+    const header=rows[headerIdx].map(h=>(h||'').replace(/\s/g,''));
+    const iDate=header.findIndex(h=>h.includes('거래일')||h.includes('이용일'));
+    const iName=header.findIndex(h=>h.includes('가맹점명')||h.includes('이용가맹점')||h.includes('내용'));
+    const iAmt=header.findIndex(h=>h.includes('이용금액')||h.includes('금액'));
+    if(iDate<0||iAmt<0)return [];
+    
+    const results=[];
+    for(let i=headerIdx+1;i<rows.length;i++){
+        const r=rows[i];
+        if(!r||r.length<3)continue;
+        const date=normalizeDate(r[iDate]);
+        const name=(r[iName]||'').trim();
+        const amount=normalizeAmount(r[iAmt]);
+        if(!date||!amount)continue;
+        const cls=classifyExpense(name);
+        results.push({source:'신한카드',date,name,amount,category:cls.category,exclude:cls.exclude,fileName});
+    }
+    return results;
+}
+
+function parseShinhanBank(rows,fileName){
+    // 상단 6행 제외 후 헤더 찾기
+    let headerIdx=-1;
+    for(let i=0;i<Math.min(rows.length,12);i++){
+        if(rows[i].some(c=>(c||'').replace(/\s/g,'').includes('거래일자'))){headerIdx=i;break;}
+    }
+    if(headerIdx<0)headerIdx=6;
+    const header=rows[headerIdx].map(h=>(h||'').replace(/\s/g,''));
+    const iDate=header.findIndex(h=>h.includes('거래일자')||h.includes('거래일'));
+    const iName=header.findIndex(h=>h.includes('내용')||h.includes('적요')||h.includes('거래내용'));
+    const iOut=header.findIndex(h=>h.includes('출금'));
+    if(iDate<0||iOut<0)return [];
+    
+    const results=[];
+    for(let i=headerIdx+1;i<rows.length;i++){
+        const r=rows[i];
+        if(!r||r.length<3)continue;
+        const date=normalizeDate(r[iDate]);
+        const name=(r[iName]||'').trim();
+        const amount=normalizeAmount(r[iOut]);
+        if(!date||!amount)continue;
+        const cls=classifyExpense(name);
+        results.push({source:'신한은행',date,name,amount,category:cls.category,exclude:cls.exclude,fileName});
+    }
+    return results;
+}
+
+function parseGenericCSV(rows,fileName){
+    if(rows.length<2)return [];
+    const header=rows[0].map(h=>(h||'').replace(/\s/g,''));
+    const iDate=header.findIndex(h=>h.includes('일자')||h.includes('날짜')||h.includes('거래일')||h.includes('Date'));
+    const iName=header.findIndex(h=>h.includes('가맹점')||h.includes('내용')||h.includes('적요')||h.includes('항목'));
+    const iAmt=header.findIndex(h=>h.includes('금액')||h.includes('출금')||h.includes('Amount'));
+    if(iDate<0||iAmt<0)return [];
+    
+    const results=[];
+    for(let i=1;i<rows.length;i++){
+        const r=rows[i];
+        if(!r||r.length<2)continue;
+        const date=normalizeDate(r[iDate]);
+        const name=(r[iName]||'').trim();
+        const amount=normalizeAmount(r[iAmt]);
+        if(!date||!amount)continue;
+        const cls=classifyExpense(name);
+        results.push({source:'기타CSV',date,name,amount,category:cls.category,exclude:cls.exclude,fileName});
+    }
+    return results;
+}
+
+// ===== 파일 핸들러 + 중복 제거 =====
+async function handleExpenseFiles(files){
+    if(!files||!files.length)return;
+    const statusEl=document.getElementById('expUploadStatus');
+    statusEl.style.display='block';
+    statusEl.innerHTML='⏳ 파일 분석 중...';
+    
+    let allParsed=[];
+    for(const file of files){
+        try{
+            const text=await readFileAsText(file);
+            const rows=parseCSVRows(text);
+            const parsed=detectAndParse(rows,file.name);
+            allParsed.push(...parsed);
+            statusEl.innerHTML+=`<br>✅ <strong>${file.name}</strong>: ${parsed.length}건 인식 (${parsed.length>0?parsed[0].source:'?'})`;
+        }catch(e){
+            statusEl.innerHTML+=`<br>❌ <strong>${file.name}</strong>: 읽기 실패 - ${e.message}`;
+        }
+    }
+    
+    // 중복 제거 (같은 날짜+가맹점+금액)
+    const seen=new Set();
+    const deduped=[];
+    for(const item of allParsed){
+        const key=`${item.date}|${item.name}|${item.amount}`;
+        if(!seen.has(key)){seen.add(key);deduped.push(item);}
+    }
+    const dupCount=allParsed.length-deduped.length;
+    if(dupCount>0) statusEl.innerHTML+=`<br>🔄 중복 ${dupCount}건 자동 제거`;
+    
+    // 금융/이체 제외 건수 표시
+    const excludeCount=deduped.filter(d=>d.exclude).length;
+    if(excludeCount>0) statusEl.innerHTML+=`<br>🏦 카드대금/이체 ${excludeCount}건 자동 제외 표시`;
+    
+    expUploadParsed=deduped;
+    renderExpUploadPreview();
+}
+
+function readFileAsText(file){
+    return new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=()=>reject(new Error('파일 읽기 실패'));
+        // 한글 인코딩 시도: EUC-KR → UTF-8 fallback
+        reader.readAsText(file,'EUC-KR');
+    });
+}
+
+// ===== 미리보기 렌더링 =====
+function renderExpUploadPreview(){
+    const container=document.getElementById('expUploadPreview');
+    const tbody=document.getElementById('expPreviewTable');
+    const filterEl=document.getElementById('expPreviewFilter');
+    if(!expUploadParsed.length){container.style.display='none';return;}
+    container.style.display='block';
+    
+    // 카테고리 필터 업데이트
+    const cats=[...new Set(expUploadParsed.map(d=>d.category))].sort();
+    const curFilter=filterEl.value;
+    filterEl.innerHTML='<option value="">전체 카테고리</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    filterEl.value=curFilter;
+    
+    let items=expUploadParsed;
+    if(curFilter) items=items.filter(d=>d.category===curFilter);
+    
+    document.getElementById('expPreviewCount').textContent=`총 ${expUploadParsed.length}건 / 표시 ${items.length}건`;
+    
+    tbody.innerHTML=items.map((d,i)=>{
+        const realIdx=expUploadParsed.indexOf(d);
+        const rowStyle=d.exclude?'opacity:.5;text-decoration:line-through;':'';
+        const catColor=d.exclude?'#999':d.category==='복리후생비'?'#2e7d32':d.category==='소모품비'?'#1565c0':d.category==='공과금'?'#e65100':d.category==='리스료'?'#6a1b9a':'#333';
+        return `<tr style="${rowStyle}">
+            <td><span style="font-size:.75rem;background:#f5f5f5;padding:2px 6px;border-radius:3px">${d.source}</span></td>
+            <td>${d.date}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name}">${d.name}</td>
+            <td><select onchange="expUploadParsed[${realIdx}].category=this.value;expUploadParsed[${realIdx}].exclude=this.value==='금융/이체';renderExpUploadSummary()" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px;color:${catColor}">
+                ${['소모품비','복리후생비','공과금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${d.category===c?' selected':''}>${c}</option>`).join('')}
+            </select></td>
+            <td class="text-right" style="font-weight:600">${formatCurrency(d.amount)}</td>
+            <td style="text-align:center"><input type="checkbox" ${d.exclude?'checked':''} onchange="expUploadParsed[${realIdx}].exclude=this.checked;renderExpUploadPreview()"></td>
+            <td style="text-align:center"><button onclick="expUploadParsed.splice(${realIdx},1);renderExpUploadPreview()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:1rem">✕</button></td>
+        </tr>`;
+    }).join('');
+    
+    renderExpUploadSummary();
+}
+
+function renderExpUploadSummary(){
+    const el=document.getElementById('expPreviewSummary');
+    const active=expUploadParsed.filter(d=>!d.exclude);
+    const excluded=expUploadParsed.filter(d=>d.exclude);
+    const totalActive=active.reduce((s,d)=>s+d.amount,0);
+    const totalExcluded=excluded.reduce((s,d)=>s+d.amount,0);
+    
+    // 카테고리별 합계
+    const byCat={};
+    active.forEach(d=>{byCat[d.category]=(byCat[d.category]||0)+d.amount;});
+    
+    el.innerHTML=`
+        <div style="background:var(--bg-card);padding:1rem;border-radius:8px;border:1px solid var(--border);min-width:200px">
+            <div style="font-size:.8rem;color:var(--text-secondary)">지출 합계 (제외 제외)</div>
+            <div style="font-size:1.3rem;font-weight:700;color:#2e7d32">${formatCurrency(totalActive)}</div>
+            <div style="font-size:.75rem;color:#999;margin-top:.25rem">${active.length}건</div>
+        </div>
+        <div style="background:var(--bg-card);padding:1rem;border-radius:8px;border:1px solid var(--border);min-width:200px">
+            <div style="font-size:.8rem;color:var(--text-secondary)">제외 (카드대금/이체)</div>
+            <div style="font-size:1.3rem;font-weight:700;color:#999">${formatCurrency(totalExcluded)}</div>
+            <div style="font-size:.75rem;color:#999;margin-top:.25rem">${excluded.length}건</div>
+        </div>
+        <div style="background:var(--bg-card);padding:1rem;border-radius:8px;border:1px solid var(--border);flex:1;min-width:200px">
+            <div style="font-size:.8rem;color:var(--text-secondary);margin-bottom:.5rem">카테고리별</div>
+            ${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`<div style="display:flex;justify-content:space-between;font-size:.8rem;padding:2px 0"><span>${cat}</span><strong>${formatCurrency(amt)}</strong></div>`).join('')}
+        </div>
+    `;
+}
+
+// ===== 일괄 저장 =====
+async function saveExpensesBulk(){
+    const items=expUploadParsed.filter(d=>!d.exclude);
+    if(!items.length){alert('저장할 항목이 없습니다.');return;}
+    
+    // 카테고리별 합계 계산
+    const byCat={};
+    items.forEach(d=>{byCat[d.category]=(byCat[d.category]||0)+d.amount;});
+    const catSummary=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`  • ${cat}: ${formatCurrency(amt)}`).join('\n');
+    
+    // 월별 합계 계산
+    const byMonth={};
+    items.forEach(d=>{const ym=d.date.substring(0,7);byMonth[ym]=(byMonth[ym]||0)+d.amount;});
+    const monthSummary=Object.entries(byMonth).sort().map(([ym,amt])=>`  ${ym}: ${formatCurrency(amt)}`).join('\n');
+    
+    const total=items.reduce((s,d)=>s+d.amount,0);
+    
+    if(!confirm(`📊 저장 전 요약\n━━━━━━━━━━━━━━━━━━\n\n[카테고리별 합계]\n${catSummary}\n\n[월별 합계]\n${monthSummary}\n\n━━━━━━━━━━━━━━━━━━\n총 ${items.length}건 / ${formatCurrency(total)}\n\n유동비에 저장하시겠습니까?`))return;
+    
+    const btn=document.getElementById('expBulkSaveBtn');
+    btn.disabled=true;btn.textContent='저장 중...';
+    
+    try{
+        // 기존 데이터와 중복 체크
+        const existingKeys=new Set(variableExpenses.map(e=>`${e.date}|${e.name}|${e.amount}`));
+        const newItems=items.filter(d=>!existingKeys.has(`${d.date}|${d.name}|${d.amount}`));
+        const skipCount=items.length-newItems.length;
+        
+        // Firestore batch (500건 제한이므로 분할)
+        const batchSize=450;
+        let savedCount=0;
+        for(let i=0;i<newItems.length;i+=batchSize){
+            const chunk=newItems.slice(i,i+batchSize);
+            const batch=db.batch();
+            for(const item of chunk){
+                const ref=db.collection('variableExpenses').doc();
+                batch.set(ref,{
+                    date:item.date,
+                    name:item.name,
+                    amount:item.amount,
+                    category:item.category,
+                    card:item.source,
+                    note:'[업로드] '+item.fileName,
+                    yearMonth:item.date.substring(0,7),
+                    createdAt:new Date().toISOString(),
+                    uploadBatch:true
+                });
+            }
+            await batch.commit();
+            savedCount+=chunk.length;
+        }
+        
+        let msg=`✅ ${savedCount}건 저장 완료!`;
+        if(skipCount>0) msg+=`\n🔄 ${skipCount}건은 이미 존재하여 건너뜀`;
+        alert(msg);
+        
+        // 데이터 리로드
+        await loadExpenses();
+        renderExpenses();
+        renderExpenseAnalysis();
+        
+        // 업로드 초기화
+        expUploadParsed=[];
+        document.getElementById('expUploadPreview').style.display='none';
+        document.getElementById('expUploadStatus').innerHTML='✅ 저장 완료. 유동비 탭에서 확인하세요.';
+    }catch(e){
+        alert('저장 실패: '+e.message);
+    }finally{
+        btn.disabled=false;btn.textContent='💾 일괄 저장';
+    }
+}
