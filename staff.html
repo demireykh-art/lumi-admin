@@ -1053,8 +1053,6 @@
                 mealRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('식사 로드 오류:',e);mealRecords=[];}
         }
-        }
-        }
         
         async function loadIncentiveItems(){
             try{
