@@ -879,7 +879,7 @@ const EXP_CATEGORY_RULES=[
     {category:'금융/이체',keywords:['카드대금','현대카드','삼성카드','신한카드','KB카드','롯데카드','우리카드','비씨카드','하나카드','체크카드','자동이체','대출이자','원리금','적금','예금','보험료','국민연금','건강보험','고용보험','산재보험'],exclude:true},
     {category:'리스료',keywords:['캐피탈','리스','렌탈','오릭스','메리츠','JB우리','한국캐피탈','아주캐피탈']},
     {category:'공과금',keywords:['에너지','전력','한전','수도','도시가스','쉴더스','세금','국세','지방세','관리비','통신비','KT','SKT','LG유플','인터넷']},
-    {category:'복리후생비',keywords:['배달의민족','요기요','쿠팡이츠','식당','컬리','편의점','CU','GS25','세븐일레','이마트24','카페','스타벅스','투썸','이디야','빽다방','메가커피','아웃백','빕스','피자','치킨','맥도날드','버거킹','서브웨이','김밥','분식','한솥']},
+    {category:'복리후생비',keywords:['배달의민족','우아한형제들','요기요','쿠팡이츠','식당','컬리','편의점','CU','씨유','GS25','지에스','세븐일레','이마트24','카페','커피','스타벅스','투썸','이디야','빽다방','메가커피','컴포즈','더벤티','할리스','엔제리너스','아웃백','빕스','피자','치킨','맥도날드','버거킹','서브웨이','김밥','분식','한솥','본죽','죽','베이커리','빵','떡','족발','보쌈','삼겹','고기','갈비','냉면','국밥','설렁탕','찌개','백반','도시락','밥','반찬','다래연','식자재','마라','양꼬치','초밥','회','돈까스','우동','라멘','파스타','샐러드','샌드위치','토스트']},
     {category:'소모품비',keywords:['네이버','쿠팡','지마켓','올리브영','옥션','11번가','위메프','티몬','다이소','오피스','문구','약국','드럭','마트','홈플러스','롯데마트','코스트코','트레이더스']},
     {category:'차량유지비',keywords:['주유','SK에너지','GS칼텍스','현대오일','S-OIL','주차','하이패스','톨게이트','세차','타이어']},
     {category:'접대비',keywords:['골프','라운지','호텔','리조트']},
@@ -1123,6 +1123,26 @@ async function handleExpenseFiles(files){
     const excludeCount=deduped.filter(d=>d.exclude).length;
     if(excludeCount>0) statusEl.innerHTML+=`<br>🏦 카드대금/이체 ${excludeCount}건 자동 제외 표시`;
     
+    // ── DB 이력 기반 자동 재분류 ──
+    // 기존 유동비에서 가맹점→카테고리 매핑 학습
+    const learnedMap={};
+    variableExpenses.forEach(e=>{
+        if(e.merchant&&e.category) learnedMap[e.merchant]=e.category;
+        if(e.name&&e.category) learnedMap[e.name]=e.category;
+    });
+    // 세션 내 수동 오버라이드 우선
+    Object.assign(learnedMap,expMerchantOverrides);
+    
+    let reClassified=0;
+    deduped.forEach(d=>{
+        if(learnedMap[d.name]&&learnedMap[d.name]!==d.category){
+            d.category=learnedMap[d.name];
+            d.exclude=d.category==='금융/이체';
+            reClassified++;
+        }
+    });
+    if(reClassified>0) statusEl.innerHTML+=`<br>📚 이전 분류 이력으로 ${reClassified}건 자동 재분류`;
+    
     expUploadParsed=deduped;
     renderExpUploadPreview();
 }
@@ -1187,6 +1207,9 @@ function renderExpUploadPreview(){
     
     document.getElementById('expPreviewCount').textContent=`총 ${expUploadParsed.length}건 / 표시 ${items.length}건`;
     
+    // ── 가맹점별 그룹 분류 패널 ──
+    renderMerchantGroupPanel();
+    
     tbody.innerHTML=items.map((d,i)=>{
         const realIdx=expUploadParsed.indexOf(d);
         const rowStyle=d.exclude?'opacity:.5;text-decoration:line-through;':'';
@@ -1196,7 +1219,7 @@ function renderExpUploadPreview(){
             <td><span style="font-size:.75rem;background:#f5f5f5;padding:2px 6px;border-radius:3px">${d.source}</span></td>
             <td>${d.date}</td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name}">${d.name}</td>
-            <td><select onchange="expUploadParsed[${realIdx}].category=this.value;expUploadParsed[${realIdx}].exclude=this.value==='금융/이체';renderExpUploadPreview()" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px">
+            <td><select onchange="applyMerchantCategory('${d.name.replace(/'/g,"\\'")}',this.value)" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px">
                 ${['소모품비','복리후생비','공과금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${d.category===c?' selected':''}>${c}</option>`).join('')}
             </select> ${catBadge}</td>
             <td class="text-right" style="font-weight:600">${formatCurrency(d.amount)}</td>
@@ -1207,6 +1230,71 @@ function renderExpUploadPreview(){
     }).join('');
     
     renderExpUploadSummary();
+}
+
+// 같은 가맹점명 전체를 한번에 카테고리 변경
+function applyMerchantCategory(merchantName,newCategory){
+    const isExclude=newCategory==='금융/이체';
+    expUploadParsed.forEach(d=>{
+        if(d.name===merchantName){
+            d.category=newCategory;
+            d.exclude=isExclude;
+        }
+    });
+    // 학습 기억에 저장
+    expMerchantOverrides[merchantName]=newCategory;
+    renderExpUploadPreview();
+}
+
+// 가맹점별 그룹 분류 패널
+let expMerchantOverrides={}; // {가맹점명: 카테고리} 세션 내 기억
+
+function renderMerchantGroupPanel(){
+    let panel=document.getElementById('expMerchantPanel');
+    if(!panel){
+        panel=document.createElement('div');
+        panel.id='expMerchantPanel';
+        const previewEl=document.getElementById('expUploadPreview');
+        const tableEl=previewEl.querySelector('.table-container');
+        previewEl.insertBefore(panel,tableEl);
+    }
+    
+    // 가맹점별 그룹 집계 (제외 건 포함)
+    const groups={};
+    expUploadParsed.forEach(d=>{
+        if(!groups[d.name]) groups[d.name]={count:0,total:0,category:d.category,exclude:d.exclude};
+        groups[d.name].count++;
+        groups[d.name].total+=d.amount;
+    });
+    
+    const entries=Object.entries(groups).sort((a,b)=>b[1].count-a[1].count);
+    // 2건 이상 or 기타인 가맹점만 표시
+    const showEntries=entries.filter(([name,g])=>g.count>=2||g.category==='기타');
+    
+    if(!showEntries.length){panel.innerHTML='';return;}
+    
+    panel.innerHTML=`
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+                <strong style="font-size:.9rem">🏷 가맹점별 일괄 분류</strong>
+                <span style="font-size:.75rem;color:var(--text-secondary)">하나를 바꾸면 같은 가맹점 전체가 변경됩니다</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+                ${showEntries.map(([name,g])=>{
+                    const badge=g.exclude?'':getCategoryBadge(g.category);
+                    const escapedName=name.replace(/'/g,"\\'");
+                    return `<div style="display:flex;align-items:center;gap:4px;background:#fafafa;padding:4px 8px;border-radius:6px;border:1px solid #eee;font-size:.82rem">
+                        <span style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</span>
+                        <span style="color:#999;font-size:.7rem">${g.count}건</span>
+                        <select onchange="applyMerchantCategory('${escapedName}',this.value)" style="font-size:.78rem;padding:1px 3px;border:1px solid #ddd;border-radius:3px">
+                            ${['소모품비','복리후생비','공과금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${g.category===c?' selected':''}>${c}</option>`).join('')}
+                        </select>
+                        ${badge}
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>
+    `;
 }
 
 function renderExpUploadSummary(){
