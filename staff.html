@@ -361,6 +361,7 @@
                     <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
                         📦 재고 실사
                         <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
+                        <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openWishlistModal()">🛍️ 비품 요청</button>
                     </div>
                     <div id="invLowStockAlert" style="display:none;background:rgba(168,90,90,.08);border:1px solid rgba(168,90,90,.2);padding:.6rem .8rem;border-radius:6px;margin-bottom:.5rem;font-size:.85rem;color:var(--red)"></div>
                     <div class="inv-cat-filters" id="invCatButtons"></div>
@@ -568,6 +569,10 @@
                     <label class="form-label">유통기한</label>
                     <input type="date" class="form-input" id="newItemExpiry">
                 </div>
+                <div class="form-group">
+                    <label class="form-label">🔗 구매 링크</label>
+                    <input type="url" class="form-input" id="newItemPurchaseLink" placeholder="https://쿠팡,네이버 등 구매 URL">
+                </div>
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-top:.5rem">
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보</div>
                     <div style="display:flex;gap:.5rem">
@@ -595,6 +600,112 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('newItemModal')" style="flex:1">취소</button>
                 <button class="btn btn-primary" onclick="saveNewItem()" style="flex:2">등록</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 재고 품목 수정 모달 -->
+    <div class="modal" id="editItemModal">
+        <div class="modal-content" style="max-width:440px">
+            <div class="modal-header">
+                <div class="modal-title">✏️ 품목 수정</div>
+                <button class="modal-close" onclick="closeModal('editItemModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editItemId">
+                <div class="form-group">
+                    <label class="form-label">품목명</label>
+                    <input type="text" class="form-input" id="editItemName" disabled style="background:#f5f5f5">
+                </div>
+                <div style="display:flex;gap:.5rem">
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">카테고리</label>
+                        <select class="form-select" id="editItemCategory">
+                            <option value="nursing">간호</option>
+                            <option value="skin">피부</option>
+                            <option value="desk">데스크</option>
+                            <option value="common">공통</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">현재고</label>
+                        <input type="number" class="form-input" id="editItemStock" min="0" step="0.01">
+                    </div>
+                </div>
+                <div style="display:flex;gap:.5rem">
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">안전재고</label>
+                        <input type="number" class="form-input" id="editItemSafety" min="0" step="1">
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">유통기한</label>
+                        <input type="date" class="form-input" id="editItemExpiry">
+                    </div>
+                </div>
+                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-top:.5rem">
+                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보 수정</div>
+                    <div style="display:flex;gap:.5rem">
+                        <div class="form-group" style="flex:1">
+                            <label class="form-label" style="font-size:.75rem">구매 총액 (원)</label>
+                            <input type="number" class="form-input" id="editItemTotalPrice" min="0" oninput="calcEditItemUnit()">
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label class="form-label" style="font-size:.75rem">박스 수</label>
+                            <input type="number" class="form-input" id="editItemBoxes" min="1" value="1" oninput="calcEditItemUnit()">
+                        </div>
+                        <div class="form-group" style="flex:1">
+                            <label class="form-label" style="font-size:.75rem">박스당 낱개</label>
+                            <input type="number" class="form-input" id="editItemPerBox" min="1" value="1" oninput="calcEditItemUnit()">
+                        </div>
+                    </div>
+                    <div id="editItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:4px;font-size:.85rem;font-weight:600;color:var(--primary)">낱개당 단가: -</div>
+                </div>
+                <div class="form-group" style="margin-top:.5rem">
+                    <label class="form-label">🔗 구매 링크</label>
+                    <input type="url" class="form-input" id="editItemPurchaseLink" placeholder="https://쿠팡,네이버 등">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('editItemModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" onclick="saveEditItem()" style="flex:2">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 비품 구매 요청 모달 -->
+    <div class="modal" id="wishlistModal">
+        <div class="modal-content" style="max-width:440px">
+            <div class="modal-header">
+                <div class="modal-title">🛍️ 비품 구매 요청</div>
+                <button class="modal-close" onclick="closeModal('wishlistModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">품목명 *</label>
+                    <input type="text" class="form-input" id="wishItemName" placeholder="예: 사무용 의자, 온풍기">
+                </div>
+                <div style="display:flex;gap:.5rem">
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">수량</label>
+                        <input type="number" class="form-input" id="wishItemQty" min="1" value="1">
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">예상 금액 (원)</label>
+                        <input type="number" class="form-input" id="wishItemPrice" min="0" placeholder="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">🔗 구매 링크</label>
+                    <input type="url" class="form-input" id="wishItemLink" placeholder="https://쿠팡,네이버 상품 URL">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">요청 사유</label>
+                    <textarea class="form-textarea" id="wishItemReason" rows="2" placeholder="필요한 이유를 간단히 적어주세요"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('wishlistModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" onclick="submitWishlistItem()" style="flex:2">요청 제출</button>
             </div>
         </div>
     </div>
@@ -1052,6 +1163,8 @@
                 }
                 mealRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('식사 로드 오류:',e);mealRecords=[];}
+        }
+        }
         }
         
         async function loadIncentiveItems(){
@@ -1939,7 +2052,8 @@
                 const isLow=item.safetyStock&&item.currentStock<item.safetyStock;
                 const sysStock=item.currentStock||0;
                 const buyLink=item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" style="display:inline-block;background:#f0f0f0;color:#333;font-size:.65rem;padding:2px 6px;border-radius:3px;text-decoration:none;margin-left:4px;vertical-align:middle">🛒</a>`:'';
-                return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}">
+                const lowBg=isLow?'background:rgba(255,152,0,0.08);border-left:3px solid #ff9800':'';
+                return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
                     <div class="inv-item-info">
                         <div class="inv-item-name">${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':''}</div>
                         <div class="inv-item-meta">
@@ -1947,6 +2061,7 @@
                             <span>시스템: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
                             ${isLow?`<span style="color:var(--red)">안전재고: ${item.safetyStock}</span>`:''}
                             ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
+                            <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">✏️ 수정</button>
                         </div>
                     </div>
                     <input type="number" class="inv-stock-input" 
@@ -2063,7 +2178,7 @@
 
         // ===== 신규 품목 등록 =====
         function openNewItemModal(){
-            ['newItemName','newItemTotalPrice','newItemExpiry'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+            ['newItemName','newItemTotalPrice','newItemExpiry','newItemPurchaseLink'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
             document.getElementById('newItemType').value='disposable';
             document.getElementById('newItemCategory').value='common';
             document.getElementById('newItemStock').value='';
@@ -2108,6 +2223,7 @@
                 purchaseQty:totalQty,
                 unitPrice:unitPrice,
                 expiryDate:document.getElementById('newItemExpiry').value||null,
+                purchaseLink:document.getElementById('newItemPurchaseLink')?.value?.trim()||'',
                 createdAt:new Date().toISOString(),
                 updatedAt:new Date().toISOString(),
                 createdBy:currentUser?.name||'staff'
@@ -2121,6 +2237,101 @@
                 renderInvAuditList();
                 renderLowStockAlert();
             }catch(e){alert('등록 실패: '+e.message);}
+        }
+
+        // ===== 품목 수정 기능 =====
+        function openEditItemModal(itemId){
+            const item=invItems.find(i=>i.id===itemId);
+            if(!item){alert('품목을 찾을 수 없습니다.');return;}
+            document.getElementById('editItemId').value=itemId;
+            document.getElementById('editItemName').value=item.name||'';
+            document.getElementById('editItemCategory').value=item.category||'common';
+            document.getElementById('editItemStock').value=item.currentStock||0;
+            document.getElementById('editItemSafety').value=item.safetyStock||0;
+            document.getElementById('editItemExpiry').value=item.expiryDate||'';
+            document.getElementById('editItemPurchaseLink').value=item.purchaseLink||'';
+            // 구매 정보 역산: purchasePrice=총액, purchaseQty=총낱개수
+            const totalPrice=item.purchasePrice||0;
+            const totalQty=item.purchaseQty||1;
+            // 박스수는 1로 기본, 박스당 낱개=totalQty
+            document.getElementById('editItemTotalPrice').value=totalPrice||'';
+            document.getElementById('editItemBoxes').value=1;
+            document.getElementById('editItemPerBox').value=totalQty||1;
+            calcEditItemUnit();
+            openModal('editItemModal');
+        }
+
+        function calcEditItemUnit(){
+            const total=parseFloat(document.getElementById('editItemTotalPrice').value)||0;
+            const boxes=parseFloat(document.getElementById('editItemBoxes').value)||1;
+            const perBox=parseFloat(document.getElementById('editItemPerBox').value)||1;
+            const el=document.getElementById('editItemUnitCalc');
+            if(total>0&&boxes>0&&perBox>0){
+                const unitPrice=Math.round(total/(boxes*perBox));
+                el.textContent='낱개당 단가: '+unitPrice.toLocaleString()+'원';
+                el.style.color='var(--green)';
+            }else{
+                el.textContent='낱개당 단가: -';
+                el.style.color='var(--primary)';
+            }
+        }
+
+        async function saveEditItem(){
+            const id=document.getElementById('editItemId').value;
+            if(!id)return;
+            const totalPrice=parseFloat(document.getElementById('editItemTotalPrice').value)||0;
+            const boxes=parseFloat(document.getElementById('editItemBoxes').value)||1;
+            const perBox=parseFloat(document.getElementById('editItemPerBox').value)||1;
+            const totalQty=boxes*perBox;
+            const data={
+                category:document.getElementById('editItemCategory').value,
+                currentStock:parseFloat(document.getElementById('editItemStock').value)||0,
+                safetyStock:parseFloat(document.getElementById('editItemSafety').value)||0,
+                expiryDate:document.getElementById('editItemExpiry').value||null,
+                purchasePrice:totalPrice,
+                purchaseQty:totalQty,
+                unitPrice:totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0,
+                purchaseLink:document.getElementById('editItemPurchaseLink').value.trim(),
+                updatedAt:new Date().toISOString(),
+                updatedBy:currentUser?.name||'staff'
+            };
+            try{
+                await db.collection('inventory').doc(id).update(data);
+                closeModal('editItemModal');
+                alert('✅ 품목 정보가 수정되었습니다.');
+                await loadInventoryForStaff();
+                renderInvCatButtons();
+                renderInvAuditList();
+                renderLowStockAlert();
+            }catch(e){alert('수정 실패: '+e.message);}
+        }
+
+        // ===== 비품 구매 요청(Wishlist) =====
+        function openWishlistModal(){
+            ['wishItemName','wishItemLink','wishItemReason'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+            document.getElementById('wishItemQty').value='1';
+            document.getElementById('wishItemPrice').value='';
+            openModal('wishlistModal');
+        }
+
+        async function submitWishlistItem(){
+            const name=document.getElementById('wishItemName').value.trim();
+            if(!name){alert('품목명을 입력하세요.');return;}
+            const data={
+                name:name,
+                qty:parseInt(document.getElementById('wishItemQty').value)||1,
+                estimatedPrice:parseFloat(document.getElementById('wishItemPrice').value)||0,
+                purchaseLink:document.getElementById('wishItemLink').value.trim(),
+                reason:document.getElementById('wishItemReason').value.trim(),
+                requestedBy:currentUser?.name||'직원',
+                status:'pending',
+                createdAt:new Date().toISOString()
+            };
+            try{
+                await db.collection('purchaseRequests').add(data);
+                closeModal('wishlistModal');
+                alert('✅ 구매 요청이 제출되었습니다.\n관리자 승인 후 구매가 진행됩니다.');
+            }catch(e){alert('요청 실패: '+e.message);}
         }
 
         // Tab Navigation

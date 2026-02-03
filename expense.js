@@ -60,7 +60,7 @@ function renderExpenses(){
             if(e.leaseCompany)leaseInfo.push(e.leaseCompany);
             if(leaseInfo.length>0)noteDisplay=leaseInfo.join(', ')+(e.note?' | '+e.note:'');
         }
-        return `<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td><span class="badge badge-blue">${e.category}</span></td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.transferBank&&e.transferAccount?`<span style="font-size:12px">${e.transferBank} ${e.transferAccount}${e.transferHolder?' ('+e.transferHolder+')':''}</span>`:'<span style="color:#aaa;font-size:12px">미등록</span>'}</td><td>${noteDisplay}</td><td>${e.transferBank&&e.transferAccount?(e.lastTransferYM===getYM()?`<span style="color:#2e7d32;font-size:12px;font-weight:600;cursor:pointer" onclick="doTransfer('${e.id}')" title="클릭하여 재이체">✅ ${e.lastTransferDate?e.lastTransferDate.substring(5):''}</span>`:`<button class="btn btn-sm" style="background:#2e7d32;color:#fff;white-space:nowrap" onclick="doTransfer('${e.id}')">💸 이체</button>`):'<span style="color:#ccc">-</span>'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`;
+        return `<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td>${getCategoryBadge(e.category)}</td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.transferBank&&e.transferAccount?`<span style="font-size:12px">${e.transferBank} ${e.transferAccount}${e.transferHolder?' ('+e.transferHolder+')':''}</span>`:'<span style="color:#aaa;font-size:12px">미등록</span>'}</td><td>${noteDisplay}</td><td>${e.transferBank&&e.transferAccount?(e.lastTransferYM===getYM()?`<span style="color:#2e7d32;font-size:12px;font-weight:600;cursor:pointer" onclick="doTransfer('${e.id}')" title="클릭하여 재이체">✅ ${e.lastTransferDate?e.lastTransferDate.substring(5):''}</span>`:`<button class="btn btn-sm" style="background:#2e7d32;color:#fff;white-space:nowrap" onclick="doTransfer('${e.id}')">💸 이체</button>`):'<span style="color:#ccc">-</span>'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`;
     }).join('')||(searchText||filterCategory?`<tr><td colspan="8" class="text-center">검색 결과 없음 (전체 ${fixedExpenses.length}개 중)</td></tr>`:'<tr><td colspan="8" class="text-center">등록된 고정비 없음</td></tr>');
 
     // 유동비
@@ -180,7 +180,7 @@ function renderExpenseAnalysis(){
     
     const renderCategoryList=(data,total)=>{
         const sorted=Object.entries(data).sort((a,b)=>b[1]-a[1]);
-        return sorted.map(([cat,amt])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee"><span>${cat}</span><span><strong>${formatCurrency(amt)}</strong> <span style="color:#999">(${((amt/total)*100).toFixed(1)}%)</span></span></div>`).join('')||'<div style="color:#999;padding:8px 0">데이터 없음</div>';
+        return sorted.map(([cat,amt])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee"><span>${getCategoryBadge(cat)}</span><span><strong>${formatCurrency(amt)}</strong> <span style="color:#999">(${((amt/total)*100).toFixed(1)}%)</span></span></div>`).join('')||'<div style="color:#999;padding:8px 0">데이터 없음</div>';
     };
     document.getElementById('fixedByCategory').innerHTML=renderCategoryList(fixedByCategory,fixedTotal||1);
     document.getElementById('variableByCategory').innerHTML=renderCategoryList(variableByCategory,variableTotal||1);
@@ -861,14 +861,39 @@ let expUploadParsed=[];
 // 카테고리별 배지 색상
 function getCategoryBadge(cat){
     const colors={
+        // 유동비 카테고리
+        '의료소모품':['#0277bd','#e1f5fe'],
+        '미용소모품':['#c2185b','#fce4ec'],
         '소모품비':['#1565c0','#e3f2fd'],
+        '사무용품':['#37474f','#eceff1'],
         '복리후생비':['#2e7d32','#e8f5e9'],
-        '공과금':['#e65100','#fff3e0'],
-        '리스료':['#6a1b9a','#f3e5f5'],
-        '차량유지비':['#00838f','#e0f7fa'],
         '접대비':['#ad1457','#fce4ec'],
-        '금융/이체':['#757575','#f5f5f5'],
+        '차량유지비':['#00838f','#e0f7fa'],
+        '교통비':['#1a237e','#e8eaf6'],
+        '시설보수':['#4e342e','#efebe9'],
+        '장비수리':['#455a64','#eceff1'],
+        '인테리어':['#00695c','#e0f2f1'],
+        '교육비':['#004d40','#e0f2f1'],
+        '공과금':['#e65100','#fff3e0'],
         '세금':['#b71c1c','#ffebee'],
+        '리스료':['#6a1b9a','#f3e5f5'],
+        '금융/이체':['#757575','#f5f5f5'],
+        // 고정비 카테고리
+        '임대료':['#bf360c','#fbe9e7'],
+        '장비리스':['#6a1b9a','#f3e5f5'],
+        '대출이자':['#880e4f','#fce4ec'],
+        '통신_인터넷':['#0d47a1','#e3f2fd'],
+        '통신_전화':['#0d47a1','#e3f2fd'],
+        '세무노무':['#4a148c','#f3e5f5'],
+        '보험료':['#1b5e20','#e8f5e9'],
+        '청소비':['#33691e','#f1f8e9'],
+        '수탁_폐기물':['#827717','#f9fbe7'],
+        '수탁_검사':['#827717','#f9fbe7'],
+        '정수기':['#006064','#e0f7fa'],
+        '보안_캡스':['#263238','#eceff1'],
+        '복리후생':['#2e7d32','#e8f5e9'],
+        '마케팅':['#e65100','#fff3e0'],
+        '인건비':['#d32f2f','#ffebee'],
         '기타':['#555','#f0f0f0']
     };
     const [fg,bg]=colors[cat]||colors['기타'];
@@ -882,9 +907,13 @@ const EXP_CATEGORY_RULES=[
     {category:'공과금',keywords:['에너지','전력','한전','수도','도시가스','쉴더스','관리비','통신비','KT','SKT','LG유플','인터넷']},
     {category:'세금',keywords:['세금','국세','지방세','원천세','부가세','종합소득세','종소세','주민세','재산세','자동차세','취득세','등록세','면허세','환경개선부담금']},
     {category:'복리후생비',keywords:['배달의민족','우아한형제들','요기요','쿠팡이츠','식당','컬리','편의점','CU','씨유','GS25','지에스','세븐일레','이마트24','카페','커피','스타벅스','투썸','이디야','빽다방','메가커피','컴포즈','더벤티','할리스','엔제리너스','아웃백','빕스','피자','치킨','맥도날드','버거킹','서브웨이','김밥','분식','한솥','본죽','죽','베이커리','빵','떡','족발','보쌈','삼겹','고기','갈비','냉면','국밥','설렁탕','찌개','백반','도시락','밥','반찬','다래연','식자재','마라','양꼬치','초밥','회','돈까스','우동','라멘','파스타','샐러드','샌드위치','토스트']},
-    {category:'소모품비',keywords:['네이버','쿠팡','지마켓','올리브영','옥션','11번가','위메프','티몬','다이소','오피스','문구','약국','드럭','마트','홈플러스','롯데마트','코스트코','트레이더스']},
+    {category:'의료소모품',keywords:['메디','주사','거즈','밴드','소독','글러브','수액','약품','주사기','의료','진료','시술','필러','보톡스','레이저','피부과','약국','드럭']},
+    {category:'미용소모품',keywords:['올리브영','화장','뷰티','스킨','마스크팩','미용']},
+    {category:'소모품비',keywords:['네이버','쿠팡','지마켓','옥션','11번가','위메프','티몬','다이소','오피스','문구','마트','홈플러스','롯데마트','코스트코','트레이더스']},
     {category:'차량유지비',keywords:['주유','SK에너지','GS칼텍스','현대오일','S-OIL','주차','하이패스','톨게이트','세차','타이어']},
     {category:'접대비',keywords:['골프','라운지','호텔','리조트']},
+    {category:'교통비',keywords:['택시','버스','지하철','KTX','SRT','항공','티머니']},
+    {category:'교육비',keywords:['학회','세미나','컨퍼런스','교육','수강','연수']},
 ];
 
 function classifyExpense(name){
@@ -1222,7 +1251,7 @@ function renderExpUploadPreview(){
             <td>${d.date}</td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name}">${d.name}</td>
             <td><select onchange="applyMerchantCategory('${d.name.replace(/'/g,"\\'")}',this.value)" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px">
-                ${['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${d.category===c?' selected':''}>${c}</option>`).join('')}
+                ${(typeof variableCategories!=='undefined'?variableCategories:['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>({value:c,label:c}))).map(c=>{const v=c.value||c;const l=c.label||c;return `<option value="${v}"${d.category===v?' selected':''}>${l}</option>`;}).join('')}
             </select> ${catBadge}</td>
             <td class="text-right" style="font-weight:600">${formatCurrency(d.amount)}</td>
             <td style="font-size:.8rem;color:#777;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noteText}">${d.note||'-'}</td>
@@ -1289,7 +1318,7 @@ function renderMerchantGroupPanel(){
                         <span style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</span>
                         <span style="color:#999;font-size:.7rem">${g.count}건</span>
                         <select onchange="applyMerchantCategory('${escapedName}',this.value)" style="font-size:.78rem;padding:1px 3px;border:1px solid #ddd;border-radius:3px">
-                            ${['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>`<option value="${c}"${g.category===c?' selected':''}>${c}</option>`).join('')}
+                            ${(typeof variableCategories!=='undefined'?variableCategories:['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>({value:c,label:c}))).map(c=>{const v=c.value||c;const l=c.label||c;return `<option value="${v}"${g.category===v?' selected':''}>${l}</option>`;}).join('')}
                         </select>
                         ${badge}
                     </div>`;

@@ -313,6 +313,7 @@
                     <div class="sub-tab active" data-sub="inv-list">소모품 목록</div>
                     <div class="sub-tab" data-sub="inv-recipe">레시피 (시술 원가)</div>
                     <div class="sub-tab" data-sub="inv-audit">재고 실사</div>
+                    <div class="sub-tab" data-sub="inv-wishlist">🛍️ 구매 요청 <span id="wishlistBadge" style="display:none;background:var(--red);color:#fff;font-size:.65rem;padding:1px 5px;border-radius:8px;margin-left:3px;vertical-align:middle">0</span></div>
                 </div>
                 <div class="sub-content active" id="sub-inv-list">
                     <div class="cards-grid" id="inventoryCards"></div>
@@ -370,6 +371,13 @@
                         </div>
                     </div>
                     <div id="auditReport"><div style="text-align:center;color:var(--text-secondary);padding:2rem">실사 데이터 로딩중...</div></div>
+                </div>
+                <div class="sub-content" id="sub-inv-wishlist">
+                    <div class="section-header">
+                        <div class="section-title">🛍️ 비품 구매 요청</div>
+                        <button class="btn btn-outline" onclick="loadPurchaseRequests().then(()=>renderPurchaseRequests())">🔄 새로고침</button>
+                    </div>
+                    <div id="purchaseRequestList"><div style="text-align:center;color:var(--text-secondary);padding:2rem">데이터 로딩중...</div></div>
                 </div>
             </div>
 
@@ -620,9 +628,10 @@
                     <div class="form-group"><label class="form-label">유통기한</label><input type="date" class="form-input" id="invExpiryDate"></div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">구매 가격 (원)</label><input type="number" class="form-input" id="invPurchasePrice" min="0"></div>
-                    <div class="form-group"><label class="form-label">구매 수량 (단위당)</label><input type="number" class="form-input" id="invPurchaseQty" step="0.01" min="0.01" value="1"></div>
+                    <div class="form-group"><label class="form-label">구매 가격 (원)</label><input type="number" class="form-input" id="invPurchasePrice" min="0" oninput="calcAdminInvUnit()"></div>
+                    <div class="form-group"><label class="form-label">구매 수량 (총 낱개수)</label><input type="number" class="form-input" id="invPurchaseQty" step="0.01" min="0.01" value="1" oninput="calcAdminInvUnit()"></div>
                 </div>
+                <div id="adminInvUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:.85rem;font-weight:600;color:var(--text-secondary);margin-bottom:.75rem">낱개당 단가: -</div>
                 <div class="form-group"><label class="form-label">구매 단위 (예: 1Box=100개, 1Bottle=500ml)</label><input type="text" class="form-input" id="invPurchaseUnit" placeholder="예: 1Box, 1Bottle"></div>
                 <div class="form-group"><label class="form-label">구매 링크 (쿠팡/네이버 URL)</label><input type="url" class="form-input" id="invPurchaseLink" placeholder="https://..."></div>
                 <div class="form-group"><label class="form-label">비고</label><textarea class="form-textarea" id="invNote" rows="2"></textarea></div>

@@ -205,6 +205,7 @@ async function loadAllData(){
             loadExpenses(),loadAttendance(),loadIncentiveItems(),
             loadIncentiveRecords(),loadLeaveRequests(),loadLunchOT(),
             typeof loadAuditRecords==='function'?loadAuditRecords():Promise.resolve(),
+            typeof loadPurchaseRequests==='function'?loadPurchaseRequests():Promise.resolve(),
             loadMealAllRecords()
         ]);
         
@@ -278,6 +279,7 @@ function renderAll(){
     if(typeof renderInventory==='function')renderInventory();
     if(typeof renderRecipes==='function')renderRecipes();
     if(typeof renderAuditReport==='function')renderAuditReport();
+    if(typeof renderPurchaseRequests==='function')renderPurchaseRequests();
     // 손익
     if(typeof renderPLStatement==='function')renderPLStatement();
 }

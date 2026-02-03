@@ -30,17 +30,18 @@ function renderInventory(){
             const typeClass=INV_TYPE_CLASS[item.type]||'';
             const stockLow=item.safetyStock&&item.currentStock<item.safetyStock;
             const unitCost=item.purchasePrice&&item.purchaseQty?(item.purchasePrice/item.purchaseQty):0;
-            return `<tr class="${stockLow?'inv-stock-low':''}">
-                <td><strong>${item.name||'-'}</strong></td>
+            const lowStyle=stockLow?'background:rgba(255,152,0,0.08)':'';
+            return `<tr style="${lowStyle}">
+                <td><strong>${item.name||'-'}</strong>${stockLow?' <span style="display:inline-block;background:#ff9800;color:#fff;font-size:.6rem;padding:1px 4px;border-radius:3px;vertical-align:middle">발주</span>':''}</td>
                 <td><span class="inv-type-badge ${catClass}">${catLabel}</span></td>
                 <td><span class="inv-type-badge ${typeClass}">${typeLabel}</span></td>
-                <td class="text-right">${formatNumber(item.currentStock||0)} ${item.unit||'개'}</td>
+                <td class="text-right" style="${stockLow?'color:var(--red);font-weight:700':''}">${formatNumber(item.currentStock||0)} ${item.unit||'개'}</td>
                 <td class="text-right">${formatNumber(item.safetyStock||0)}</td>
                 <td class="text-right">${formatCurrency(item.purchasePrice||0)}</td>
                 <td class="text-right">${unitCost?formatCurrency(unitCost):'-'}</td>
                 <td class="${isExpiryWarning(item.expiryDate)?'inv-expiry-warn':''}">${item.expiryDate||'-'}</td>
                 <td><div class="btn-group">
-                    ${item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" class="btn btn-sm btn-outline" style="text-decoration:none">🛒</a>`:''}
+                    ${item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" class="btn btn-sm" style="text-decoration:none;background:#ff9800;color:#fff;white-space:nowrap">🛒 구매하기</a>`:''}
                     <button class="btn btn-sm btn-outline" onclick="editInventoryItem('${item.id}')">수정</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteInventoryItem('${item.id}')">삭제</button>
                 </div></td>
@@ -223,3 +224,96 @@ async function applyAuditToSystem(){
     try{await batch.commit();alert(cnt+'개 품목 반영 완료');await loadInventory();renderInventory();renderAuditReport();}catch(e){alert('반영 실패: '+e.message);}
 }
 function getLowStockCount(){return inventoryItems.filter(i=>i.safetyStock&&i.currentStock<i.safetyStock).length;}
+
+// ===== 비품 구매 요청(Wishlist) 관리 - 관리자 =====
+let purchaseRequests=[];
+async function loadPurchaseRequests(){
+    try{
+        const s=await db.collection('purchaseRequests').orderBy('createdAt','desc').limit(100).get();
+        purchaseRequests=s.docs.map(d=>({id:d.id,...d.data()}));
+    }catch(e){console.error('Load purchaseRequests:',e);}
+}
+
+function renderPurchaseRequests(){
+    const container=document.getElementById('purchaseRequestList');
+    if(!container)return;
+    const pending=purchaseRequests.filter(r=>r.status==='pending');
+    const processed=purchaseRequests.filter(r=>r.status!=='pending');
+    
+    let html='';
+    if(pending.length){
+        html+=`<div style="margin-bottom:1rem"><strong>대기 중 (${pending.length}건)</strong></div>`;
+        html+=pending.map(r=>{
+            const linkBtn=r.purchaseLink?`<a href="${r.purchaseLink}" target="_blank" class="btn btn-sm" style="text-decoration:none;background:#ff9800;color:#fff;white-space:nowrap">🛒 구매하기</a>`:'';
+            return `<div style="display:flex;align-items:center;gap:8px;padding:10px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;margin-bottom:8px">
+                <div style="flex:1">
+                    <strong>${r.name}</strong> <span style="color:#999;font-size:.8rem">×${r.qty||1}</span>
+                    ${r.estimatedPrice?` <span style="font-size:.8rem;color:#e65100">${formatCurrency(r.estimatedPrice)}</span>`:''}
+                    <div style="font-size:.75rem;color:#666;margin-top:2px">${r.reason||''}</div>
+                    <div style="font-size:.7rem;color:#999;margin-top:2px">요청: ${r.requestedBy||'-'} · ${r.createdAt?new Date(r.createdAt).toLocaleDateString('ko'):'-'}</div>
+                </div>
+                ${linkBtn}
+                <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="updatePurchaseRequest('${r.id}','approved')">✅ 승인</button>
+                <button class="btn btn-sm btn-danger" onclick="updatePurchaseRequest('${r.id}','rejected')">❌</button>
+            </div>`;
+        }).join('');
+    }else{
+        html+='<div style="text-align:center;color:#999;padding:1rem;font-size:.9rem">대기 중인 구매 요청이 없습니다.</div>';
+    }
+    
+    if(processed.length){
+        html+=`<div style="margin-top:1.5rem;margin-bottom:.5rem"><strong>처리 완료</strong></div>`;
+        html+=processed.slice(0,10).map(r=>{
+            const statusBadge=r.status==='approved'
+                ?'<span style="font-size:.7rem;background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:3px">승인됨</span>'
+                :'<span style="font-size:.7rem;background:#ffebee;color:#c62828;padding:1px 6px;border-radius:3px">거절됨</span>';
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid #eee;font-size:.85rem">
+                <span style="flex:1">${r.name} ×${r.qty||1} ${statusBadge}</span>
+                <span style="color:#999;font-size:.75rem">${r.requestedBy||'-'}</span>
+                <button class="btn btn-sm btn-danger" style="font-size:.65rem;padding:1px 6px" onclick="deletePurchaseRequest('${r.id}')">삭제</button>
+            </div>`;
+        }).join('');
+    }
+    
+    container.innerHTML=html;
+    
+    // 대기 중 뱃지 업데이트
+    const badge=document.getElementById('wishlistBadge');
+    if(badge){
+        if(pending.length){badge.textContent=pending.length;badge.style.display='inline-block';}
+        else badge.style.display='none';
+    }
+}
+
+async function updatePurchaseRequest(id,status){
+    try{
+        await db.collection('purchaseRequests').doc(id).update({status:status,processedAt:new Date().toISOString()});
+        await loadPurchaseRequests();
+        renderPurchaseRequests();
+    }catch(e){alert('처리 실패: '+e.message);}
+}
+
+async function deletePurchaseRequest(id){
+    if(!confirm('삭제하시겠습니까?'))return;
+    try{
+        await db.collection('purchaseRequests').doc(id).delete();
+        await loadPurchaseRequests();
+        renderPurchaseRequests();
+    }catch(e){alert('삭제 실패: '+e.message);}
+}
+
+// ===== 관리자 재고 모달 단가 계산기 =====
+function calcAdminInvUnit(){
+    const price=parseFloat(document.getElementById('invPurchasePrice')?.value)||0;
+    const qty=parseFloat(document.getElementById('invPurchaseQty')?.value)||1;
+    const el=document.getElementById('adminInvUnitCalc');
+    if(!el)return;
+    if(price>0&&qty>0){
+        const unitPrice=Math.round(price/qty);
+        el.textContent='낱개당 단가: '+unitPrice.toLocaleString()+'원';
+        el.style.color='var(--accent-green)';
+    }else{
+        el.textContent='낱개당 단가: -';
+        el.style.color='var(--text-secondary)';
+    }
+}
