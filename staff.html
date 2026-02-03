@@ -376,8 +376,19 @@
                     <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()">실사 결과 제출</button>
                 </div>
             </div>
+
+            <!-- 비품 요청 탭 -->
+            <div class="tab-content" id="tab-wishlist">
+                <div class="card" style="margin-bottom:.5rem">
+                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                        🛍️ 비품 구매 요청
+                        <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openWishlistModal()">+ 새 요청</button>
+                    </div>
+                    <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem">1회성 비품(의자, 온풍기 등)을 요청하세요. 관리자 승인 후 구매가 진행됩니다.</div>
+                    <div id="staffWishlistHistory" style="font-size:.85rem;color:var(--text-muted);text-align:center;padding:1rem">요청 내역을 불러오는 중...</div>
+                </div>
+            </div>
         </div>
-        
         <nav class="bottom-nav">
             <div class="nav-item active" data-tab="attendance"><div class="nav-icon">📅</div>출퇴근</div>
             <div class="nav-item" data-tab="meal"><div class="nav-icon">🍽</div>식사</div>
@@ -385,6 +396,7 @@
             <div class="nav-item" data-tab="leave"><div class="nav-icon">🏖</div>연차</div>
             <div class="nav-item" data-tab="incentive"><div class="nav-icon">💎</div>인센티브</div>
             <div class="nav-item" data-tab="inventory"><div class="nav-icon">📦</div>재고</div>
+            <div class="nav-item" data-tab="wishlist"><div class="nav-icon">🛍️</div>비품요청</div>
             <div class="nav-item" data-tab="info"><div class="nav-icon">👤</div>내정보</div>
         </nav>
     </div>
@@ -797,11 +809,11 @@
         }
         
         // ===== Login System =====
-        // 비밀번호를 config 컬렉션에서 읽어옴 (하드코딩 방지)
-        let configPasswords={staff_pw:'lumi2026!'}; // fallback 기본값
+        let configPasswords={staff_pw:'lumi2026!'}; // 하드코딩 fallback (DB 실패 시)
         
         async function loadConfigPasswords(){
             try{
+                if(typeof db==='undefined')return;
                 const doc=await db.collection('config').doc('passwords').get();
                 if(doc.exists){
                     const data=doc.data();
@@ -811,49 +823,60 @@
         }
         
         async function attemptLogin(){
-            const inputName=document.getElementById('empIdInput').value.trim();
-            const pw=document.getElementById('empPwInput').value;
+            const inputName=(document.getElementById('empIdInput').value||'').trim();
+            const pw=document.getElementById('empPwInput').value||'';
             const errEl=document.getElementById('loginError');
             errEl.textContent='';
             
             if(!inputName||!pw){errEl.textContent='이름과 비밀번호를 입력해주세요.';return;}
             
-            // db 안전 체크
-            if(typeof db==='undefined'){errEl.textContent='시스템 초기화 중입니다. 잠시 후 다시 시도해주세요.';return;}
-            
-            // ─── 1) lumistaff 공용 계정: 최상단 분기 ───
-            if(inputName.toLowerCase()==='lumistaff'){
-                // DB에서 최신 비밀번호 로드
-                await loadConfigPasswords();
-                if(pw!==configPasswords.staff_pw){
-                    errEl.textContent='공용계정 비밀번호가 올바르지 않습니다.';
-                    return;
-                }
-                currentUser={id:'lumistaff',name:'공용계정',role:'shared'};
-                localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                showApp();
+            // ── db 초기화 대기 (최대 2초) ──
+            if(typeof db==='undefined'){
+                errEl.textContent='시스템 초기화 중... 잠시 후 다시 시도해주세요.';
                 return;
             }
             
-            // ─── 2) 개인 계정: DB에서 직원 조회 후 비밀번호 대조 ───
+            // ═══════════════════════════════════════
+            // 1) lumistaff 공용 계정 → DB 조회 없이 비밀번호만 대조
+            // ═══════════════════════════════════════
+            if(inputName.toLowerCase()==='lumistaff'){
+                try{ await loadConfigPasswords(); }catch(e){}
+                if(pw===configPasswords.staff_pw){
+                    currentUser={id:'lumistaff',name:'공용계정',role:'shared'};
+                    localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                    showApp();
+                }else{
+                    errEl.textContent='공용계정 비밀번호가 올바르지 않습니다.';
+                }
+                return;
+            }
+            
+            // ═══════════════════════════════════════
+            // 2) 개인 계정 → employees 컬렉션에서 조회
+            // ═══════════════════════════════════════
             try{
-                // 항상 최신 데이터로 조회 (배열 캐시 미사용)
                 let empDoc=null;
                 
-                // 2-1. 문서ID = 이름으로 직접 조회
-                let doc=await db.collection('employees').doc(inputName).get();
-                if(doc.exists) empDoc=doc;
+                // 2-1. 문서ID가 이름과 동일한 경우
+                try{
+                    const d=await db.collection('employees').doc(inputName).get();
+                    if(d.exists) empDoc=d;
+                }catch(e){}
                 
-                // 2-2. 소문자 변환 시도
+                // 2-2. 소문자로 재시도
                 if(!empDoc){
-                    doc=await db.collection('employees').doc(inputName.toLowerCase()).get();
-                    if(doc.exists) empDoc=doc;
+                    try{
+                        const d=await db.collection('employees').doc(inputName.toLowerCase()).get();
+                        if(d.exists) empDoc=d;
+                    }catch(e){}
                 }
                 
-                // 2-3. name 필드로 검색
+                // 2-3. name 필드 where 검색
                 if(!empDoc){
-                    const snap=await db.collection('employees').where('name','==',inputName).limit(1).get();
-                    if(!snap.empty) empDoc=snap.docs[0];
+                    try{
+                        const snap=await db.collection('employees').where('name','==',inputName).limit(1).get();
+                        if(!snap.empty) empDoc=snap.docs[0];
+                    }catch(e){}
                 }
                 
                 if(!empDoc){
@@ -863,7 +886,7 @@
                 
                 const emp={id:empDoc.id,...empDoc.data()};
                 
-                // 초기 비밀번호 처리 (마스터키)
+                // 마스터키: 초기 비밀번호 설정 유도
                 if(pw==='fnal12890-'&&(!emp.password||emp.password==='fnal12890-')){
                     currentUser=emp;
                     document.getElementById('pwSetup').classList.add('active');
@@ -880,7 +903,7 @@
                 showApp();
             }catch(e){
                 console.error('로그인 오류:',e);
-                errEl.textContent='로그인 오류: '+e.message;
+                errEl.textContent='로그인 중 오류가 발생했습니다. 다시 시도해주세요.';
             }
         }
         
@@ -911,44 +934,19 @@
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
 
             const shared=isSharedAccount();
-            const allTabs=['attendance','meal','ot','leave','incentive','inventory','info'];
-            // 공용: 재고+식사 / 개인: 출퇴근+OT+연차+인센티브+내정보
-            const sharedTabs=['inventory','meal'];
-            const personalTabs=['attendance','ot','leave','incentive','info'];
-
-            // 모든 탭 먼저 숨기기
-            allTabs.forEach(tab=>{
-                const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
-                const content=document.getElementById('tab-'+tab);
-                if(nav)nav.style.display='none';
-                if(content)content.style.display='none';
-            });
-
-            // 해당 계정 타입에 맞는 탭만 표시
-            const visibleTabs=shared?sharedTabs:personalTabs;
-            visibleTabs.forEach(tab=>{
-                const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
-                const content=document.getElementById('tab-'+tab);
-                if(nav)nav.style.display='';
-                if(content)content.style.display='';
-            });
-
-            // 인센티브 탭 조건부 (개인계정 + isIncentiveTarget인 경우만)
-            if(!shared&&!currentUser.isIncentiveTarget){
-                const incNav=document.querySelector('.nav-item[data-tab="incentive"]');
-                const incTab=document.getElementById('tab-incentive');
-                if(incNav)incNav.style.display='none';
-                if(incTab)incTab.style.display='none';
+            
+            // ═══ 계정별 탭 노출 ═══
+            if(shared){
+                displayTabs(['inventory','meal','wishlist']);
+            }else{
+                const personalTabs=['attendance','incentive','meal'];
+                // 인센티브 대상자만 인센티브 탭 표시
+                if(!currentUser.isIncentiveTarget){
+                    displayTabs(['attendance','meal']);
+                }else{
+                    displayTabs(personalTabs);
+                }
             }
-
-            // 활성 탭 설정
-            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-            const defaultTab=shared?'inventory':'attendance';
-            const defNav=document.querySelector(`.nav-item[data-tab="${defaultTab}"]`);
-            const defTab=document.getElementById('tab-'+defaultTab);
-            if(defNav)defNav.classList.add('active');
-            if(defTab)defTab.classList.add('active');
 
             if(shared) initInventoryTab();
             checkLocation();
@@ -957,15 +955,48 @@
             startAutoLogoutTimer();
         }
         
+        // ═══ 탭 표시 유틸리티 ═══
+        function displayTabs(visibleList){
+            const allTabs=['attendance','meal','ot','leave','incentive','inventory','info','wishlist'];
+            // 1) 모든 탭 숨기기
+            allTabs.forEach(tab=>{
+                const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
+                const content=document.getElementById('tab-'+tab);
+                if(nav)nav.style.display='none';
+                if(content)content.style.display='none';
+            });
+            // 2) 지정된 탭만 표시
+            visibleList.forEach(tab=>{
+                const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
+                const content=document.getElementById('tab-'+tab);
+                if(nav)nav.style.display='';
+                if(content)content.style.display='';
+            });
+            // 3) 첫 번째 탭 활성화
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+            const defaultTab=visibleList[0]||'attendance';
+            const defNav=document.querySelector(`.nav-item[data-tab="${defaultTab}"]`);
+            const defTab=document.getElementById('tab-'+defaultTab);
+            if(defNav)defNav.classList.add('active');
+            if(defTab)defTab.classList.add('active');
+        }
+        
         function logout(){
             clearAutoLogoutTimer();
             localStorage.removeItem('lumi_staff_user');
-            location.reload();
+            currentUser=null;
+            // 부드러운 UI 리셋 (location.reload 대신)
+            document.getElementById('appContainer').classList.remove('active');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('empIdInput').value='';
+            document.getElementById('empPwInput').value='';
+            document.getElementById('loginError').textContent='';
         }
         
         function checkAuth(){
-            // db 안전 체크
-            if(typeof db==='undefined'){
+            // db 안전 체크 (firebase-config.js 미로드 또는 초기화 실패 대비)
+            if(typeof db==='undefined'||!db){
                 setTimeout(checkAuth,300);
                 return;
             }
@@ -974,8 +1005,8 @@
                 try{
                     currentUser=JSON.parse(saved);
                     if(currentUser&&currentUser.id)showApp();
-                    else localStorage.removeItem('lumi_staff_user');
-                }catch(e){localStorage.removeItem('lumi_staff_user');}
+                    else{currentUser=null;localStorage.removeItem('lumi_staff_user');}
+                }catch(e){currentUser=null;localStorage.removeItem('lumi_staff_user');}
             }
             checkBiometricAvailable();
         }
@@ -1163,8 +1194,6 @@
                 }
                 mealRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('식사 로드 오류:',e);mealRecords=[];}
-        }
-        }
         }
         
         async function loadIncentiveItems(){
@@ -1891,6 +1920,7 @@
                 closeModal('mealModal');
                 alert('✅ '+selected.length+'명 식대 정산 완료');
                 await loadMealRecords();
+                await loadMealStaffList(); // employees 잔액 재로드
                 renderMeal();
             }catch(e){alert('정산 실패: '+e.message);}
         }
@@ -2317,6 +2347,7 @@
         async function submitWishlistItem(){
             const name=document.getElementById('wishItemName').value.trim();
             if(!name){alert('품목명을 입력하세요.');return;}
+            if(typeof db==='undefined'){alert('시스템 초기화 중입니다.');return;}
             const data={
                 name:name,
                 qty:parseInt(document.getElementById('wishItemQty').value)||1,
@@ -2324,6 +2355,7 @@
                 purchaseLink:document.getElementById('wishItemLink').value.trim(),
                 reason:document.getElementById('wishItemReason').value.trim(),
                 requestedBy:currentUser?.name||'직원',
+                requestedById:currentUser?.id||'',
                 status:'pending',
                 createdAt:new Date().toISOString()
             };
@@ -2331,7 +2363,42 @@
                 await db.collection('purchaseRequests').add(data);
                 closeModal('wishlistModal');
                 alert('✅ 구매 요청이 제출되었습니다.\n관리자 승인 후 구매가 진행됩니다.');
+                loadStaffWishlist(); // UI 리렌더링
             }catch(e){alert('요청 실패: '+e.message);}
+        }
+
+        // ===== 비품 요청 내역 (직원용) =====
+        async function loadStaffWishlist(){
+            const container=document.getElementById('staffWishlistHistory');
+            if(!container)return;
+            if(typeof db==='undefined'){container.innerHTML='시스템 초기화 중...';return;}
+            try{
+                const snap=await db.collection('purchaseRequests').orderBy('createdAt','desc').limit(30).get();
+                const items=snap.docs.map(d=>({id:d.id,...d.data()}));
+                if(!items.length){
+                    container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1.5rem">아직 요청 내역이 없습니다.</div>';
+                    return;
+                }
+                container.innerHTML=items.map(r=>{
+                    const statusMap={pending:'⏳ 대기중',approved:'✅ 승인됨',rejected:'❌ 거절됨'};
+                    const statusColor={pending:'#f57f17',approved:'#2e7d32',rejected:'#c62828'};
+                    const st=r.status||'pending';
+                    const linkBtn=r.purchaseLink?`<a href="${r.purchaseLink}" target="_blank" style="font-size:.7rem;color:#1976d2;text-decoration:none;margin-left:4px">🔗 링크</a>`:'';
+                    const dateStr=r.createdAt?new Date(r.createdAt).toLocaleDateString('ko'):'-';
+                    return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:#fff">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <strong>${r.name}</strong> <span style="font-size:.75rem;color:#999">×${r.qty||1}</span>
+                            <span style="font-size:.75rem;color:${statusColor[st]};font-weight:600">${statusMap[st]||st}</span>
+                        </div>
+                        <div style="font-size:.75rem;color:#888;margin-top:3px">
+                            ${r.estimatedPrice?'예상 '+r.estimatedPrice.toLocaleString()+'원':''}
+                            ${linkBtn}
+                            · ${r.requestedBy||'-'} · ${dateStr}
+                        </div>
+                        ${r.reason?`<div style="font-size:.75rem;color:#666;margin-top:2px">${r.reason}</div>`:''}
+                    </div>`;
+                }).join('');
+            }catch(e){container.innerHTML='불러오기 실패: '+e.message;}
         }
 
         // Tab Navigation
@@ -2344,6 +2411,10 @@
                 // 재고 탭 진입 시 데이터 로드
                 if(this.dataset.tab==='inventory'&&!invItems.length){
                     initInventoryTab();
+                }
+                // 비품요청 탭 진입 시 내역 로드
+                if(this.dataset.tab==='wishlist'){
+                    loadStaffWishlist();
                 }
             });
         });
