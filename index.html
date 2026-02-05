@@ -547,30 +547,27 @@
                 <!-- 탭 선택 (Staff App 노출 제어) -->
                 <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem">
                     <label class="form-label" style="font-weight:600;margin-bottom:.5rem">📱 Staff App 탭 노출 설정</label>
-                    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.75rem">이 직원이 Staff App에서 볼 수 있는 탭을 선택하세요. 미선택 시 모든 탭이 표시됩니다.</div>
+                    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.75rem">체크된 탭만 Staff App에서 표시됩니다. 체크 해제 시 해당 탭이 숨겨집니다.</div>
                     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem">
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
-                            <input type="checkbox" class="empTab" data-tab="attendance" style="width:16px;height:16px">
+                            <input type="checkbox" class="empTab" data-tab="attendance" style="width:16px;height:16px" checked>
                             📅 출퇴근
                         </label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
-                            <input type="checkbox" class="empTab" data-tab="meal" style="width:16px;height:16px">
+                            <input type="checkbox" class="empTab" data-tab="meal" style="width:16px;height:16px" checked>
                             🍽 식사
                         </label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
-                            <input type="checkbox" class="empTab" data-tab="ot" style="width:16px;height:16px">
+                            <input type="checkbox" class="empTab" data-tab="ot" style="width:16px;height:16px" checked>
                             ⏰ OT
                         </label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
-                            <input type="checkbox" class="empTab" data-tab="leave" style="width:16px;height:16px">
+                            <input type="checkbox" class="empTab" data-tab="leave" style="width:16px;height:16px" checked>
                             🏖 연차
                         </label>
+
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
-                            <input type="checkbox" class="empTab" data-tab="incentive" style="width:16px;height:16px">
-                            💎 인센티브
-                        </label>
-                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
-                            <input type="checkbox" class="empTab" data-tab="info" style="width:16px;height:16px">
+                            <input type="checkbox" class="empTab" data-tab="info" style="width:16px;height:16px" checked>
                             👤 내정보
                         </label>
                     </div>
