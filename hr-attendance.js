@@ -345,7 +345,6 @@ function openEmployeeModal(id=null){
     document.getElementById('empAnnualLeave').value='';
     document.getElementById('empUsedLeave').value='0';
     document.getElementById('autoAnnualLeave').textContent='0';
-    document.getElementById('empIsIncentiveTarget').checked=false;
     document.getElementById('empId').value='';
     // 탭 체크박스 초기화
     document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
