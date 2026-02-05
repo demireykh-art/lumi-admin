@@ -347,6 +347,9 @@ function openEmployeeModal(id=null){
     document.getElementById('autoAnnualLeave').textContent='0';
     document.getElementById('empIsIncentiveTarget').checked=false;
     document.getElementById('empId').value='';
+    // 탭 체크박스 초기화
+    document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
+    
     if(id){
         const emp=employees.find(e=>e.id===id);
         if(emp){
@@ -365,6 +368,16 @@ function openEmployeeModal(id=null){
             // 법정 연차 자동계산 표시
             const autoLeave=calculateLegalAnnualLeave(emp.joinDate);
             document.getElementById('autoAnnualLeave').textContent=autoLeave;
+            // 탭 선택 복원
+            if(emp.visibleTabs&&emp.visibleTabs.length>0){
+                // 명시적으로 저장된 탭이 있으면, 먼저 모두 해제 후 저장된 것만 체크
+                document.querySelectorAll('.empTab').forEach(cb=>cb.checked=false);
+                emp.visibleTabs.forEach(tab=>{
+                    const cb=document.querySelector(`.empTab[data-tab="${tab}"]`);
+                    if(cb)cb.checked=true;
+                });
+            }
+            // visibleTabs가 null이거나 없으면 기본값(모두 체크) 유지
         }
     }
     openModal('employeeModal');
@@ -426,6 +439,17 @@ async function saveEmployee(){
     const annualLeave=annualLeaveInput?parseInt(annualLeaveInput):null; // null이면 자동계산 사용
     const usedLeave=parseInt(document.getElementById('empUsedLeave').value)||0;
     
+    // 탭 선택 수집
+    const selectedTabs=[];
+    const allTabs=document.querySelectorAll('.empTab');
+    document.querySelectorAll('.empTab:checked').forEach(cb=>{
+        selectedTabs.push(cb.getAttribute('data-tab'));
+    });
+    
+    // 모든 탭이 체크되어 있으면 null (기본값, 모든 탭 표시)
+    // 일부만 체크되어 있으면 선택된 탭만 배열로 저장
+    const visibleTabsValue=selectedTabs.length===allTabs.length?null:selectedTabs;
+    
     const data={
         name,
         matchName:document.getElementById('empMatchName').value.trim(),
@@ -437,7 +461,8 @@ async function saveEmployee(){
         status:document.getElementById('empStatus').value,
         annualLeave:annualLeave,
         usedLeave:usedLeave,
-        isIncentiveTarget:document.getElementById('empIsIncentiveTarget').checked
+        isIncentiveTarget:document.getElementById('empIsIncentiveTarget').checked,
+        visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
     };
     try{
         await db.collection('employees').doc(empId).set(data,{merge:true});
