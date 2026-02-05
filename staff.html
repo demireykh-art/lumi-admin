@@ -2531,12 +2531,30 @@
             const sel=document.getElementById('receivingLocation');
             if(!sel)return;
             sel.innerHTML='<option value="">장소 선택</option>';
-            receivingLocations.forEach(loc=>{
-                const opt=document.createElement('option');
-                opt.value=`${loc.floor}-${loc.name}`;
-                opt.textContent=`${loc.floor}-${loc.name}`;
-                sel.appendChild(opt);
-            });
+            
+            // DB에서 로드된 장소가 있으면 사용
+            if(receivingLocations.length>0){
+                receivingLocations.forEach(loc=>{
+                    const opt=document.createElement('option');
+                    opt.value=`${loc.floor}-${loc.name}`;
+                    opt.textContent=`${loc.floor}-${loc.name}`;
+                    sel.appendChild(opt);
+                });
+            }else{
+                // 기본 장소 (DB 로드 실패 시 fallback)
+                const defaults=[
+                    '5층-처치실','5층-냉장고',
+                    '6층-시술실','6층-수액실','6층-줄기세포센터','6층-수술실',
+                    '6층-준비실','6층-준비실옆보관실','6층-준비실 냉장고',
+                    '6층-어븀실','6층-레이저실','6층-리팟실'
+                ];
+                defaults.forEach(loc=>{
+                    const opt=document.createElement('option');
+                    opt.value=loc;
+                    opt.textContent=loc;
+                    sel.appendChild(opt);
+                });
+            }
         }
         
         // 품목 검색
