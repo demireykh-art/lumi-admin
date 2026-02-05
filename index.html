@@ -534,15 +534,6 @@
                         <input type="number" class="form-input" id="empUsedLeave" value="0" min="0">
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group" style="display:flex;align-items:center;gap:.75rem;padding-top:1rem">
-                        <label class="form-label" style="margin:0;cursor:pointer;display:flex;align-items:center;gap:.5rem">
-                            <input type="checkbox" id="empIsIncentiveTarget" style="width:18px;height:18px;accent-color:var(--primary)">
-                            💎 인센티브 대상자
-                        </label>
-                        <span style="font-size:.75rem;color:var(--text-muted)">체크 시 Staff App에 인센티브 탭 노출</span>
-                    </div>
-                </div>
                 
                 <!-- 탭 선택 (Staff App 노출 제어) -->
                 <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem">
@@ -565,7 +556,10 @@
                             <input type="checkbox" class="empTab" data-tab="leave" style="width:16px;height:16px" checked>
                             🏖 연차
                         </label>
-
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+                            <input type="checkbox" class="empTab" data-tab="incentive" style="width:16px;height:16px" checked>
+                            💎 인센티브
+                        </label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
                             <input type="checkbox" class="empTab" data-tab="info" style="width:16px;height:16px" checked>
                             👤 내정보
