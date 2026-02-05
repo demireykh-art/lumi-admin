@@ -1029,7 +1029,10 @@
                 }
             }
 
-            if(shared) initInventoryTab();
+            if(shared){
+                initInventoryTab();
+                loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
+            }
             checkLocation();
             loadAllData();
             loadSettings();
@@ -2164,11 +2167,20 @@
                 const sysStock=item.currentStock||0;
                 const buyLink=item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" style="display:inline-block;background:#f0f0f0;color:#333;font-size:.65rem;padding:2px 6px;border-radius:3px;text-decoration:none;margin-left:4px;vertical-align:middle">🛒</a>`:'';
                 const lowBg=isLow?'background:rgba(255,152,0,0.08);border-left:3px solid #ff9800':'';
+                
+                // 위치 정보 처리
+                const locations = item.locations ? 
+                    Object.entries(item.locations)
+                        .filter(([loc, qty]) => qty > 0)
+                        .map(([loc, qty]) => `${loc}(${qty})`).join(', ') 
+                    : '위치 미지정';
+                
                 return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
                     <div class="inv-item-info">
                         <div class="inv-item-name">${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':''}</div>
                         <div class="inv-item-meta">
                             <span>${catLabel}</span>
+                            <span style="color:var(--primary);font-weight:600">📍 ${locations}</span>
                             <span>시스템: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
                             ${isLow?`<span style="color:var(--red)">안전재고: ${item.safetyStock}</span>`:''}
                             ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
