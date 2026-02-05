@@ -385,6 +385,12 @@
                         새로 도착한 물품을 등록하세요. 품목을 검색하여 입고 수량, 유통기한, 보관 장소를 입력하면 배치(Batch)가 자동 생성됩니다.
                     </div>
                     
+                    <!-- 카테고리 필터 -->
+                    <div style="margin-bottom:1rem">
+                        <label style="font-weight:600;font-size:.9rem;margin-bottom:.5rem;display:block">📂 분류별 입고</label>
+                        <div class="inv-cat-filters" id="receivingCatButtons"></div>
+                    </div>
+                    
                     <!-- 품목 검색 -->
                     <div style="margin-bottom:1rem">
                         <label style="font-weight:600;font-size:.9rem;margin-bottom:.5rem;display:block">품목 검색</label>
@@ -1032,6 +1038,7 @@
             if(shared){
                 initInventoryTab();
                 loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
+                renderReceivingCatButtons(); // 입고 카테고리 버튼 렌더링
             }
             checkLocation();
             loadAllData();
@@ -2525,6 +2532,36 @@
 
         // ===== 입고 시스템 =====
         let receivingLocations=[]; // 장소 목록
+        let currentReceivingCat=''; // 입고 탭 카테고리 필터
+        
+        // 입고 카테고리 버튼 렌더링
+        function renderReceivingCatButtons(){
+            const container=document.getElementById('receivingCatButtons');
+            if(!container)return;
+            const cats=[
+                {key:'',label:'전체',icon:'📋'},
+                {key:'nursing',label:'간호',icon:'💉'},
+                {key:'skin',label:'피부',icon:'✨'},
+                {key:'desk',label:'데스크',icon:'🖥️'},
+                {key:'common',label:'공통',icon:'📎'}
+            ];
+            container.innerHTML=cats.map(c=>{
+                const count=c.key?invItems.filter(i=>i.category===c.key).length:invItems.length;
+                return `<div class="inv-cat-btn ${currentReceivingCat===c.key?'active':''}" onclick="setReceivingCat('${c.key}')">
+                    <span class="cat-icon">${c.icon}</span>${c.label}<span class="cat-count">${count}개</span>
+                </div>`;
+            }).join('');
+        }
+        
+        function setReceivingCat(cat){
+            currentReceivingCat=cat;
+            renderReceivingCatButtons();
+            // 검색창 초기화
+            document.getElementById('receivingSearch').value='';
+            document.getElementById('receivingSearchResults').innerHTML='';
+            // 폼 숨기기
+            cancelReceiving();
+        }
         
         // 장소 목록 로드
         async function loadReceivingLocations(){
@@ -2569,7 +2606,7 @@
             }
         }
         
-        // 품목 검색
+        // 품목 검색 (카테고리 필터 적용)
         function searchItemsForReceiving(keyword){
             const container=document.getElementById('receivingSearchResults');
             if(!container)return;
@@ -2580,10 +2617,16 @@
             }
             
             const kw=keyword.toLowerCase();
-            const results=invItems.filter(item=>(item.name||'').toLowerCase().includes(kw));
+            let results=invItems.filter(item=>(item.name||'').toLowerCase().includes(kw));
+            
+            // 카테고리 필터 적용
+            if(currentReceivingCat){
+                results=results.filter(item=>item.category===currentReceivingCat);
+            }
             
             if(!results.length){
-                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:.75rem;font-size:.85rem">검색 결과가 없습니다</div>';
+                const catLabel=currentReceivingCat?` (${INV_CATEGORIES[currentReceivingCat]})`:' (전체)';
+                container.innerHTML=`<div style="text-align:center;color:var(--text-muted);padding:.75rem;font-size:.85rem">검색 결과가 없습니다${catLabel}</div>`;
                 return;
             }
             
@@ -2780,6 +2823,7 @@
                 // 입고 탭 진입 시 초기화
                 if(this.dataset.tab==='receiving'){
                     loadReceivingLocations();
+                    renderReceivingCatButtons();
                     loadRecentReceiving();
                 }
                 // 비품요청 탭 진입 시 내역 로드
