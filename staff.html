@@ -693,6 +693,21 @@
                         💡 예시: 1박스(100개입) 50만원 구매 시 → 총액 500000, 박스수 1, 낱개수 100 입력
                     </div>
                 </div>
+                
+                <!-- 보관 위치 입력 -->
+                <div style="background:#f0f8ff;border:1px solid #b8daff;padding:.75rem;border-radius:6px;margin-top:.75rem">
+                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.75rem">📍 보관 위치 설정</div>
+                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+                        <select class="form-select" id="newItemLocationSelect" style="flex:2">
+                            <option value="">장소 선택</option>
+                        </select>
+                        <input type="number" class="form-input" id="newItemLocationQty" placeholder="수량" min="0" style="flex:1">
+                        <button type="button" onclick="addNewItemLocation()" style="padding:.5rem .75rem;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">+ 추가</button>
+                    </div>
+                    <div id="newItemLocationsList" style="min-height:2rem;display:flex;flex-wrap:wrap;gap:.5rem">
+                        <div style="font-size:.75rem;color:var(--text-muted);font-style:italic">위치를 추가하세요</div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('newItemModal')" style="flex:1">취소</button>
@@ -758,14 +773,18 @@
                     <div id="editItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:4px;font-size:.85rem;font-weight:600;color:var(--primary)">낱개당 단가: -</div>
                 </div>
                 
-                <!-- 위치 정보 표시 -->
+                <!-- 보관 위치 수정 -->
                 <div style="background:#f0f8ff;border:1px solid #b8daff;padding:.75rem;border-radius:6px;margin-top:.75rem">
-                    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
-                        <span style="font-weight:600;font-size:.85rem">📍 보관 위치</span>
-                        <span style="font-size:.7rem;color:var(--text-muted)">(입고 시 자동 등록됨)</span>
+                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.75rem">📍 보관 위치 수정</div>
+                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+                        <select class="form-select" id="editItemLocationSelect" style="flex:2">
+                            <option value="">장소 선택</option>
+                        </select>
+                        <input type="number" class="form-input" id="editItemLocationQty" placeholder="수량" min="0" style="flex:1">
+                        <button type="button" onclick="addEditItemLocation()" style="padding:.5rem .75rem;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">+ 추가</button>
                     </div>
-                    <div id="editItemLocationsDisplay" style="font-size:.85rem;color:var(--text);line-height:1.6">
-                        위치 정보 없음
+                    <div id="editItemLocationsList" style="min-height:2rem;display:flex;flex-wrap:wrap;gap:.5rem">
+                        <div style="font-size:.75rem;color:var(--text-muted);font-style:italic">위치 정보 없음</div>
                     </div>
                 </div>
                 
@@ -2320,6 +2339,8 @@
         }
 
         // ===== 신규 품목 등록 =====
+        let newItemLocations={}; // 신규 품목의 위치 정보 임시 저장
+        
         function openNewItemModal(){
             ['newItemName','newItemTotalPrice','newItemExpiry','newItemPurchaseLink'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
             document.getElementById('newItemType').value='disposable';
@@ -2329,7 +2350,64 @@
             document.getElementById('newItemBoxes').value='1';
             document.getElementById('newItemPerBox').value='1';
             document.getElementById('newItemUnitCalc').textContent='낱개당 단가: -';
+            
+            // 위치 정보 초기화
+            newItemLocations={};
+            updateNewItemLocationSelect();
+            renderNewItemLocations();
+            
             openModal('newItemModal');
+        }
+        
+        function updateNewItemLocationSelect(){
+            const sel=document.getElementById('newItemLocationSelect');
+            if(!sel)return;
+            sel.innerHTML='<option value="">장소 선택</option>';
+            if(receivingLocations.length>0){
+                receivingLocations.forEach(loc=>{
+                    const opt=document.createElement('option');
+                    opt.value=`${loc.floor}-${loc.name}`;
+                    opt.textContent=`${loc.floor}-${loc.name}`;
+                    sel.appendChild(opt);
+                });
+            }else{
+                const defaults=['5층-처치실','5층-냉장고','6층-시술실','6층-수액실','6층-줄기세포센터','6층-수술실','6층-준비실','6층-준비실옆보관실','6층-준비실 냉장고','6층-어븀실','6층-레이저실','6층-리팟실'];
+                defaults.forEach(loc=>{
+                    const opt=document.createElement('option');
+                    opt.value=loc;
+                    opt.textContent=loc;
+                    sel.appendChild(opt);
+                });
+            }
+        }
+        
+        function addNewItemLocation(){
+            const loc=document.getElementById('newItemLocationSelect').value;
+            const qty=parseFloat(document.getElementById('newItemLocationQty').value)||0;
+            if(!loc){alert('장소를 선택하세요.');return;}
+            if(qty<=0){alert('수량은 0보다 커야 합니다.');return;}
+            newItemLocations[loc]=(newItemLocations[loc]||0)+qty;
+            document.getElementById('newItemLocationQty').value='';
+            renderNewItemLocations();
+        }
+        
+        function removeNewItemLocation(loc){
+            delete newItemLocations[loc];
+            renderNewItemLocations();
+        }
+        
+        function renderNewItemLocations(){
+            const container=document.getElementById('newItemLocationsList');
+            if(!container)return;
+            const locs=Object.entries(newItemLocations);
+            if(!locs.length){
+                container.innerHTML='<div style="font-size:.75rem;color:var(--text-muted);font-style:italic">위치를 추가하세요</div>';
+                return;
+            }
+            container.innerHTML=locs.map(([loc,qty])=>`<div style="display:inline-flex;align-items:center;gap:.5rem;background:var(--bg);padding:.4rem .6rem;border-radius:4px;border:1px solid var(--border)">
+                <strong style="font-size:.85rem">${loc}</strong>: ${qty}개
+                <button onclick="removeNewItemLocation('${loc}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:0;line-height:1">×</button>
+            </div>`).join('');
         }
 
         function calcNewItemUnit(){
@@ -2367,6 +2445,8 @@
                 unitPrice:unitPrice,
                 expiryDate:document.getElementById('newItemExpiry').value||null,
                 purchaseLink:document.getElementById('newItemPurchaseLink')?.value?.trim()||'',
+                locations:newItemLocations, // 위치 정보 저장
+                totalStock:Object.values(newItemLocations).reduce((sum,v)=>sum+v,0), // 총재고 계산
                 createdAt:new Date().toISOString(),
                 updatedAt:new Date().toISOString(),
                 createdBy:currentUser?.name||'staff'
@@ -2383,6 +2463,8 @@
         }
 
         // ===== 품목 수정 기능 =====
+        let editItemLocations={}; // 수정 중인 품목의 위치 정보 임시 저장
+        
         function openEditItemModal(itemId){
             const item=invItems.find(i=>i.id===itemId);
             if(!item){alert('품목을 찾을 수 없습니다.');return;}
@@ -2394,21 +2476,10 @@
             document.getElementById('editItemExpiry').value=item.expiryDate||'';
             document.getElementById('editItemPurchaseLink').value=item.purchaseLink||'';
             
-            // 위치 정보 표시
-            const locDisplay=document.getElementById('editItemLocationsDisplay');
-            if(locDisplay){
-                if(item.locations&&Object.keys(item.locations).length>0){
-                    const locList=Object.entries(item.locations)
-                        .filter(([loc,qty])=>qty>0)
-                        .map(([loc,qty])=>`<div style="display:inline-block;background:var(--bg);padding:.3rem .6rem;border-radius:4px;margin:2px;border:1px solid var(--border)">
-                            <strong>${loc}</strong>: ${qty}개
-                        </div>`)
-                        .join('');
-                    locDisplay.innerHTML=locList||'위치 정보 없음';
-                }else{
-                    locDisplay.innerHTML='<div style="color:var(--text-muted);font-style:italic">위치 정보 없음 (입고 시 자동 등록됩니다)</div>';
-                }
-            }
+            // 위치 정보 로드
+            editItemLocations=item.locations?{...item.locations}:{};
+            updateEditItemLocationSelect();
+            renderEditItemLocations();
             
             // 구매 정보 역산: purchasePrice=총액, purchaseQty=총낱개수
             const totalPrice=item.purchasePrice||0;
@@ -2419,6 +2490,57 @@
             document.getElementById('editItemPerBox').value=totalQty||1;
             calcEditItemUnit();
             openModal('editItemModal');
+        }
+        
+        function updateEditItemLocationSelect(){
+            const sel=document.getElementById('editItemLocationSelect');
+            if(!sel)return;
+            sel.innerHTML='<option value="">장소 선택</option>';
+            if(receivingLocations.length>0){
+                receivingLocations.forEach(loc=>{
+                    const opt=document.createElement('option');
+                    opt.value=`${loc.floor}-${loc.name}`;
+                    opt.textContent=`${loc.floor}-${loc.name}`;
+                    sel.appendChild(opt);
+                });
+            }else{
+                const defaults=['5층-처치실','5층-냉장고','6층-시술실','6층-수액실','6층-줄기세포센터','6층-수술실','6층-준비실','6층-준비실옆보관실','6층-준비실 냉장고','6층-어븀실','6층-레이저실','6층-리팟실'];
+                defaults.forEach(loc=>{
+                    const opt=document.createElement('option');
+                    opt.value=loc;
+                    opt.textContent=loc;
+                    sel.appendChild(opt);
+                });
+            }
+        }
+        
+        function addEditItemLocation(){
+            const loc=document.getElementById('editItemLocationSelect').value;
+            const qty=parseFloat(document.getElementById('editItemLocationQty').value)||0;
+            if(!loc){alert('장소를 선택하세요.');return;}
+            if(qty<=0){alert('수량은 0보다 커야 합니다.');return;}
+            editItemLocations[loc]=(editItemLocations[loc]||0)+qty;
+            document.getElementById('editItemLocationQty').value='';
+            renderEditItemLocations();
+        }
+        
+        function removeEditItemLocation(loc){
+            delete editItemLocations[loc];
+            renderEditItemLocations();
+        }
+        
+        function renderEditItemLocations(){
+            const container=document.getElementById('editItemLocationsList');
+            if(!container)return;
+            const locs=Object.entries(editItemLocations);
+            if(!locs.length){
+                container.innerHTML='<div style="font-size:.75rem;color:var(--text-muted);font-style:italic">위치 정보 없음</div>';
+                return;
+            }
+            container.innerHTML=locs.map(([loc,qty])=>`<div style="display:inline-flex;align-items:center;gap:.5rem;background:var(--bg);padding:.4rem .6rem;border-radius:4px;border:1px solid var(--border)">
+                <strong style="font-size:.85rem">${loc}</strong>: ${qty}개
+                <button onclick="removeEditItemLocation('${loc}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:0;line-height:1">×</button>
+            </div>`).join('');
         }
 
         function calcEditItemUnit(){
@@ -2452,6 +2574,8 @@
                 purchaseQty:totalQty,
                 unitPrice:totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0,
                 purchaseLink:document.getElementById('editItemPurchaseLink').value.trim(),
+                locations:editItemLocations, // 위치 정보 업데이트
+                totalStock:Object.values(editItemLocations).reduce((sum,v)=>sum+v,0), // 총재고 재계산
                 updatedAt:new Date().toISOString(),
                 updatedBy:currentUser?.name||'staff'
             };
