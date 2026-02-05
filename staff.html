@@ -757,6 +757,18 @@
                     </div>
                     <div id="editItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:4px;font-size:.85rem;font-weight:600;color:var(--primary)">낱개당 단가: -</div>
                 </div>
+                
+                <!-- 위치 정보 표시 -->
+                <div style="background:#f0f8ff;border:1px solid #b8daff;padding:.75rem;border-radius:6px;margin-top:.75rem">
+                    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
+                        <span style="font-weight:600;font-size:.85rem">📍 보관 위치</span>
+                        <span style="font-size:.7rem;color:var(--text-muted)">(입고 시 자동 등록됨)</span>
+                    </div>
+                    <div id="editItemLocationsDisplay" style="font-size:.85rem;color:var(--text);line-height:1.6">
+                        위치 정보 없음
+                    </div>
+                </div>
+                
                 <div class="form-group" style="margin-top:.5rem">
                     <label class="form-label">🔗 구매 링크</label>
                     <input type="url" class="form-input" id="editItemPurchaseLink" placeholder="https://쿠팡,네이버 등">
@@ -2381,6 +2393,23 @@
             document.getElementById('editItemSafety').value=item.safetyStock||0;
             document.getElementById('editItemExpiry').value=item.expiryDate||'';
             document.getElementById('editItemPurchaseLink').value=item.purchaseLink||'';
+            
+            // 위치 정보 표시
+            const locDisplay=document.getElementById('editItemLocationsDisplay');
+            if(locDisplay){
+                if(item.locations&&Object.keys(item.locations).length>0){
+                    const locList=Object.entries(item.locations)
+                        .filter(([loc,qty])=>qty>0)
+                        .map(([loc,qty])=>`<div style="display:inline-block;background:var(--bg);padding:.3rem .6rem;border-radius:4px;margin:2px;border:1px solid var(--border)">
+                            <strong>${loc}</strong>: ${qty}개
+                        </div>`)
+                        .join('');
+                    locDisplay.innerHTML=locList||'위치 정보 없음';
+                }else{
+                    locDisplay.innerHTML='<div style="color:var(--text-muted);font-style:italic">위치 정보 없음 (입고 시 자동 등록됩니다)</div>';
+                }
+            }
+            
             // 구매 정보 역산: purchasePrice=총액, purchaseQty=총낱개수
             const totalPrice=item.purchasePrice||0;
             const totalQty=item.purchaseQty||1;
