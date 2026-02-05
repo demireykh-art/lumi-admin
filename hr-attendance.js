@@ -363,7 +363,6 @@ function openEmployeeModal(id=null){
             document.getElementById('empStatus').value=emp.status||'active';
             document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
-            document.getElementById('empIsIncentiveTarget').checked=!!emp.isIncentiveTarget;
             document.getElementById('empId').value=emp.id;
             // 법정 연차 자동계산 표시
             const autoLeave=calculateLegalAnnualLeave(emp.joinDate);
@@ -450,6 +449,9 @@ async function saveEmployee(){
     // 일부만 체크되어 있으면 선택된 탭만 배열로 저장
     const visibleTabsValue=selectedTabs.length===allTabs.length?null:selectedTabs;
     
+    // isIncentiveTarget: 인센티브 탭이 포함되어 있는지 자동 판단
+    const isIncentiveTarget=selectedTabs.includes('incentive');
+    
     const data={
         name,
         matchName:document.getElementById('empMatchName').value.trim(),
@@ -461,7 +463,7 @@ async function saveEmployee(){
         status:document.getElementById('empStatus').value,
         annualLeave:annualLeave,
         usedLeave:usedLeave,
-        isIncentiveTarget:document.getElementById('empIsIncentiveTarget').checked,
+        isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
         visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
     };
     try{

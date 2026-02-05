@@ -1022,8 +1022,9 @@
                 if(currentUser.visibleTabs&&currentUser.visibleTabs.length>0){
                     displayTabs(currentUser.visibleTabs);
                 }else{
-                    // 기본: 출퇴근, 식사, OT, 연차, 인센티브(대상자만), 내정보
+                    // 기본: 출퇴근, 식사, OT, 연차, 내정보
                     const tabs=['attendance','meal','ot','leave','info'];
+                    // 하위 호환성: isIncentiveTarget이 true이고 visibleTabs가 없으면 인센티브 추가
                     if(currentUser.isIncentiveTarget) tabs.splice(2,0,'incentive');
                     displayTabs(tabs);
                 }
