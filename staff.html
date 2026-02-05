@@ -377,6 +377,84 @@
                 </div>
             </div>
 
+            <!-- 입고 탭 -->
+            <div class="tab-content" id="tab-receiving">
+                <div class="card" style="margin-bottom:.5rem">
+                    <div class="card-title">📥 물품 입고</div>
+                    <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
+                        새로 도착한 물품을 등록하세요. 품목을 검색하여 입고 수량, 유통기한, 보관 장소를 입력하면 배치(Batch)가 자동 생성됩니다.
+                    </div>
+                    
+                    <!-- 품목 검색 -->
+                    <div style="margin-bottom:1rem">
+                        <label style="font-weight:600;font-size:.9rem;margin-bottom:.5rem;display:block">품목 검색</label>
+                        <input type="text" id="receivingSearch" placeholder="품목명을 입력하세요..." 
+                            style="width:100%;padding:.75rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem"
+                            oninput="searchItemsForReceiving(this.value)">
+                        <div id="receivingSearchResults" style="margin-top:.5rem;max-height:200px;overflow-y:auto"></div>
+                    </div>
+                    
+                    <!-- 입고 폼 (품목 선택 후 표시) -->
+                    <div id="receivingForm" style="display:none;border-top:1px solid var(--border);padding-top:1rem;margin-top:1rem">
+                        <input type="hidden" id="receivingItemId">
+                        <div style="background:var(--bg);padding:.75rem;border-radius:6px;margin-bottom:1rem">
+                            <div style="font-weight:600;font-size:1rem" id="receivingItemName"></div>
+                            <div style="font-size:.8rem;color:var(--text-muted);margin-top:.25rem">
+                                현재고: <span id="receivingCurrentStock">-</span> | 
+                                단위: <span id="receivingItemUnit">개</span>
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+                            <div>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">입고 수량 *</label>
+                                <input type="number" id="receivingQty" placeholder="0" step="0.01" min="0.01" 
+                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
+                            </div>
+                            <div>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">유통기한 *</label>
+                                <input type="date" id="receivingExpiry" 
+                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.75rem">
+                            <div>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">구매단가 (원)</label>
+                                <input type="number" id="receivingPrice" placeholder="0" min="0" 
+                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
+                            </div>
+                            <div>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">보관 장소 *</label>
+                                <select id="receivingLocation" 
+                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
+                                    <option value="">장소 선택</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top:1rem">
+                            <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">메모</label>
+                            <textarea id="receivingMemo" rows="2" placeholder="입고 관련 메모 (선택)" 
+                                style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.85rem"></textarea>
+                        </div>
+                        
+                        <div style="display:flex;gap:.5rem;margin-top:1.5rem">
+                            <button onclick="cancelReceiving()" style="flex:1;padding:.75rem;background:#eee;border:none;border-radius:6px;cursor:pointer;font-weight:600">취소</button>
+                            <button onclick="submitReceiving()" style="flex:2;padding:.75rem;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">입고 완료</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 최근 입고 내역 -->
+                <div class="card">
+                    <div class="card-title">📋 최근 입고 내역</div>
+                    <div id="recentReceivingList" style="font-size:.85rem;color:var(--text-muted);text-align:center;padding:1rem">
+                        내역을 불러오는 중...
+                    </div>
+                </div>
+            </div>
+
             <!-- 비품 요청 탭 -->
             <div class="tab-content" id="tab-wishlist">
                 <div class="card" style="margin-bottom:.5rem">
@@ -396,6 +474,7 @@
             <div class="nav-item" data-tab="leave"><div class="nav-icon">🏖</div>연차</div>
             <div class="nav-item" data-tab="incentive"><div class="nav-icon">💎</div>인센티브</div>
             <div class="nav-item" data-tab="inventory"><div class="nav-icon">📦</div>재고</div>
+            <div class="nav-item" data-tab="receiving"><div class="nav-icon">📥</div>입고</div>
             <div class="nav-item" data-tab="wishlist"><div class="nav-icon">🛍️</div>비품요청</div>
             <div class="nav-item" data-tab="info"><div class="nav-icon">👤</div>내정보</div>
         </nav>
@@ -937,7 +1016,7 @@
             
             // ═══ 계정별 탭 노출 ═══
             if(shared){
-                displayTabs(['inventory','meal','wishlist']);
+                displayTabs(['inventory','receiving','meal','wishlist']);
             }else{
                 // 개인계정: visibleTabs 우선, 없으면 기본값
                 if(currentUser.visibleTabs&&currentUser.visibleTabs.length>0){
@@ -959,7 +1038,7 @@
         
         // ═══ 탭 표시 유틸리티 ═══
         function displayTabs(visibleList){
-            const allTabs=['attendance','meal','ot','leave','incentive','inventory','info','wishlist'];
+            const allTabs=['attendance','meal','ot','leave','incentive','inventory','receiving','info','wishlist'];
             // 1) 모든 탭 숨기기
             allTabs.forEach(tab=>{
                 const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
@@ -2432,6 +2511,231 @@
             }catch(e){container.innerHTML='불러오기 실패: '+e.message;}
         }
 
+        // ===== 입고 시스템 =====
+        let receivingLocations=[]; // 장소 목록
+        
+        // 장소 목록 로드
+        async function loadReceivingLocations(){
+            if(typeof db==='undefined')return;
+            try{
+                const snap=await db.collection('locations').orderBy('order','asc').get();
+                receivingLocations=snap.docs.map(d=>({id:d.id,...d.data()}));
+                updateLocationSelect();
+            }catch(e){
+                receivingLocations=[];
+                console.error('장소 로드 실패:',e);
+            }
+        }
+        
+        function updateLocationSelect(){
+            const sel=document.getElementById('receivingLocation');
+            if(!sel)return;
+            sel.innerHTML='<option value="">장소 선택</option>';
+            receivingLocations.forEach(loc=>{
+                const opt=document.createElement('option');
+                opt.value=`${loc.floor}-${loc.name}`;
+                opt.textContent=`${loc.floor}-${loc.name}`;
+                sel.appendChild(opt);
+            });
+        }
+        
+        // 품목 검색
+        function searchItemsForReceiving(keyword){
+            const container=document.getElementById('receivingSearchResults');
+            if(!container)return;
+            
+            if(!keyword||keyword.length<1){
+                container.innerHTML='';
+                return;
+            }
+            
+            const kw=keyword.toLowerCase();
+            const results=invItems.filter(item=>(item.name||'').toLowerCase().includes(kw));
+            
+            if(!results.length){
+                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:.75rem;font-size:.85rem">검색 결과가 없습니다</div>';
+                return;
+            }
+            
+            container.innerHTML=results.map(item=>{
+                const catLabel=INV_CATEGORIES[item.category]||'';
+                const stock=item.totalStock||0;
+                return `<div onclick="selectItemForReceiving('${item.id}')" 
+                    style="padding:.6rem .75rem;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer;background:#fff;display:flex;justify-content:space-between;align-items:center"
+                    onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='#fff'">
+                    <div>
+                        <strong style="font-size:.9rem">${item.name}</strong>
+                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">${catLabel} · 현재고 ${stock} ${item.unit||'개'}</div>
+                    </div>
+                    <span style="color:var(--primary);font-size:.75rem">선택 →</span>
+                </div>`;
+            }).join('');
+        }
+        
+        function selectItemForReceiving(itemId){
+            const item=invItems.find(i=>i.id===itemId);
+            if(!item)return;
+            
+            // 검색창 숨기기
+            document.getElementById('receivingSearch').value=item.name;
+            document.getElementById('receivingSearchResults').innerHTML='';
+            
+            // 폼 표시
+            document.getElementById('receivingForm').style.display='block';
+            document.getElementById('receivingItemId').value=itemId;
+            document.getElementById('receivingItemName').textContent=item.name;
+            document.getElementById('receivingCurrentStock').textContent=(item.totalStock||0)+' '+(item.unit||'개');
+            document.getElementById('receivingItemUnit').textContent=item.unit||'개';
+            
+            // 입력 초기화
+            document.getElementById('receivingQty').value='';
+            document.getElementById('receivingExpiry').value='';
+            document.getElementById('receivingPrice').value='';
+            document.getElementById('receivingLocation').value='';
+            document.getElementById('receivingMemo').value='';
+        }
+        
+        function cancelReceiving(){
+            document.getElementById('receivingForm').style.display='none';
+            document.getElementById('receivingSearch').value='';
+            document.getElementById('receivingSearchResults').innerHTML='';
+        }
+        
+        async function submitReceiving(){
+            const itemId=document.getElementById('receivingItemId').value;
+            const qty=parseFloat(document.getElementById('receivingQty').value)||0;
+            const expiry=document.getElementById('receivingExpiry').value;
+            const price=parseFloat(document.getElementById('receivingPrice').value)||0;
+            const location=document.getElementById('receivingLocation').value;
+            const memo=document.getElementById('receivingMemo').value.trim();
+            
+            if(!itemId||!qty||!expiry||!location){
+                alert('필수 항목을 모두 입력해주세요.\n(입고 수량, 유통기한, 보관 장소)');
+                return;
+            }
+            
+            if(qty<=0){alert('입고 수량은 0보다 커야 합니다.');return;}
+            if(typeof db==='undefined'){alert('시스템 초기화 중입니다.');return;}
+            
+            const item=invItems.find(i=>i.id===itemId);
+            if(!item){alert('품목을 찾을 수 없습니다.');return;}
+            
+            try{
+                // 배치 번호 생성 (B날짜-순번)
+                const today=new Date().toISOString().split('T')[0].replace(/-/g,'');
+                const batchNo=`B${today}-${Date.now().toString(36).toUpperCase().substr(-3)}`;
+                
+                // 새 배치 객체
+                const newBatch={
+                    batchNo:batchNo,
+                    expiryDate:expiry,
+                    location:location,
+                    qty:qty,
+                    purchasePrice:price,
+                    purchaseDate:new Date().toISOString().split('T')[0],
+                    memo:memo,
+                    createdBy:currentUser?.name||currentUser?.id||'직원',
+                    createdAt:new Date().toISOString()
+                };
+                
+                // Firestore 트랜잭션
+                await db.runTransaction(async tx=>{
+                    const docRef=db.collection('inventory').doc(itemId);
+                    const doc=await tx.get(docRef);
+                    if(!doc.exists)throw new Error('품목이 존재하지 않습니다');
+                    
+                    const data=doc.data();
+                    const batches=data.batches||[];
+                    const locations=data.locations||{};
+                    
+                    // 배치 추가
+                    batches.push(newBatch);
+                    
+                    // 장소별 재고 업데이트
+                    locations[location]=(locations[location]||0)+qty;
+                    
+                    // 총재고 계산
+                    const totalStock=Object.values(locations).reduce((sum,v)=>sum+v,0);
+                    
+                    tx.update(docRef,{
+                        batches:batches,
+                        locations:locations,
+                        totalStock:totalStock,
+                        updatedAt:new Date().toISOString()
+                    });
+                });
+                
+                // 입고 기록 저장 (receivingHistory 컬렉션)
+                await db.collection('receivingHistory').add({
+                    itemId:itemId,
+                    itemName:item.name,
+                    batchNo:batchNo,
+                    qty:qty,
+                    expiryDate:expiry,
+                    location:location,
+                    price:price,
+                    memo:memo,
+                    receivedBy:currentUser?.name||currentUser?.id||'직원',
+                    receivedAt:new Date().toISOString()
+                });
+                
+                alert(`✅ 입고 완료!\n\n품목: ${item.name}\n수량: ${qty} ${item.unit||'개'}\n배치번호: ${batchNo}\n보관 장소: ${location}`);
+                
+                // UI 초기화
+                cancelReceiving();
+                
+                // 재고 목록 새로고침
+                await loadInventoryItems();
+                renderInvCatButtons();
+                renderInvAuditList();
+                renderLowStockAlert();
+                
+                // 최근 입고 내역 새로고침
+                loadRecentReceiving();
+            }catch(e){
+                alert('입고 실패: '+e.message);
+            }
+        }
+        
+        // 최근 입고 내역 로드
+        async function loadRecentReceiving(){
+            const container=document.getElementById('recentReceivingList');
+            if(!container)return;
+            if(typeof db==='undefined'){container.innerHTML='시스템 초기화 중...';return;}
+            
+            try{
+                const snap=await db.collection('receivingHistory')
+                    .orderBy('receivedAt','desc')
+                    .limit(10)
+                    .get();
+                const items=snap.docs.map(d=>({id:d.id,...d.data()}));
+                
+                if(!items.length){
+                    container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1.5rem">입고 내역이 없습니다</div>';
+                    return;
+                }
+                
+                container.innerHTML=items.map(r=>{
+                    const date=new Date(r.receivedAt).toLocaleString('ko',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+                    return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:#fff">
+                        <div style="display:flex;justify-content:space-between;align-items:start">
+                            <div style="flex:1">
+                                <strong style="font-size:.9rem">${r.itemName}</strong>
+                                <div style="font-size:.75rem;color:#666;margin-top:3px">
+                                    수량: ${r.qty} · 배치: ${r.batchNo} · ${r.location}
+                                </div>
+                                <div style="font-size:.7rem;color:#999;margin-top:2px">
+                                    유통기한: ${r.expiryDate} · ${r.receivedBy} · ${date}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }catch(e){
+                container.innerHTML='불러오기 실패: '+e.message;
+            }
+        }
+
         // Tab Navigation
         document.querySelectorAll('.nav-item').forEach(item=>{
             item.addEventListener('click',function(){
@@ -2442,6 +2746,11 @@
                 // 재고 탭 진입 시 데이터 로드
                 if(this.dataset.tab==='inventory'&&!invItems.length){
                     initInventoryTab();
+                }
+                // 입고 탭 진입 시 초기화
+                if(this.dataset.tab==='receiving'){
+                    loadReceivingLocations();
+                    loadRecentReceiving();
                 }
                 // 비품요청 탭 진입 시 내역 로드
                 if(this.dataset.tab==='wishlist'){
