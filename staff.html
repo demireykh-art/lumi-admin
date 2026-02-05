@@ -358,32 +358,13 @@
             <!-- 재고 실사 탭 -->
             <div class="tab-content" id="tab-inventory">
                 <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
-                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
-                        <span>📦 재고 실사 (위치별)</span>
-                        <div style="display:flex;gap:.5rem">
-                            <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
-                            <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openWishlistModal()">🛍️ 비품 요청</button>
-                        </div>
+                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                        📦 재고 실사
+                        <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
+                        <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openWishlistModal()">🛍️ 비품 요청</button>
                     </div>
-                    
                     <div id="invLowStockAlert" style="display:none;background:rgba(168,90,90,.08);border:1px solid rgba(168,90,90,.2);padding:.6rem .8rem;border-radius:6px;margin-bottom:.5rem;font-size:.85rem;color:var(--red)"></div>
-                    
-                    <!-- 위치 선택 -->
-                    <div style="background:#fff9f0;border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:.75rem">
-                        <div style="font-weight:600;font-size:.9rem;margin-bottom:.5rem">📍 실사할 위치 선택</div>
-                        <select id="auditLocationSelect" onchange="setAuditLocation(this.value)" 
-                            style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
-                            <option value="">전체 위치</option>
-                        </select>
-                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem">
-                            💡 현재 계신 위치를 선택하면 해당 장소의 품목만 표시됩니다
-                        </div>
-                    </div>
-                    
-                    <!-- 카테고리 필터 -->
                     <div class="inv-cat-filters" id="invCatButtons"></div>
-                    
-                    <!-- 진행률 -->
                     <div class="inv-progress" id="invProgress">
                         <span>진행률</span>
                         <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
@@ -401,13 +382,7 @@
                 <div class="card" style="margin-bottom:.5rem">
                     <div class="card-title">📥 물품 입고</div>
                     <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
-                        새로 도착한 물품을 등록하세요. 한 번에 여러 위치로 분할 입고가 가능합니다.
-                    </div>
-                    
-                    <!-- 카테고리 필터 -->
-                    <div style="margin-bottom:1rem">
-                        <label style="font-weight:600;font-size:.9rem;margin-bottom:.5rem;display:block">📂 분류별 입고</label>
-                        <div class="inv-cat-filters" id="receivingCatButtons"></div>
+                        새로 도착한 물품을 등록하세요. 품목을 검색하여 입고 수량, 유통기한, 보관 장소를 입력하면 배치(Batch)가 자동 생성됩니다.
                     </div>
                     
                     <!-- 품목 검색 -->
@@ -425,50 +400,36 @@
                         <div style="background:var(--bg);padding:.75rem;border-radius:6px;margin-bottom:1rem">
                             <div style="font-weight:600;font-size:1rem" id="receivingItemName"></div>
                             <div style="font-size:.8rem;color:var(--text-muted);margin-top:.25rem">
-                                총재고: <span id="receivingCurrentStock">-</span> | 
+                                현재고: <span id="receivingCurrentStock">-</span> | 
                                 단위: <span id="receivingItemUnit">개</span>
                             </div>
                         </div>
                         
-                        <!-- 배치 정보 -->
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+                            <div>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">입고 수량 *</label>
+                                <input type="number" id="receivingQty" placeholder="0" step="0.01" min="0.01" 
+                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
+                            </div>
                             <div>
                                 <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">유통기한 *</label>
                                 <input type="date" id="receivingExpiry" 
                                     style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
                             </div>
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.75rem">
                             <div>
                                 <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">구매단가 (원)</label>
                                 <input type="number" id="receivingPrice" placeholder="0" min="0" 
                                     style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
                             </div>
-                        </div>
-                        
-                        <!-- 위치별 분할 입고 -->
-                        <div style="background:#f0f8ff;border:1px solid #b8daff;padding:.75rem;border-radius:6px;margin-bottom:1rem">
-                            <div style="font-weight:600;font-size:.85rem;margin-bottom:.75rem">📍 위치별 입고 수량</div>
-                            <div style="display:flex;gap:.5rem;margin-bottom:.5rem;align-items:end">
-                                <div style="flex:2">
-                                    <label style="font-size:.75rem;color:var(--text-secondary);margin-bottom:.25rem;display:block">보관 장소</label>
-                                    <select id="receivingLocation" style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
-                                        <option value="">장소 선택</option>
-                                    </select>
-                                </div>
-                                <div style="flex:1">
-                                    <label style="font-size:.75rem;color:var(--text-secondary);margin-bottom:.25rem;display:block">입고 수량</label>
-                                    <input type="number" id="receivingQty" placeholder="0" step="0.01" min="0.01" 
-                                        style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
-                                </div>
-                                <button type="button" onclick="addReceivingLocation()" 
-                                    style="padding:.6rem .75rem;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;font-weight:600">+ 추가</button>
-                            </div>
-                            <div id="receivingLocationsList" style="min-height:2rem;display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem">
-                                <div style="font-size:.75rem;color:var(--text-muted);font-style:italic">입고할 위치를 추가하세요</div>
-                            </div>
-                            <div style="margin-top:.75rem;padding:.5rem;background:rgba(154,139,122,.1);border-radius:4px;text-align:center">
-                                <span style="font-size:.85rem;color:var(--text-secondary)">총 입고량:</span>
-                                <strong id="receivingTotalQty" style="font-size:1.1rem;color:var(--primary);margin-left:.5rem">0</strong>
-                                <span id="receivingTotalUnit" style="font-size:.85rem;color:var(--text-secondary)">개</span>
+                            <div>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">보관 장소 *</label>
+                                <select id="receivingLocation" 
+                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
+                                    <option value="">장소 선택</option>
+                                </select>
                             </div>
                         </div>
                         
@@ -726,21 +687,6 @@
                         💡 예시: 1박스(100개입) 50만원 구매 시 → 총액 500000, 박스수 1, 낱개수 100 입력
                     </div>
                 </div>
-                
-                <!-- 보관 위치 입력 -->
-                <div style="background:#f0f8ff;border:1px solid #b8daff;padding:.75rem;border-radius:6px;margin-top:.75rem">
-                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.75rem">📍 보관 위치 설정</div>
-                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
-                        <select class="form-select" id="newItemLocationSelect" style="flex:2">
-                            <option value="">장소 선택</option>
-                        </select>
-                        <input type="number" class="form-input" id="newItemLocationQty" placeholder="수량" min="0" style="flex:1">
-                        <button type="button" onclick="addNewItemLocation()" style="padding:.5rem .75rem;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">+ 추가</button>
-                    </div>
-                    <div id="newItemLocationsList" style="min-height:2rem;display:flex;flex-wrap:wrap;gap:.5rem">
-                        <div style="font-size:.75rem;color:var(--text-muted);font-style:italic">위치를 추가하세요</div>
-                    </div>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('newItemModal')" style="flex:1">취소</button>
@@ -805,22 +751,6 @@
                     </div>
                     <div id="editItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:4px;font-size:.85rem;font-weight:600;color:var(--primary)">낱개당 단가: -</div>
                 </div>
-                
-                <!-- 보관 위치 수정 -->
-                <div style="background:#f0f8ff;border:1px solid #b8daff;padding:.75rem;border-radius:6px;margin-top:.75rem">
-                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.75rem">📍 보관 위치 수정</div>
-                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
-                        <select class="form-select" id="editItemLocationSelect" style="flex:2">
-                            <option value="">장소 선택</option>
-                        </select>
-                        <input type="number" class="form-input" id="editItemLocationQty" placeholder="수량" min="0" style="flex:1">
-                        <button type="button" onclick="addEditItemLocation()" style="padding:.5rem .75rem;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap">+ 추가</button>
-                    </div>
-                    <div id="editItemLocationsList" style="min-height:2rem;display:flex;flex-wrap:wrap;gap:.5rem">
-                        <div style="font-size:.75rem;color:var(--text-muted);font-style:italic">위치 정보 없음</div>
-                    </div>
-                </div>
-                
                 <div class="form-group" style="margin-top:.5rem">
                     <label class="form-label">🔗 구매 링크</label>
                     <input type="url" class="form-input" id="editItemPurchaseLink" placeholder="https://쿠팡,네이버 등">
@@ -1099,11 +1029,7 @@
                 }
             }
 
-            if(shared){
-                initInventoryTab();
-                loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
-                renderReceivingCatButtons(); // 입고 카테고리 버튼 렌더링
-            }
+            if(shared) initInventoryTab();
             checkLocation();
             loadAllData();
             loadSettings();
@@ -2172,7 +2098,6 @@
         let auditInputs={}; // {itemId: value}
         let lastWeekAudits={}; // {itemId: lastAuditData}
         let currentInvCat=''; // '' = 전체
-        let currentAuditLocation=''; // 현재 선택된 실사 위치
 
         async function loadInventoryForStaff(){
             try{
@@ -2213,68 +2138,18 @@
             renderInvCatButtons();
             renderInvAuditList();
         }
-        
-        // 실사 위치 선택 셀렉트 박스 업데이트
-        function updateAuditLocationSelect(){
-            const sel=document.getElementById('auditLocationSelect');
-            if(!sel)return;
-            sel.innerHTML='<option value="">전체 위치 (모든 품목)</option>';
-            
-            if(receivingLocations.length>0){
-                // 정렬된 위치 목록 추가
-                receivingLocations.forEach(loc=>{
-                    const opt=document.createElement('option');
-                    opt.value=`${loc.floor}-${loc.name}`;
-                    opt.textContent=`${loc.floor}-${loc.name}`;
-                    sel.appendChild(opt);
-                });
-            }else{
-                // fallback 기본 장소
-                const defaults=[
-                    '5층-냉장고','5층-처치실',
-                    '6층-레이저실','6층-리팟실','6층-수액실','6층-수술실','6층-시술실','6층-어븀실',
-                    '6층-줄기세포센터','6층-준비실','6층-준비실 냉장고','6층-준비실옆보관실'
-                ].sort((a,b)=>a.localeCompare(b,'ko'));
-                defaults.forEach(loc=>{
-                    const opt=document.createElement('option');
-                    opt.value=loc;
-                    opt.textContent=loc;
-                    sel.appendChild(opt);
-                });
-            }
-        }
-        
-        function setAuditLocation(loc){
-            currentAuditLocation=loc;
-            renderInvAuditList();
-        }
 
         function renderInvAuditList(){
             const container=document.getElementById('invAuditList');
             if(!container)return;
             let items=invItems;
-            
-            // 카테고리 필터
             if(currentInvCat){
                 items=items.filter(i=>i.category===currentInvCat);
             }
-            
-            // 위치 필터 (핵심 기능!)
-            if(currentAuditLocation){
-                items=items.filter(i=>{
-                    // 선택한 위치에 재고가 있는 품목만 표시
-                    return i.locations&&i.locations[currentAuditLocation]>0;
-                });
-            }
-            
             items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
             
             if(!items.length){
-                const locMsg=currentAuditLocation?` (${currentAuditLocation})`:' (전체)';
-                container.innerHTML=`<div style="text-align:center;color:var(--text-muted);padding:2rem">
-                    ${currentAuditLocation?'이 위치에 등록된 품목이 없습니다.':'등록된 품목이 없습니다.'}
-                    ${locMsg}
-                </div>`;
+                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:2rem">등록된 품목이 없습니다.</div>';
                 return;
             }
 
@@ -2286,34 +2161,15 @@
                 const isSaved=val!=null&&val!=='';
                 const catLabel=INV_CATEGORIES[item.category]||'';
                 const isLow=item.safetyStock&&item.currentStock<item.safetyStock;
+                const sysStock=item.currentStock||0;
                 const buyLink=item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" style="display:inline-block;background:#f0f0f0;color:#333;font-size:.65rem;padding:2px 6px;border-radius:3px;text-decoration:none;margin-left:4px;vertical-align:middle">🛒</a>`:'';
                 const lowBg=isLow?'background:rgba(255,152,0,0.08);border-left:3px solid #ff9800':'';
-                
-                // 위치별 재고 표시 (선택된 위치가 있으면 해당 위치만, 없으면 전체)
-                let locationDisplay='';
-                let locationStock=0;
-                if(currentAuditLocation){
-                    // 특정 위치 선택됨 - 해당 위치의 재고만 표시
-                    locationStock=item.locations?.[currentAuditLocation]||0;
-                    locationDisplay=`<span style="color:var(--primary);font-weight:700">📍 ${currentAuditLocation}: ${locationStock}${item.unit||'개'}</span>`;
-                }else{
-                    // 전체 위치 - 모든 위치 표시
-                    locationStock=item.currentStock||item.totalStock||0;
-                    const locations = item.locations ? 
-                        Object.entries(item.locations)
-                            .filter(([loc, qty]) => qty > 0)
-                            .map(([loc, qty]) => `${loc}(${qty})`).join(', ') 
-                        : '위치 미지정';
-                    locationDisplay=`<span style="color:var(--primary);font-weight:600">📍 ${locations}</span>`;
-                }
-                
                 return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
                     <div class="inv-item-info">
                         <div class="inv-item-name">${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':''}</div>
                         <div class="inv-item-meta">
                             <span>${catLabel}</span>
-                            ${locationDisplay}
-                            <span>총재고: <strong>${item.totalStock||item.currentStock||0}</strong> ${item.unit||'개'}</span>
+                            <span>시스템: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
                             ${isLow?`<span style="color:var(--red)">안전재고: ${item.safetyStock}</span>`:''}
                             ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
                             <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">✏️ 수정</button>
@@ -2322,9 +2178,9 @@
                     </div>
                     <input type="number" class="inv-stock-input" 
                         id="inv-input-${item.id}"
-                        placeholder="${currentAuditLocation?'실제 수량':'총 수량'}" step="0.01" min="0"
+                        placeholder="-" step="0.01" min="0"
                         value="${val!=null?val:''}"
-                        onchange="onInvInput('${item.id}',this.value,${currentAuditLocation?`'${currentAuditLocation}'`:null})"
+                        onchange="onInvInput('${item.id}',this.value)"
                         oninput="onInvInputLive('${item.id}',this.value)"
                         inputmode="decimal">
                     <span class="inv-stock-unit">${item.unit||'개'}</span>
@@ -2366,74 +2222,36 @@
         }
 
         // 개별 품목 즉시 저장 (onchange 시 Firebase 트랜잭션)
-        async function onInvInput(itemId,val,location=null){
+        async function onInvInput(itemId,val){
             onInvInputLive(itemId,val);
             if(val===''||val==null)return;
             const actualStock=parseFloat(val);
             const item=invItems.find(i=>i.id===itemId);
             if(!item)return;
             const staffName=currentUser?.name||currentUser?.id||'staff';
-            
             try{
                 const ref=db.collection('inventory').doc(itemId);
                 await db.runTransaction(async tx=>{
                     const doc=await tx.get(ref);
-                    const data=doc.data();
-                    const prevStock=data?.currentStock||data?.totalStock||0;
-                    const locations=data?.locations||{};
-                    
-                    // 위치별 실사인 경우
-                    if(location&&currentAuditLocation){
-                        // 특정 위치의 재고만 업데이트
-                        locations[location]=actualStock;
-                        const totalStock=Object.values(locations).reduce((sum,v)=>sum+v,0);
-                        tx.update(ref,{
-                            locations:locations,
-                            currentStock:totalStock,
-                            totalStock:totalStock,
-                            lastAuditAt:new Date().toISOString(),
-                            lastAuditBy:staffName,
-                            lastAuditLocation:location
-                        });
-                    }else{
-                        // 전체 실사 (기존 방식)
-                        tx.update(ref,{
-                            currentStock:actualStock,
-                            totalStock:actualStock,
-                            lastAuditAt:new Date().toISOString(),
-                            lastAuditBy:staffName
-                        });
-                    }
-                    
+                    const prevStock=doc.data()?.currentStock||0;
+                    tx.update(ref,{currentStock:actualStock,lastAuditAt:new Date().toISOString(),lastAuditBy:staffName});
                     // inventoryLogs 기록
                     const logRef=db.collection('inventoryLogs').doc();
                     tx.set(logRef,{
                         itemId,itemName:item.name,
                         prevStock,newStock:actualStock,diff:actualStock-prevStock,
                         type:'audit',staffName,
-                        location:location||'전체',
                         createdAt:new Date().toISOString()
                     });
                 });
-                
                 // inventoryAudits에도 기록 (관리자 리포트용)
                 await db.collection('inventoryAudits').add({
                     itemId,actualStock,
-                    location:location||'전체',
                     staffId:currentUser?.id||'unknown',staffName,
                     createdAt:new Date().toISOString()
                 });
-                
                 // 로컬 데이터 동기화
-                if(location&&currentAuditLocation&&item.locations){
-                    item.locations[location]=actualStock;
-                    item.currentStock=Object.values(item.locations).reduce((sum,v)=>sum+v,0);
-                    item.totalStock=item.currentStock;
-                }else if(item){
-                    item.currentStock=actualStock;
-                    item.totalStock=actualStock;
-                }
-                
+                if(item)item.currentStock=actualStock;
                 const row=document.getElementById('inv-row-'+itemId);
                 if(row)row.classList.add('saved');
             }catch(e){console.error('실사 저장 오류:',e);}
@@ -2452,7 +2270,6 @@
 
         async function initInventoryTab(){
             await Promise.all([loadInventoryForStaff(),loadLastWeekAudits()]);
-            updateAuditLocationSelect(); // 위치 셀렉트 업데이트
             renderInvCatButtons();
             renderInvAuditList();
             renderLowStockAlert();
@@ -2472,8 +2289,6 @@
         }
 
         // ===== 신규 품목 등록 =====
-        let newItemLocations={}; // 신규 품목의 위치 정보 임시 저장
-        
         function openNewItemModal(){
             ['newItemName','newItemTotalPrice','newItemExpiry','newItemPurchaseLink'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
             document.getElementById('newItemType').value='disposable';
@@ -2483,64 +2298,7 @@
             document.getElementById('newItemBoxes').value='1';
             document.getElementById('newItemPerBox').value='1';
             document.getElementById('newItemUnitCalc').textContent='낱개당 단가: -';
-            
-            // 위치 정보 초기화
-            newItemLocations={};
-            updateNewItemLocationSelect();
-            renderNewItemLocations();
-            
             openModal('newItemModal');
-        }
-        
-        function updateNewItemLocationSelect(){
-            const sel=document.getElementById('newItemLocationSelect');
-            if(!sel)return;
-            sel.innerHTML='<option value="">장소 선택</option>';
-            if(receivingLocations.length>0){
-                receivingLocations.forEach(loc=>{
-                    const opt=document.createElement('option');
-                    opt.value=`${loc.floor}-${loc.name}`;
-                    opt.textContent=`${loc.floor}-${loc.name}`;
-                    sel.appendChild(opt);
-                });
-            }else{
-                const defaults=['5층-처치실','5층-냉장고','6층-시술실','6층-수액실','6층-줄기세포센터','6층-수술실','6층-준비실','6층-준비실옆보관실','6층-준비실 냉장고','6층-어븀실','6층-레이저실','6층-리팟실'];
-                defaults.forEach(loc=>{
-                    const opt=document.createElement('option');
-                    opt.value=loc;
-                    opt.textContent=loc;
-                    sel.appendChild(opt);
-                });
-            }
-        }
-        
-        function addNewItemLocation(){
-            const loc=document.getElementById('newItemLocationSelect').value;
-            const qty=parseFloat(document.getElementById('newItemLocationQty').value)||0;
-            if(!loc){alert('장소를 선택하세요.');return;}
-            if(qty<=0){alert('수량은 0보다 커야 합니다.');return;}
-            newItemLocations[loc]=(newItemLocations[loc]||0)+qty;
-            document.getElementById('newItemLocationQty').value='';
-            renderNewItemLocations();
-        }
-        
-        function removeNewItemLocation(loc){
-            delete newItemLocations[loc];
-            renderNewItemLocations();
-        }
-        
-        function renderNewItemLocations(){
-            const container=document.getElementById('newItemLocationsList');
-            if(!container)return;
-            const locs=Object.entries(newItemLocations);
-            if(!locs.length){
-                container.innerHTML='<div style="font-size:.75rem;color:var(--text-muted);font-style:italic">위치를 추가하세요</div>';
-                return;
-            }
-            container.innerHTML=locs.map(([loc,qty])=>`<div style="display:inline-flex;align-items:center;gap:.5rem;background:var(--bg);padding:.4rem .6rem;border-radius:4px;border:1px solid var(--border)">
-                <strong style="font-size:.85rem">${loc}</strong>: ${qty}개
-                <button onclick="removeNewItemLocation('${loc}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:0;line-height:1">×</button>
-            </div>`).join('');
         }
 
         function calcNewItemUnit(){
@@ -2578,8 +2336,6 @@
                 unitPrice:unitPrice,
                 expiryDate:document.getElementById('newItemExpiry').value||null,
                 purchaseLink:document.getElementById('newItemPurchaseLink')?.value?.trim()||'',
-                locations:newItemLocations, // 위치 정보 저장
-                totalStock:Object.values(newItemLocations).reduce((sum,v)=>sum+v,0), // 총재고 계산
                 createdAt:new Date().toISOString(),
                 updatedAt:new Date().toISOString(),
                 createdBy:currentUser?.name||'staff'
@@ -2596,8 +2352,6 @@
         }
 
         // ===== 품목 수정 기능 =====
-        let editItemLocations={}; // 수정 중인 품목의 위치 정보 임시 저장
-        
         function openEditItemModal(itemId){
             const item=invItems.find(i=>i.id===itemId);
             if(!item){alert('품목을 찾을 수 없습니다.');return;}
@@ -2608,12 +2362,6 @@
             document.getElementById('editItemSafety').value=item.safetyStock||0;
             document.getElementById('editItemExpiry').value=item.expiryDate||'';
             document.getElementById('editItemPurchaseLink').value=item.purchaseLink||'';
-            
-            // 위치 정보 로드
-            editItemLocations=item.locations?{...item.locations}:{};
-            updateEditItemLocationSelect();
-            renderEditItemLocations();
-            
             // 구매 정보 역산: purchasePrice=총액, purchaseQty=총낱개수
             const totalPrice=item.purchasePrice||0;
             const totalQty=item.purchaseQty||1;
@@ -2623,57 +2371,6 @@
             document.getElementById('editItemPerBox').value=totalQty||1;
             calcEditItemUnit();
             openModal('editItemModal');
-        }
-        
-        function updateEditItemLocationSelect(){
-            const sel=document.getElementById('editItemLocationSelect');
-            if(!sel)return;
-            sel.innerHTML='<option value="">장소 선택</option>';
-            if(receivingLocations.length>0){
-                receivingLocations.forEach(loc=>{
-                    const opt=document.createElement('option');
-                    opt.value=`${loc.floor}-${loc.name}`;
-                    opt.textContent=`${loc.floor}-${loc.name}`;
-                    sel.appendChild(opt);
-                });
-            }else{
-                const defaults=['5층-처치실','5층-냉장고','6층-시술실','6층-수액실','6층-줄기세포센터','6층-수술실','6층-준비실','6층-준비실옆보관실','6층-준비실 냉장고','6층-어븀실','6층-레이저실','6층-리팟실'];
-                defaults.forEach(loc=>{
-                    const opt=document.createElement('option');
-                    opt.value=loc;
-                    opt.textContent=loc;
-                    sel.appendChild(opt);
-                });
-            }
-        }
-        
-        function addEditItemLocation(){
-            const loc=document.getElementById('editItemLocationSelect').value;
-            const qty=parseFloat(document.getElementById('editItemLocationQty').value)||0;
-            if(!loc){alert('장소를 선택하세요.');return;}
-            if(qty<=0){alert('수량은 0보다 커야 합니다.');return;}
-            editItemLocations[loc]=(editItemLocations[loc]||0)+qty;
-            document.getElementById('editItemLocationQty').value='';
-            renderEditItemLocations();
-        }
-        
-        function removeEditItemLocation(loc){
-            delete editItemLocations[loc];
-            renderEditItemLocations();
-        }
-        
-        function renderEditItemLocations(){
-            const container=document.getElementById('editItemLocationsList');
-            if(!container)return;
-            const locs=Object.entries(editItemLocations);
-            if(!locs.length){
-                container.innerHTML='<div style="font-size:.75rem;color:var(--text-muted);font-style:italic">위치 정보 없음</div>';
-                return;
-            }
-            container.innerHTML=locs.map(([loc,qty])=>`<div style="display:inline-flex;align-items:center;gap:.5rem;background:var(--bg);padding:.4rem .6rem;border-radius:4px;border:1px solid var(--border)">
-                <strong style="font-size:.85rem">${loc}</strong>: ${qty}개
-                <button onclick="removeEditItemLocation('${loc}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:0;line-height:1">×</button>
-            </div>`).join('');
         }
 
         function calcEditItemUnit(){
@@ -2707,8 +2404,6 @@
                 purchaseQty:totalQty,
                 unitPrice:totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0,
                 purchaseLink:document.getElementById('editItemPurchaseLink').value.trim(),
-                locations:editItemLocations, // 위치 정보 업데이트
-                totalStock:Object.values(editItemLocations).reduce((sum,v)=>sum+v,0), // 총재고 재계산
                 updatedAt:new Date().toISOString(),
                 updatedBy:currentUser?.name||'staff'
             };
@@ -2818,19 +2513,6 @@
 
         // ===== 입고 시스템 =====
         let receivingLocations=[]; // 장소 목록
-        let currentReceivingCat=''; // 입고 탭 카테고리 필터
-        let receivingLocationsList={}; // 입고할 위치별 수량 {장소명: 수량}
-        let currentReceivingItem=null; // 현재 입고 중인 품목 정보
-        
-        // 위치 정렬 함수: 5층(가나다) -> 6층(가나다)
-        function sortLocations(locs){
-            return locs.sort((a,b)=>{
-                const aFloor=a.floor||'';
-                const bFloor=b.floor||'';
-                if(aFloor!==bFloor)return aFloor.localeCompare(bFloor,'ko');
-                return (a.name||'').localeCompare(b.name||'','ko');
-            });
-        }
         
         // 장소 목록 로드
         async function loadReceivingLocations(){
@@ -2838,9 +2520,7 @@
             try{
                 const snap=await db.collection('locations').orderBy('order','asc').get();
                 receivingLocations=snap.docs.map(d=>({id:d.id,...d.data()}));
-                receivingLocations=sortLocations(receivingLocations);
                 updateLocationSelect();
-                updateAuditLocationSelect();
             }catch(e){
                 receivingLocations=[];
                 console.error('장소 로드 실패:',e);
@@ -2852,7 +2532,7 @@
             if(!sel)return;
             sel.innerHTML='<option value="">장소 선택</option>';
             
-            // DB에서 로드된 장소가 있으면 사용 (정렬된 상태)
+            // DB에서 로드된 장소가 있으면 사용
             if(receivingLocations.length>0){
                 receivingLocations.forEach(loc=>{
                     const opt=document.createElement('option');
@@ -2861,12 +2541,13 @@
                     sel.appendChild(opt);
                 });
             }else{
-                // 기본 장소 (DB 로드 실패 시 fallback) - 정렬된 상태로 추가
+                // 기본 장소 (DB 로드 실패 시 fallback)
                 const defaults=[
-                    '5층-냉장고','5층-처치실',
-                    '6층-레이저실','6층-리팟실','6층-수액실','6층-수술실','6층-시술실','6층-어븀실',
-                    '6층-줄기세포센터','6층-준비실','6층-준비실 냉장고','6층-준비실옆보관실'
-                ].sort((a,b)=>a.localeCompare(b,'ko'));
+                    '5층-처치실','5층-냉장고',
+                    '6층-시술실','6층-수액실','6층-줄기세포센터','6층-수술실',
+                    '6층-준비실','6층-준비실옆보관실','6층-준비실 냉장고',
+                    '6층-어븀실','6층-레이저실','6층-리팟실'
+                ];
                 defaults.forEach(loc=>{
                     const opt=document.createElement('option');
                     opt.value=loc;
@@ -2876,77 +2557,7 @@
             }
         }
         
-        // 입고 위치 추가
-        function addReceivingLocation(){
-            const loc=document.getElementById('receivingLocation').value;
-            const qty=parseFloat(document.getElementById('receivingQty').value)||0;
-            if(!loc){alert('장소를 선택하세요.');return;}
-            if(qty<=0){alert('입고 수량은 0보다 커야 합니다.');return;}
-            
-            receivingLocationsList[loc]=(receivingLocationsList[loc]||0)+qty;
-            document.getElementById('receivingQty').value='';
-            renderReceivingLocations();
-        }
-        
-        function removeReceivingLocation(loc){
-            delete receivingLocationsList[loc];
-            renderReceivingLocations();
-        }
-        
-        function renderReceivingLocations(){
-            const container=document.getElementById('receivingLocationsList');
-            const totalEl=document.getElementById('receivingTotalQty');
-            const unitEl=document.getElementById('receivingTotalUnit');
-            if(!container)return;
-            
-            const locs=Object.entries(receivingLocationsList);
-            const total=locs.reduce((sum,[_,qty])=>sum+qty,0);
-            const unit=currentReceivingItem?.unit||'개';
-            
-            if(totalEl)totalEl.textContent=total.toLocaleString();
-            if(unitEl)unitEl.textContent=unit;
-            
-            if(!locs.length){
-                container.innerHTML='<div style="font-size:.75rem;color:var(--text-muted);font-style:italic">입고할 위치를 추가하세요</div>';
-                return;
-            }
-            
-            container.innerHTML=locs.map(([loc,qty])=>`<div style="display:inline-flex;align-items:center;gap:.5rem;background:#fff;padding:.4rem .6rem;border-radius:4px;border:1px solid var(--primary)">
-                <strong style="font-size:.85rem;color:var(--primary)">${loc}</strong>: <span style="font-weight:600">${qty}</span>${unit}
-                <button onclick="removeReceivingLocation('${loc}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;padding:0;line-height:1">×</button>
-            </div>`).join('');
-        }
-        
-        // 입고 카테고리 버튼 렌더링
-        function renderReceivingCatButtons(){
-            const container=document.getElementById('receivingCatButtons');
-            if(!container)return;
-            const cats=[
-                {key:'',label:'전체',icon:'📋'},
-                {key:'nursing',label:'간호',icon:'💉'},
-                {key:'skin',label:'피부',icon:'✨'},
-                {key:'desk',label:'데스크',icon:'🖥️'},
-                {key:'common',label:'공통',icon:'📎'}
-            ];
-            container.innerHTML=cats.map(c=>{
-                const count=c.key?invItems.filter(i=>i.category===c.key).length:invItems.length;
-                return `<div class="inv-cat-btn ${currentReceivingCat===c.key?'active':''}" onclick="setReceivingCat('${c.key}')">
-                    <span class="cat-icon">${c.icon}</span>${c.label}<span class="cat-count">${count}개</span>
-                </div>`;
-            }).join('');
-        }
-        
-        function setReceivingCat(cat){
-            currentReceivingCat=cat;
-            renderReceivingCatButtons();
-            // 검색창 초기화
-            document.getElementById('receivingSearch').value='';
-            document.getElementById('receivingSearchResults').innerHTML='';
-            // 폼 숨기기
-            cancelReceiving();
-        }
-        
-        // 품목 검색 (카테고리 필터 적용)
+        // 품목 검색
         function searchItemsForReceiving(keyword){
             const container=document.getElementById('receivingSearchResults');
             if(!container)return;
@@ -2957,16 +2568,10 @@
             }
             
             const kw=keyword.toLowerCase();
-            let results=invItems.filter(item=>(item.name||'').toLowerCase().includes(kw));
-            
-            // 카테고리 필터 적용
-            if(currentReceivingCat){
-                results=results.filter(item=>item.category===currentReceivingCat);
-            }
+            const results=invItems.filter(item=>(item.name||'').toLowerCase().includes(kw));
             
             if(!results.length){
-                const catLabel=currentReceivingCat?` (${INV_CATEGORIES[currentReceivingCat]})`:' (전체)';
-                container.innerHTML=`<div style="text-align:center;color:var(--text-muted);padding:.75rem;font-size:.85rem">검색 결과가 없습니다${catLabel}</div>`;
+                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:.75rem;font-size:.85rem">검색 결과가 없습니다</div>';
                 return;
             }
             
@@ -2978,7 +2583,7 @@
                     onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='#fff'">
                     <div>
                         <strong style="font-size:.9rem">${item.name}</strong>
-                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">${catLabel} · 총재고 ${stock} ${item.unit||'개'}</div>
+                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">${catLabel} · 현재고 ${stock} ${item.unit||'개'}</div>
                     </div>
                     <span style="color:var(--primary);font-size:.75rem">선택 →</span>
                 </div>`;
@@ -2988,9 +2593,6 @@
         function selectItemForReceiving(itemId){
             const item=invItems.find(i=>i.id===itemId);
             if(!item)return;
-            
-            currentReceivingItem=item; // 현재 품목 정보 저장
-            receivingLocationsList={}; // 위치 목록 초기화
             
             // 검색창 숨기기
             document.getElementById('receivingSearch').value=item.name;
@@ -3009,47 +2611,50 @@
             document.getElementById('receivingPrice').value='';
             document.getElementById('receivingLocation').value='';
             document.getElementById('receivingMemo').value='';
-            
-            // 위치 placeholder 업데이트
-            const qtyInput=document.getElementById('receivingQty');
-            if(qtyInput)qtyInput.placeholder=`${item.unit||'개'} 수량`;
-            
-            renderReceivingLocations();
         }
         
         function cancelReceiving(){
             document.getElementById('receivingForm').style.display='none';
             document.getElementById('receivingSearch').value='';
             document.getElementById('receivingSearchResults').innerHTML='';
-            receivingLocationsList={};
-            currentReceivingItem=null;
         }
         
         async function submitReceiving(){
             const itemId=document.getElementById('receivingItemId').value;
+            const qty=parseFloat(document.getElementById('receivingQty').value)||0;
             const expiry=document.getElementById('receivingExpiry').value;
             const price=parseFloat(document.getElementById('receivingPrice').value)||0;
+            const location=document.getElementById('receivingLocation').value;
             const memo=document.getElementById('receivingMemo').value.trim();
             
-            // 필수 항목 검증
-            if(!itemId){alert('품목을 선택하세요.');return;}
-            if(!expiry){alert('유통기한을 입력하세요.');return;}
-            if(!Object.keys(receivingLocationsList).length){
-                alert('입고할 위치를 최소 1개 이상 추가하세요.');
+            if(!itemId||!qty||!expiry||!location){
+                alert('필수 항목을 모두 입력해주세요.\n(입고 수량, 유통기한, 보관 장소)');
                 return;
             }
             
+            if(qty<=0){alert('입고 수량은 0보다 커야 합니다.');return;}
             if(typeof db==='undefined'){alert('시스템 초기화 중입니다.');return;}
             
             const item=invItems.find(i=>i.id===itemId);
             if(!item){alert('품목을 찾을 수 없습니다.');return;}
             
-            const totalQty=Object.values(receivingLocationsList).reduce((sum,v)=>sum+v,0);
-            
             try{
                 // 배치 번호 생성 (B날짜-순번)
                 const today=new Date().toISOString().split('T')[0].replace(/-/g,'');
                 const batchNo=`B${today}-${Date.now().toString(36).toUpperCase().substr(-3)}`;
+                
+                // 새 배치 객체
+                const newBatch={
+                    batchNo:batchNo,
+                    expiryDate:expiry,
+                    location:location,
+                    qty:qty,
+                    purchasePrice:price,
+                    purchaseDate:new Date().toISOString().split('T')[0],
+                    memo:memo,
+                    createdBy:currentUser?.name||currentUser?.id||'직원',
+                    createdAt:new Date().toISOString()
+                };
                 
                 // Firestore 트랜잭션
                 await db.runTransaction(async tx=>{
@@ -3061,73 +2666,50 @@
                     const batches=data.batches||[];
                     const locations=data.locations||{};
                     
-                    // 각 위치별로 배치 추가 및 재고 업데이트
-                    Object.entries(receivingLocationsList).forEach(([location,qty])=>{
-                        // 배치 추가
-                        batches.push({
-                            batchNo:`${batchNo}-${location}`,
-                            expiryDate:expiry,
-                            location:location,
-                            qty:qty,
-                            purchasePrice:price,
-                            purchaseDate:new Date().toISOString().split('T')[0],
-                            memo:memo,
-                            createdBy:currentUser?.name||currentUser?.id||'직원',
-                            createdAt:new Date().toISOString()
-                        });
-                        
-                        // 장소별 재고 업데이트
-                        locations[location]=(locations[location]||0)+qty;
-                    });
+                    // 배치 추가
+                    batches.push(newBatch);
                     
-                    // 총재고 계산 (currentStock과 totalStock 모두 업데이트)
+                    // 장소별 재고 업데이트
+                    locations[location]=(locations[location]||0)+qty;
+                    
+                    // 총재고 계산
                     const totalStock=Object.values(locations).reduce((sum,v)=>sum+v,0);
                     
                     tx.update(docRef,{
                         batches:batches,
                         locations:locations,
                         totalStock:totalStock,
-                        currentStock:totalStock, // currentStock도 동기화
                         updatedAt:new Date().toISOString()
                     });
                 });
                 
                 // 입고 기록 저장 (receivingHistory 컬렉션)
-                const locationSummary=Object.entries(receivingLocationsList)
-                    .map(([loc,qty])=>`${loc}(${qty})`)
-                    .join(', ');
-                
                 await db.collection('receivingHistory').add({
                     itemId:itemId,
                     itemName:item.name,
                     batchNo:batchNo,
-                    qty:totalQty,
-                    locations:receivingLocationsList, // 위치별 수량 저장
-                    locationSummary:locationSummary,
+                    qty:qty,
                     expiryDate:expiry,
+                    location:location,
                     price:price,
                     memo:memo,
                     receivedBy:currentUser?.name||currentUser?.id||'직원',
                     receivedAt:new Date().toISOString()
                 });
                 
-                alert(`✅ 입고 완료!\n\n품목: ${item.name}\n총 입고량: ${totalQty} ${item.unit||'개'}\n배치번호: ${batchNo}\n\n보관 위치:\n${locationSummary}`);
+                alert(`✅ 입고 완료!\n\n품목: ${item.name}\n수량: ${qty} ${item.unit||'개'}\n배치번호: ${batchNo}\n보관 장소: ${location}`);
                 
                 // UI 초기화
                 cancelReceiving();
                 
                 // 재고 목록 새로고침
-                await loadInventoryForStaff();
+                await loadInventoryItems();
                 renderInvCatButtons();
                 renderInvAuditList();
                 renderLowStockAlert();
                 
                 // 최근 입고 내역 새로고침
                 loadRecentReceiving();
-            }catch(e){
-                alert('입고 실패: '+e.message);
-            }
-        }
             }catch(e){
                 alert('입고 실패: '+e.message);
             }
@@ -3186,7 +2768,6 @@
                 // 입고 탭 진입 시 초기화
                 if(this.dataset.tab==='receiving'){
                     loadReceivingLocations();
-                    renderReceivingCatButtons();
                     loadRecentReceiving();
                 }
                 // 비품요청 탭 진입 시 내역 로드
