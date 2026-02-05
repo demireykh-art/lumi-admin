@@ -71,43 +71,202 @@ function formatBirthday(birthday){
     return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
-// ===== Auth (config DB 기반) =====
-const ADMIN_ID='adminhighgo';
+// ===== Auth (다수 관리자 지원) =====
+const SUPER_ADMIN_ID='adminhighgo';
 const DEFAULT_ADMIN_PW='gndls-asdk!jd-As';
 const DEFAULT_STAFF_PW='lumi2026!';
+let currentAdmin=null; // {id, name, role:'super'|'admin', ...}
 
 async function handleAdminLogin(){
-    const id=document.getElementById('adminId').value.trim();
+    const id=document.getElementById('adminId').value.trim().toLowerCase();
     const pw=document.getElementById('adminPw').value;
     document.getElementById('loginError').textContent='';
-    if(id!==ADMIN_ID){
-        document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
-        return;
-    }
-    // DB에서 비밀번호 확인
-    let adminPw=DEFAULT_ADMIN_PW;
-    try{
-        const doc=await db.collection('config').doc('passwords').get();
-        if(doc.exists&&doc.data().admin_pw) adminPw=doc.data().admin_pw;
-    }catch(e){console.warn('config 로드 실패, 기본값 사용');}
-    if(pw!==adminPw){
-        document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
-        return;
-    }
-    localStorage.setItem('lumi_admin_auth','true');
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('appContainer').classList.add('active');
-    initApp();
-}
-function logout(){localStorage.removeItem('lumi_admin_auth');location.reload();}
-function checkAuth(){
-    if(localStorage.getItem('lumi_admin_auth')==='true'){
+    if(!id||!pw){document.getElementById('loginError').textContent='ID와 비밀번호를 입력해주세요.';return;}
+    
+    // ── 1) 슈퍼 관리자 (기존 하드코딩 호환) ──
+    if(id===SUPER_ADMIN_ID){
+        let adminPw=DEFAULT_ADMIN_PW;
+        try{
+            const doc=await db.collection('config').doc('passwords').get();
+            if(doc.exists&&doc.data().admin_pw) adminPw=doc.data().admin_pw;
+        }catch(e){}
+        if(pw!==adminPw){
+            document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
+            return;
+        }
+        currentAdmin={id:SUPER_ADMIN_ID,name:'최고관리자',role:'super'};
+        localStorage.setItem('lumi_admin_auth',JSON.stringify(currentAdmin));
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('appContainer').classList.add('active');
         initApp();
         return;
     }
+    
+    // ── 2) 추가 관리자 (admins 컬렉션) ──
+    try{
+        let adminDoc=null;
+        // ID로 직접 조회
+        let d=await db.collection('admins').doc(id).get();
+        if(d.exists) adminDoc=d;
+        // 소문자 변환 시도
+        if(!adminDoc){
+            d=await db.collection('admins').doc(id.toLowerCase()).get();
+            if(d.exists) adminDoc=d;
+        }
+        if(!adminDoc){
+            document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
+            return;
+        }
+        const data=adminDoc.data();
+        if(data.status==='inactive'){
+            document.getElementById('loginError').textContent='비활성화된 계정입니다. 최고관리자에게 문의하세요.';
+            return;
+        }
+        if(data.password!==pw){
+            document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
+            return;
+        }
+        currentAdmin={id:adminDoc.id,name:data.name||adminDoc.id,role:data.role||'admin'};
+        localStorage.setItem('lumi_admin_auth',JSON.stringify(currentAdmin));
+        // 마지막 로그인 시각 기록
+        db.collection('admins').doc(adminDoc.id).update({lastLogin:new Date().toISOString()}).catch(()=>{});
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('appContainer').classList.add('active');
+        initApp();
+    }catch(e){
+        console.error('로그인 오류:',e);
+        document.getElementById('loginError').textContent='로그인 오류가 발생했습니다.';
+    }
+}
+function logout(){localStorage.removeItem('lumi_admin_auth');currentAdmin=null;location.reload();}
+function checkAuth(){
+    const saved=localStorage.getItem('lumi_admin_auth');
+    if(saved){
+        try{
+            const parsed=JSON.parse(saved);
+            if(parsed&&parsed.id){
+                currentAdmin=parsed;
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appContainer').classList.add('active');
+                initApp();
+                return;
+            }
+        }catch(e){}
+        // 기존 'true' 문자열 호환 (마이그레이션)
+        if(saved==='true'){
+            currentAdmin={id:SUPER_ADMIN_ID,name:'최고관리자',role:'super'};
+            localStorage.setItem('lumi_admin_auth',JSON.stringify(currentAdmin));
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('appContainer').classList.add('active');
+            initApp();
+            return;
+        }
+    }
     document.getElementById('loginScreen').classList.remove('hidden');
+}
+function isSuperAdmin(){return currentAdmin?.role==='super'||currentAdmin?.id===SUPER_ADMIN_ID;}
+
+// ===== 관리자 계정 관리 =====
+let adminAccounts=[];
+async function loadAdminAccounts(){
+    try{
+        const snap=await db.collection('admins').orderBy('createdAt','desc').get();
+        adminAccounts=snap.docs.map(d=>({id:d.id,...d.data()}));
+    }catch(e){adminAccounts=[];console.error('관리자 목록 로드 실패:',e);}
+    renderAdminAccounts();
+}
+function renderAdminAccounts(){
+    const container=document.getElementById('adminAccountList');
+    if(!container)return;
+    // 슈퍼관리자만 관리 가능
+    if(!isSuperAdmin()){
+        container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1.5rem">최고관리자만 관리자 계정을 관리할 수 있습니다.</div>';
+        return;
+    }
+    if(!adminAccounts.length){
+        container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1.5rem">추가된 관리자 계정이 없습니다.</div>';
+        return;
+    }
+    container.innerHTML=adminAccounts.map(a=>{
+        const st=a.status==='inactive';
+        const lastLogin=a.lastLogin?new Date(a.lastLogin).toLocaleString('ko'):'접속 이력 없음';
+        const created=a.createdAt?new Date(a.createdAt).toLocaleDateString('ko'):'';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:${st?'#fafafa':'#fff'}">
+            <div style="flex:1">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <strong style="font-size:.95rem">${a.name||a.id}</strong>
+                    <span style="font-size:.7rem;padding:2px 8px;border-radius:10px;background:${st?'#eee;color:#999':'rgba(46,125,50,.1);color:#2e7d32'}">${st?'비활성':'활성'}</span>
+                </div>
+                <div style="font-size:.75rem;color:#888;margin-top:2px">
+                    ID: ${a.id} · 등록: ${created} · 최근접속: ${lastLogin}
+                </div>
+            </div>
+            <div style="display:flex;gap:6px">
+                <button onclick="toggleAdminStatus('${a.id}',${st?'true':'false'})" style="padding:4px 10px;font-size:.75rem;border:1px solid ${st?'#2e7d32':'#f57f17'};color:${st?'#2e7d32':'#f57f17'};background:none;border-radius:4px;cursor:pointer">${st?'활성화':'비활성화'}</button>
+                <button onclick="resetAdminPw('${a.id}')" style="padding:4px 10px;font-size:.75rem;border:1px solid #1976d2;color:#1976d2;background:none;border-radius:4px;cursor:pointer">PW초기화</button>
+                <button onclick="deleteAdminAccount('${a.id}','${(a.name||a.id).replace(/'/g,"\\'")}')" style="padding:4px 10px;font-size:.75rem;border:1px solid var(--red);color:var(--red);background:none;border-radius:4px;cursor:pointer">삭제</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+async function addAdminAccount(){
+    if(!isSuperAdmin()){alert('최고관리자만 관리자를 추가할 수 있습니다.');return;}
+    const idEl=document.getElementById('newAdminId');
+    const nameEl=document.getElementById('newAdminName');
+    const pwEl=document.getElementById('newAdminPw');
+    const msg=document.getElementById('adminAddMsg');
+    const id=(idEl.value||'').trim().toLowerCase();
+    const name=(nameEl.value||'').trim();
+    const pw=(pwEl.value||'').trim();
+    msg.textContent='';
+    if(!id||!name||!pw){msg.textContent='모든 항목을 입력해주세요.';msg.style.color='var(--red)';return;}
+    if(id.length<3){msg.textContent='ID는 3자 이상이어야 합니다.';msg.style.color='var(--red)';return;}
+    if(pw.length<4){msg.textContent='비밀번호는 4자 이상이어야 합니다.';msg.style.color='var(--red)';return;}
+    if(id===SUPER_ADMIN_ID){msg.textContent='이 ID는 사용할 수 없습니다.';msg.style.color='var(--red)';return;}
+    // 중복 체크
+    try{
+        const exist=await db.collection('admins').doc(id).get();
+        if(exist.exists){msg.textContent='이미 존재하는 ID입니다.';msg.style.color='var(--red)';return;}
+    }catch(e){}
+    try{
+        await db.collection('admins').doc(id).set({
+            name:name,
+            password:pw,
+            role:'admin',
+            status:'active',
+            createdAt:new Date().toISOString(),
+            createdBy:currentAdmin?.id||SUPER_ADMIN_ID
+        });
+        idEl.value='';nameEl.value='';pwEl.value='';
+        msg.textContent='✅ 관리자 추가 완료';msg.style.color='var(--green)';
+        setTimeout(()=>{msg.textContent='';},2000);
+        await loadAdminAccounts();
+    }catch(e){msg.textContent='추가 실패: '+e.message;msg.style.color='var(--red)';}
+}
+async function toggleAdminStatus(id,isInactive){
+    const newStatus=isInactive?'active':'inactive';
+    const action=isInactive?'활성화':'비활성화';
+    if(!confirm(`${id} 계정을 ${action}하시겠습니까?`))return;
+    try{
+        await db.collection('admins').doc(id).update({status:newStatus});
+        await loadAdminAccounts();
+    }catch(e){alert('변경 실패: '+e.message);}
+}
+async function resetAdminPw(id){
+    const newPw=prompt(`${id} 계정의 새 비밀번호를 입력하세요 (4자 이상):`);
+    if(!newPw||newPw.length<4){if(newPw!==null)alert('비밀번호는 4자 이상이어야 합니다.');return;}
+    try{
+        await db.collection('admins').doc(id).update({password:newPw});
+        alert('✅ 비밀번호 초기화 완료');
+    }catch(e){alert('변경 실패: '+e.message);}
+}
+async function deleteAdminAccount(id,name){
+    if(!confirm(`"${name}" (${id}) 관리자 계정을 완전히 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`))return;
+    try{
+        await db.collection('admins').doc(id).delete();
+        await loadAdminAccounts();
+        alert('✅ 삭제 완료');
+    }catch(e){alert('삭제 실패: '+e.message);}
 }
 
 // ===== 비밀번호 설정 관리 =====
@@ -292,7 +451,20 @@ async function initApp(){
     if(typeof initTaxDropZone==='function')initTaxDropZone();
     if(typeof loadStaffSettings==='function')loadStaffSettings();
     if(typeof loadConfigForSettings==='function')loadConfigForSettings();
+    if(typeof loadAdminAccounts==='function')loadAdminAccounts();
+    if(typeof initDefaultLocations==='function')await initDefaultLocations();
+    if(typeof loadLocations==='function')await loadLocations();
+    updateAdminUI();
 }
 
 // Auto-check auth on load
+// 관리자 UI 업데이트 (로그인 사용자 표시)
+function updateAdminUI(){
+    const nameEl=document.getElementById('adminDisplayName');
+    if(nameEl&&currentAdmin) nameEl.textContent=currentAdmin.name||currentAdmin.id;
+    // 슈퍼관리자가 아니면 관리자 관리 섹션 숨기기
+    const adminMgmt=document.getElementById('adminMgmtSection');
+    if(adminMgmt) adminMgmt.style.display=isSuperAdmin()?'':'none';
+}
+
 document.addEventListener('DOMContentLoaded',checkAuth);

@@ -317,3 +317,153 @@ function calcAdminInvUnit(){
         el.style.color='var(--text-secondary)';
     }
 }
+
+// ===== 장소 관리 시스템 =====
+let locations=[];
+
+async function loadLocations(){
+    try{
+        const snap=await db.collection('locations').orderBy('order','asc').get();
+        locations=snap.docs.map(d=>({id:d.id,...d.data()}));
+    }catch(e){
+        locations=[];
+        console.error('장소 로드 실패:',e);
+    }
+    renderLocations();
+    updateLocationFilters();
+}
+
+function renderLocations(){
+    const el5=document.getElementById('locations5F');
+    const el6=document.getElementById('locations6F');
+    if(!el5||!el6)return;
+    
+    const locs5=locations.filter(l=>l.floor==='5층');
+    const locs6=locations.filter(l=>l.floor==='6층');
+    
+    if(!locs5.length){
+        el5.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem;font-size:.85rem">등록된 장소가 없습니다</div>';
+    }else{
+        el5.innerHTML=locs5.map(l=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:#fff">
+            <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:.7rem;color:var(--text-muted);min-width:20px">${l.order}</span>
+                <strong style="font-size:.9rem">${l.name}</strong>
+            </div>
+            <div style="display:flex;gap:4px">
+                <button onclick="editLocation('${l.id}')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--primary);color:var(--primary);background:none;border-radius:4px;cursor:pointer">수정</button>
+                <button onclick="deleteLocation('${l.id}','${l.name.replace(/'/g,"\\'")} (5층)')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--red);color:var(--red);background:none;border-radius:4px;cursor:pointer">삭제</button>
+            </div>
+        </div>`).join('');
+    }
+    
+    if(!locs6.length){
+        el6.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem;font-size:.85rem">등록된 장소가 없습니다</div>';
+    }else{
+        el6.innerHTML=locs6.map(l=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:#fff">
+            <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:.7rem;color:var(--text-muted);min-width:20px">${l.order}</span>
+                <strong style="font-size:.9rem">${l.name}</strong>
+            </div>
+            <div style="display:flex;gap:4px">
+                <button onclick="editLocation('${l.id}')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--primary);color:var(--primary);background:none;border-radius:4px;cursor:pointer">수정</button>
+                <button onclick="deleteLocation('${l.id}','${l.name.replace(/'/g,"\\'")} (6층)')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--red);color:var(--red);background:none;border-radius:4px;cursor:pointer">삭제</button>
+            </div>
+        </div>`).join('');
+    }
+}
+
+function updateLocationFilters(){
+    const filter=document.getElementById('invLocationFilter');
+    if(!filter)return;
+    const current=filter.value;
+    filter.innerHTML='<option value="">전체 장소</option><option value="5층">5층 전체</option><option value="6층">6층 전체</option>';
+    locations.forEach(loc=>{
+        const opt=document.createElement('option');
+        opt.value=`${loc.floor}-${loc.name}`;
+        opt.textContent=`${loc.floor}-${loc.name}`;
+        filter.appendChild(opt);
+    });
+    filter.value=current;
+}
+
+function openLocationModal(id=null){
+    document.getElementById('locationModalTitle').textContent=id?'장소 수정':'장소 추가';
+    document.getElementById('locationEditId').value=id||'';
+    document.getElementById('locationFloor').value='5층';
+    document.getElementById('locationName').value='';
+    document.getElementById('locationOrder').value='1';
+    
+    if(id){
+        const loc=locations.find(l=>l.id===id);
+        if(loc){
+            document.getElementById('locationFloor').value=loc.floor||'5층';
+            document.getElementById('locationName').value=loc.name||'';
+            document.getElementById('locationOrder').value=loc.order||1;
+        }
+    }
+    openModal('locationModal');
+}
+
+function editLocation(id){openLocationModal(id);}
+
+async function saveLocation(){
+    const editId=document.getElementById('locationEditId').value;
+    const floor=document.getElementById('locationFloor').value;
+    const name=document.getElementById('locationName').value.trim();
+    const order=parseInt(document.getElementById('locationOrder').value)||1;
+    
+    if(!name){alert('장소명을 입력하세요.');return;}
+    
+    const data={floor,name,order,updatedAt:new Date().toISOString()};
+    if(!editId)data.createdAt=new Date().toISOString();
+    
+    try{
+        if(editId){
+            await db.collection('locations').doc(editId).update(data);
+        }else{
+            await db.collection('locations').add(data);
+        }
+        closeModal('locationModal');
+        await loadLocations();
+        alert('✅ 저장 완료');
+    }catch(e){alert('저장 실패: '+e.message);}
+}
+
+async function deleteLocation(id,name){
+    if(!confirm(`"${name}" 장소를 삭제하시겠습니까?\n해당 장소의 재고 데이터는 유지되지만 새로 입력할 수 없습니다.`))return;
+    try{
+        await db.collection('locations').doc(id).delete();
+        await loadLocations();
+        alert('✅ 삭제 완료');
+    }catch(e){alert('삭제 실패: '+e.message);}
+}
+
+// 초기 장소 데이터 생성 (최초 1회)
+async function initDefaultLocations(){
+    const snap=await db.collection('locations').limit(1).get();
+    if(!snap.empty)return; // 이미 데이터 있음
+    
+    const defaults=[
+        {floor:'5층',name:'처치실',order:1},
+        {floor:'5층',name:'냉장고',order:2},
+        {floor:'6층',name:'시술실',order:1},
+        {floor:'6층',name:'수액실',order:2},
+        {floor:'6층',name:'줄기세포센터',order:3},
+        {floor:'6층',name:'수술실',order:4},
+        {floor:'6층',name:'준비실',order:5},
+        {floor:'6층',name:'준비실옆보관실',order:6},
+        {floor:'6층',name:'준비실 냉장고',order:7},
+        {floor:'6층',name:'어븀실',order:8},
+        {floor:'6층',name:'레이저실',order:9},
+        {floor:'6층',name:'리팟실',order:10}
+    ];
+    
+    const batch=db.batch();
+    defaults.forEach(d=>{
+        const ref=db.collection('locations').doc();
+        batch.set(ref,{...d,createdAt:new Date().toISOString()});
+    });
+    await batch.commit();
+    console.log('기본 장소 데이터 생성 완료');
+}
+

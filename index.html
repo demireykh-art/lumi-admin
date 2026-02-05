@@ -40,6 +40,7 @@
                         <select id="monthSelect" onchange="loadData()"></select><span>월</span>
                         <button class="month-arrow" onclick="changeMonth(1)">▶</button>
                     </div>
+                    <span id="adminDisplayName" style="font-size:.8rem;color:var(--text-secondary);margin-right:.5rem"></span>
                     <button class="logout-btn" onclick="logout()">로그아웃</button>
                 </div>
             </div>
@@ -311,6 +312,7 @@
             <div class="tab-content" id="tab-inventory">
                 <div class="sub-tabs">
                     <div class="sub-tab active" data-sub="inv-list">소모품 목록</div>
+                    <div class="sub-tab" data-sub="inv-locations">📍 장소 관리</div>
                     <div class="sub-tab" data-sub="inv-recipe">레시피 (시술 원가)</div>
                     <div class="sub-tab" data-sub="inv-audit">재고 실사</div>
                     <div class="sub-tab" data-sub="inv-wishlist">🛍️ 구매 요청 <span id="wishlistBadge" style="display:none;background:var(--red);color:#fff;font-size:.65rem;padding:1px 5px;border-radius:8px;margin-left:3px;vertical-align:middle">0</span></div>
@@ -328,20 +330,45 @@
                                 <option value="desk">데스크</option>
                                 <option value="common">공통</option>
                             </select>
-                            <select class="form-select" id="invTypeFilter" onchange="renderInventory()" style="width:auto">
-                                <option value="">전체 타입</option>
-                                <option value="disposable">1회용</option>
-                                <option value="portioned">소분용</option>
-                                <option value="hygiene">위생용품</option>
+                            <select class="form-select" id="invLocationFilter" onchange="renderInventory()" style="width:auto">
+                                <option value="">전체 장소</option>
+                                <option value="5층">5층 전체</option>
+                                <option value="6층">6층 전체</option>
                             </select>
                             <button class="btn btn-primary" onclick="openInventoryModal()">+ 소모품 추가</button>
                         </div>
                     </div>
                     <div class="table-container"><table><thead><tr>
-                        <th>품목명</th><th>카테고리</th><th>타입</th><th class="text-right">현재고</th><th class="text-right">안전재고</th>
-                        <th class="text-right">구매가</th><th class="text-right">단가</th><th>유통기한</th><th>관리</th>
+                        <th>품목명</th><th>카테고리</th><th>장소별 재고</th><th class="text-right">총재고</th><th class="text-right">안전재고</th>
+                        <th class="text-right">단가</th><th>유통기한</th><th>관리</th>
                     </tr></thead><tbody id="inventoryTable"></tbody></table></div>
                 </div>
+                
+                <!-- 장소 관리 서브탭 -->
+                <div class="sub-content" id="sub-inv-locations">
+                    <div class="section-header">
+                        <div class="section-title">📍 재고 보관 장소 관리</div>
+                        <button class="btn btn-primary" onclick="openLocationModal()">+ 장소 추가</button>
+                    </div>
+                    <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
+                        층별·장소별로 재고를 관리합니다. 장소를 추가/수정/삭제하고 순서를 조정할 수 있습니다.
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+                        <div class="card">
+                            <div class="card-title" style="display:flex;align-items:center;gap:.5rem">
+                                🏢 5층 장소
+                            </div>
+                            <div id="locations5F" style="margin-top:.75rem"></div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title" style="display:flex;align-items:center;gap:.5rem">
+                                🏢 6층 장소
+                            </div>
+                            <div id="locations6F" style="margin-top:.75rem"></div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="sub-content" id="sub-inv-recipe">
                     <div class="cards-grid" id="recipeCards"></div>
                     <div class="section-header">
@@ -425,6 +452,47 @@
                     </div>
                     <button class="btn btn-outline" onclick="saveStaffSettings()" style="margin-top:.5rem">저장</button>
                 </div>
+
+                <!-- 관리자 계정 관리 (슈퍼관리자 전용) -->
+                <div id="adminMgmtSection" class="card" style="max-width:600px;margin-top:1rem">
+                    <div class="card-label" style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">👥 관리자 계정 관리</div>
+                    <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:1rem">
+                        추가된 관리자는 동일한 경영관리(index.html) 페이지에 로그인할 수 있습니다.<br>
+                        최고관리자(adminhighgo)만 관리자를 추가/삭제할 수 있습니다.
+                    </div>
+                    
+                    <!-- 새 관리자 추가 폼 -->
+                    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:1rem">
+                        <div style="font-weight:600;font-size:.9rem;margin-bottom:.75rem">➕ 새 관리자 추가</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+                            <div>
+                                <label class="form-label" style="font-size:.75rem">ID (영문, 3자 이상)</label>
+                                <input type="text" class="form-input" id="newAdminId" placeholder="admin_id" style="font-size:.85rem">
+                            </div>
+                            <div>
+                                <label class="form-label" style="font-size:.75rem">이름</label>
+                                <input type="text" class="form-input" id="newAdminName" placeholder="홍길동" style="font-size:.85rem">
+                            </div>
+                        </div>
+                        <div style="margin-top:.5rem">
+                            <label class="form-label" style="font-size:.75rem">초기 비밀번호 (4자 이상)</label>
+                            <div style="display:flex;gap:.5rem">
+                                <input type="password" class="form-input" id="newAdminPw" placeholder="비밀번호" style="font-size:.85rem">
+                                <button class="btn btn-outline" onclick="togglePw('newAdminPw',this)" style="min-width:40px">👁</button>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:.75rem;margin-top:.75rem">
+                            <button class="btn btn-primary" onclick="addAdminAccount()" style="flex:1">관리자 추가</button>
+                            <span id="adminAddMsg" style="font-size:.8rem;flex:1"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- 관리자 목록 -->
+                    <div style="font-weight:600;font-size:.9rem;margin-bottom:.5rem">등록된 관리자</div>
+                    <div id="adminAccountList" style="font-size:.85rem;color:var(--text-muted);text-align:center;padding:1rem">
+                        불러오는 중...
+                    </div>
+                </div>
             </div>
 
         </main>
@@ -475,6 +543,39 @@
                         <span style="font-size:.75rem;color:var(--text-muted)">체크 시 Staff App에 인센티브 탭 노출</span>
                     </div>
                 </div>
+                
+                <!-- 탭 선택 (Staff App 노출 제어) -->
+                <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem">
+                    <label class="form-label" style="font-weight:600;margin-bottom:.5rem">📱 Staff App 탭 노출 설정</label>
+                    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.75rem">이 직원이 Staff App에서 볼 수 있는 탭을 선택하세요. 미선택 시 모든 탭이 표시됩니다.</div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem">
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+                            <input type="checkbox" class="empTab" data-tab="attendance" style="width:16px;height:16px">
+                            📅 출퇴근
+                        </label>
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+                            <input type="checkbox" class="empTab" data-tab="meal" style="width:16px;height:16px">
+                            🍽 식사
+                        </label>
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+                            <input type="checkbox" class="empTab" data-tab="ot" style="width:16px;height:16px">
+                            ⏰ OT
+                        </label>
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+                            <input type="checkbox" class="empTab" data-tab="leave" style="width:16px;height:16px">
+                            🏖 연차
+                        </label>
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+                            <input type="checkbox" class="empTab" data-tab="incentive" style="width:16px;height:16px">
+                            💎 인센티브
+                        </label>
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
+                            <input type="checkbox" class="empTab" data-tab="info" style="width:16px;height:16px">
+                            👤 내정보
+                        </label>
+                    </div>
+                </div>
+                
                 <input type="hidden" id="empId">
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('employeeModal')">취소</button><button class="btn btn-primary" onclick="saveEmployee()">저장</button></div>
@@ -658,6 +759,39 @@
                 </div>
             </div>
             <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('recipeModal')">취소</button><button class="btn btn-primary" onclick="saveRecipe()">저장</button></div>
+        </div>
+    </div>
+
+    <!-- 장소 관리 모달 -->
+    <div class="modal" id="locationModal">
+        <div class="modal-content" style="max-width:400px">
+            <div class="modal-header">
+                <div class="modal-title" id="locationModalTitle">장소 추가</div>
+                <button class="modal-close" onclick="closeModal('locationModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="locationEditId">
+                <div class="form-group">
+                    <label class="form-label">층 *</label>
+                    <select class="form-select" id="locationFloor">
+                        <option value="5층">5층</option>
+                        <option value="6층">6층</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">장소명 *</label>
+                    <input type="text" class="form-input" id="locationName" placeholder="예: 처치실, 냉장고" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">순서</label>
+                    <input type="number" class="form-input" id="locationOrder" value="1" min="1">
+                    <div style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">숫자가 작을수록 먼저 표시됩니다</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('locationModal')">취소</button>
+                <button class="btn btn-primary" onclick="saveLocation()">저장</button>
+            </div>
         </div>
     </div>
 

@@ -939,10 +939,15 @@
             if(shared){
                 displayTabs(['inventory','meal','wishlist']);
             }else{
-                // 개인계정: 출퇴근, 식사, OT, 연차, 인센티브(대상자만), 내정보
-                const tabs=['attendance','meal','ot','leave','info'];
-                if(currentUser.isIncentiveTarget) tabs.splice(2,0,'incentive');
-                displayTabs(tabs);
+                // 개인계정: visibleTabs 우선, 없으면 기본값
+                if(currentUser.visibleTabs&&currentUser.visibleTabs.length>0){
+                    displayTabs(currentUser.visibleTabs);
+                }else{
+                    // 기본: 출퇴근, 식사, OT, 연차, 인센티브(대상자만), 내정보
+                    const tabs=['attendance','meal','ot','leave','info'];
+                    if(currentUser.isIncentiveTarget) tabs.splice(2,0,'incentive');
+                    displayTabs(tabs);
+                }
             }
 
             if(shared) initInventoryTab();
@@ -2089,6 +2094,7 @@
                             ${isLow?`<span style="color:var(--red)">안전재고: ${item.safetyStock}</span>`:''}
                             ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
                             <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">✏️ 수정</button>
+                            <button onclick="deleteInventoryItem('${item.id}','${item.name.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--red);color:var(--red);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🗑️ 삭제</button>
                         </div>
                     </div>
                     <input type="number" class="inv-stock-input" 
@@ -2331,6 +2337,34 @@
                 renderInvAuditList();
                 renderLowStockAlert();
             }catch(e){alert('수정 실패: '+e.message);}
+        }
+
+        // ===== 재고 항목 삭제 =====
+        async function deleteInventoryItem(itemId,itemName){
+            if(!confirm(`"${itemName}" 품목을 완전히 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없으며, 다음 데이터가 삭제됩니다:\n• 품목 정보\n• 재고 실사 기록\n• 관련된 모든 데이터`))return;
+            
+            if(typeof db==='undefined'){alert('시스템 초기화 중입니다.');return;}
+            
+            try{
+                // 재고 문서 삭제
+                await db.collection('inventory').doc(itemId).delete();
+                
+                // 로컬 배열에서도 제거
+                const idx=invItems.findIndex(i=>i.id===itemId);
+                if(idx>-1)invItems.splice(idx,1);
+                
+                // 실사 입력값도 제거
+                delete auditInputs[itemId];
+                
+                // UI 리렌더링
+                renderInvCatButtons();
+                renderInvAuditList();
+                renderLowStockAlert();
+                
+                alert('✅ 삭제 완료');
+            }catch(e){
+                alert('삭제 실패: '+e.message);
+            }
         }
 
         // ===== 비품 구매 요청(Wishlist) =====
