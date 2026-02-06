@@ -1348,7 +1348,9 @@
                 const statusBadge=todayAtt.status==='late'?'badge-orange':todayAtt.status==='early'?'badge-red':'badge-green';
                 document.getElementById('todayStatus').innerHTML=`<span class="badge ${statusBadge}">${statusText}</span>`;
                 
-                document.getElementById('checkInBtn').style.display=todayAtt.checkOut?'none':'none';
+                // 출근 기록이 있으면 출근 버튼 숨김
+                document.getElementById('checkInBtn').style.display='none';
+                // 퇴근 기록이 없으면 퇴근 버튼 표시
                 document.getElementById('checkOutBtn').style.display=todayAtt.checkOut?'none':'block';
             }else{
                 document.getElementById('todayCheckIn').textContent='-';
