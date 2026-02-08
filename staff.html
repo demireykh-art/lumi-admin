@@ -355,25 +355,90 @@
                 </div>
             </div>
 
-            <!-- 재고 실사 탭 -->
-            <div class="tab-content" id="tab-inventory">
-                <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
-                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                        📦 재고 실사
-                        <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
-                        <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openWishlistModal()">🛍️ 비품 요청</button>
+            <!-- ========== 급여 탭 (PAYROLL ADDED) ========== -->
+            <div class="tab-content" id="tab-payroll">
+                <div class="card">
+                    <div class="card-title">
+                        <span>💰 급여 명세서</span>
+                        <div class="month-select">
+                            <select id="payrollMonth" onchange="renderPayroll()"></select>
+                        </div>
                     </div>
-                    <div id="invLowStockAlert" style="display:none;background:rgba(168,90,90,.08);border:1px solid rgba(168,90,90,.2);padding:.6rem .8rem;border-radius:6px;margin-bottom:.5rem;font-size:.85rem;color:var(--red)"></div>
-                    <div class="inv-cat-filters" id="invCatButtons"></div>
-                    <div class="inv-progress" id="invProgress">
-                        <span>진행률</span>
-                        <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
-                        <span id="invProgressText">0/0</span>
+                    <div class="info-row"><span class="info-label">월 기본급 (90%)</span><span class="info-value" id="payrollBaseSalary">-</span></div>
+                    <div class="info-row"><span class="info-label">OT수당</span><span class="info-value" id="payrollOT">-</span></div>
+                    <div class="info-row"><span class="info-label">인센티브</span><span class="info-value" id="payrollIncentive">-</span></div>
+                    <div class="info-row" style="border-top:2px solid var(--border);margin-top:.5rem;padding-top:.5rem;font-weight:600;font-size:1.1rem">
+                        <span class="info-label">실수령액</span>
+                        <span class="info-value" style="color:var(--primary)" id="payrollTotal">-</span>
                     </div>
                 </div>
-                <div id="invAuditList" style="padding:.5rem 0"></div>
-                <div class="inv-submit-bar">
-                    <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()">실사 결과 제출</button>
+                <div class="card">
+                    <div class="card-title">💼 연봉 정보</div>
+                    <div class="info-row"><span class="info-label">세후 연봉</span><span class="info-value" id="payrollAnnualSalary">-</span></div>
+                    <div class="info-row"><span class="info-label">월 기본급 (90%)</span><span class="info-value" id="payrollMonthlyBase">-</span></div>
+                    <div class="info-row"><span class="info-label">퇴직금 적립 (10%)</span><span class="info-value" id="payrollRetirement">-</span></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">📈 퇴직금 누적</div>
+                    <div class="info-row"><span class="info-label">근무 기간</span><span class="info-value" id="payrollTenureMonths">-</span></div>
+                    <div class="info-row"><span class="info-label">누적 퇴직금</span><span class="info-value" style="color:var(--primary);font-weight:600" id="payrollAccumulatedRetirement">-</span></div>
+                    <div style="font-size:.75rem;color:var(--text-muted);margin-top:.5rem;text-align:center">
+                        * 월 퇴직금 적립액 × 근무 개월 수
+                    </div>
+                </div>
+                <div id="payrollPdfSection" style="display:none">
+                    <div class="card">
+                        <div class="card-title">📄 급여명세서 PDF</div>
+                        <button class="btn btn-gold" onclick="openPayrollPdf()">명세서 다운로드</button>
+                    </div>
+                </div>
+            </div>
+            <!-- ========== /급여 탭 (PAYROLL ADDED) ========== -->
+
+            <!-- 재고 실사 탭 -->
+            <div class="tab-content" id="tab-inventory">
+                <!-- 재고 관리 모드 선택 -->
+                <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
+                    <div class="card-title">📦 재고 관리</div>
+                    <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+                        <button class="btn btn-primary" id="invModeAudit" onclick="switchInventoryMode('audit')" style="flex:1">📋 재고 실사</button>
+                        <button class="btn btn-secondary" id="invModeManage" onclick="switchInventoryMode('manage')" style="flex:1">🔧 재고 관리</button>
+                    </div>
+                </div>
+
+                <!-- 재고 실사 모드 -->
+                <div id="inventoryAuditMode">
+                    <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
+                        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+                            📋 재고 실사
+                            <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
+                        </div>
+                        <div id="invLowStockAlert" style="display:none;background:rgba(168,90,90,.08);border:1px solid rgba(168,90,90,.2);padding:.6rem .8rem;border-radius:6px;margin-bottom:.5rem;font-size:.85rem;color:var(--red)"></div>
+                        <div class="inv-cat-filters" id="invCatButtons"></div>
+                        <div class="inv-progress" id="invProgress">
+                            <span>진행률</span>
+                            <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
+                            <span id="invProgressText">0/0</span>
+                        </div>
+                    </div>
+                    <div id="invAuditList" style="padding:.5rem 0"></div>
+                    <div class="inv-submit-bar">
+                        <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()">실사 결과 제출</button>
+                    </div>
+                </div>
+
+                <!-- 재고 관리 모드 (수정/삭제) -->
+                <div id="inventoryManageMode" style="display:none">
+                    <div class="card">
+                        <div class="card-title">🔧 재고 관리</div>
+                        <div style="margin-bottom:1rem">
+                            <input type="text" id="invManageSearch" placeholder="품목명 검색..." 
+                                style="width:100%;padding:.75rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem"
+                                oninput="searchInventoryItems(this.value)">
+                        </div>
+                        <div class="inv-cat-filters" id="invManageCatButtons"></div>
+                    </div>
+                    <div id="invManageList" style="padding:.5rem 0"></div>
                 </div>
             </div>
 
@@ -473,6 +538,7 @@
             <div class="nav-item" data-tab="ot"><div class="nav-icon">⏰</div>OT</div>
             <div class="nav-item" data-tab="leave"><div class="nav-icon">🏖</div>연차</div>
             <div class="nav-item" data-tab="incentive"><div class="nav-icon">💎</div>인센티브</div>
+            <div class="nav-item" data-tab="payroll"><div class="nav-icon">₩</div>급여</div><!-- PAYROLL ADDED -->
             <div class="nav-item" data-tab="inventory"><div class="nav-icon">📦</div>재고</div>
             <div class="nav-item" data-tab="receiving"><div class="nav-icon">📥</div>입고</div>
             <div class="nav-item" data-tab="wishlist"><div class="nav-icon">🛍️</div>비품요청</div>
@@ -763,6 +829,51 @@
         </div>
     </div>
 
+    <!-- 재고 수정 모달 -->
+    <div class="modal" id="inventoryEditModal">
+        <div class="modal-content" style="max-width:480px">
+            <div class="modal-header">
+                <div class="modal-title">🔧 재고 수정</div>
+                <button class="modal-close" onclick="closeModal('inventoryEditModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="invEditItemId">
+                <div style="background:var(--bg);padding:.75rem;border-radius:6px;margin-bottom:1rem">
+                    <div style="font-weight:600;font-size:1rem" id="invEditItemName"></div>
+                    <div style="font-size:.8rem;color:var(--text-muted);margin-top:.25rem">
+                        현재고: <span id="invEditCurrentStock">-</span> <span id="invEditUnit">개</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">수량 조정 *</label>
+                    <input type="number" class="form-input" id="invEditQuantity" min="0" step="1" placeholder="새로운 수량 입력">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">안전재고</label>
+                    <input type="number" class="form-input" id="invEditSafety" min="0" step="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">유통기한</label>
+                    <input type="date" class="form-input" id="invEditExpiry">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">보관 장소</label>
+                    <select class="form-input" id="invEditLocation">
+                        <option value="">장소 선택</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">수정 사유</label>
+                    <textarea class="form-textarea" id="invEditReason" rows="2" placeholder="수정 이유를 입력하세요"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('inventoryEditModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" onclick="saveInventoryEdit()" style="flex:2">저장</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 비품 구매 요청 모달 -->
     <div class="modal" id="wishlistModal">
         <div class="modal-content" style="max-width:440px">
@@ -1022,8 +1133,8 @@
                 if(currentUser.visibleTabs&&currentUser.visibleTabs.length>0){
                     displayTabs(currentUser.visibleTabs);
                 }else{
-                    // 기본: 출퇴근, 식사, OT, 연차, 내정보
-                    const tabs=['attendance','meal','ot','leave','info'];
+                    // 기본: 출퇴근, 식사, OT, 연차, 급여, 내정보
+                    const tabs=['attendance','meal','ot','leave','payroll','info']; /* PAYROLL ADDED */
                     // 하위 호환성: isIncentiveTarget이 true이고 visibleTabs가 없으면 인센티브 추가
                     if(currentUser.isIncentiveTarget) tabs.splice(2,0,'incentive');
                     displayTabs(tabs);
@@ -1039,7 +1150,7 @@
         
         // ═══ 탭 표시 유틸리티 ═══
         function displayTabs(visibleList){
-            const allTabs=['attendance','meal','ot','leave','incentive','inventory','receiving','info','wishlist'];
+            const allTabs=['attendance','meal','ot','leave','incentive','payroll','inventory','receiving','info','wishlist']; /* PAYROLL ADDED */
             // 1) 모든 탭 숨기기
             allTabs.forEach(tab=>{
                 const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
@@ -1646,6 +1757,13 @@
             const select=document.getElementById('salaryMonth');
             select.innerHTML=months.length>0?months.map(m=>`<option value="${m}">${m.replace('-','년 ')}월</option>`).join(''):'<option value="">데이터 없음</option>';
             
+            /* PAYROLL ADDED - 급여 탭용 월 선택 초기화 */
+            const payrollSelect=document.getElementById('payrollMonth');
+            if(payrollSelect){
+                payrollSelect.innerHTML=months.length>0?months.map(m=>`<option value="${m}">${m.replace('-','년 ')}월</option>`).join(''):`<option value="${getYM()}">${getYM().replace('-','년 ')}월</option>`;
+            }
+            /* /PAYROLL ADDED */
+            
             // 생체인식 상태 표시
             const bioStatus=document.getElementById('biometricStatus');
             const hasCredential=localStorage.getItem('lumi_biometric_credential');
@@ -1714,8 +1832,175 @@
             }
         }
         
+        /* ========== PAYROLL TAB FUNCTIONS (PAYROLL ADDED) ========== */
+        function renderPayroll(){
+            const ym=document.getElementById('payrollMonth')?.value||getYM();
+            
+            // 직급 확인: 원장(director) vs 일반직원
+            const isDirector=(currentUser.role==='director');
+            
+            // 연봉 정보 표시
+            const annualSalary=currentUser.salary||0; // 만원 단위
+            
+            if(isDirector){
+                // ========== 원장: 기본90% + 퇴직금10% 구조 ==========
+                const monthlyBase=Math.round(annualSalary*0.9/12*10)/10; // 90%를 12개월로 나눔
+                const monthlyRetirement=Math.round(annualSalary*0.1/12*10)/10; // 10% 퇴직금
+                
+                if(document.getElementById('payrollAnnualSalary')){
+                    document.getElementById('payrollAnnualSalary').textContent=formatCurrency(annualSalary*10000);
+                    document.getElementById('payrollMonthlyBase').textContent=formatCurrency(Math.round(monthlyBase*10000));
+                    document.getElementById('payrollRetirement').textContent=formatCurrency(Math.round(monthlyRetirement*10000))+'/월';
+                }
+                
+                // 근무 기간 및 퇴직금 누적
+                if(currentUser.joinDate){
+                    const joinDate=new Date(currentUser.joinDate);
+                    const now=new Date();
+                    const months=Math.floor((now-joinDate)/(1000*60*60*24*30));
+                    const years=Math.floor(months/12);
+                    const remainMonths=months%12;
+                    const tenureText=years>0?`${years}년 ${remainMonths}개월`:`${months}개월`;
+                    const accumulatedRetirement=Math.round(monthlyRetirement*months*10000);
+                    
+                    if(document.getElementById('payrollTenureMonths')){
+                        document.getElementById('payrollTenureMonths').textContent=tenureText;
+                        document.getElementById('payrollAccumulatedRetirement').textContent=formatCurrency(accumulatedRetirement);
+                    }
+                }
+                
+                // 해당 월의 급여 정보
+                const myPayroll=payrollData.find(p=>(p.yearMonth===ym)&&(p.name===currentUser.name||p.name===currentUser.matchName));
+                
+                // 원장 인센티브 계산 (월 매출 8000만원 초과분)
+                const monthRevenue=revenueData[ym]||{total:0};
+                const totalSales=monthRevenue.total||0; // 원 단위
+                let directorIncentive=0;
+                
+                if(totalSales>80000000){ // 8000만원 초과
+                    if(totalSales<=90000000){ // 8000~9000만원 구간
+                        directorIncentive=Math.floor((totalSales-80000000)*0.1); // 초과분의 10%
+                    }else{ // 9000만원 초과
+                        directorIncentive=Math.floor(10000000*0.1); // 8000~9000 구간: 1000만원
+                        directorIncentive+=Math.floor((totalSales-90000000)*0.2); // 9000 초과분: 20%
+                    }
+                }
+                
+                if(myPayroll){
+                    // 노무사 급여대장 데이터가 있으면 표시
+                    if(document.getElementById('payrollBaseSalary')){
+                        document.getElementById('payrollBaseSalary').textContent=formatCurrency(myPayroll.baseSalary||Math.round(monthlyBase*10000));
+                        document.getElementById('payrollOT').textContent='해당없음';
+                        // 급여대장에 인센티브 있으면 사용, 없으면 계산값
+                        const incentiveAmount=myPayroll.directorIncentive||myPayroll.incentive||directorIncentive;
+                        document.getElementById('payrollIncentive').textContent=formatCurrency(incentiveAmount)+(myPayroll.directorIncentive||myPayroll.incentive?'':' (세전)');
+                        document.getElementById('payrollTotal').textContent=formatCurrency((myPayroll.baseSalary||Math.round(monthlyBase*10000))+incentiveAmount);
+                    }
+                }else{
+                    // 급여대장 없으면 예상 값
+                    if(document.getElementById('payrollBaseSalary')){
+                        document.getElementById('payrollBaseSalary').textContent=formatCurrency(Math.round(monthlyBase*10000));
+                        document.getElementById('payrollOT').textContent='해당없음';
+                        document.getElementById('payrollIncentive').textContent=directorIncentive>0?formatCurrency(directorIncentive)+' (세전)':'해당없음';
+                        document.getElementById('payrollTotal').textContent=formatCurrency(Math.round(monthlyBase*10000)+directorIncentive);
+                    }
+                }
+                
+            }else{
+                // ========== 일반 직원: 기본급 + OT + 인센티브 ==========
+                const monthlyBase=Math.round(annualSalary/12*10)/10;
+                
+                if(document.getElementById('payrollAnnualSalary')){
+                    document.getElementById('payrollAnnualSalary').textContent=formatCurrency(annualSalary*10000);
+                    document.getElementById('payrollMonthlyBase').textContent=formatCurrency(Math.round(monthlyBase*10000));
+                    document.getElementById('payrollRetirement').textContent='법정 퇴직금 적용';
+                }
+                
+                // 근무 기간 표시 (퇴직금은 법정 기준이므로 누적 표시 안 함)
+                if(currentUser.joinDate){
+                    const joinDate=new Date(currentUser.joinDate);
+                    const now=new Date();
+                    const months=Math.floor((now-joinDate)/(1000*60*60*24*30));
+                    const years=Math.floor(months/12);
+                    const remainMonths=months%12;
+                    const tenureText=years>0?`${years}년 ${remainMonths}개월`:`${months}개월`;
+                    
+                    if(document.getElementById('payrollTenureMonths')){
+                        document.getElementById('payrollTenureMonths').textContent=tenureText;
+                        document.getElementById('payrollAccumulatedRetirement').textContent='법정 퇴직금 규정 적용';
+                    }
+                }
+                
+                // 해당 월의 급여 정보
+                const myPayroll=payrollData.find(p=>(p.yearMonth===ym)&&(p.name===currentUser.name||p.name===currentUser.matchName));
+                
+                if(myPayroll){
+                    // 노무사 급여대장 데이터가 있으면 표시
+                    if(document.getElementById('payrollBaseSalary')){
+                        document.getElementById('payrollBaseSalary').textContent=formatCurrency(myPayroll.baseSalary||Math.round(monthlyBase*10000));
+                        document.getElementById('payrollOT').textContent=formatCurrency(myPayroll.extraOT||myPayroll.additionalOT||0);
+                        document.getElementById('payrollIncentive').textContent=formatCurrency(myPayroll.incentive||0);
+                        document.getElementById('payrollTotal').textContent=formatCurrency(myPayroll.netPay||0);
+                    }
+                }else{
+                    // 급여대장 없으면 예상 값 계산
+                    const monthOT=lunchOT.filter(ot=>ot.date?.startsWith(ym));
+                    const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
+                    const lunchMinutes=monthOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+                    let afterMinutes=0;
+                    monthAtt.forEach(a=>{
+                        if(a.checkOut){
+                            const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
+                            const checkOutMin=h*60+m;
+                            if(checkOutMin>18*60)afterMinutes+=checkOutMin-18*60;
+                        }
+                    });
+                    const totalOTMinutes=lunchMinutes+afterMinutes;
+                    const hourly=currentUser.hourly||12000;
+                    const estimatedOT=Math.round((totalOTMinutes/60)*hourly*1.5);
+                    
+                    // 인센티브 계산
+                    const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
+                    let estimatedIncentive=0;
+                    incentiveItems.forEach(item=>{
+                        if(item.type!=='japanSales'){
+                            const count=monthRecords.filter(r=>r.itemId===item.id).length;
+                            estimatedIncentive+=count*(item.price||0);
+                        }
+                    });
+                    
+                    const estimatedTotal=Math.round(monthlyBase*10000)+estimatedOT+estimatedIncentive;
+                    
+                    if(document.getElementById('payrollBaseSalary')){
+                        document.getElementById('payrollBaseSalary').textContent=formatCurrency(Math.round(monthlyBase*10000));
+                        document.getElementById('payrollOT').textContent=formatCurrency(estimatedOT)+' (예상)';
+                        document.getElementById('payrollIncentive').textContent=formatCurrency(estimatedIncentive)+' (예상)';
+                        document.getElementById('payrollTotal').textContent=formatCurrency(estimatedTotal)+' (예상)';
+                    }
+                }
+            }
+            
+            // PDF 명세서 섹션 (추후 구현)
+            // if(myPayroll && myPayroll.pdfUrl){
+            //     document.getElementById('payrollPdfSection').style.display='block';
+            // }else{
+            //     document.getElementById('payrollPdfSection').style.display='none';
+            // }
+        }
+        
+        function openPayrollPdf(){
+            // 추후 구현: PDF URL 열기
+            alert('급여명세서 PDF 기능은 추후 구현 예정입니다.');
+        }
+        /* ========== /PAYROLL TAB FUNCTIONS (PAYROLL ADDED) ========== */
+        
         // Actions
         async function checkIn(){
+            // 이중 확인 다이얼로그
+            if(!confirm('출근하시겠습니까?\n\n출근 시간이 기록됩니다.')){
+                return;
+            }
+            
             if(!userLocation){
                 alert('위치를 확인할 수 없습니다. 위치 권한을 허용해주세요.');
                 checkLocation();
@@ -1744,13 +2029,24 @@
                     location:{lat:userLocation.lat,lng:userLocation.lng},
                     createdAt:firebase.firestore.FieldValue.serverTimestamp()
                 });
-                alert('출근 완료: '+time+(status==='late'?' (지각)':''));
+                
+                const message='✅ 출근 완료: '+time+(status==='late'?' (지각)':'')+'\n\n잘못 찍으셨나요?';
+                if(confirm(message)){
+                    // 수정 요청
+                    await requestAttendanceCorrection(today,'checkIn',time,'출근 시간 수정 요청');
+                }
+                
                 await loadAttendance();
                 renderAttendance();
             }catch(e){alert('출근 실패: '+e.message);}
         }
         
         async function checkOut(){
+            // 이중 확인 다이얼로그
+            if(!confirm('퇴근하시겠습니까?\n\n퇴근 시간이 기록됩니다.')){
+                return;
+            }
+            
             if(!userLocation){
                 alert('위치를 확인할 수 없습니다.');
                 checkLocation();
@@ -1778,10 +2074,51 @@
                     checkOut:time,
                     status:newStatus
                 });
-                alert('퇴근 완료: '+time+(newStatus==='early'?' (조퇴)':''));
+                
+                const message='✅ 퇴근 완료: '+time+(newStatus==='early'?' (조퇴)':'')+'\n\n잘못 찍으셨나요?';
+                if(confirm(message)){
+                    // 수정 요청
+                    await requestAttendanceCorrection(today,'checkOut',time,'퇴근 시간 수정 요청');
+                }
+                
                 await loadAttendance();
                 renderAttendance();
             }catch(e){alert('퇴근 실패: '+e.message);}
+        }
+        
+        // 출퇴근 수정 요청
+        async function requestAttendanceCorrection(date,type,recordedTime,reason){
+            const correctTime=prompt(`${type==='checkIn'?'출근':'퇴근'} 시간을 수정하시려면\n정확한 시간을 입력하세요 (예: 09:00):`);
+            
+            if(!correctTime){
+                return; // 취소
+            }
+            
+            // 시간 형식 검증
+            const timePattern=/^([01]\d|2[0-3]):([0-5]\d)$/;
+            if(!timePattern.test(correctTime)){
+                alert('올바른 시간 형식이 아닙니다 (예: 09:00)');
+                return;
+            }
+            
+            try{
+                await db.collection('attendanceCorrections').add({
+                    employeeId:currentUser.id,
+                    employeeName:currentUser.name,
+                    date:date,
+                    type:type, // 'checkIn' or 'checkOut'
+                    recordedTime:recordedTime,
+                    requestedTime:correctTime,
+                    reason:reason,
+                    status:'pending',
+                    requestedAt:firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                alert('수정 요청이 제출되었습니다.\n관리자 승인 후 반영됩니다.');
+            }catch(e){
+                console.error('수정 요청 실패:',e);
+                alert('수정 요청 실패: '+e.message);
+            }
         }
         
         function openModal(id){document.getElementById(id).classList.add('active');}
@@ -2276,6 +2613,223 @@
             renderInvCatButtons();
             renderInvAuditList();
             renderLowStockAlert();
+            switchInventoryMode('audit'); // 기본 모드: 실사
+        }
+
+        // ===== 재고 관리 모드 전환 =====
+        let currentInvMode='audit'; // 'audit' or 'manage'
+
+        function switchInventoryMode(mode){
+            currentInvMode=mode;
+            const auditMode=document.getElementById('inventoryAuditMode');
+            const manageMode=document.getElementById('inventoryManageMode');
+            const auditBtn=document.getElementById('invModeAudit');
+            const manageBtn=document.getElementById('invModeManage');
+            
+            if(mode==='audit'){
+                auditMode.style.display='block';
+                manageMode.style.display='none';
+                auditBtn.className='btn btn-primary';
+                manageBtn.className='btn btn-secondary';
+            }else{
+                auditMode.style.display='none';
+                manageMode.style.display='block';
+                auditBtn.className='btn btn-secondary';
+                manageBtn.className='btn btn-primary';
+                renderInvManageCatButtons();
+                renderInvManageList();
+            }
+        }
+
+        // ===== 재고 관리 - 카테고리 버튼 =====
+        function renderInvManageCatButtons(){
+            const container=document.getElementById('invManageCatButtons');
+            if(!container)return;
+            const cats=['all','desk','nursing','skin','premium','external','common'];
+            const labels={all:'전체',desk:'데스크',nursing:'간호',skin:'피부',premium:'고가',external:'외부',common:'공통'};
+            container.innerHTML=cats.map(c=>`<div class="inv-cat-btn ${selectedInvCat===c?'active':''}" onclick="filterInvManage('${c}')">${labels[c]}</div>`).join('');
+        }
+
+        let selectedInvCat='all';
+        function filterInvManage(cat){
+            selectedInvCat=cat;
+            renderInvManageCatButtons();
+            renderInvManageList();
+        }
+
+        // ===== 재고 관리 - 목록 렌더링 =====
+        function renderInvManageList(searchTerm=''){
+            const container=document.getElementById('invManageList');
+            if(!container)return;
+            
+            let filtered=invItems;
+            if(selectedInvCat!=='all') filtered=filtered.filter(i=>i.category===selectedInvCat);
+            if(searchTerm) filtered=filtered.filter(i=>i.name.includes(searchTerm));
+            
+            if(filtered.length===0){
+                container.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text-muted)">품목이 없습니다</div>';
+                return;
+            }
+            
+            container.innerHTML=filtered.map(item=>{
+                const isLowStock=item.safetyStock&&item.currentStock<item.safetyStock;
+                return `
+                    <div class="inv-item-card" style="background:${isLowStock?'rgba(168,90,90,.05)':'var(--bg-card)'};border:1px solid ${isLowStock?'rgba(168,90,90,.2)':'var(--border)'};padding:.75rem;border-radius:6px;margin-bottom:.5rem">
+                        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:.5rem">
+                            <div style="flex:1">
+                                <div style="font-weight:600;font-size:.95rem">${item.name}</div>
+                                <div style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">
+                                    ${item.category?getCategoryLabel(item.category):''} | 
+                                    ${item.location||'-'}
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:.25rem">
+                                <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .6rem" onclick="openInventoryEditModal('${item.id}')">수정</button>
+                                <button class="btn" style="font-size:.7rem;padding:.3rem .6rem;background:var(--red);color:white" onclick="deleteInventoryConfirm('${item.id}','${item.name}')">삭제</button>
+                            </div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:.85rem">
+                            <span>현재고: <strong style="color:${isLowStock?'var(--red)':'var(--text)'}">$ {item.currentStock||0}</strong> ${item.unit||'개'}</span>
+                            <span>안전재고: ${item.safetyStock||'-'}</span>
+                        </div>
+                        ${item.expiry?`<div style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">유통기한: ${item.expiry}</div>`:''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getCategoryLabel(cat){
+            const labels={desk:'💊데스크',nursing:'💉간호',skin:'✨피부',premium:'💰고가',external:'🩹외부',common:'📦공통'};
+            return labels[cat]||cat;
+        }
+
+        function searchInventoryItems(term){
+            renderInvManageList(term);
+        }
+
+        // ===== 재고 수정 모달 열기 =====
+        async function openInventoryEditModal(itemId){
+            const item=invItems.find(i=>i.id===itemId);
+            if(!item){
+                alert('품목을 찾을 수 없습니다');
+                return;
+            }
+            
+            document.getElementById('invEditItemId').value=itemId;
+            document.getElementById('invEditItemName').textContent=item.name;
+            document.getElementById('invEditCurrentStock').textContent=item.currentStock||0;
+            document.getElementById('invEditUnit').textContent=item.unit||'개';
+            document.getElementById('invEditQuantity').value=item.currentStock||0;
+            document.getElementById('invEditSafety').value=item.safetyStock||'';
+            document.getElementById('invEditExpiry').value=item.expiry||'';
+            document.getElementById('invEditReason').value='';
+            
+            // 장소 목록 로드
+            const locationSelect=document.getElementById('invEditLocation');
+            if(locationSelect){
+                const locations=await loadLocations();
+                locationSelect.innerHTML='<option value="">장소 선택</option>'+
+                    locations.map(loc=>`<option value="${loc.id}" ${loc.id===item.location?'selected':''}>${loc.name}</option>`).join('');
+            }
+            
+            openModal('inventoryEditModal');
+        }
+
+        async function loadLocations(){
+            try{
+                const snapshot=await db.collection('locations').orderBy('order').get();
+                return snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
+            }catch(e){
+                console.error('장소 로드 실패:',e);
+                return[];
+            }
+        }
+
+        // ===== 재고 수정 저장 =====
+        async function saveInventoryEdit(){
+            const itemId=document.getElementById('invEditItemId').value;
+            const newQuantity=parseInt(document.getElementById('invEditQuantity').value)||0;
+            const safetyStock=parseInt(document.getElementById('invEditSafety').value)||0;
+            const expiry=document.getElementById('invEditExpiry').value;
+            const location=document.getElementById('invEditLocation').value;
+            const reason=document.getElementById('invEditReason').value.trim();
+            
+            if(newQuantity<0){
+                alert('수량은 0 이상이어야 합니다');
+                return;
+            }
+            
+            if(!reason){
+                alert('수정 사유를 입력하세요');
+                return;
+            }
+            
+            try{
+                const updateData={
+                    currentStock:newQuantity,
+                    safetyStock:safetyStock,
+                    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+                };
+                
+                if(expiry) updateData.expiry=expiry;
+                if(location) updateData.location=location;
+                
+                await db.collection('inventory').doc(itemId).update(updateData);
+                
+                // 로그 기록
+                await db.collection('inventoryLogs').add({
+                    itemId:itemId,
+                    action:'manual_edit',
+                    quantity:newQuantity,
+                    reason:reason,
+                    employeeId:currentUser.id,
+                    employeeName:currentUser.name,
+                    timestamp:firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                alert('재고가 수정되었습니다');
+                closeModal('inventoryEditModal');
+                await loadInventoryForStaff();
+                renderInvManageList();
+            }catch(e){
+                console.error('재고 수정 실패:',e);
+                alert('오류가 발생했습니다: '+e.message);
+            }
+        }
+
+        // ===== 재고 삭제 =====
+        async function deleteInventoryConfirm(itemId,itemName){
+            if(!confirm(`"${itemName}" 품목을 삭제하시겠습니까?\n\n⚠️ 삭제 후 복구할 수 없습니다.`)){
+                return;
+            }
+            
+            const reason=prompt('삭제 사유를 입력하세요:');
+            if(!reason){
+                alert('삭제 사유를 입력해야 합니다');
+                return;
+            }
+            
+            try{
+                // 로그 기록
+                await db.collection('inventoryLogs').add({
+                    itemId:itemId,
+                    action:'delete',
+                    reason:reason,
+                    employeeId:currentUser.id,
+                    employeeName:currentUser.name,
+                    timestamp:firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // 삭제
+                await db.collection('inventory').doc(itemId).delete();
+                
+                alert('품목이 삭제되었습니다');
+                await loadInventoryForStaff();
+                renderInvManageList();
+            }catch(e){
+                console.error('품목 삭제 실패:',e);
+                alert('오류가 발생했습니다: '+e.message);
+            }
         }
 
         // ===== 발주 필요 알림 =====
@@ -2764,6 +3318,10 @@
                 document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
                 this.classList.add('active');
                 document.getElementById('tab-'+this.dataset.tab).classList.add('active');
+                // 출퇴근 탭 진입 시 버튼 상태 업데이트
+                if(this.dataset.tab==='attendance'){
+                    renderAttendance();
+                }
                 // 재고 탭 진입 시 데이터 로드
                 if(this.dataset.tab==='inventory'&&!invItems.length){
                     initInventoryTab();
@@ -2777,8 +3335,31 @@
                 if(this.dataset.tab==='wishlist'){
                     loadStaffWishlist();
                 }
+                /* PAYROLL ADDED - 급여 탭 진입 시 렌더링 */
+                if(this.dataset.tab==='payroll'){
+                    renderPayroll();
+                }
+                /* /PAYROLL ADDED */
             });
         });
+        
+        // ========== 날짜 변경 감지 (출퇴근 버튼 자동 업데이트) ==========
+        let lastCheckedDate = getToday();
+        setInterval(() => {
+            const currentDate = getToday();
+            if (currentDate !== lastCheckedDate) {
+                // 날짜가 바뀌었음 - 출퇴근 데이터 다시 로드 및 버튼 업데이트
+                console.log('날짜 변경 감지:', lastCheckedDate, '→', currentDate);
+                lastCheckedDate = currentDate;
+                if (currentUser && currentUser.id) {
+                    loadAttendance().then(() => {
+                        renderAttendance();
+                        console.log('출퇴근 버튼 상태 업데이트 완료');
+                    });
+                }
+            }
+        }, 60000); // 1분마다 체크
+        // ==========================================================
         
         // Init
         checkAuth();
