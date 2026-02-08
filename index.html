@@ -281,7 +281,38 @@
                         <div class="card"><div class="card-label">지각</div><div class="card-value" id="lateDays">0회</div></div>
                         <div class="card"><div class="card-label">조퇴</div><div class="card-value" id="earlyDays">0회</div></div>
                         <div class="card"><div class="card-label">결근</div><div class="card-value" id="absentDays">0회</div></div>
+                        <div class="card" style="cursor:pointer" onclick="showAttendanceCorrections()">
+                            <div class="card-label">⏰ 수정 요청</div>
+                            <div class="card-value" id="pendingCorrections" style="color:#c4956a">0건</div>
+                        </div>
                     </div>
+                    
+                    <!-- 출퇴근 수정 요청 섹션 -->
+                    <div id="attendanceCorrectionsSection" style="display:none;margin-top:1.5rem">
+                        <div class="section-header">
+                            <div class="section-title">⏰ 출퇴근 수정 요청</div>
+                            <button class="btn btn-secondary" onclick="hideAttendanceCorrections()">닫기</button>
+                        </div>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>요청일시</th>
+                                        <th>직원</th>
+                                        <th>날짜</th>
+                                        <th>구분</th>
+                                        <th>기록시간</th>
+                                        <th>요청시간</th>
+                                        <th>사유</th>
+                                        <th>상태</th>
+                                        <th>관리</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="correctionsTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
                     <div class="section-header"><div class="section-title">근태 기록</div><select class="form-select" id="attendanceFilter" style="width:auto" onchange="renderAttendance()"><option value="all">전체 직원</option></select></div>
                     <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>상태</th><th>관리</th></tr></thead><tbody id="attendanceTable"></tbody></table></div>
                 </div>
@@ -315,6 +346,7 @@
                     <div class="sub-tab" data-sub="inv-locations">📍 장소 관리</div>
                     <div class="sub-tab" data-sub="inv-recipe">레시피 (시술 원가)</div>
                     <div class="sub-tab" data-sub="inv-audit">재고 실사</div>
+                    <div class="sub-tab" data-sub="inv-history">📜 수정/삭제 이력</div>
                     <div class="sub-tab" data-sub="inv-wishlist">🛍️ 구매 요청 <span id="wishlistBadge" style="display:none;background:var(--red);color:#fff;font-size:.65rem;padding:1px 5px;border-radius:8px;margin-left:3px;vertical-align:middle">0</span></div>
                 </div>
                 <div class="sub-content active" id="sub-inv-list">
@@ -398,6 +430,34 @@
                         </div>
                     </div>
                     <div id="auditReport"><div style="text-align:center;color:var(--text-secondary);padding:2rem">실사 데이터 로딩중...</div></div>
+                </div>
+                <div class="sub-content" id="sub-inv-history">
+                    <div class="section-header">
+                        <div class="section-title">📜 재고 수정/삭제 이력</div>
+                        <div style="display:flex;gap:.5rem">
+                            <select class="form-select" id="invHistoryFilter" style="width:auto" onchange="renderInventoryHistory()">
+                                <option value="all">전체</option>
+                                <option value="manual_edit">수정</option>
+                                <option value="delete">삭제</option>
+                            </select>
+                            <button class="btn btn-outline" onclick="loadInventoryHistory()">🔄 새로고침</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>일시</th>
+                                    <th>품목 ID</th>
+                                    <th>작업</th>
+                                    <th>수량</th>
+                                    <th>사유</th>
+                                    <th>직원</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invHistoryTable"></tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="sub-content" id="sub-inv-wishlist">
                     <div class="section-header">
@@ -534,6 +594,15 @@
                         <input type="number" class="form-input" id="empUsedLeave" value="0" min="0">
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group" style="display:flex;align-items:center;gap:.75rem;padding-top:1rem">
+                        <label class="form-label" style="margin:0;cursor:pointer;display:flex;align-items:center;gap:.5rem">
+                            <input type="checkbox" id="empIsIncentiveTarget" style="width:18px;height:18px;accent-color:var(--primary)">
+                            💎 인센티브 대상자
+                        </label>
+                        <span style="font-size:.75rem;color:var(--text-muted)">체크 시 Staff App에 인센티브 탭 노출</span>
+                    </div>
+                </div>
                 
                 <!-- 탭 선택 (Staff App 노출 제어) -->
                 <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem">
@@ -556,10 +625,7 @@
                             <input type="checkbox" class="empTab" data-tab="leave" style="width:16px;height:16px" checked>
                             🏖 연차
                         </label>
-                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
-                            <input type="checkbox" class="empTab" data-tab="incentive" style="width:16px;height:16px" checked>
-                            💎 인센티브
-                        </label>
+
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.85rem">
                             <input type="checkbox" class="empTab" data-tab="info" style="width:16px;height:16px" checked>
                             👤 내정보
@@ -793,5 +859,222 @@
     <script src="hr-attendance.js"></script>
     <script src="inventory.js"></script>
     <script src="finance.js"></script>
+    
+    <!-- 출퇴근 수정 요청 & 재고 이력 관리 -->
+    <script>
+        // ===== 출퇴근 수정 요청 관리 =====
+        let attendanceCorrections = [];
+        
+        async function loadAttendanceCorrections() {
+            try {
+                const snapshot = await db.collection('attendanceCorrections')
+                    .orderBy('requestedAt', 'desc')
+                    .limit(100)
+                    .get();
+                attendanceCorrections = snapshot.docs.map(d => ({
+                    id: d.id,
+                    ...d.data(),
+                    requestedAt: d.data().requestedAt?.toDate()
+                }));
+                updatePendingCorrectionsCount();
+            } catch (e) {
+                console.error('수정 요청 로드 실패:', e);
+            }
+        }
+        
+        function updatePendingCorrectionsCount() {
+            const pending = attendanceCorrections.filter(c => c.status === 'pending').length;
+            const el = document.getElementById('pendingCorrections');
+            if (el) {
+                el.textContent = pending + '건';
+                el.style.color = pending > 0 ? '#c4956a' : 'var(--text-secondary)';
+            }
+        }
+        
+        function showAttendanceCorrections() {
+            const section = document.getElementById('attendanceCorrectionsSection');
+            if (section) {
+                section.style.display = 'block';
+                renderAttendanceCorrections();
+            }
+        }
+        
+        function hideAttendanceCorrections() {
+            const section = document.getElementById('attendanceCorrectionsSection');
+            if (section) section.style.display = 'none';
+        }
+        
+        function renderAttendanceCorrections() {
+            const tbody = document.getElementById('correctionsTable');
+            if (!tbody) return;
+            
+            const filtered = attendanceCorrections.filter(c => c.status === 'pending');
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-secondary)">대기 중인 수정 요청이 없습니다</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = filtered.map(correction => {
+                const typeLabel = correction.type === 'checkIn' ? '출근' : '퇴근';
+                const statusBadge = correction.status === 'pending' ? 
+                    '<span style="background:#c4956a;color:#fff;padding:2px 8px;border-radius:4px;font-size:.75rem">대기</span>' :
+                    correction.status === 'approved' ?
+                    '<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:4px;font-size:.75rem">승인</span>' :
+                    '<span style="background:var(--red);color:#fff;padding:2px 8px;border-radius:4px;font-size:.75rem">거부</span>';
+                
+                return `
+                    <tr>
+                        <td>${correction.requestedAt ? correction.requestedAt.toLocaleString('ko-KR', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                        <td>${correction.employeeName || '-'}</td>
+                        <td>${correction.date || '-'}</td>
+                        <td>${typeLabel}</td>
+                        <td style="color:var(--red)">${correction.recordedTime || '-'}</td>
+                        <td style="color:var(--green);font-weight:600">${correction.requestedTime || '-'}</td>
+                        <td>${correction.reason || '-'}</td>
+                        <td>${statusBadge}</td>
+                        <td>
+                            ${correction.status === 'pending' ? `
+                                <button class="btn btn-sm" style="background:var(--green);color:#fff;padding:4px 8px;font-size:.75rem;margin-right:4px" onclick="approveCorrection('${correction.id}')">승인</button>
+                                <button class="btn btn-sm" style="background:var(--red);color:#fff;padding:4px 8px;font-size:.75rem" onclick="rejectCorrection('${correction.id}')">거부</button>
+                            ` : '-'}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        async function approveCorrection(correctionId) {
+            const correction = attendanceCorrections.find(c => c.id === correctionId);
+            if (!correction) {
+                alert('수정 요청을 찾을 수 없습니다');
+                return;
+            }
+            
+            if (!confirm(`${correction.employeeName}님의 ${correction.type === 'checkIn' ? '출근' : '퇴근'} 시간을\n${correction.recordedTime} → ${correction.requestedTime}로 수정하시겠습니까?`)) {
+                return;
+            }
+            
+            try {
+                // 1. 출퇴근 기록 수정
+                const attSnapshot = await db.collection('attendance')
+                    .where('employeeId', '==', correction.employeeId)
+                    .where('date', '==', correction.date)
+                    .get();
+                
+                if (attSnapshot.empty) {
+                    alert('해당 날짜의 출퇴근 기록을 찾을 수 없습니다');
+                    return;
+                }
+                
+                const attDoc = attSnapshot.docs[0];
+                const updateData = {};
+                updateData[correction.type] = correction.requestedTime;
+                
+                await db.collection('attendance').doc(attDoc.id).update(updateData);
+                
+                // 2. 수정 요청 승인 처리
+                await db.collection('attendanceCorrections').doc(correctionId).update({
+                    status: 'approved',
+                    approvedBy: 'admin',
+                    approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                alert('승인되었습니다');
+                await loadAttendanceCorrections();
+                renderAttendanceCorrections();
+            } catch (e) {
+                console.error('승인 실패:', e);
+                alert('오류가 발생했습니다: ' + e.message);
+            }
+        }
+        
+        async function rejectCorrection(correctionId) {
+            const correction = attendanceCorrections.find(c => c.id === correctionId);
+            if (!correction) return;
+            
+            const reason = prompt('거부 사유를 입력하세요:');
+            if (!reason) return;
+            
+            try {
+                await db.collection('attendanceCorrections').doc(correctionId).update({
+                    status: 'rejected',
+                    rejectedBy: 'admin',
+                    rejectionReason: reason,
+                    rejectedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                alert('거부되었습니다');
+                await loadAttendanceCorrections();
+                renderAttendanceCorrections();
+            } catch (e) {
+                console.error('거부 실패:', e);
+                alert('오류가 발생했습니다: ' + e.message);
+            }
+        }
+        
+        // ===== 재고 수정/삭제 이력 관리 =====
+        let inventoryLogs = [];
+        
+        async function loadInventoryHistory() {
+            try {
+                const snapshot = await db.collection('inventoryLogs')
+                    .orderBy('timestamp', 'desc')
+                    .limit(200)
+                    .get();
+                inventoryLogs = snapshot.docs.map(d => ({
+                    id: d.id,
+                    ...d.data(),
+                    timestamp: d.data().timestamp?.toDate()
+                }));
+                renderInventoryHistory();
+            } catch (e) {
+                console.error('재고 이력 로드 실패:', e);
+            }
+        }
+        
+        function renderInventoryHistory() {
+            const tbody = document.getElementById('invHistoryTable');
+            if (!tbody) return;
+            
+            const filter = document.getElementById('invHistoryFilter')?.value || 'all';
+            let filtered = inventoryLogs;
+            
+            if (filter !== 'all') {
+                filtered = inventoryLogs.filter(log => log.action === filter);
+            }
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">이력이 없습니다</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = filtered.map(log => {
+                const actionLabel = log.action === 'manual_edit' ? '수정' : 
+                                   log.action === 'delete' ? '삭제' : log.action;
+                const actionColor = log.action === 'delete' ? 'var(--red)' : 'var(--green)';
+                
+                return `
+                    <tr>
+                        <td>${log.timestamp ? log.timestamp.toLocaleString('ko-KR', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+                        <td style="font-size:.85rem;font-family:monospace">${log.itemId || '-'}</td>
+                        <td><span style="color:${actionColor};font-weight:600">${actionLabel}</span></td>
+                        <td>${log.quantity !== undefined ? log.quantity : '-'}</td>
+                        <td style="font-size:.85rem">${log.reason || '-'}</td>
+                        <td>${log.employeeName || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // ===== 초기화 =====
+        document.addEventListener('DOMContentLoaded', function() {
+            // 기존 초기화 코드 실행 후
+            setTimeout(() => {
+                loadAttendanceCorrections();
+                loadInventoryHistory();
+            }, 1000);
+        });
+    </script>
 </body>
 </html>
