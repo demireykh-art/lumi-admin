@@ -954,6 +954,23 @@
                 }
                 firebase.initializeApp(firebaseConfig);
                 window.db = firebase.firestore();
+                
+                // ✅ Firestore 설정 최적화
+                try {
+                    // 오프라인 지속성 활성화 (모바일 최적화)
+                    window.db.enablePersistence({ synchronizeTabs: true })
+                        .then(() => console.log('✅ Offline persistence enabled'))
+                        .catch((err) => {
+                            if (err.code === 'failed-precondition') {
+                                console.warn('⚠️ Multiple tabs open, persistence disabled');
+                            } else if (err.code === 'unimplemented') {
+                                console.warn('⚠️ Browser does not support persistence');
+                            }
+                        });
+                } catch (e) {
+                    console.warn('Persistence error:', e);
+                }
+                
                 firebaseReady = true;
                 console.log('✅ Firebase initialized');
             } catch (e) {
