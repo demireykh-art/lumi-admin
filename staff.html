@@ -937,7 +937,7 @@
                 if(pw===configPasswords.staff_pw){
                     currentUser={id:'lumistaff',name:'공용계정',role:'shared'};
                     localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                    showApp();
+                    await showApp();
                 }else{
                     errEl.textContent='공용계정 비밀번호가 올바르지 않습니다.';
                 }
@@ -993,7 +993,7 @@
                 
                 currentUser=emp;
                 localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                showApp();
+                await showApp();
             }catch(e){
                 console.error('로그인 오류:',e);
                 errEl.textContent='로그인 중 오류가 발생했습니다. 다시 시도해주세요.';
@@ -1013,7 +1013,7 @@
                 currentUser.password=pw1;
                 localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
                 document.getElementById('pwSetup').classList.remove('active');
-                showApp();
+                await showApp();
             }catch(e){document.getElementById('pwError').textContent='저장 실패: '+e.message;}
         }
         
@@ -1021,7 +1021,7 @@
         const SHARED_ACCOUNT_ID='lumistaff';
         function isSharedAccount(){return currentUser?.id===SHARED_ACCOUNT_ID;}
 
-        function showApp(){
+        async function showApp(){
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('appContainer').classList.add('active');
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
@@ -1044,12 +1044,12 @@
             }
 
             if(shared){
-                initInventoryTab();
-                loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
+                await initInventoryTab();
+                await loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
             }
             checkLocation();
-            loadAllData();
-            loadSettings();
+            await loadAllData();
+            await loadSettings();
             startAutoLogoutTimer();
         }
         
@@ -1092,7 +1092,7 @@
             document.getElementById('loginError').textContent='';
         }
         
-        function checkAuth(){
+        async function checkAuth(){
             // db 안전 체크 (firebase-config.js 미로드 또는 초기화 실패 대비)
             if(typeof db==='undefined'||!db){
                 setTimeout(checkAuth,300);
@@ -1102,7 +1102,7 @@
             if(saved){
                 try{
                     currentUser=JSON.parse(saved);
-                    if(currentUser&&currentUser.id)showApp();
+                    if(currentUser&&currentUser.id)await showApp();
                     else{currentUser=null;localStorage.removeItem('lumi_staff_user');}
                 }catch(e){currentUser=null;localStorage.removeItem('lumi_staff_user');}
             }
@@ -1186,7 +1186,7 @@
                     if(doc.exists){
                         currentUser={id:doc.id,...doc.data()};
                         localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                        showApp();
+                        await showApp();
                     }else{
                         alert('사용자 정보를 찾을 수 없습니다.');
                     }
