@@ -2234,7 +2234,7 @@
                         <div class="inv-item-name">${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':''}</div>
                         <div class="inv-item-meta">
                             <span>${catLabel}</span>
-                            <span style="color:var(--primary);font-weight:600">📍 ${locations}</span>
+                            <span style="color:var(--text-secondary);font-size:.85rem">📍 ${locationInfo}</span>
                             <span>시스템: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
                             ${isLow?`<span style="color:var(--red)">안전재고: ${item.safetyStock}</span>`:''}
                             ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
