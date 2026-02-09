@@ -329,8 +329,32 @@
                 <div class="sub-content" id="sub-incentive">
                     <div class="section-header"><div class="section-title">인센티브 항목 관리</div><button class="btn btn-primary" onclick="openIncentiveItemModal()">+ 항목 추가</button></div>
                     <div class="table-container"><table><thead><tr><th>항목명</th><th>유형/단가</th><th>적용 직원</th><th>관리</th></tr></thead><tbody id="incentiveItemTable"></tbody></table></div>
+                    
+                    <div class="section-header mt-1">
+                        <div class="section-title">💰 추가 인센티브 수동 지급</div>
+                        <button class="btn btn-primary" onclick="openManualIncentiveModal()">+ 추가 지급</button>
+                    </div>
+                    <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:.5rem">
+                        자동 계산되지 않는 특별 인센티브를 직원별로 추가 지급할 수 있습니다
+                    </p>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>지급월</th>
+                                    <th>직원명</th>
+                                    <th>항목</th>
+                                    <th class="text-right">금액</th>
+                                    <th>비고</th>
+                                    <th>관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="manualIncentiveTable"></tbody>
+                        </table>
+                    </div>
+                    
                     <div class="section-header mt-1"><div class="section-title">직원별 인센티브 현황</div></div>
-                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 기반</th><th class="text-right">건별/기타</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 기반</th><th class="text-right">건별/기타</th><th class="text-right">추가 지급</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-salary">
                     <div class="section-header"><div class="section-title">사전급여대장 (노무사 전달용)</div><button class="btn btn-secondary" onclick="exportPrePayroll()">엑셀 다운로드</button></div>
@@ -717,6 +741,48 @@
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('otModal')">취소</button><button class="btn btn-primary" onclick="saveLunchOT()">저장</button></div>
         </div>
     </div>
+    
+    <!-- 수동 인센티브 지급 모달 -->
+    <div class="modal" id="manualIncentiveModal">
+        <div class="modal-content" style="max-width:500px">
+            <div class="modal-header">
+                <div class="modal-title">💰 추가 인센티브 수동 지급</div>
+                <button class="modal-close" onclick="closeModal('manualIncentiveModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="background:#fff3cd;padding:12px;border-radius:6px;font-size:.85rem;color:#856404;margin-bottom:1rem">
+                    ⚠️ 자동 계산되지 않는 특별 인센티브를 직원에게 추가 지급할 때 사용합니다
+                </p>
+                <div class="form-group">
+                    <label class="form-label">지급월 *</label>
+                    <input type="month" class="form-input" id="manualIncMonth">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">직원 선택 *</label>
+                    <select class="form-select" id="manualIncEmployee">
+                        <option value="">직원 선택</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">항목명 *</label>
+                    <input type="text" class="form-input" id="manualIncTitle" placeholder="예: 특별 보너스, 프로젝트 성과급">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">지급 금액 (원) *</label>
+                    <input type="number" class="form-input" id="manualIncAmount" min="0" step="1000" placeholder="100000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">비고</label>
+                    <textarea class="form-textarea" id="manualIncNote" rows="2" placeholder="지급 사유나 세부 내용을 입력하세요"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('manualIncentiveModal')">취소</button>
+                <button class="btn btn-primary" onclick="saveManualIncentive()">저장</button>
+            </div>
+        </div>
+    </div>
+    
     <div class="modal" id="incentiveItemModal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="incentiveItemModalTitle">인센티브 항목 추가</div><button class="modal-close" onclick="closeModal('incentiveItemModal')">&times;</button></div>
@@ -1073,8 +1139,138 @@
             setTimeout(() => {
                 loadAttendanceCorrections();
                 loadInventoryHistory();
+                loadManualIncentives();
             }, 1000);
         });
+        
+        // ===== 수동 인센티브 관리 =====
+        let manualIncentives = [];
+        
+        async function loadManualIncentives() {
+            try {
+                const snapshot = await db.collection('manualIncentives')
+                    .orderBy('month', 'desc')
+                    .get();
+                manualIncentives = snapshot.docs.map(d => ({
+                    id: d.id,
+                    ...d.data()
+                }));
+                renderManualIncentives();
+            } catch (e) {
+                console.error('수동 인센티브 로드 실패:', e);
+            }
+        }
+        
+        function renderManualIncentives() {
+            const tbody = document.getElementById('manualIncentiveTable');
+            if (!tbody) return;
+            
+            if (manualIncentives.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">추가 지급 내역이 없습니다</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = manualIncentives.map(inc => `
+                <tr>
+                    <td>${inc.month || '-'}</td>
+                    <td>${inc.employeeName || '-'}</td>
+                    <td>${inc.title || '-'}</td>
+                    <td class="text-right" style="font-weight:600;color:var(--primary)">₩${(inc.amount || 0).toLocaleString()}</td>
+                    <td style="font-size:.85rem">${inc.note || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm" style="background:var(--red);color:#fff;padding:4px 8px;font-size:.75rem" 
+                            onclick="deleteManualIncentive('${inc.id}')">삭제</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        function openManualIncentiveModal() {
+            // 직원 목록 로드
+            const select = document.getElementById('manualIncEmployee');
+            if (select && window.employees) {
+                select.innerHTML = '<option value="">직원 선택</option>' +
+                    employees.filter(e => e.status === 'active')
+                        .map(e => `<option value="${e.id}">${e.name} (${e.role || '-'})</option>`)
+                        .join('');
+            }
+            
+            // 현재 월로 초기화
+            const now = new Date();
+            const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            document.getElementById('manualIncMonth').value = thisMonth;
+            document.getElementById('manualIncTitle').value = '';
+            document.getElementById('manualIncAmount').value = '';
+            document.getElementById('manualIncNote').value = '';
+            
+            document.getElementById('manualIncentiveModal').classList.add('active');
+        }
+        
+        async function saveManualIncentive() {
+            const month = document.getElementById('manualIncMonth').value;
+            const employeeId = document.getElementById('manualIncEmployee').value;
+            const title = document.getElementById('manualIncTitle').value.trim();
+            const amount = parseInt(document.getElementById('manualIncAmount').value) || 0;
+            const note = document.getElementById('manualIncNote').value.trim();
+            
+            if (!month) {
+                alert('지급월을 선택하세요');
+                return;
+            }
+            if (!employeeId) {
+                alert('직원을 선택하세요');
+                return;
+            }
+            if (!title) {
+                alert('항목명을 입력하세요');
+                return;
+            }
+            if (amount <= 0) {
+                alert('지급 금액을 입력하세요');
+                return;
+            }
+            
+            const employee = employees.find(e => e.id === employeeId);
+            if (!employee) {
+                alert('직원 정보를 찾을 수 없습니다');
+                return;
+            }
+            
+            try {
+                await db.collection('manualIncentives').add({
+                    month: month,
+                    employeeId: employeeId,
+                    employeeName: employee.name,
+                    title: title,
+                    amount: amount,
+                    note: note,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdBy: 'admin'
+                });
+                
+                alert('추가 인센티브가 등록되었습니다\n\n직원 계정에서 확인할 수 있습니다');
+                closeModal('manualIncentiveModal');
+                await loadManualIncentives();
+            } catch (e) {
+                console.error('저장 실패:', e);
+                alert('오류가 발생했습니다: ' + e.message);
+            }
+        }
+        
+        async function deleteManualIncentive(id) {
+            if (!confirm('이 인센티브 지급 내역을 삭제하시겠습니까?')) {
+                return;
+            }
+            
+            try {
+                await db.collection('manualIncentives').doc(id).delete();
+                alert('삭제되었습니다');
+                await loadManualIncentives();
+            } catch (e) {
+                console.error('삭제 실패:', e);
+                alert('오류가 발생했습니다: ' + e.message);
+            }
+        }
     </script>
 </body>
 </html>

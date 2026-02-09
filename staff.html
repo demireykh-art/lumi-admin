@@ -400,9 +400,13 @@
                 <!-- 재고 관리 모드 선택 -->
                 <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
                     <div class="card-title">📦 재고 관리</div>
+                    <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem">
+                        💡 <strong>재고 실사</strong>: 전체 품목 실제 개수 확인 및 기록<br>
+                        💡 <strong>재고 정리</strong>: 품목별 수정·삭제 (층별 위치 확인 가능)
+                    </div>
                     <div style="display:flex;gap:.5rem;margin-bottom:1rem">
                         <button class="btn btn-primary" id="invModeAudit" onclick="switchInventoryMode('audit')" style="flex:1">📋 재고 실사</button>
-                        <button class="btn btn-secondary" id="invModeManage" onclick="switchInventoryMode('manage')" style="flex:1">🔧 재고 관리</button>
+                        <button class="btn btn-secondary" id="invModeManage" onclick="switchInventoryMode('manage')" style="flex:1">🔧 재고 정리</button>
                     </div>
                 </div>
 
@@ -410,8 +414,11 @@
                 <div id="inventoryAuditMode">
                     <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
                         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                            📋 재고 실사
+                            📋 재고 실사 (전체 품목 카운트)
                             <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
+                        </div>
+                        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem">
+                            모든 품목의 실제 개수를 세어서 입력하세요
                         </div>
                         <div id="invLowStockAlert" style="display:none;background:rgba(168,90,90,.08);border:1px solid rgba(168,90,90,.2);padding:.6rem .8rem;border-radius:6px;margin-bottom:.5rem;font-size:.85rem;color:var(--red)"></div>
                         <div class="inv-cat-filters" id="invCatButtons"></div>
@@ -427,10 +434,14 @@
                     </div>
                 </div>
 
-                <!-- 재고 관리 모드 (수정/삭제) -->
+                <!-- 재고 정리 모드 (수정/삭제) -->
                 <div id="inventoryManageMode" style="display:none">
                     <div class="card">
-                        <div class="card-title">🔧 재고 관리</div>
+                        <div class="card-title">🔧 재고 정리 (품목별 수정·삭제)</div>
+                        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem">
+                            품목별로 수량 수정, 장소 변경, 삭제 작업을 할 수 있습니다<br>
+                            층별 위치 정보도 함께 확인할 수 있습니다
+                        </div>
                         <div style="margin-bottom:1rem">
                             <input type="text" id="invManageSearch" placeholder="품목명 검색..." 
                                 style="width:100%;padding:.75rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem"
@@ -928,6 +939,7 @@
         let mealRecords=[];
         let incentiveItems=[];
         let incentiveRecords=[];
+        let manualIncentives=[]; // 관리자가 수동으로 지급한 추가 인센티브
         let leaveRequests=[];
         let payrollData=[];
         let salesDetail={};
@@ -1354,6 +1366,7 @@
                     loadMealRecords(),
                     loadIncentiveItems(),
                     loadIncentiveRecords(),
+                    loadManualIncentivesForStaff(),
                     loadLeaveRequests(),
                     loadPayrollData(),
                     loadSalesData()
@@ -1402,6 +1415,13 @@
                 const snapshot=await db.collection('incentiveRecords').where('employeeId','==',currentUser.id).get();
                 incentiveRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('인센티브 기록 로드 오류:',e);incentiveRecords=[];}
+        }
+        
+        async function loadManualIncentivesForStaff(){
+            try{
+                const snapshot=await db.collection('manualIncentives').where('employeeId','==',currentUser.id).get();
+                manualIncentives=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+            }catch(e){console.error('수동 인센티브 로드 오류:',e);manualIncentives=[];}
         }
         
         async function loadSalesData(){
@@ -1724,9 +1744,35 @@
             }
             
             // 상단 통계 업데이트
-            const totalAmount=salesBasedIncentive+perCaseAmount;
+            const ym=getYM();
+            const monthlyManual=manualIncentives.filter(m=>m.month===ym);
+            const manualTotal=monthlyManual.reduce((sum,m)=>(sum+(m.amount||0)),0);
+            
+            const totalAmount=salesBasedIncentive+perCaseAmount+manualTotal;
             document.getElementById('incTotalCount').textContent=totalCount+'건';
             document.getElementById('incTotalAmount').textContent=formatCurrency(totalAmount);
+            
+            // 수동 지급 인센티브 표시
+            if(monthlyManual.length>0){
+                const manualHTML=`
+                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-top:.75rem">
+                        <div style="font-weight:600;font-size:.9rem;margin-bottom:.5rem;color:var(--primary)">💰 추가 지급 인센티브</div>
+                        ${monthlyManual.map(m=>`
+                            <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid var(--border-light)">
+                                <div>
+                                    <div style="font-weight:600">${m.title||'추가 지급'}</div>
+                                    <div style="font-size:.8rem;color:var(--text-muted)">${m.note||''}</div>
+                                </div>
+                                <div style="font-weight:700;color:var(--green)">${formatCurrency(m.amount||0)}</div>
+                            </div>
+                        `).join('')}
+                        <div style="text-align:right;padding-top:.5rem;font-weight:700;font-size:1rem;color:var(--primary)">
+                            합계: ${formatCurrency(manualTotal)}
+                        </div>
+                    </div>
+                `;
+                document.getElementById('salesIncentiveDetail').innerHTML+=manualHTML;
+            }
             
             if(monthRecords.length>0){
                 document.getElementById('incentiveRecords').innerHTML=monthRecords.map(r=>{
@@ -2645,8 +2691,8 @@
         function renderInvManageCatButtons(){
             const container=document.getElementById('invManageCatButtons');
             if(!container)return;
-            const cats=['all','desk','nursing','skin','premium','external','common'];
-            const labels={all:'전체',desk:'데스크',nursing:'간호',skin:'피부',premium:'고가',external:'외부',common:'공통'};
+            const cats=['all','desk','nursing','skin','common'];
+            const labels={all:'전체',desk:'💊데스크',nursing:'💉간호',skin:'✨피부',common:'📦공통'};
             container.innerHTML=cats.map(c=>`<div class="inv-cat-btn ${selectedInvCat===c?'active':''}" onclick="filterInvManage('${c}')">${labels[c]}</div>`).join('');
         }
 
@@ -2729,7 +2775,7 @@
             if(locationSelect){
                 const locations=await loadLocations();
                 locationSelect.innerHTML='<option value="">장소 선택</option>'+
-                    locations.map(loc=>`<option value="${loc.id}" ${loc.id===item.location?'selected':''}>${loc.name}</option>`).join('');
+                    locations.map(loc=>`<option value="${loc.id}" ${loc.id===item.location?'selected':''}>${loc.displayName||loc.name}</option>`).join('');
             }
             
             openModal('inventoryEditModal');
@@ -2738,7 +2784,16 @@
         async function loadLocations(){
             try{
                 const snapshot=await db.collection('locations').orderBy('order').get();
-                return snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
+                return snapshot.docs.map(d=>{
+                    const data=d.data();
+                    // 층 정보 추출 (예: "5층-냉장고" → "5층" 추출)
+                    const floor=data.name.match(/^(\d층)/)?.[1]||'';
+                    return {
+                        id:d.id,
+                        name:data.name,
+                        displayName:floor?`${floor} | ${data.name}`:`${data.name}`
+                    };
+                });
             }catch(e){
                 console.error('장소 로드 실패:',e);
                 return[];
