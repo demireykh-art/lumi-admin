@@ -420,6 +420,20 @@
                         <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem">
                             모든 품목의 실제 개수를 세어서 입력하세요
                         </div>
+                        
+                        <!-- 장소 선택 필터 (신규) -->
+                        <div style="margin-bottom:.75rem">
+                            <label style="font-size:.85rem;font-weight:600;color:var(--text);display:block;margin-bottom:.3rem">
+                                📍 실사 장소 선택 (선택사항)
+                            </label>
+                            <select id="invAuditLocationFilter" class="form-select" onchange="filterInvAuditByLocation()" style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
+                                <option value="">전체 장소 (모든 품목)</option>
+                            </select>
+                            <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.3rem">
+                                장소를 선택하면 해당 장소에 있는 품목만 표시됩니다
+                            </div>
+                        </div>
+                        
                         <div id="invLowStockAlert" style="display:none;background:rgba(168,90,90,.08);border:1px solid rgba(168,90,90,.2);padding:.6rem .8rem;border-radius:6px;margin-bottom:.5rem;font-size:.85rem;color:var(--red)"></div>
                         <div class="inv-cat-filters" id="invCatButtons"></div>
                         <div class="inv-progress" id="invProgress">
@@ -1045,7 +1059,7 @@
         async function loadConfigPasswords(){
             try{
                 if(typeof db==='undefined')return;
-                const doc=await db.collection('config').doc('passwords').get();
+                const doc=await window.db.collection('config').doc('passwords').get();
                 if(doc.exists){
                     const data=doc.data();
                     if(data.staff_pw) configPasswords.staff_pw=data.staff_pw;
@@ -1096,24 +1110,24 @@
                 
                 // 2-1. 문서ID가 이름과 동일한 경우
                 try{
-                    const d=await db.collection('employees').doc(inputName).get();
+                    const d=await window.db.collection('employees').doc(inputName).get();
                     if(d.exists) empDoc=d;
-                }catch(e){}
+                }catch(e){console.error('Doc query error:',e);}
                 
                 // 2-2. 소문자로 재시도
                 if(!empDoc){
                     try{
-                        const d=await db.collection('employees').doc(inputName.toLowerCase()).get();
+                        const d=await window.db.collection('employees').doc(inputName.toLowerCase()).get();
                         if(d.exists) empDoc=d;
-                    }catch(e){}
+                    }catch(e){console.error('Lowercase query error:',e);}
                 }
                 
                 // 2-3. name 필드 where 검색
                 if(!empDoc){
                     try{
-                        const snap=await db.collection('employees').where('name','==',inputName).limit(1).get();
+                        const snap=await window.db.collection('employees').where('name','==',inputName).limit(1).get();
                         if(!snap.empty) empDoc=snap.docs[0];
-                    }catch(e){}
+                    }catch(e){console.error('Where query error:',e);}
                 }
                 
                 if(!empDoc){
@@ -1153,7 +1167,7 @@
             if(pw1!==pw2){document.getElementById('pwError').textContent='비밀번호가 일치하지 않습니다.';return;}
             
             try{
-                await db.collection('employees').doc(currentUser.id).update({password:pw1});
+                await window.db.collection('employees').doc(currentUser.id).update({password:pw1});
                 currentUser.password=pw1;
                 localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
                 document.getElementById('pwSetup').classList.remove('active');
@@ -1281,7 +1295,7 @@
         // 자동 로그아웃 타이머
         async function loadSettings(){
             try{
-                const doc=await db.collection('settings').doc('staff').get();
+                const doc=await window.db.collection('settings').doc('staff').get();
                 if(doc.exists){
                     const data=doc.data();
                     autoLogoutMinutes=data.autoLogoutMinutes||10;
@@ -1351,7 +1365,7 @@
                 
                 if(credential){
                     // 인증 성공 - 저장된 사용자 정보로 로그인
-                    const doc=await db.collection('employees').doc(userId).get();
+                    const doc=await window.db.collection('employees').doc(userId).get();
                     if(doc.exists){
                         currentUser={id:doc.id,...doc.data()};
                         localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
@@ -1439,14 +1453,14 @@
         
         async function loadAttendance(){
             try{
-                const snapshot=await db.collection('attendance').where('employeeId','==',currentUser.id).get();
+                const snapshot=await window.db.collection('attendance').where('employeeId','==',currentUser.id).get();
                 attendance=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('출퇴근 로드 오류:',e);attendance=[];}
         }
         
         async function loadLunchOT(){
             try{
-                const snapshot=await db.collection('lunchOT').where('employeeId','==',currentUser.id).get();
+                const snapshot=await window.db.collection('lunchOT').where('employeeId','==',currentUser.id).get();
                 lunchOT=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('OT 로드 오류:',e);lunchOT=[];}
         }
@@ -1456,9 +1470,9 @@
                 let snapshot;
                 if(isSharedAccount()){
                     const ym=getYM();
-                    snapshot=await db.collection('mealRecords').where('yearMonth','==',ym).get();
+                    snapshot=await window.db.collection('mealRecords').where('yearMonth','==',ym).get();
                 }else{
-                    snapshot=await db.collection('mealRecords').where('employeeId','==',currentUser.id).get();
+                    snapshot=await window.db.collection('mealRecords').where('employeeId','==',currentUser.id).get();
                 }
                 mealRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('식사 로드 오류:',e);mealRecords=[];}
@@ -1466,7 +1480,7 @@
         
         async function loadIncentiveItems(){
             try{
-                const snapshot=await db.collection('incentiveItems').get();
+                const snapshot=await window.db.collection('incentiveItems').get();
                 const all=snapshot.docs.map(d=>({id:d.id,...d.data()}));
                 incentiveItems=all.filter(item=>!item.employees||item.employees.length===0||item.employees.includes(currentUser.id));
             }catch(e){console.error('인센티브 항목 로드 오류:',e);incentiveItems=[];}
@@ -1474,14 +1488,14 @@
         
         async function loadIncentiveRecords(){
             try{
-                const snapshot=await db.collection('incentiveRecords').where('employeeId','==',currentUser.id).get();
+                const snapshot=await window.db.collection('incentiveRecords').where('employeeId','==',currentUser.id).get();
                 incentiveRecords=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('인센티브 기록 로드 오류:',e);incentiveRecords=[];}
         }
         
         async function loadManualIncentivesForStaff(){
             try{
-                const snapshot=await db.collection('manualIncentives').where('employeeId','==',currentUser.id).get();
+                const snapshot=await window.db.collection('manualIncentives').where('employeeId','==',currentUser.id).get();
                 manualIncentives=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('수동 인센티브 로드 오류:',e);manualIncentives=[];}
         }
@@ -1489,16 +1503,16 @@
         async function loadSalesData(){
             try{
                 const ym=getYM();
-                const detailDoc=await db.collection('salesDetail').doc(ym).get();
+                const detailDoc=await window.db.collection('salesDetail').doc(ym).get();
                 if(detailDoc.exists)salesDetail[ym]=detailDoc.data();
-                const revDoc=await db.collection('revenue').doc(ym).get();
+                const revDoc=await window.db.collection('revenue').doc(ym).get();
                 if(revDoc.exists)revenueData[ym]=revDoc.data();
             }catch(e){console.error('매출 데이터 로드 오류:',e);}
         }
         
         async function loadLeaveRequests(){
             try{
-                const snapshot=await db.collection('leaveRequests').where('employeeId','==',currentUser.id).get();
+                const snapshot=await window.db.collection('leaveRequests').where('employeeId','==',currentUser.id).get();
                 leaveRequests=snapshot.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
                     const aTime=a.createdAt?.toDate?.()?.getTime()||0;
                     const bTime=b.createdAt?.toDate?.()?.getTime()||0;
@@ -1509,7 +1523,7 @@
         
         async function loadPayrollData(){
             try{
-                const snapshot=await db.collection('payroll').get();
+                const snapshot=await window.db.collection('payroll').get();
                 payrollData=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('급여 로드 오류:',e);payrollData=[];}
         }
@@ -2128,7 +2142,7 @@
             const status=(h>9||(h===9&&m>10))?'late':'normal';
             
             try{
-                await db.collection('attendance').add({
+                await window.db.collection('attendance').add({
                     employeeId:currentUser.id,
                     employeeName:currentUser.name,
                     date:today,
@@ -2178,7 +2192,7 @@
             const newStatus=h<18?'early':todayAtt.status;
             
             try{
-                await db.collection('attendance').doc(todayAtt.id).update({
+                await window.db.collection('attendance').doc(todayAtt.id).update({
                     checkOut:time,
                     status:newStatus
                 });
@@ -2210,7 +2224,7 @@
             }
             
             try{
-                await db.collection('attendanceCorrections').add({
+                await window.db.collection('attendanceCorrections').add({
                     employeeId:currentUser.id,
                     employeeName:currentUser.name,
                     date:date,
@@ -2247,7 +2261,7 @@
             if(!date||minutes<=0){alert('날짜와 시간을 입력해주세요.');return;}
             
             try{
-                await db.collection('lunchOT').add({
+                await window.db.collection('lunchOT').add({
                     employeeId:currentUser.id,
                     employeeName:currentUser.name,
                     date:date,
@@ -2283,7 +2297,7 @@
 
         async function loadMealStaffList(){
             try{
-                const s=await db.collection('employees').where('status','==','active').get();
+                const s=await window.db.collection('employees').where('status','==','active').get();
                 mealAllStaff=s.docs.map(d=>({id:d.id,...d.data()})).filter(e=>e.id!==SHARED_ACCOUNT_ID&&e.status==='active');
             }catch(e){mealAllStaff=[];}
             renderMealStaffList();
@@ -2490,7 +2504,7 @@
             if(selectedLeaveDates.length===0){alert('날짜를 추가해주세요.');return;}
             
             try{
-                await db.collection('leaveRequests').add({
+                await window.db.collection('leaveRequests').add({
                     employeeId:currentUser.id,
                     employeeName:currentUser.name,
                     type:type,
@@ -2521,7 +2535,7 @@
             if(!customerName){alert('고객명을 입력해주세요.');return;}
             
             try{
-                await db.collection('incentiveRecords').add({
+                await window.db.collection('incentiveRecords').add({
                     employeeId:currentUser.id,
                     employeeName:currentUser.name,
                     itemId:itemId,
@@ -2546,19 +2560,60 @@
         let auditInputs={}; // {itemId: value}
         let lastWeekAudits={}; // {itemId: lastAuditData}
         let currentInvCat=''; // '' = 전체
+        let currentAuditLocation=''; // '' = 전체 장소
 
         async function loadInventoryForStaff(){
             try{
-                const s=await db.collection('inventory').orderBy('name').get();
+                const s=await window.db.collection('inventory').orderBy('name').get();
                 invItems=s.docs.map(d=>({id:d.id,...d.data()}));
+                
+                // 장소 필터 드롭다운 업데이트
+                await updateAuditLocationFilter();
             }catch(e){console.error('Load inv:',e);}
+        }
+        
+        // ===== 재고 실사 장소 필터 =====
+        async function updateAuditLocationFilter() {
+            const select = document.getElementById('invAuditLocationFilter');
+            if (!select) return;
+            
+            try {
+                // locations 컬렉션에서 모든 장소 가져오기
+                const snapshot = await window.db.collection('locations').orderBy('order').get();
+                const locations = snapshot.docs.map(d => ({
+                    id: d.id,
+                    name: d.data().name
+                }));
+                
+                // 5층 → 6층 순서로 정렬
+                locations.sort((a, b) => {
+                    const floorA = a.name.startsWith('5층') ? 0 : 1;
+                    const floorB = b.name.startsWith('5층') ? 0 : 1;
+                    if (floorA !== floorB) return floorA - floorB;
+                    return a.name.localeCompare(b.name, 'ko');
+                });
+                
+                // 드롭다운 옵션 생성
+                select.innerHTML = '<option value="">전체 장소 (모든 품목)</option>' +
+                    locations.map(loc => `<option value="${loc.id}">${loc.name}</option>`).join('');
+                    
+            } catch (e) {
+                console.error('장소 목록 로드 오류:', e);
+                select.innerHTML = '<option value="">전체 장소 (모든 품목)</option>';
+            }
+        }
+        
+        function filterInvAuditByLocation() {
+            const select = document.getElementById('invAuditLocationFilter');
+            currentAuditLocation = select ? select.value : '';
+            renderInvAuditList();
         }
 
         async function loadLastWeekAudits(){
             try{
                 const oneWeekAgo=new Date();
                 oneWeekAgo.setDate(oneWeekAgo.getDate()-14);
-                const s=await db.collection('inventoryAudits')
+                const s=await window.db.collection('inventoryAudits')
                     .where('createdAt','>=',oneWeekAgo.toISOString())
                     .orderBy('createdAt','desc').limit(500).get();
                 lastWeekAudits={};
@@ -2591,13 +2646,29 @@
             const container=document.getElementById('invAuditList');
             if(!container)return;
             let items=invItems;
+            
+            // 카테고리 필터
             if(currentInvCat){
                 items=items.filter(i=>i.category===currentInvCat);
             }
+            
+            // ✅ 장소 필터 (신규)
+            if(currentAuditLocation){
+                items=items.filter(i=>{
+                    // locations 객체에서 해당 장소에 재고가 있는지 확인
+                    if(!i.locations) return false;
+                    const qty = i.locations[currentAuditLocation];
+                    return qty && qty > 0;
+                });
+            }
+            
             items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
             
             if(!items.length){
-                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:2rem">등록된 품목이 없습니다.</div>';
+                const msg = currentAuditLocation 
+                    ? '선택한 장소에 품목이 없습니다. 다른 장소를 선택하세요.' 
+                    : '등록된 품목이 없습니다.';
+                container.innerHTML=`<div style="text-align:center;color:var(--text-muted);padding:2rem">${msg}</div>`;
                 return;
             }
 
@@ -2612,12 +2683,20 @@
                 const sysStock=item.currentStock||0;
                 const buyLink=item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" style="display:inline-block;background:#f0f0f0;color:#333;font-size:.65rem;padding:2px 6px;border-radius:3px;text-decoration:none;margin-left:4px;vertical-align:middle">🛒</a>`:'';
                 const lowBg=isLow?'background:rgba(255,152,0,0.08);border-left:3px solid #ff9800':'';
+                
+                // ✅ 현재 장소 재고 정보 표시 (장소 필터 활성화 시)
+                let locationInfo = '';
+                if(currentAuditLocation && item.locations && item.locations[currentAuditLocation]){
+                    const locQty = item.locations[currentAuditLocation];
+                    locationInfo = `<span style="color:var(--primary);font-weight:600">📍 이 장소: ${locQty} ${item.unit||'개'}</span>`;
+                }
+                
                 return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
                     <div class="inv-item-info">
                         <div class="inv-item-name">${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':''}</div>
                         <div class="inv-item-meta">
                             <span>${catLabel}</span>
-                            <span>시스템: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
+                            ${locationInfo ? locationInfo : `<span>시스템: <strong>${sysStock}</strong> ${item.unit||'개'}</span>`}
                             ${isLow?`<span style="color:var(--red)">안전재고: ${item.safetyStock}</span>`:''}
                             ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
                             <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">✏️ 수정</button>
@@ -2693,7 +2772,7 @@
                     });
                 });
                 // inventoryAudits에도 기록 (관리자 리포트용)
-                await db.collection('inventoryAudits').add({
+                await window.db.collection('inventoryAudits').add({
                     itemId,actualStock,
                     staffId:currentUser?.id||'unknown',staffName,
                     createdAt:new Date().toISOString()
@@ -2845,7 +2924,7 @@
 
         async function loadLocations(){
             try{
-                const snapshot=await db.collection('locations').orderBy('order').get();
+                const snapshot=await window.db.collection('locations').orderBy('order').get();
                 return snapshot.docs.map(d=>{
                     const data=d.data();
                     // 층 정보 추출 (예: "5층-냉장고" → "5층" 추출)
@@ -2891,10 +2970,10 @@
                 if(expiry) updateData.expiry=expiry;
                 if(location) updateData.location=location;
                 
-                await db.collection('inventory').doc(itemId).update(updateData);
+                await window.db.collection('inventory').doc(itemId).update(updateData);
                 
                 // 로그 기록
-                await db.collection('inventoryLogs').add({
+                await window.db.collection('inventoryLogs').add({
                     itemId:itemId,
                     action:'manual_edit',
                     quantity:newQuantity,
@@ -2928,7 +3007,7 @@
             
             try{
                 // 로그 기록
-                await db.collection('inventoryLogs').add({
+                await window.db.collection('inventoryLogs').add({
                     itemId:itemId,
                     action:'delete',
                     reason:reason,
@@ -2938,7 +3017,7 @@
                 });
                 
                 // 삭제
-                await db.collection('inventory').doc(itemId).delete();
+                await window.db.collection('inventory').doc(itemId).delete();
                 
                 alert('품목이 삭제되었습니다');
                 await loadInventoryForStaff();
@@ -3015,7 +3094,7 @@
                 createdBy:currentUser?.name||'staff'
             };
             try{
-                await db.collection('inventory').add(data);
+                await window.db.collection('inventory').add(data);
                 closeModal('newItemModal');
                 alert('✅ "'+name+'" 품목이 등록되었습니다.');
                 await loadInventoryForStaff();
@@ -3082,7 +3161,7 @@
                 updatedBy:currentUser?.name||'staff'
             };
             try{
-                await db.collection('inventory').doc(id).update(data);
+                await window.db.collection('inventory').doc(id).update(data);
                 closeModal('editItemModal');
                 alert('✅ 품목 정보가 수정되었습니다.');
                 await loadInventoryForStaff();
@@ -3100,7 +3179,7 @@
             
             try{
                 // 재고 문서 삭제
-                await db.collection('inventory').doc(itemId).delete();
+                await window.db.collection('inventory').doc(itemId).delete();
                 
                 // 로컬 배열에서도 제거
                 const idx=invItems.findIndex(i=>i.id===itemId);
@@ -3144,7 +3223,7 @@
                 createdAt:new Date().toISOString()
             };
             try{
-                await db.collection('purchaseRequests').add(data);
+                await window.db.collection('purchaseRequests').add(data);
                 closeModal('wishlistModal');
                 alert('✅ 구매 요청이 제출되었습니다.\n관리자 승인 후 구매가 진행됩니다.');
                 loadStaffWishlist(); // UI 리렌더링
@@ -3157,7 +3236,7 @@
             if(!container)return;
             if(typeof db==='undefined'){container.innerHTML='시스템 초기화 중...';return;}
             try{
-                const snap=await db.collection('purchaseRequests').orderBy('createdAt','desc').limit(30).get();
+                const snap=await window.db.collection('purchaseRequests').orderBy('createdAt','desc').limit(30).get();
                 const items=snap.docs.map(d=>({id:d.id,...d.data()}));
                 if(!items.length){
                     container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1.5rem">아직 요청 내역이 없습니다.</div>';
@@ -3192,7 +3271,7 @@
         async function loadReceivingLocations(){
             if(typeof db==='undefined')return;
             try{
-                const snap=await db.collection('locations').orderBy('order','asc').get();
+                const snap=await window.db.collection('locations').orderBy('order','asc').get();
                 receivingLocations=snap.docs.map(d=>({id:d.id,...d.data()}));
                 updateLocationSelect();
             }catch(e){
@@ -3358,7 +3437,7 @@
                 });
                 
                 // 입고 기록 저장 (receivingHistory 컬렉션)
-                await db.collection('receivingHistory').add({
+                await window.db.collection('receivingHistory').add({
                     itemId:itemId,
                     itemName:item.name,
                     batchNo:batchNo,
@@ -3396,7 +3475,7 @@
             if(typeof db==='undefined'){container.innerHTML='시스템 초기화 중...';return;}
             
             try{
-                const snap=await db.collection('receivingHistory')
+                const snap=await window.db.collection('receivingHistory')
                     .orderBy('receivedAt','desc')
                     .limit(10)
                     .get();
