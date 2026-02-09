@@ -2130,15 +2130,15 @@
             if(!select)return;
             try{
                 const snapshot=await db.collection('locations').orderBy('order').get();
-                const locations=snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
-                locations.sort((a,b)=>{
+                const locationList=snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
+                locationList.sort((a,b)=>{
                     const floorA=a.name.startsWith('5층')?0:1;
                     const floorB=b.name.startsWith('5층')?0:1;
                     if(floorA!==floorB)return floorA-floorB;
                     return a.name.localeCompare(b.name,'ko');
                 });
                 select.innerHTML='<option value="">전체 장소 (모든 품목)</option>'+
-                    locations.map(loc=>`<option value="${loc.id}">${loc.name}</option>`).join('');
+                    locationList.map(loc=>`<option value="${loc.id}">${loc.name}</option>`).join('');
             }catch(e){console.error('장소 로드:',e);}
         }
         
@@ -2730,20 +2730,20 @@
                     
                     const data=doc.data();
                     const batches=data.batches||[];
-                    const locations=data.locations||{};
+                    const itemLocations=data.locations||{};
                     
                     // 배치 추가
                     batches.push(newBatch);
                     
                     // 장소별 재고 업데이트
-                    locations[location]=(locations[location]||0)+qty;
+                    itemLocations[location]=(itemLocations[location]||0)+qty;
                     
                     // 총재고 계산
-                    const totalStock=Object.values(locations).reduce((sum,v)=>sum+v,0);
+                    const totalStock=Object.values(itemLocations).reduce((sum,v)=>sum+v,0);
                     
                     tx.update(docRef,{
                         batches:batches,
-                        locations:locations,
+                        locations:itemLocations,
                         totalStock:totalStock,
                         updatedAt:new Date().toISOString()
                     });
