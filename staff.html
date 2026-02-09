@@ -2221,12 +2221,12 @@
                     const locQty=item.locations[currentAuditLocation];
                     locationInfo=`<span style="color:var(--primary);font-weight:600">📍 이 장소: ${locQty}${item.unit||'개'}</span>`;
                 }else{
-                    const locations = item.locations ? 
+                    const locationsList = item.locations ? 
                         Object.entries(item.locations)
                             .filter(([loc, qty]) => qty > 0)
                             .map(([loc, qty]) => `${loc}(${qty})`).join(', ') 
                         : '위치 미지정';
-                    locationInfo=locations;
+                    locationInfo=locationsList;
                 }
                 
                 return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
