@@ -924,9 +924,38 @@
     </div>
 
     <script>
+        // Firebase 초기화 완료 플래그
+        let firebaseReady = false;
+        
+        // Firebase 초기화
         const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
-        firebase.initializeApp(firebaseConfig);
-        const db=firebase.firestore();
+        
+        // Firebase 초기화 대기
+        function initializeFirebase() {
+            try {
+                if (typeof firebase === 'undefined') {
+                    console.error('Firebase SDK not loaded');
+                    setTimeout(initializeFirebase, 100);
+                    return;
+                }
+                firebase.initializeApp(firebaseConfig);
+                window.db = firebase.firestore();
+                firebaseReady = true;
+                console.log('✅ Firebase initialized');
+            } catch (e) {
+                console.error('Firebase init error:', e);
+                setTimeout(initializeFirebase, 100);
+            }
+        }
+        
+        // 페이지 로드 시 초기화
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeFirebase);
+        } else {
+            initializeFirebase();
+        }
+        
+        const db = window.db; // 하위 호환성
         
         // 클리닉 위치 (GPS 출퇴근용)
         const CLINIC_LAT=37.5037435;  // 루미클리닉 위도
@@ -1032,9 +1061,15 @@
             
             if(!inputName||!pw){errEl.textContent='이름과 비밀번호를 입력해주세요.';return;}
             
-            // ── db 초기화 대기 (최대 2초) ──
-            if(typeof db==='undefined'){
+            // ── Firebase 초기화 대기 (최대 5초) ──
+            if (!firebaseReady || typeof window.db === 'undefined') {
                 errEl.textContent='시스템 초기화 중... 잠시 후 다시 시도해주세요.';
+                // 5초 대기 후 자동 재시도
+                setTimeout(() => {
+                    if (firebaseReady && window.db) {
+                        attemptLogin();
+                    }
+                }, 1000);
                 return;
             }
             
@@ -1046,7 +1081,7 @@
                 if(pw===configPasswords.staff_pw){
                     currentUser={id:'lumistaff',name:'공용계정',role:'shared'};
                     localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                    showApp();
+                    await showApp(); // ✅ 데이터 로드 완료 후 UI 표시
                 }else{
                     errEl.textContent='공용계정 비밀번호가 올바르지 않습니다.';
                 }
@@ -1102,7 +1137,7 @@
                 
                 currentUser=emp;
                 localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                showApp();
+                await showApp(); // ✅ 데이터 로드 완료 후 UI 표시
             }catch(e){
                 console.error('로그인 오류:',e);
                 errEl.textContent='로그인 중 오류가 발생했습니다. 다시 시도해주세요.';
@@ -1122,7 +1157,7 @@
                 currentUser.password=pw1;
                 localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
                 document.getElementById('pwSetup').classList.remove('active');
-                showApp();
+                await showApp(); // ✅ 데이터 로드 완료 후 UI 표시
             }catch(e){document.getElementById('pwError').textContent='저장 실패: '+e.message;}
         }
         
@@ -1130,34 +1165,54 @@
         const SHARED_ACCOUNT_ID='lumistaff';
         function isSharedAccount(){return currentUser?.id===SHARED_ACCOUNT_ID;}
 
-        function showApp(){
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('appContainer').classList.add('active');
-            document.getElementById('userName').textContent=currentUser.name||currentUser.id;
+        async function showApp(){
+            try {
+                // 1. 로딩 인디케이터 표시 (선택사항)
+                console.log('Loading user data...');
+                
+                // 2. 사용자 이름 표시
+                document.getElementById('userName').textContent=currentUser.name||currentUser.id;
 
-            const shared=isSharedAccount();
-            
-            // ═══ 계정별 탭 노출 ═══
-            if(shared){
-                displayTabs(['inventory','receiving','meal','wishlist']);
-            }else{
-                // 개인계정: visibleTabs 우선, 없으면 기본값
-                if(currentUser.visibleTabs&&currentUser.visibleTabs.length>0){
-                    displayTabs(currentUser.visibleTabs);
+                const shared=isSharedAccount();
+                
+                // 3. 계정별 탭 노출
+                if(shared){
+                    displayTabs(['inventory','receiving','meal','wishlist']);
                 }else{
-                    // 기본: 출퇴근, 식사, OT, 연차, 급여, 내정보
-                    const tabs=['attendance','meal','ot','leave','payroll','info']; /* PAYROLL ADDED */
-                    // 하위 호환성: isIncentiveTarget이 true이고 visibleTabs가 없으면 인센티브 추가
-                    if(currentUser.isIncentiveTarget) tabs.splice(2,0,'incentive');
-                    displayTabs(tabs);
+                    // 개인계정: visibleTabs 우선, 없으면 기본값
+                    if(currentUser.visibleTabs&&currentUser.visibleTabs.length>0){
+                        displayTabs(currentUser.visibleTabs);
+                    }else{
+                        // 기본: 출퇴근, 식사, OT, 연차, 급여, 내정보
+                        const tabs=['attendance','meal','ot','leave','payroll','info']; /* PAYROLL ADDED */
+                        // 하위 호환성: isIncentiveTarget이 true이고 visibleTabs가 없으면 인센티브 추가
+                        if(currentUser.isIncentiveTarget) tabs.splice(2,0,'incentive');
+                        displayTabs(tabs);
+                    }
                 }
-            }
 
-            if(shared) initInventoryTab();
-            checkLocation();
-            loadAllData();
-            loadSettings();
-            startAutoLogoutTimer();
+                // 4. 필수 데이터 로드 (UI 표시 전)
+                if(shared) await initInventoryTab();
+                checkLocation();
+                await loadAllData(); // ✅ 데이터 로드 완료 대기
+                await loadSettings(); // ✅ 설정 로드 완료 대기
+                
+                // 5. 데이터 로드 완료 후 UI 표시
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appContainer').classList.add('active');
+                
+                // 6. 화면 렌더링
+                renderAll();
+                
+                // 7. 자동 로그아웃 타이머 시작
+                startAutoLogoutTimer();
+                
+                console.log('✅ App loaded successfully');
+            } catch (error) {
+                console.error('App loading error:', error);
+                alert('데이터 로드 중 오류가 발생했습니다. 다시 로그인해주세요.');
+                logout();
+            }
         }
         
         // ═══ 탭 표시 유틸리티 ═══
@@ -1199,9 +1254,9 @@
             document.getElementById('loginError').textContent='';
         }
         
-        function checkAuth(){
-            // db 안전 체크 (firebase-config.js 미로드 또는 초기화 실패 대비)
-            if(typeof db==='undefined'||!db){
+        async function checkAuth(){
+            // Firebase 초기화 체크
+            if(!firebaseReady || typeof window.db==='undefined'||!window.db){
                 setTimeout(checkAuth,300);
                 return;
             }
@@ -1209,9 +1264,16 @@
             if(saved){
                 try{
                     currentUser=JSON.parse(saved);
-                    if(currentUser&&currentUser.id)showApp();
-                    else{currentUser=null;localStorage.removeItem('lumi_staff_user');}
-                }catch(e){currentUser=null;localStorage.removeItem('lumi_staff_user');}
+                    if(currentUser&&currentUser.id){
+                        await showApp(); // ✅ 데이터 로드 완료 후 UI 표시
+                    }else{
+                        currentUser=null;
+                        localStorage.removeItem('lumi_staff_user');
+                    }
+                }catch(e){
+                    currentUser=null;
+                    localStorage.removeItem('lumi_staff_user');
+                }
             }
             checkBiometricAvailable();
         }
@@ -1293,7 +1355,7 @@
                     if(doc.exists){
                         currentUser={id:doc.id,...doc.data()};
                         localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                        showApp();
+                        await showApp(); // ✅ 데이터 로드 완료 후 UI 표시
                     }else{
                         alert('사용자 정보를 찾을 수 없습니다.');
                     }

@@ -355,6 +355,29 @@
                     
                     <div class="section-header mt-1"><div class="section-title">직원별 인센티브 현황</div></div>
                     <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 기반</th><th class="text-right">건별/기타</th><th class="text-right">추가 지급</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
+                    
+                    <div class="section-header mt-1">
+                        <div class="section-title">📋 직원별 인센티브 실적 상세</div>
+                        <select class="form-select" id="incRecordFilter" style="width:auto" onchange="renderIncentiveRecords()">
+                            <option value="">전체 직원</option>
+                        </select>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>날짜</th>
+                                    <th>직원</th>
+                                    <th>항목</th>
+                                    <th>환자명</th>
+                                    <th>차트번호</th>
+                                    <th>금액</th>
+                                    <th>관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="incentiveRecordsTable"></tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="sub-content" id="sub-salary">
                     <div class="section-header"><div class="section-title">사전급여대장 (노무사 전달용)</div><button class="btn btn-secondary" onclick="exportPrePayroll()">엑셀 다운로드</button></div>
@@ -1133,6 +1156,88 @@
             }).join('');
         }
         
+        // ===== 비밀번호 관리 =====
+        async function saveConfigPasswords() {
+            const adminPw = document.getElementById('cfgAdminPw').value.trim();
+            const staffPw = document.getElementById('cfgStaffPw').value.trim();
+            
+            if (!adminPw && !staffPw) {
+                alert('변경할 비밀번호를 입력하세요');
+                return;
+            }
+            
+            try {
+                const configRef = db.collection('config').doc('passwords');
+                const updates = {};
+                
+                if (adminPw) {
+                    if (adminPw.length < 4) {
+                        alert('관리자 비밀번호는 4자 이상이어야 합니다');
+                        return;
+                    }
+                    updates.admin_pw = adminPw;
+                }
+                
+                if (staffPw) {
+                    if (staffPw.length < 4) {
+                        alert('공용계정 비밀번호는 4자 이상이어야 합니다');
+                        return;
+                    }
+                    updates.staff_pw = staffPw;
+                }
+                
+                await configRef.set(updates, { merge: true });
+                
+                alert('비밀번호가 저장되었습니다\n\n다음 로그인부터 새 비밀번호를 사용하세요');
+                
+                // ✅ 핵심: 입력값 초기화
+                document.getElementById('cfgAdminPw').value = '';
+                document.getElementById('cfgStaffPw').value = '';
+                
+            } catch (error) {
+                console.error('비밀번호 저장 오류:', error);
+                alert('저장 실패: ' + error.message);
+            }
+        }
+        
+        // ===== 모달 유틸리티 함수 =====
+        function openModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('active');
+            }
+        }
+        
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            
+            modal.classList.remove('active');
+            
+            // 모달 내 모든 입력 필드 초기화 (비밀번호 포함)
+            const inputs = modal.querySelectorAll('input, textarea, select');
+            inputs.forEach(input => {
+                if (input.type !== 'button' && input.type !== 'submit') {
+                    if (input.tagName === 'SELECT') {
+                        input.selectedIndex = 0;
+                    } else if (input.type === 'checkbox' || input.type === 'radio') {
+                        input.checked = false;
+                    } else {
+                        input.value = '';
+                    }
+                }
+            });
+            
+            // 에러 메시지나 미리보기 텍스트 초기화
+            const helpTexts = modal.querySelectorAll('.help-text, .preview-area, .error-message');
+            helpTexts.forEach(el => {
+                el.textContent = '';
+                el.innerHTML = '';
+            });
+            
+            console.log(`✅ Modal ${modalId} closed and reset`);
+        }
+        
         // ===== 초기화 =====
         document.addEventListener('DOMContentLoaded', function() {
             // 기존 초기화 코드 실행 후
@@ -1140,11 +1245,106 @@
                 loadAttendanceCorrections();
                 loadInventoryHistory();
                 loadManualIncentives();
+                loadAllIncentiveRecords();
             }, 1000);
         });
         
         // ===== 수동 인센티브 관리 =====
         let manualIncentives = [];
+        let allIncentiveRecords = []; // 전체 직원의 인센티브 실적
+        
+        async function loadManualIncentives() {
+            try {
+                const snapshot = await db.collection('manualIncentives')
+                    .orderBy('month', 'desc')
+                    .get();
+                manualIncentives = snapshot.docs.map(d => ({
+                    id: d.id,
+                    ...d.data()
+                }));
+                renderManualIncentives();
+            } catch (e) {
+                console.error('수동 인센티브 로드 실패:', e);
+            }
+        }
+        
+        async function loadAllIncentiveRecords() {
+            try {
+                const snapshot = await db.collection('incentiveRecords')
+                    .orderBy('date', 'desc')
+                    .limit(500)
+                    .get();
+                allIncentiveRecords = snapshot.docs.map(d => ({
+                    id: d.id,
+                    ...d.data()
+                }));
+                
+                // 직원 필터 업데이트
+                const uniqueEmployees = [...new Set(allIncentiveRecords.map(r => r.employeeName))].filter(Boolean);
+                const filterSelect = document.getElementById('incRecordFilter');
+                if (filterSelect) {
+                    filterSelect.innerHTML = '<option value="">전체 직원</option>' +
+                        uniqueEmployees.map(name => `<option value="${name}">${name}</option>`).join('');
+                }
+                
+                renderIncentiveRecords();
+            } catch (e) {
+                console.error('인센티브 실적 로드 실패:', e);
+            }
+        }
+        
+        function renderIncentiveRecords() {
+            const tbody = document.getElementById('incentiveRecordsTable');
+            if (!tbody) return;
+            
+            const filter = document.getElementById('incRecordFilter')?.value || '';
+            let filtered = allIncentiveRecords;
+            
+            if (filter) {
+                filtered = allIncentiveRecords.filter(r => r.employeeName === filter);
+            }
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary)">실적이 없습니다</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = filtered.map(record => {
+                const item = window.incentiveItems?.find(i => i.id === record.itemId);
+                const itemName = item?.name || '항목';
+                const itemPrice = item?.price || 0;
+                
+                return `
+                    <tr>
+                        <td>${record.date || '-'}</td>
+                        <td>${record.employeeName || '-'}</td>
+                        <td>${itemName}</td>
+                        <td>${record.customerName || '-'}</td>
+                        <td>${record.chartNo || '-'}</td>
+                        <td class="text-right" style="font-weight:600">₩${itemPrice.toLocaleString()}</td>
+                        <td>
+                            <button class="btn btn-sm" style="background:var(--red);color:#fff;padding:4px 8px;font-size:.75rem" 
+                                onclick="deleteIncentiveRecord('${record.id}','${record.employeeName}','${itemName}')">삭제</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        async function deleteIncentiveRecord(recordId, employeeName, itemName) {
+            if (!confirm(`${employeeName}님의 "${itemName}" 실적을 삭제하시겠습니까?`)) {
+                return;
+            }
+            
+            try {
+                await db.collection('incentiveRecords').doc(recordId).delete();
+                alert('삭제되었습니다');
+                await loadAllIncentiveRecords();
+            } catch (e) {
+                console.error('삭제 실패:', e);
+                alert('오류가 발생했습니다: ' + e.message);
+            }
+        }
         
         async function loadManualIncentives() {
             try {
