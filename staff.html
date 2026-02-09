@@ -366,9 +366,12 @@
                     
                     <!-- 장소 선택 필터 -->
                     <div style="margin-bottom:.75rem;margin-top:.5rem">
-                        <label style="font-size:.85rem;font-weight:600;color:var(--text);display:block;margin-bottom:.3rem">
-                            📍 실사 장소 선택 (선택사항)
-                        </label>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+                            <label style="font-size:.85rem;font-weight:600;color:var(--text)">
+                                📍 실사 장소 선택
+                            </label>
+                            <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .6rem" onclick="openLocationManageModal()">장소 관리</button>
+                        </div>
                         <select id="invAuditLocationFilter" class="form-select" onchange="filterInvAuditByLocation()" style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
                             <option value="">전체 장소 (모든 품목)</option>
                         </select>
@@ -782,6 +785,43 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('editItemModal')" style="flex:1">취소</button>
                 <button class="btn btn-primary" onclick="saveEditItem()" style="flex:2">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 장소 관리 모달 -->
+    <div class="modal" id="locationManageModal">
+        <div class="modal-content" style="max-width:500px">
+            <div class="modal-header">
+                <div class="modal-title">📍 장소 관리</div>
+                <button class="modal-close" onclick="closeModal('locationManageModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 새 장소 추가 -->
+                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:1rem">
+                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">➕ 새 장소 추가</div>
+                    <div style="display:flex;gap:.5rem;align-items:end">
+                        <div class="form-group" style="flex:1;margin:0">
+                            <label class="form-label" style="font-size:.8rem">층</label>
+                            <select class="form-select" id="newLocationFloor" style="padding:.5rem">
+                                <option value="5층">5층</option>
+                                <option value="6층" selected>6층</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:2;margin:0">
+                            <label class="form-label" style="font-size:.8rem">장소명</label>
+                            <input type="text" class="form-input" id="newLocationName" placeholder="예: 준비실, 레이저실" style="padding:.5rem">
+                        </div>
+                        <button class="btn btn-primary" onclick="addLocation()" style="padding:.5rem 1rem;white-space:nowrap">추가</button>
+                    </div>
+                </div>
+                
+                <!-- 기존 장소 목록 -->
+                <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">📋 기존 장소 목록</div>
+                <div id="locationsList" style="max-height:400px;overflow-y:auto"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('locationManageModal')" style="flex:1">닫기</button>
             </div>
         </div>
     </div>
@@ -2128,10 +2168,21 @@
 
         async function loadInventoryForStaff(){
             try{
+                console.log('📦 재고 데이터 로드 시작...');
                 const s=await db.collection('inventory').orderBy('name').get();
                 invItems=s.docs.map(d=>({id:d.id,...d.data()}));
+                console.log('✅ 재고 데이터 로드 완료:', invItems.length, '개 품목');
+                if(invItems.length>0){
+                    console.log('📋 첫 5개 품목:', invItems.slice(0,5).map(i=>i.name));
+                }else{
+                    console.warn('⚠️ 품목이 하나도 없습니다! Firebase inventory 컬렉션을 확인하세요.');
+                }
                 await updateAuditLocationFilter();
-            }catch(e){console.error('Load inv:',e);}
+            }catch(e){
+                console.error('❌ 재고 로드 실패:',e);
+                alert('재고 데이터를 불러오는데 실패했습니다. 새로고침 후 다시 시도해주세요.');
+            }
+        }
         }
         
         async function updateAuditLocationFilter(){
@@ -2139,7 +2190,16 @@
             if(!select)return;
             try{
                 const snapshot=await db.collection('locations').orderBy('order').get();
-                const locationList=snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
+                let locationList=snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
+                
+                // 장소가 하나도 없으면 기본 장소 자동 생성
+                if(locationList.length===0){
+                    console.warn('⚠️ 장소가 없습니다. 기본 장소를 생성합니다...');
+                    await createDefaultLocations();
+                    // 다시 로드
+                    const snapshot2=await db.collection('locations').orderBy('order').get();
+                    locationList=snapshot2.docs.map(d=>({id:d.id,name:d.data().name}));
+                }
                 
                 // 층별로 그룹핑
                 const floor5=locationList.filter(loc=>loc.name.startsWith('5층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
@@ -2165,13 +2225,185 @@
                 }
                 
                 select.innerHTML=html;
-            }catch(e){console.error('장소 로드:',e);}
+                console.log('✅ 장소 드롭다운 로드 완료:', locationList.length, '개 장소');
+            }catch(e){
+                console.error('❌ 장소 로드 실패:',e);
+            }
+        }
+        
+        async function createDefaultLocations(){
+            const defaultLocations=[
+                {name:'5층-냉장고',floor:'5층',order:1},
+                {name:'5층-처치실',floor:'5층',order:2},
+                {name:'6층-레이저실',floor:'6층',order:3},
+                {name:'6층-리팟실',floor:'6층',order:4},
+                {name:'6층-수액실',floor:'6층',order:5},
+                {name:'6층-수술실',floor:'6층',order:6},
+                {name:'6층-시술실',floor:'6층',order:7},
+                {name:'6층-어븀실',floor:'6층',order:8},
+                {name:'6층-줄기세포센터',floor:'6층',order:9},
+                {name:'6층-준비실',floor:'6층',order:10},
+                {name:'6층-준비실 냉장고',floor:'6층',order:11},
+                {name:'6층-준비실옆보관실',floor:'6층',order:12}
+            ];
+            
+            const batch=db.batch();
+            defaultLocations.forEach(loc=>{
+                const ref=db.collection('locations').doc();
+                batch.set(ref,{
+                    ...loc,
+                    createdAt:new Date().toISOString(),
+                    createdBy:'system'
+                });
+            });
+            
+            await batch.commit();
+            console.log('✅ 기본 장소 12개 생성 완료');
+        }
         }
         
         function filterInvAuditByLocation(){
             const select=document.getElementById('invAuditLocationFilter');
             currentAuditLocation=select?select.value:'';
             renderInvAuditList();
+        }
+        
+        // ===== 장소 관리 =====
+        async function openLocationManageModal(){
+            await loadLocationsList();
+            openModal('locationManageModal');
+        }
+        
+        async function loadLocationsList(){
+            const container=document.getElementById('locationsList');
+            if(!container)return;
+            
+            try{
+                const snapshot=await db.collection('locations').orderBy('order').get();
+                const locs=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+                
+                if(locs.length===0){
+                    container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:2rem">등록된 장소가 없습니다</div>';
+                    return;
+                }
+                
+                // 층별 그룹핑
+                const floor5=locs.filter(l=>l.name.startsWith('5층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+                const floor6=locs.filter(l=>l.name.startsWith('6층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+                
+                let html='';
+                
+                if(floor5.length>0){
+                    html+='<div style="font-weight:600;font-size:.8rem;color:var(--text-secondary);margin-top:.5rem;padding:.5rem;background:var(--bg);border-radius:4px">5층</div>';
+                    floor5.forEach(loc=>{
+                        html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem;border-bottom:1px solid var(--border)">
+                            <span style="font-size:.9rem">${loc.name}</span>
+                            <button onclick="deleteLocation('${loc.id}','${loc.name.replace(/'/g,"\\'")}')" 
+                                    style="background:var(--red);color:#fff;border:none;padding:.3rem .6rem;border-radius:4px;font-size:.75rem;cursor:pointer">삭제</button>
+                        </div>`;
+                    });
+                }
+                
+                if(floor6.length>0){
+                    html+='<div style="font-weight:600;font-size:.8rem;color:var(--text-secondary);margin-top:.5rem;padding:.5rem;background:var(--bg);border-radius:4px">6층</div>';
+                    floor6.forEach(loc=>{
+                        html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem;border-bottom:1px solid var(--border)">
+                            <span style="font-size:.9rem">${loc.name}</span>
+                            <button onclick="deleteLocation('${loc.id}','${loc.name.replace(/'/g,"\\'")}')" 
+                                    style="background:var(--red);color:#fff;border:none;padding:.3rem .6rem;border-radius:4px;font-size:.75rem;cursor:pointer">삭제</button>
+                        </div>`;
+                    });
+                }
+                
+                container.innerHTML=html;
+            }catch(e){
+                console.error('장소 로드 실패:',e);
+                container.innerHTML='<div style="text-align:center;color:var(--red);padding:2rem">장소를 불러올 수 없습니다</div>';
+            }
+        }
+        
+        async function addLocation(){
+            const floor=document.getElementById('newLocationFloor').value;
+            const name=document.getElementById('newLocationName').value.trim();
+            
+            if(!name){
+                alert('장소명을 입력해주세요');
+                return;
+            }
+            
+            const fullName=`${floor}-${name}`;
+            
+            try{
+                // 중복 확인
+                const existing=await db.collection('locations').where('name','==',fullName).get();
+                if(!existing.empty){
+                    alert('이미 존재하는 장소입니다');
+                    return;
+                }
+                
+                // 현재 최대 order 값 찾기
+                const allLocs=await db.collection('locations').orderBy('order','desc').limit(1).get();
+                const maxOrder=allLocs.empty?0:allLocs.docs[0].data().order||0;
+                
+                // 새 장소 추가
+                await db.collection('locations').add({
+                    name:fullName,
+                    floor:floor,
+                    order:maxOrder+1,
+                    createdAt:new Date().toISOString(),
+                    createdBy:currentUser?.name||'staff'
+                });
+                
+                // 입력 초기화
+                document.getElementById('newLocationName').value='';
+                
+                // 목록 새로고침
+                await loadLocationsList();
+                await updateAuditLocationFilter();
+                
+                alert('✅ 장소가 추가되었습니다');
+            }catch(e){
+                alert('추가 실패: '+e.message);
+            }
+        }
+        
+        async function deleteLocation(locId,locName){
+            if(!confirm(`"${locName}" 장소를 삭제하시겠습니까?\n\n⚠️ 주의: 이 장소를 사용하는 품목의 재고 정보도 함께 삭제됩니다.`))return;
+            
+            try{
+                // 장소 삭제
+                await db.collection('locations').doc(locId).delete();
+                
+                // 품목의 locations 필드에서 해당 장소 제거
+                const items=await db.collection('inventory').get();
+                const batch=db.batch();
+                
+                items.docs.forEach(doc=>{
+                    const data=doc.data();
+                    if(data.locations&&data.locations[locId]){
+                        const newLocs={...data.locations};
+                        delete newLocs[locId];
+                        const newTotal=Object.values(newLocs).reduce((sum,qty)=>sum+qty,0);
+                        batch.update(doc.ref,{
+                            locations:newLocs,
+                            totalStock:newTotal,
+                            currentStock:newTotal
+                        });
+                    }
+                });
+                
+                await batch.commit();
+                
+                // 목록 새로고침
+                await loadLocationsList();
+                await updateAuditLocationFilter();
+                await loadInventoryForStaff();
+                renderInvAuditList();
+                
+                alert('✅ 장소가 삭제되었습니다');
+            }catch(e){
+                alert('삭제 실패: '+e.message);
+            }
         }
 
         async function loadLastWeekAudits(){
@@ -2210,6 +2442,14 @@
         function renderInvAuditList(){
             const container=document.getElementById('invAuditList');
             if(!container)return;
+            
+            // 디버깅: 데이터 확인
+            console.log('📊 재고 실사 렌더링:', {
+                totalItems: invItems.length,
+                currentCat: currentInvCat,
+                currentLoc: currentAuditLocation
+            });
+            
             let items=invItems;
             if(currentInvCat){
                 items=items.filter(i=>i.category===currentInvCat);
@@ -2222,6 +2462,11 @@
                 });
             }
             items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+            
+            console.log('📊 필터링 후:', {
+                filteredItems: items.length,
+                itemNames: items.slice(0,5).map(i=>i.name)
+            });
             
             if(!items.length){
                 const msg=currentAuditLocation?'선택한 장소에 품목이 없습니다.':'등록된 품목이 없습니다.';
