@@ -809,7 +809,8 @@
                 <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">📋 기존 장소 목록</div>
                 <div id="locationsList" style="max-height:400px;overflow-y:auto"></div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="display:flex;gap:.5rem">
+                <button class="btn" onclick="deleteAllLocations()" style="flex:1;background:var(--red);color:#fff">⚠️ 모두 삭제</button>
                 <button class="btn btn-secondary" onclick="closeModal('locationManageModal')" style="flex:1">닫기</button>
             </div>
         </div>
@@ -2319,6 +2320,47 @@
                 renderInvAuditList();
                 
                 alert('✅ 장소가 삭제되었습니다');
+            }catch(e){
+                alert('삭제 실패: '+e.message);
+            }
+        }
+        
+        // ===== 임시: 모든 장소 일괄 삭제 (테스트용) =====
+        async function deleteAllLocations(){
+            if(!confirm('⚠️⚠️⚠️ 경고 ⚠️⚠️⚠️\n\n모든 장소를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다!'))return;
+            if(!confirm('정말로 모든 장소를 삭제하시겠습니까?'))return;
+            
+            try{
+                const snapshot=await db.collection('locations').get();
+                const batch=db.batch();
+                
+                snapshot.docs.forEach(doc=>{
+                    batch.delete(doc.ref);
+                });
+                
+                await batch.commit();
+                
+                // 모든 품목의 locations 필드 초기화
+                const items=await db.collection('inventory').get();
+                const batch2=db.batch();
+                
+                items.docs.forEach(doc=>{
+                    batch2.update(doc.ref,{
+                        locations:{},
+                        totalStock:0,
+                        currentStock:0
+                    });
+                });
+                
+                await batch2.commit();
+                
+                // 목록 새로고침
+                await loadLocationsList();
+                await updateAuditLocationFilter();
+                await loadInventoryForStaff();
+                renderInvAuditList();
+                
+                alert('✅ 모든 장소가 삭제되었습니다');
             }catch(e){
                 alert('삭제 실패: '+e.message);
             }
