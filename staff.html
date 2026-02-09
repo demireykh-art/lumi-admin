@@ -366,9 +366,12 @@
                     
                     <!-- 장소 선택 필터 -->
                     <div style="margin-bottom:.75rem;margin-top:.5rem">
-                        <label style="font-size:.85rem;font-weight:600;color:var(--text);display:block;margin-bottom:.3rem">
-                            📍 실사 장소 선택 (선택사항)
-                        </label>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+                            <label style="font-size:.85rem;font-weight:600;color:var(--text)">
+                                📍 실사 장소 선택
+                            </label>
+                            <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .6rem" onclick="openLocationManageModal()">장소 관리</button>
+                        </div>
                         <select id="invAuditLocationFilter" class="form-select" onchange="filterInvAuditByLocation()" style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
                             <option value="">전체 장소 (모든 품목)</option>
                         </select>
@@ -733,17 +736,8 @@
                         </select>
                     </div>
                     <div class="form-group" style="flex:1">
-                        <label class="form-label">현재고 (전체)</label>
-                        <input type="number" class="form-input" id="editItemStock" min="0" step="0.01" disabled style="background:#f5f5f5">
-                    </div>
-                </div>
-                
-                <!-- 장소별 재고 수정 -->
-                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-top:.5rem">
-                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">📍 장소별 재고 수정</div>
-                    <div id="editLocationStocks" style="display:grid;gap:.4rem"></div>
-                    <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.5rem;text-align:center">
-                        장소별 수량을 수정하면 전체 재고가 자동 계산됩니다
+                        <label class="form-label">현재고</label>
+                        <input type="number" class="form-input" id="editItemStock" min="0" step="0.01">
                     </div>
                 </div>
                 <div style="display:flex;gap:.5rem">
@@ -782,6 +776,43 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('editItemModal')" style="flex:1">취소</button>
                 <button class="btn btn-primary" onclick="saveEditItem()" style="flex:2">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 장소 관리 모달 -->
+    <div class="modal" id="locationManageModal">
+        <div class="modal-content" style="max-width:500px">
+            <div class="modal-header">
+                <div class="modal-title">📍 장소 관리</div>
+                <button class="modal-close" onclick="closeModal('locationManageModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 새 장소 추가 -->
+                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:1rem">
+                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">➕ 새 장소 추가</div>
+                    <div style="display:flex;gap:.5rem;align-items:end">
+                        <div class="form-group" style="flex:1;margin:0">
+                            <label class="form-label" style="font-size:.8rem">층</label>
+                            <select class="form-select" id="newLocationFloor" style="padding:.5rem">
+                                <option value="5층">5층</option>
+                                <option value="6층" selected>6층</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:2;margin:0">
+                            <label class="form-label" style="font-size:.8rem">장소명</label>
+                            <input type="text" class="form-input" id="newLocationName" placeholder="예: 준비실, 레이저실" style="padding:.5rem">
+                        </div>
+                        <button class="btn btn-primary" onclick="addLocation()" style="padding:.5rem 1rem;white-space:nowrap">추가</button>
+                    </div>
+                </div>
+                
+                <!-- 기존 장소 목록 -->
+                <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">📋 기존 장소 목록</div>
+                <div id="locationsList" style="max-height:400px;overflow-y:auto"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('locationManageModal')" style="flex:1">닫기</button>
             </div>
         </div>
     </div>
@@ -2140,31 +2171,14 @@
             try{
                 const snapshot=await db.collection('locations').orderBy('order').get();
                 const locationList=snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
-                
-                // 층별로 그룹핑
-                const floor5=locationList.filter(loc=>loc.name.startsWith('5층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-                const floor6=locationList.filter(loc=>loc.name.startsWith('6층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-                
-                // HTML 생성 (층별 optgroup)
-                let html='<option value="">전체 장소 (모든 품목)</option>';
-                
-                if(floor5.length>0){
-                    html+='<optgroup label="━━━ 5층 ━━━">';
-                    floor5.forEach(loc=>{
-                        html+=`<option value="${loc.id}">${loc.name}</option>`;
-                    });
-                    html+='</optgroup>';
-                }
-                
-                if(floor6.length>0){
-                    html+='<optgroup label="━━━ 6층 ━━━">';
-                    floor6.forEach(loc=>{
-                        html+=`<option value="${loc.id}">${loc.name}</option>`;
-                    });
-                    html+='</optgroup>';
-                }
-                
-                select.innerHTML=html;
+                locationList.sort((a,b)=>{
+                    const floorA=a.name.startsWith('5층')?0:1;
+                    const floorB=b.name.startsWith('5층')?0:1;
+                    if(floorA!==floorB)return floorA-floorB;
+                    return a.name.localeCompare(b.name,'ko');
+                });
+                select.innerHTML='<option value="">전체 장소 (모든 품목)</option>'+
+                    locationList.map(loc=>`<option value="${loc.id}">${loc.name}</option>`).join('');
             }catch(e){console.error('장소 로드:',e);}
         }
         
@@ -2172,6 +2186,144 @@
             const select=document.getElementById('invAuditLocationFilter');
             currentAuditLocation=select?select.value:'';
             renderInvAuditList();
+        }
+        
+        // ===== 장소 관리 =====
+        async function openLocationManageModal(){
+            await loadLocationsList();
+            openModal('locationManageModal');
+        }
+        
+        async function loadLocationsList(){
+            const container=document.getElementById('locationsList');
+            if(!container)return;
+            
+            try{
+                const snapshot=await db.collection('locations').orderBy('order').get();
+                const locs=snapshot.docs.map(d=>({id:d.id,...d.data()}));
+                
+                if(locs.length===0){
+                    container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:2rem">등록된 장소가 없습니다<br><br>위에서 새 장소를 추가해주세요</div>';
+                    return;
+                }
+                
+                // 층별 그룹핑
+                const floor5=locs.filter(l=>l.name.startsWith('5층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+                const floor6=locs.filter(l=>l.name.startsWith('6층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+                
+                let html='';
+                
+                if(floor5.length>0){
+                    html+='<div style="font-weight:600;font-size:.8rem;color:var(--text-secondary);margin-top:.5rem;padding:.5rem;background:var(--bg);border-radius:4px">5층</div>';
+                    floor5.forEach(loc=>{
+                        html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem;border-bottom:1px solid var(--border)">
+                            <span style="font-size:.9rem">${loc.name}</span>
+                            <button onclick="deleteLocation('${loc.id}','${loc.name.replace(/'/g,"\\'")}')" 
+                                    style="background:var(--red);color:#fff;border:none;padding:.3rem .6rem;border-radius:4px;font-size:.75rem;cursor:pointer">삭제</button>
+                        </div>`;
+                    });
+                }
+                
+                if(floor6.length>0){
+                    html+='<div style="font-weight:600;font-size:.8rem;color:var(--text-secondary);margin-top:.5rem;padding:.5rem;background:var(--bg);border-radius:4px">6층</div>';
+                    floor6.forEach(loc=>{
+                        html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem;border-bottom:1px solid var(--border)">
+                            <span style="font-size:.9rem">${loc.name}</span>
+                            <button onclick="deleteLocation('${loc.id}','${loc.name.replace(/'/g,"\\'")}')" 
+                                    style="background:var(--red);color:#fff;border:none;padding:.3rem .6rem;border-radius:4px;font-size:.75rem;cursor:pointer">삭제</button>
+                        </div>`;
+                    });
+                }
+                
+                container.innerHTML=html;
+            }catch(e){
+                console.error('장소 로드 실패:',e);
+                container.innerHTML='<div style="text-align:center;color:var(--red);padding:2rem">장소를 불러올 수 없습니다</div>';
+            }
+        }
+        
+        async function addLocation(){
+            const floor=document.getElementById('newLocationFloor').value;
+            const name=document.getElementById('newLocationName').value.trim();
+            
+            if(!name){
+                alert('장소명을 입력해주세요');
+                return;
+            }
+            
+            const fullName=`${floor}-${name}`;
+            
+            try{
+                // 중복 확인
+                const existing=await db.collection('locations').where('name','==',fullName).get();
+                if(!existing.empty){
+                    alert('이미 존재하는 장소입니다');
+                    return;
+                }
+                
+                // 현재 최대 order 값 찾기
+                const allLocs=await db.collection('locations').orderBy('order','desc').limit(1).get();
+                const maxOrder=allLocs.empty?0:allLocs.docs[0].data().order||0;
+                
+                // 새 장소 추가
+                await db.collection('locations').add({
+                    name:fullName,
+                    floor:floor,
+                    order:maxOrder+1,
+                    createdAt:new Date().toISOString(),
+                    createdBy:currentUser?.name||'staff'
+                });
+                
+                // 입력 초기화
+                document.getElementById('newLocationName').value='';
+                
+                // 목록 새로고침
+                await loadLocationsList();
+                await updateAuditLocationFilter();
+                
+                alert('✅ 장소가 추가되었습니다');
+            }catch(e){
+                alert('추가 실패: '+e.message);
+            }
+        }
+        
+        async function deleteLocation(locId,locName){
+            if(!confirm(`"${locName}" 장소를 삭제하시겠습니까?\n\n⚠️ 주의: 이 장소를 사용하는 품목의 재고 정보도 함께 삭제됩니다.`))return;
+            
+            try{
+                // 장소 삭제
+                await db.collection('locations').doc(locId).delete();
+                
+                // 품목의 locations 필드에서 해당 장소 제거
+                const items=await db.collection('inventory').get();
+                const batch=db.batch();
+                
+                items.docs.forEach(doc=>{
+                    const data=doc.data();
+                    if(data.locations&&data.locations[locId]){
+                        const newLocs={...data.locations};
+                        delete newLocs[locId];
+                        const newTotal=Object.values(newLocs).reduce((sum,qty)=>sum+qty,0);
+                        batch.update(doc.ref,{
+                            locations:newLocs,
+                            totalStock:newTotal,
+                            currentStock:newTotal
+                        });
+                    }
+                });
+                
+                await batch.commit();
+                
+                // 목록 새로고침
+                await loadLocationsList();
+                await updateAuditLocationFilter();
+                await loadInventoryForStaff();
+                renderInvAuditList();
+                
+                alert('✅ 장소가 삭제되었습니다');
+            }catch(e){
+                alert('삭제 실패: '+e.message);
+            }
         }
 
         async function loadLastWeekAudits(){
@@ -2444,7 +2596,7 @@
         }
 
         // ===== 품목 수정 기능 =====
-        async function openEditItemModal(itemId){
+        function openEditItemModal(itemId){
             const item=invItems.find(i=>i.id===itemId);
             if(!item){alert('품목을 찾을 수 없습니다.');return;}
             document.getElementById('editItemId').value=itemId;
@@ -2462,75 +2614,7 @@
             document.getElementById('editItemBoxes').value=1;
             document.getElementById('editItemPerBox').value=totalQty||1;
             calcEditItemUnit();
-            
-            // 장소별 재고 표시
-            await renderEditLocationStocks(item);
-            
             openModal('editItemModal');
-        }
-        
-        async function renderEditLocationStocks(item){
-            const container=document.getElementById('editLocationStocks');
-            if(!container)return;
-            
-            try{
-                // locations 컬렉션에서 모든 장소 가져오기
-                const snapshot=await db.collection('locations').orderBy('order').get();
-                const allLocations=snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
-                
-                // 층별 그룹핑
-                const floor5=allLocations.filter(loc=>loc.name.startsWith('5층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-                const floor6=allLocations.filter(loc=>loc.name.startsWith('6층')).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-                
-                const itemLocs=item.locations||{};
-                
-                let html='';
-                
-                // 5층
-                if(floor5.length>0){
-                    html+='<div style="font-weight:600;font-size:.8rem;color:var(--text-secondary);margin-top:.5rem;padding-bottom:.2rem;border-bottom:1px solid var(--border)">5층</div>';
-                    floor5.forEach(loc=>{
-                        const qty=itemLocs[loc.id]||0;
-                        html+=`<div style="display:flex;align-items:center;gap:.5rem">
-                            <label style="flex:1;font-size:.8rem">${loc.name}</label>
-                            <input type="number" class="form-input" id="editLoc_${loc.id}" value="${qty}" min="0" step="0.01" 
-                                   onchange="updateEditTotalStock()" 
-                                   style="width:100px;padding:.4rem;font-size:.85rem">
-                            <span style="font-size:.75rem;color:var(--text-muted)">${item.unit||'개'}</span>
-                        </div>`;
-                    });
-                }
-                
-                // 6층
-                if(floor6.length>0){
-                    html+='<div style="font-weight:600;font-size:.8rem;color:var(--text-secondary);margin-top:.5rem;padding-bottom:.2rem;border-bottom:1px solid var(--border)">6층</div>';
-                    floor6.forEach(loc=>{
-                        const qty=itemLocs[loc.id]||0;
-                        html+=`<div style="display:flex;align-items:center;gap:.5rem">
-                            <label style="flex:1;font-size:.8rem">${loc.name}</label>
-                            <input type="number" class="form-input" id="editLoc_${loc.id}" value="${qty}" min="0" step="0.01" 
-                                   onchange="updateEditTotalStock()" 
-                                   style="width:100px;padding:.4rem;font-size:.85rem">
-                            <span style="font-size:.75rem;color:var(--text-muted)">${item.unit||'개'}</span>
-                        </div>`;
-                    });
-                }
-                
-                container.innerHTML=html;
-            }catch(e){
-                console.error('장소 로드 실패:',e);
-                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">장소 정보를 불러올 수 없습니다</div>';
-            }
-        }
-        
-        function updateEditTotalStock(){
-            // 모든 장소별 재고를 합산하여 전체 재고 업데이트
-            const inputs=document.querySelectorAll('[id^="editLoc_"]');
-            let total=0;
-            inputs.forEach(input=>{
-                total+=parseFloat(input.value)||0;
-            });
-            document.getElementById('editItemStock').value=total.toFixed(2);
         }
 
         function calcEditItemUnit(){
@@ -2555,23 +2639,9 @@
             const boxes=parseFloat(document.getElementById('editItemBoxes').value)||1;
             const perBox=parseFloat(document.getElementById('editItemPerBox').value)||1;
             const totalQty=boxes*perBox;
-            
-            // 장소별 재고 수집
-            const locationStocks={};
-            const locationInputs=document.querySelectorAll('[id^="editLoc_"]');
-            locationInputs.forEach(input=>{
-                const locId=input.id.replace('editLoc_','');
-                const qty=parseFloat(input.value)||0;
-                if(qty>0){
-                    locationStocks[locId]=qty;
-                }
-            });
-            
             const data={
                 category:document.getElementById('editItemCategory').value,
                 currentStock:parseFloat(document.getElementById('editItemStock').value)||0,
-                totalStock:parseFloat(document.getElementById('editItemStock').value)||0,
-                locations:locationStocks,
                 safetyStock:parseFloat(document.getElementById('editItemSafety').value)||0,
                 expiryDate:document.getElementById('editItemExpiry').value||null,
                 purchasePrice:totalPrice,
