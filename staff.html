@@ -2787,16 +2787,16 @@
             row.id = rowId;
             row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center';
             row.innerHTML = `
-                <select class="form-select" style="flex:1.5;padding:.6rem" onchange="calcNewTotalStock()">
+                <select class="form-select" style="flex:1.5;padding:.8rem;font-size:1rem;font-weight:600" onchange="calcNewTotalStock()">
                     <option value="">장소 선택</option>
                     ${receivingLocations.map(loc => 
                         `<option value="${loc.floor}-${loc.name}">${loc.floor}-${loc.name}</option>`
                     ).join('')}
                 </select>
                 <input type="number" class="form-input" placeholder="수량" min="0" step="1" 
-                    style="flex:1;padding:.6rem" oninput="calcNewTotalStock()">
+                    style="flex:1;padding:.8rem;font-size:1.1rem;font-weight:700;text-align:center" oninput="calcNewTotalStock()">
                 <button type="button" class="btn btn-secondary" onclick="removeNewLocationRow('${rowId}')" 
-                    style="padding:.6rem;font-size:.75rem">삭제</button>
+                    style="padding:.8rem;font-size:.85rem;font-weight:600">삭제</button>
             `;
             container.appendChild(row);
             calcNewTotalStock();
@@ -2899,6 +2899,11 @@
         function openEditItemModal(itemId){
             const item=invItems.find(i=>i.id===itemId);
             if(!item){alert('품목을 찾을 수 없습니다.');return;}
+            
+            console.log('📦 품목 정보:', item);
+            console.log('📍 locations 객체:', item.locations);
+            console.log('📍 단일 location:', item.location);
+            
             document.getElementById('editItemId').value=itemId;
             document.getElementById('editItemName').value=item.name||'';
             document.getElementById('editItemCategory').value=item.category||'common';
@@ -2912,12 +2917,14 @@
             
             if(item.locations && Object.keys(item.locations).length > 0){
                 Object.entries(item.locations).forEach(([loc, qty]) => {
+                    console.log('🔍 장소 로드:', loc, '수량:', qty);
                     if(qty > 0){
                         addEditLocationRow(loc, qty);
                     }
                 });
             }else if(item.location){
                 // 기존 단일 location 필드 처리
+                console.log('🔍 단일 장소 로드:', item.location);
                 addEditLocationRow(item.location, item.currentStock || 0);
             }else{
                 // 빈 행 1개 추가
@@ -2941,22 +2948,26 @@
             const container = document.getElementById('editLocationsList');
             const rowId = 'editLoc_' + Date.now();
             
+            console.log('➕ 장소 행 추가:', location, '수량:', quantity);
+            console.log('📋 사용 가능한 장소:', receivingLocations.map(l => `${l.floor}-${l.name}`));
+            
             const row = document.createElement('div');
             row.id = rowId;
             row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center';
             row.innerHTML = `
-                <select class="form-select" style="flex:1.5;padding:.6rem" onchange="calcEditTotalStock()">
+                <select class="form-select" style="flex:1.5;padding:.8rem;font-size:1rem;font-weight:600" onchange="calcEditTotalStock()">
                     <option value="">장소 선택</option>
                     ${receivingLocations.map(loc => {
                         const locValue = `${loc.floor}-${loc.name}`;
                         const selected = locValue === location ? 'selected' : '';
+                        console.log('🔍 비교:', locValue, '===', location, '→', selected);
                         return `<option value="${locValue}" ${selected}>${locValue}</option>`;
                     }).join('')}
                 </select>
                 <input type="number" class="form-input" placeholder="수량" min="0" step="1" value="${quantity}" 
-                    style="flex:1;padding:.6rem" oninput="calcEditTotalStock()">
+                    style="flex:1;padding:.8rem;font-size:1.1rem;font-weight:700;text-align:center" oninput="calcEditTotalStock()">
                 <button type="button" class="btn btn-secondary" onclick="removeEditLocationRow('${rowId}')" 
-                    style="padding:.6rem;font-size:.75rem">삭제</button>
+                    style="padding:.8rem;font-size:.85rem;font-weight:600">삭제</button>
             `;
             container.appendChild(row);
         }
