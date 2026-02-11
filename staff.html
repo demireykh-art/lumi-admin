@@ -2785,18 +2785,18 @@
             
             const row = document.createElement('div');
             row.id = rowId;
-            row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center';
+            row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:stretch';
             row.innerHTML = `
-                <select class="form-select" style="flex:2;padding:1rem;font-size:1.1rem;font-weight:600" onchange="calcNewTotalStock()">
+                <select class="form-select" style="flex:3;padding:1.1rem;font-size:1.1rem;font-weight:600;min-width:0" onchange="calcNewTotalStock()">
                     <option value="">장소 선택</option>
                     ${receivingLocations.map(loc => 
                         `<option value="${loc.floor}-${loc.name}">${loc.floor}-${loc.name}</option>`
                     ).join('')}
                 </select>
                 <input type="number" class="form-input" placeholder="수량" min="0" step="1" 
-                    style="flex:1.2;padding:1rem;font-size:1.3rem;font-weight:700;text-align:center" oninput="calcNewTotalStock()">
+                    style="flex:2;padding:1.1rem;font-size:1.4rem;font-weight:700;text-align:center;min-width:0" oninput="calcNewTotalStock()">
                 <button type="button" class="btn btn-secondary" onclick="removeNewLocationRow('${rowId}')" 
-                    style="padding:.5rem .7rem;font-size:.75rem;white-space:nowrap">삭제</button>
+                    style="flex-shrink:0;padding:.4rem .5rem;font-size:.7rem;white-space:nowrap;min-width:auto">삭제</button>
             `;
             container.appendChild(row);
             calcNewTotalStock();
@@ -2953,9 +2953,9 @@
             
             const row = document.createElement('div');
             row.id = rowId;
-            row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center';
+            row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:stretch';
             row.innerHTML = `
-                <select class="form-select" style="flex:2;padding:1rem;font-size:1.1rem;font-weight:600" onchange="calcEditTotalStock()">
+                <select class="form-select" style="flex:3;padding:1.1rem;font-size:1.1rem;font-weight:600;min-width:0" onchange="calcEditTotalStock()">
                     <option value="">장소 선택</option>
                     ${receivingLocations.map(loc => {
                         const locValue = `${loc.floor}-${loc.name}`;
@@ -2965,9 +2965,9 @@
                     }).join('')}
                 </select>
                 <input type="number" class="form-input" placeholder="수량" min="0" step="1" value="${quantity}" 
-                    style="flex:1.2;padding:1rem;font-size:1.3rem;font-weight:700;text-align:center" oninput="calcEditTotalStock()">
+                    style="flex:2;padding:1.1rem;font-size:1.4rem;font-weight:700;text-align:center;min-width:0" oninput="calcEditTotalStock()">
                 <button type="button" class="btn btn-secondary" onclick="removeEditLocationRow('${rowId}')" 
-                    style="padding:.5rem .7rem;font-size:.75rem;white-space:nowrap">삭제</button>
+                    style="flex-shrink:0;padding:.4rem .5rem;font-size:.7rem;white-space:nowrap;min-width:auto">삭제</button>
             `;
             container.appendChild(row);
         }
