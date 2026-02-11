@@ -281,38 +281,7 @@
                         <div class="card"><div class="card-label">지각</div><div class="card-value" id="lateDays">0회</div></div>
                         <div class="card"><div class="card-label">조퇴</div><div class="card-value" id="earlyDays">0회</div></div>
                         <div class="card"><div class="card-label">결근</div><div class="card-value" id="absentDays">0회</div></div>
-                        <div class="card" style="cursor:pointer" onclick="showAttendanceCorrections()">
-                            <div class="card-label">⏰ 수정 요청</div>
-                            <div class="card-value" id="pendingCorrections" style="color:#c4956a">0건</div>
-                        </div>
                     </div>
-                    
-                    <!-- 출퇴근 수정 요청 섹션 -->
-                    <div id="attendanceCorrectionsSection" style="display:none;margin-top:1.5rem">
-                        <div class="section-header">
-                            <div class="section-title">⏰ 출퇴근 수정 요청</div>
-                            <button class="btn btn-secondary" onclick="hideAttendanceCorrections()">닫기</button>
-                        </div>
-                        <div class="table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>요청일시</th>
-                                        <th>직원</th>
-                                        <th>날짜</th>
-                                        <th>구분</th>
-                                        <th>기록시간</th>
-                                        <th>요청시간</th>
-                                        <th>사유</th>
-                                        <th>상태</th>
-                                        <th>관리</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="correctionsTable"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                    
                     <div class="section-header"><div class="section-title">근태 기록</div><select class="form-select" id="attendanceFilter" style="width:auto" onchange="renderAttendance()"><option value="all">전체 직원</option></select></div>
                     <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>상태</th><th>관리</th></tr></thead><tbody id="attendanceTable"></tbody></table></div>
                 </div>
@@ -334,50 +303,13 @@
                         <div class="section-title">💰 추가 인센티브 수동 지급</div>
                         <button class="btn btn-primary" onclick="openManualIncentiveModal()">+ 추가 지급</button>
                     </div>
-                    <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:.5rem">
-                        자동 계산되지 않는 특별 인센티브를 직원별로 추가 지급할 수 있습니다
-                    </p>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>지급월</th>
-                                    <th>직원명</th>
-                                    <th>항목</th>
-                                    <th class="text-right">금액</th>
-                                    <th>비고</th>
-                                    <th>관리</th>
-                                </tr>
-                            </thead>
-                            <tbody id="manualIncentiveTable"></tbody>
-                        </table>
+                    <div style="background:#fffbeb;border:1px solid #fcd34d;padding:.75rem;border-radius:6px;margin-bottom:1rem;font-size:.85rem;color:#92400e">
+                        <strong>⚠️ 자동 계산되지 않는 특별 인센티브를 직원에게 추가 지급할 때 사용합니다</strong>
                     </div>
+                    <div class="table-container"><table><thead><tr><th>지급월</th><th>직원명</th><th>항목</th><th>금액</th><th>비고</th><th>관리</th></tr></thead><tbody id="manualIncentiveTable"></tbody></table></div>
                     
-                    <div class="section-header mt-1"><div class="section-title">직원별 인센티브 현황</div></div>
-                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 기반</th><th class="text-right">건별/기타</th><th class="text-right">추가 지급</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
-                    
-                    <div class="section-header mt-1">
-                        <div class="section-title">📋 직원별 인센티브 실적 상세</div>
-                        <select class="form-select" id="incRecordFilter" style="width:auto" onchange="renderIncentiveRecords()">
-                            <option value="">전체 직원</option>
-                        </select>
-                    </div>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>날짜</th>
-                                    <th>직원</th>
-                                    <th>항목</th>
-                                    <th>환자명</th>
-                                    <th>차트번호</th>
-                                    <th>금액</th>
-                                    <th>관리</th>
-                                </tr>
-                            </thead>
-                            <tbody id="incentiveRecordsTable"></tbody>
-                        </table>
-                    </div>
+                    <div class="section-header mt-1"><div class="section-title">📋 직원별 인센티브 실적 상세</div><button class="btn btn-secondary" onclick="expandAllIncentiveDetails()">전체 펼치기</button></div>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 기반</th><th class="text-right">건별/기타</th><th class="text-right">추가 지급</th><th class="text-right">합계</th><th>관리</th></tr></thead><tbody id="incentiveDetailTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-salary">
                     <div class="section-header"><div class="section-title">사전급여대장 (노무사 전달용)</div><button class="btn btn-secondary" onclick="exportPrePayroll()">엑셀 다운로드</button></div>
@@ -393,7 +325,6 @@
                     <div class="sub-tab" data-sub="inv-locations">📍 장소 관리</div>
                     <div class="sub-tab" data-sub="inv-recipe">레시피 (시술 원가)</div>
                     <div class="sub-tab" data-sub="inv-audit">재고 실사</div>
-                    <div class="sub-tab" data-sub="inv-history">📜 수정/삭제 이력</div>
                     <div class="sub-tab" data-sub="inv-wishlist">🛍️ 구매 요청 <span id="wishlistBadge" style="display:none;background:var(--red);color:#fff;font-size:.65rem;padding:1px 5px;border-radius:8px;margin-left:3px;vertical-align:middle">0</span></div>
                 </div>
                 <div class="sub-content active" id="sub-inv-list">
@@ -477,34 +408,6 @@
                         </div>
                     </div>
                     <div id="auditReport"><div style="text-align:center;color:var(--text-secondary);padding:2rem">실사 데이터 로딩중...</div></div>
-                </div>
-                <div class="sub-content" id="sub-inv-history">
-                    <div class="section-header">
-                        <div class="section-title">📜 재고 수정/삭제 이력</div>
-                        <div style="display:flex;gap:.5rem">
-                            <select class="form-select" id="invHistoryFilter" style="width:auto" onchange="renderInventoryHistory()">
-                                <option value="all">전체</option>
-                                <option value="manual_edit">수정</option>
-                                <option value="delete">삭제</option>
-                            </select>
-                            <button class="btn btn-outline" onclick="loadInventoryHistory()">🔄 새로고침</button>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>일시</th>
-                                    <th>품목 ID</th>
-                                    <th>작업</th>
-                                    <th>수량</th>
-                                    <th>사유</th>
-                                    <th>직원</th>
-                                </tr>
-                            </thead>
-                            <tbody id="invHistoryTable"></tbody>
-                        </table>
-                    </div>
                 </div>
                 <div class="sub-content" id="sub-inv-wishlist">
                     <div class="section-header">
@@ -764,48 +667,6 @@
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('otModal')">취소</button><button class="btn btn-primary" onclick="saveLunchOT()">저장</button></div>
         </div>
     </div>
-    
-    <!-- 수동 인센티브 지급 모달 -->
-    <div class="modal" id="manualIncentiveModal">
-        <div class="modal-content" style="max-width:500px">
-            <div class="modal-header">
-                <div class="modal-title">💰 추가 인센티브 수동 지급</div>
-                <button class="modal-close" onclick="closeModal('manualIncentiveModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p style="background:#fff3cd;padding:12px;border-radius:6px;font-size:.85rem;color:#856404;margin-bottom:1rem">
-                    ⚠️ 자동 계산되지 않는 특별 인센티브를 직원에게 추가 지급할 때 사용합니다
-                </p>
-                <div class="form-group">
-                    <label class="form-label">지급월 *</label>
-                    <input type="month" class="form-input" id="manualIncMonth">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">직원 선택 *</label>
-                    <select class="form-select" id="manualIncEmployee">
-                        <option value="">직원 선택</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">항목명 *</label>
-                    <input type="text" class="form-input" id="manualIncTitle" placeholder="예: 특별 보너스, 프로젝트 성과급">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">지급 금액 (원) *</label>
-                    <input type="number" class="form-input" id="manualIncAmount" min="0" step="1000" placeholder="100000">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">비고</label>
-                    <textarea class="form-textarea" id="manualIncNote" rows="2" placeholder="지급 사유나 세부 내용을 입력하세요"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('manualIncentiveModal')">취소</button>
-                <button class="btn btn-primary" onclick="saveManualIncentive()">저장</button>
-            </div>
-        </div>
-    </div>
-    
     <div class="modal" id="incentiveItemModal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="incentiveItemModalTitle">인센티브 항목 추가</div><button class="modal-close" onclick="closeModal('incentiveItemModal')">&times;</button></div>
@@ -816,7 +677,7 @@
                     <select class="form-select" id="incItemType" onchange="toggleIncItemFields()">
                         <option value="perCase">건별 단가 (고정 금액)</option>
                         <option value="salesPercent">담당 매출 % (매출 연동)</option>
-                        <option value="japanSales">일본인 본인 상담매출 %</option>
+                        <option value="japanVisitors">일본인 내원객수 (전체 객수 × 10,000원)</option>
                     </select>
                 </div>
                 <div id="perCaseFields">
@@ -830,16 +691,58 @@
                         <span style="color:var(--accent-gold)">예: 매출 1000만원 × 1% = 10만원</span>
                     </div>
                 </div>
-                <div id="japanSalesFields" style="display:none">
-                    <div class="form-group"><label class="form-label">적용 비율 (%)</label><input type="number" class="form-input" id="incItemPercent" value="1" step="0.1" min="0" max="100"></div>
+                <div id="japanVisitorsFields" style="display:none">
                     <div class="form-group" style="background:#f5f5f0;padding:12px;border-radius:8px;font-size:.85rem;color:var(--text-secondary)">
-                        <strong>💡 일본인 본인 상담매출 인센티브</strong><br>
-                        매출 파일에서 일본인 매출 중 해당 직원이 담당한 매출 × 설정 비율로 계산됩니다.
+                        <strong>💡 일본인 내원객수 인센티브</strong><br>
+                        매출 파일에서 일본인 전체 내원객수 × 10,000원으로 자동 계산됩니다.<br>
+                        <span style="color:var(--accent-gold)">예: 일본인 50명 내원 × 10,000원 = 500,000원</span><br>
+                        <span style="color:#dc2626;font-weight:600">※ 담당자 상관없이 전체 일본인 내원객수 기준입니다</span>
                     </div>
                 </div>
                 <div class="form-group"><label class="form-label">적용 직원 (복수 선택 가능)</label><div id="incItemEmployees" style="max-height:200px;overflow-y:auto;border:1px solid var(--border-color);padding:.75rem;background:#fff"></div></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('incentiveItemModal')">취소</button><button class="btn btn-primary" onclick="saveIncentiveItem()">저장</button></div>
+        </div>
+    </div>
+
+    <!-- 수동 인센티브 지급 모달 -->
+    <div class="modal" id="manualIncentiveModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title">💰 추가 인센티브 수동 지급</div><button class="modal-close" onclick="closeModal('manualIncentiveModal')">&times;</button></div>
+            <div class="modal-body">
+                <div style="background:#fffbeb;border:1px solid #fcd34d;padding:.75rem;border-radius:6px;margin-bottom:1rem;font-size:.85rem;color:#92400e">
+                    <strong>⚠️ 자동 계산되지 않는 특별 인센티브를 직원에게 추가 지급할 때 사용합니다</strong>
+                </div>
+                
+                <input type="hidden" id="manualIncEditId">
+                <div class="form-group"><label class="form-label">지급월 *</label><input type="month" class="form-input" id="manualIncMonth"></div>
+                
+                <div class="form-group">
+                    <label class="form-label">직원 선택 *</label>
+                    <select class="form-select" id="manualIncEmployee">
+                        <option value="">직원 선택</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">항목 *</label>
+                    <input type="text" class="form-input" id="manualIncItem" placeholder="예: 특별 보너스, 프로젝트 성과금">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">지급 금액 (원) *</label>
+                    <input type="number" class="form-input" id="manualIncAmount" value="100000">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">비고</label>
+                    <textarea class="form-textarea" id="manualIncNote" rows="3" placeholder="지급 사유나 세부 내용을 입력하세요"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('manualIncentiveModal')">취소</button>
+                <button class="btn btn-primary" onclick="saveManualIncentive()">저장</button>
+            </div>
         </div>
     </div>
 
@@ -949,528 +852,283 @@
     <script src="inventory.js"></script>
     <script src="finance.js"></script>
     
-    <!-- 출퇴근 수정 요청 & 재고 이력 관리 -->
+    <!-- 추가 인센티브 관련 스크립트 -->
     <script>
-        // ===== 출퇴근 수정 요청 관리 =====
-        let attendanceCorrections = [];
+    // 수동 인센티브 모달 열기
+    async function openManualIncentiveModal(editId = null) {
+        const modal = document.getElementById('manualIncentiveModal');
+        const employeeSelect = document.getElementById('manualIncEmployee');
         
-        async function loadAttendanceCorrections() {
-            try {
-                const snapshot = await db.collection('attendanceCorrections')
-                    .orderBy('requestedAt', 'desc')
-                    .limit(100)
-                    .get();
-                attendanceCorrections = snapshot.docs.map(d => ({
-                    id: d.id,
-                    ...d.data(),
-                    requestedAt: d.data().requestedAt?.toDate()
-                }));
-                updatePendingCorrectionsCount();
-            } catch (e) {
-                console.error('수정 요청 로드 실패:', e);
-            }
-        }
-        
-        function updatePendingCorrectionsCount() {
-            const pending = attendanceCorrections.filter(c => c.status === 'pending').length;
-            const el = document.getElementById('pendingCorrections');
-            if (el) {
-                el.textContent = pending + '건';
-                el.style.color = pending > 0 ? '#c4956a' : 'var(--text-secondary)';
-            }
-        }
-        
-        function showAttendanceCorrections() {
-            const section = document.getElementById('attendanceCorrectionsSection');
-            if (section) {
-                section.style.display = 'block';
-                renderAttendanceCorrections();
-            }
-        }
-        
-        function hideAttendanceCorrections() {
-            const section = document.getElementById('attendanceCorrectionsSection');
-            if (section) section.style.display = 'none';
-        }
-        
-        function renderAttendanceCorrections() {
-            const tbody = document.getElementById('correctionsTable');
-            if (!tbody) return;
-            
-            const filtered = attendanceCorrections.filter(c => c.status === 'pending');
-            
-            if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-secondary)">대기 중인 수정 요청이 없습니다</td></tr>';
-                return;
-            }
-            
-            tbody.innerHTML = filtered.map(correction => {
-                const typeLabel = correction.type === 'checkIn' ? '출근' : '퇴근';
-                const statusBadge = correction.status === 'pending' ? 
-                    '<span style="background:#c4956a;color:#fff;padding:2px 8px;border-radius:4px;font-size:.75rem">대기</span>' :
-                    correction.status === 'approved' ?
-                    '<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:4px;font-size:.75rem">승인</span>' :
-                    '<span style="background:var(--red);color:#fff;padding:2px 8px;border-radius:4px;font-size:.75rem">거부</span>';
-                
-                return `
-                    <tr>
-                        <td>${correction.requestedAt ? correction.requestedAt.toLocaleString('ko-KR', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</td>
-                        <td>${correction.employeeName || '-'}</td>
-                        <td>${correction.date || '-'}</td>
-                        <td>${typeLabel}</td>
-                        <td style="color:var(--red)">${correction.recordedTime || '-'}</td>
-                        <td style="color:var(--green);font-weight:600">${correction.requestedTime || '-'}</td>
-                        <td>${correction.reason || '-'}</td>
-                        <td>${statusBadge}</td>
-                        <td>
-                            ${correction.status === 'pending' ? `
-                                <button class="btn btn-sm" style="background:var(--green);color:#fff;padding:4px 8px;font-size:.75rem;margin-right:4px" onclick="approveCorrection('${correction.id}')">승인</button>
-                                <button class="btn btn-sm" style="background:var(--red);color:#fff;padding:4px 8px;font-size:.75rem" onclick="rejectCorrection('${correction.id}')">거부</button>
-                            ` : '-'}
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
-        async function approveCorrection(correctionId) {
-            const correction = attendanceCorrections.find(c => c.id === correctionId);
-            if (!correction) {
-                alert('수정 요청을 찾을 수 없습니다');
-                return;
-            }
-            
-            if (!confirm(`${correction.employeeName}님의 ${correction.type === 'checkIn' ? '출근' : '퇴근'} 시간을\n${correction.recordedTime} → ${correction.requestedTime}로 수정하시겠습니까?`)) {
-                return;
-            }
-            
-            try {
-                // 1. 출퇴근 기록 수정
-                const attSnapshot = await db.collection('attendance')
-                    .where('employeeId', '==', correction.employeeId)
-                    .where('date', '==', correction.date)
-                    .get();
-                
-                if (attSnapshot.empty) {
-                    alert('해당 날짜의 출퇴근 기록을 찾을 수 없습니다');
-                    return;
-                }
-                
-                const attDoc = attSnapshot.docs[0];
-                const updateData = {};
-                updateData[correction.type] = correction.requestedTime;
-                
-                await db.collection('attendance').doc(attDoc.id).update(updateData);
-                
-                // 2. 수정 요청 승인 처리
-                await db.collection('attendanceCorrections').doc(correctionId).update({
-                    status: 'approved',
-                    approvedBy: 'admin',
-                    approvedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                alert('승인되었습니다');
-                await loadAttendanceCorrections();
-                renderAttendanceCorrections();
-            } catch (e) {
-                console.error('승인 실패:', e);
-                alert('오류가 발생했습니다: ' + e.message);
-            }
-        }
-        
-        async function rejectCorrection(correctionId) {
-            const correction = attendanceCorrections.find(c => c.id === correctionId);
-            if (!correction) return;
-            
-            const reason = prompt('거부 사유를 입력하세요:');
-            if (!reason) return;
-            
-            try {
-                await db.collection('attendanceCorrections').doc(correctionId).update({
-                    status: 'rejected',
-                    rejectedBy: 'admin',
-                    rejectionReason: reason,
-                    rejectedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                
-                alert('거부되었습니다');
-                await loadAttendanceCorrections();
-                renderAttendanceCorrections();
-            } catch (e) {
-                console.error('거부 실패:', e);
-                alert('오류가 발생했습니다: ' + e.message);
-            }
-        }
-        
-        // ===== 재고 수정/삭제 이력 관리 =====
-        let inventoryLogs = [];
-        
-        async function loadInventoryHistory() {
-            try {
-                const snapshot = await db.collection('inventoryLogs')
-                    .orderBy('timestamp', 'desc')
-                    .limit(200)
-                    .get();
-                inventoryLogs = snapshot.docs.map(d => ({
-                    id: d.id,
-                    ...d.data(),
-                    timestamp: d.data().timestamp?.toDate()
-                }));
-                renderInventoryHistory();
-            } catch (e) {
-                console.error('재고 이력 로드 실패:', e);
-            }
-        }
-        
-        function renderInventoryHistory() {
-            const tbody = document.getElementById('invHistoryTable');
-            if (!tbody) return;
-            
-            const filter = document.getElementById('invHistoryFilter')?.value || 'all';
-            let filtered = inventoryLogs;
-            
-            if (filter !== 'all') {
-                filtered = inventoryLogs.filter(log => log.action === filter);
-            }
-            
-            if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">이력이 없습니다</td></tr>';
-                return;
-            }
-            
-            tbody.innerHTML = filtered.map(log => {
-                const actionLabel = log.action === 'manual_edit' ? '수정' : 
-                                   log.action === 'delete' ? '삭제' : log.action;
-                const actionColor = log.action === 'delete' ? 'var(--red)' : 'var(--green)';
-                
-                return `
-                    <tr>
-                        <td>${log.timestamp ? log.timestamp.toLocaleString('ko-KR', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-'}</td>
-                        <td style="font-size:.85rem;font-family:monospace">${log.itemId || '-'}</td>
-                        <td><span style="color:${actionColor};font-weight:600">${actionLabel}</span></td>
-                        <td>${log.quantity !== undefined ? log.quantity : '-'}</td>
-                        <td style="font-size:.85rem">${log.reason || '-'}</td>
-                        <td>${log.employeeName || '-'}</td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
-        // ===== 비밀번호 관리 =====
-        async function saveConfigPasswords() {
-            const adminPw = document.getElementById('cfgAdminPw').value.trim();
-            const staffPw = document.getElementById('cfgStaffPw').value.trim();
-            
-            if (!adminPw && !staffPw) {
-                alert('변경할 비밀번호를 입력하세요');
-                return;
-            }
-            
-            try {
-                const configRef = db.collection('config').doc('passwords');
-                const updates = {};
-                
-                if (adminPw) {
-                    if (adminPw.length < 4) {
-                        alert('관리자 비밀번호는 4자 이상이어야 합니다');
-                        return;
-                    }
-                    updates.admin_pw = adminPw;
-                }
-                
-                if (staffPw) {
-                    if (staffPw.length < 4) {
-                        alert('공용계정 비밀번호는 4자 이상이어야 합니다');
-                        return;
-                    }
-                    updates.staff_pw = staffPw;
-                }
-                
-                await configRef.set(updates, { merge: true });
-                
-                alert('비밀번호가 저장되었습니다\n\n다음 로그인부터 새 비밀번호를 사용하세요');
-                
-                // ✅ 핵심: 입력값 초기화
-                document.getElementById('cfgAdminPw').value = '';
-                document.getElementById('cfgStaffPw').value = '';
-                
-            } catch (error) {
-                console.error('비밀번호 저장 오류:', error);
-                alert('저장 실패: ' + error.message);
-            }
-        }
-        
-        // ===== 모달 유틸리티 함수 =====
-        function openModal(modalId) {
-            const modal = document.getElementById(modalId);
-            if (modal) {
-                modal.classList.add('active');
-            }
-        }
-        
-        function closeModal(modalId) {
-            const modal = document.getElementById(modalId);
-            if (!modal) return;
-            
-            modal.classList.remove('active');
-            
-            // 모달 내 모든 입력 필드 초기화 (비밀번호 포함)
-            const inputs = modal.querySelectorAll('input, textarea, select');
-            inputs.forEach(input => {
-                if (input.type !== 'button' && input.type !== 'submit') {
-                    if (input.tagName === 'SELECT') {
-                        input.selectedIndex = 0;
-                    } else if (input.type === 'checkbox' || input.type === 'radio') {
-                        input.checked = false;
-                    } else {
-                        input.value = '';
-                    }
-                }
+        // 직원 목록 로드
+        try {
+            const snapshot = await firebase.firestore().collection('users').orderBy('name').get();
+            employeeSelect.innerHTML = '<option value="">직원 선택</option>';
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                const option = document.createElement('option');
+                option.value = data.name;
+                option.textContent = `${data.name} (${data.position || '직원'})`;
+                employeeSelect.appendChild(option);
             });
-            
-            // 에러 메시지나 미리보기 텍스트 초기화
-            const helpTexts = modal.querySelectorAll('.help-text, .preview-area, .error-message');
-            helpTexts.forEach(el => {
-                el.textContent = '';
-                el.innerHTML = '';
-            });
-            
-            console.log(`✅ Modal ${modalId} closed and reset`);
+        } catch(e) {
+            console.error('직원 목록 로드 실패:', e);
         }
         
-        // ===== 초기화 =====
-        document.addEventListener('DOMContentLoaded', function() {
-            // 기존 초기화 코드 실행 후
-            setTimeout(() => {
-                loadAttendanceCorrections();
-                loadInventoryHistory();
-                loadManualIncentives();
-                loadAllIncentiveRecords();
-            }, 1000);
-        });
-        
-        // ===== 수동 인센티브 관리 =====
-        let manualIncentives = [];
-        let allIncentiveRecords = []; // 전체 직원의 인센티브 실적
-        
-        async function loadManualIncentives() {
+        // 편집 모드
+        if (editId) {
             try {
-                const snapshot = await db.collection('manualIncentives')
-                    .orderBy('month', 'desc')
-                    .get();
-                manualIncentives = snapshot.docs.map(d => ({
-                    id: d.id,
-                    ...d.data()
-                }));
-                renderManualIncentives();
-            } catch (e) {
-                console.error('수동 인센티브 로드 실패:', e);
-            }
-        }
-        
-        async function loadAllIncentiveRecords() {
-            try {
-                const snapshot = await db.collection('incentiveRecords')
-                    .orderBy('date', 'desc')
-                    .limit(500)
-                    .get();
-                allIncentiveRecords = snapshot.docs.map(d => ({
-                    id: d.id,
-                    ...d.data()
-                }));
-                
-                // 직원 필터 업데이트
-                const uniqueEmployees = [...new Set(allIncentiveRecords.map(r => r.employeeName))].filter(Boolean);
-                const filterSelect = document.getElementById('incRecordFilter');
-                if (filterSelect) {
-                    filterSelect.innerHTML = '<option value="">전체 직원</option>' +
-                        uniqueEmployees.map(name => `<option value="${name}">${name}</option>`).join('');
+                const doc = await firebase.firestore().collection('manualIncentives').doc(editId).get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    document.getElementById('manualIncEditId').value = editId;
+                    document.getElementById('manualIncMonth').value = data.month;
+                    document.getElementById('manualIncEmployee').value = data.employeeName;
+                    document.getElementById('manualIncItem').value = data.item;
+                    document.getElementById('manualIncAmount').value = data.amount;
+                    document.getElementById('manualIncNote').value = data.note || '';
                 }
-                
-                renderIncentiveRecords();
-            } catch (e) {
-                console.error('인센티브 실적 로드 실패:', e);
+            } catch(e) {
+                console.error('데이터 로드 실패:', e);
             }
-        }
-        
-        function renderIncentiveRecords() {
-            const tbody = document.getElementById('incentiveRecordsTable');
-            if (!tbody) return;
-            
-            const filter = document.getElementById('incRecordFilter')?.value || '';
-            let filtered = allIncentiveRecords;
-            
-            if (filter) {
-                filtered = allIncentiveRecords.filter(r => r.employeeName === filter);
-            }
-            
-            if (filtered.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary)">실적이 없습니다</td></tr>';
-                return;
-            }
-            
-            tbody.innerHTML = filtered.map(record => {
-                const item = window.incentiveItems?.find(i => i.id === record.itemId);
-                const itemName = item?.name || '항목';
-                const itemPrice = item?.price || 0;
-                
-                return `
-                    <tr>
-                        <td>${record.date || '-'}</td>
-                        <td>${record.employeeName || '-'}</td>
-                        <td>${itemName}</td>
-                        <td>${record.customerName || '-'}</td>
-                        <td>${record.chartNo || '-'}</td>
-                        <td class="text-right" style="font-weight:600">₩${itemPrice.toLocaleString()}</td>
-                        <td>
-                            <button class="btn btn-sm" style="background:var(--red);color:#fff;padding:4px 8px;font-size:.75rem" 
-                                onclick="deleteIncentiveRecord('${record.id}','${record.employeeName}','${itemName}')">삭제</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
-        async function deleteIncentiveRecord(recordId, employeeName, itemName) {
-            if (!confirm(`${employeeName}님의 "${itemName}" 실적을 삭제하시겠습니까?`)) {
-                return;
-            }
-            
-            try {
-                await db.collection('incentiveRecords').doc(recordId).delete();
-                alert('삭제되었습니다');
-                await loadAllIncentiveRecords();
-            } catch (e) {
-                console.error('삭제 실패:', e);
-                alert('오류가 발생했습니다: ' + e.message);
-            }
-        }
-        
-        async function loadManualIncentives() {
-            try {
-                const snapshot = await db.collection('manualIncentives')
-                    .orderBy('month', 'desc')
-                    .get();
-                manualIncentives = snapshot.docs.map(d => ({
-                    id: d.id,
-                    ...d.data()
-                }));
-                renderManualIncentives();
-            } catch (e) {
-                console.error('수동 인센티브 로드 실패:', e);
-            }
-        }
-        
-        function renderManualIncentives() {
-            const tbody = document.getElementById('manualIncentiveTable');
-            if (!tbody) return;
-            
-            if (manualIncentives.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">추가 지급 내역이 없습니다</td></tr>';
-                return;
-            }
-            
-            tbody.innerHTML = manualIncentives.map(inc => `
-                <tr>
-                    <td>${inc.month || '-'}</td>
-                    <td>${inc.employeeName || '-'}</td>
-                    <td>${inc.title || '-'}</td>
-                    <td class="text-right" style="font-weight:600;color:var(--primary)">₩${(inc.amount || 0).toLocaleString()}</td>
-                    <td style="font-size:.85rem">${inc.note || '-'}</td>
-                    <td>
-                        <button class="btn btn-sm" style="background:var(--red);color:#fff;padding:4px 8px;font-size:.75rem" 
-                            onclick="deleteManualIncentive('${inc.id}')">삭제</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-        
-        function openManualIncentiveModal() {
-            // 직원 목록 로드
-            const select = document.getElementById('manualIncEmployee');
-            if (select && window.employees) {
-                select.innerHTML = '<option value="">직원 선택</option>' +
-                    employees.filter(e => e.status === 'active')
-                        .map(e => `<option value="${e.id}">${e.name} (${e.role || '-'})</option>`)
-                        .join('');
-            }
-            
-            // 현재 월로 초기화
+        } else {
+            // 신규 모드
+            document.getElementById('manualIncEditId').value = '';
             const now = new Date();
-            const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            document.getElementById('manualIncMonth').value = thisMonth;
-            document.getElementById('manualIncTitle').value = '';
-            document.getElementById('manualIncAmount').value = '';
+            document.getElementById('manualIncMonth').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            document.getElementById('manualIncEmployee').value = '';
+            document.getElementById('manualIncItem').value = '';
+            document.getElementById('manualIncAmount').value = '100000';
             document.getElementById('manualIncNote').value = '';
-            
-            document.getElementById('manualIncentiveModal').classList.add('active');
         }
         
-        async function saveManualIncentive() {
-            const month = document.getElementById('manualIncMonth').value;
-            const employeeId = document.getElementById('manualIncEmployee').value;
-            const title = document.getElementById('manualIncTitle').value.trim();
-            const amount = parseInt(document.getElementById('manualIncAmount').value) || 0;
-            const note = document.getElementById('manualIncNote').value.trim();
+        modal.style.display = 'flex';
+    }
+    
+    // 수동 인센티브 저장
+    async function saveManualIncentive() {
+        const month = document.getElementById('manualIncMonth').value;
+        const employeeName = document.getElementById('manualIncEmployee').value;
+        const item = document.getElementById('manualIncItem').value.trim();
+        const amount = parseFloat(document.getElementById('manualIncAmount').value) || 0;
+        const note = document.getElementById('manualIncNote').value.trim();
+        const editId = document.getElementById('manualIncEditId').value;
+        
+        if (!month || !employeeName || !item || amount <= 0) {
+            alert('필수 항목을 모두 입력해주세요');
+            return;
+        }
+        
+        const data = {
+            month: month,
+            employeeName: employeeName,
+            item: item,
+            amount: amount,
+            note: note,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        try {
+            if (editId) {
+                await firebase.firestore().collection('manualIncentives').doc(editId).update(data);
+                alert('수정되었습니다');
+            } else {
+                data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                await firebase.firestore().collection('manualIncentives').add(data);
+                alert('추가되었습니다');
+            }
             
-            if (!month) {
-                alert('지급월을 선택하세요');
-                return;
-            }
-            if (!employeeId) {
-                alert('직원을 선택하세요');
-                return;
-            }
-            if (!title) {
-                alert('항목명을 입력하세요');
-                return;
-            }
-            if (amount <= 0) {
-                alert('지급 금액을 입력하세요');
+            closeModal('manualIncentiveModal');
+            loadManualIncentives();
+            loadIncentiveDetails();
+        } catch(e) {
+            alert('저장 실패: ' + e.message);
+        }
+    }
+    
+    // 수동 인센티브 목록 로드
+    async function loadManualIncentives() {
+        const tbody = document.getElementById('manualIncentiveTable');
+        if (!tbody) return;
+        
+        const currentYear = document.getElementById('yearSelect')?.value || new Date().getFullYear();
+        const currentMonth = document.getElementById('monthSelect')?.value || (new Date().getMonth() + 1);
+        const targetMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+        
+        try {
+            const snapshot = await firebase.firestore().collection('manualIncentives')
+                .where('month', '==', targetMonth)
+                .orderBy('createdAt', 'desc')
+                .get();
+            
+            if (snapshot.empty) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:2rem">추가 지급 내역이 없습니다</td></tr>';
                 return;
             }
             
-            const employee = employees.find(e => e.id === employeeId);
-            if (!employee) {
-                alert('직원 정보를 찾을 수 없습니다');
-                return;
-            }
+            let html = '';
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                html += `<tr>
+                    <td>${data.month}</td>
+                    <td>${data.employeeName}</td>
+                    <td>${data.item}</td>
+                    <td class="text-right">${data.amount.toLocaleString()}원</td>
+                    <td>${data.note || '-'}</td>
+                    <td>
+                        <button class="btn-small" onclick="openManualIncentiveModal('${doc.id}')">수정</button>
+                        <button class="btn-small btn-danger" onclick="deleteManualIncentive('${doc.id}')">삭제</button>
+                    </td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        } catch(e) {
+            console.error('수동 인센티브 로드 실패:', e);
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">로드 실패</td></tr>';
+        }
+    }
+    
+    // 수동 인센티브 삭제
+    async function deleteManualIncentive(id) {
+        if (!confirm('이 인센티브 지급 내역을 삭제하시겠습니까?')) return;
+        
+        try {
+            await firebase.firestore().collection('manualIncentives').doc(id).delete();
+            alert('삭제되었습니다');
+            loadManualIncentives();
+            loadIncentiveDetails();
+        } catch(e) {
+            alert('삭제 실패: ' + e.message);
+        }
+    }
+    
+    // 직원별 인센티브 실적 상세 로드
+    async function loadIncentiveDetails() {
+        const tbody = document.getElementById('incentiveDetailTable');
+        if (!tbody) return;
+        
+        const currentYear = document.getElementById('yearSelect')?.value || new Date().getFullYear();
+        const currentMonth = document.getElementById('monthSelect')?.value || (new Date().getMonth() + 1);
+        const targetMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+        
+        try {
+            // 직원 목록 로드
+            const usersSnapshot = await firebase.firestore().collection('users').orderBy('name').get();
             
-            try {
-                await db.collection('manualIncentives').add({
-                    month: month,
-                    employeeId: employeeId,
-                    employeeName: employee.name,
-                    title: title,
-                    amount: amount,
-                    note: note,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    createdBy: 'admin'
+            // 수동 인센티브 로드
+            const manualSnapshot = await firebase.firestore().collection('manualIncentives')
+                .where('month', '==', targetMonth)
+                .get();
+            
+            const manualByEmployee = {};
+            manualSnapshot.docs.forEach(doc => {
+                const data = doc.data();
+                if (!manualByEmployee[data.employeeName]) {
+                    manualByEmployee[data.employeeName] = [];
+                }
+                manualByEmployee[data.employeeName].push({
+                    id: doc.id,
+                    item: data.item,
+                    amount: data.amount,
+                    note: data.note
                 });
-                
-                alert('추가 인센티브가 등록되었습니다\n\n직원 계정에서 확인할 수 있습니다');
-                closeModal('manualIncentiveModal');
-                await loadManualIncentives();
-            } catch (e) {
-                console.error('저장 실패:', e);
-                alert('오류가 발생했습니다: ' + e.message);
-            }
-        }
-        
-        async function deleteManualIncentive(id) {
-            if (!confirm('이 인센티브 지급 내역을 삭제하시겠습니까?')) {
-                return;
-            }
+            });
             
-            try {
-                await db.collection('manualIncentives').doc(id).delete();
-                alert('삭제되었습니다');
-                await loadManualIncentives();
-            } catch (e) {
-                console.error('삭제 실패:', e);
-                alert('오류가 발생했습니다: ' + e.message);
-            }
+            let html = '';
+            usersSnapshot.docs.forEach(doc => {
+                const user = doc.data();
+                const manualItems = manualByEmployee[user.name] || [];
+                const manualTotal = manualItems.reduce((sum, item) => sum + item.amount, 0);
+                
+                // 여기에 실제 매출 기반, 건별 인센티브 계산 로직 추가 필요
+                // 현재는 임시로 0으로 표시
+                const salesBased = 0;
+                const perCase = 0;
+                const total = salesBased + perCase + manualTotal;
+                
+                html += `<tr>
+                    <td>${user.name}</td>
+                    <td>${user.position || '-'}</td>
+                    <td class="text-right">${salesBased > 0 ? salesBased.toLocaleString() + '원' : '₩0'}</td>
+                    <td class="text-right">${perCase > 0 ? perCase.toLocaleString() + '원' : '₩0'}</td>
+                    <td class="text-right">${manualTotal > 0 ? manualTotal.toLocaleString() + '원' : '₩0'}</td>
+                    <td class="text-right" style="font-weight:600">${total > 0 ? total.toLocaleString() + '원' : '₩0'}</td>
+                    <td><button class="btn-small" onclick="toggleIncentiveDetail('${user.name}')">상세</button></td>
+                </tr>`;
+                
+                // 상세 내역 (접기/펼치기)
+                if (manualItems.length > 0) {
+                    html += `<tr id="detail-${user.name}" style="display:none;background:#f8f9fa">
+                        <td colspan="7" style="padding:1rem">
+                            <strong style="font-size:.9rem">추가 지급 내역:</strong>
+                            <table style="width:100%;margin-top:.5rem;font-size:.85rem">
+                                <thead><tr><th>항목</th><th>금액</th><th>비고</th><th>관리</th></tr></thead>
+                                <tbody>`;
+                    manualItems.forEach(item => {
+                        html += `<tr>
+                            <td>${item.item}</td>
+                            <td class="text-right">${item.amount.toLocaleString()}원</td>
+                            <td>${item.note || '-'}</td>
+                            <td>
+                                <button class="btn-small" onclick="openManualIncentiveModal('${item.id}')">수정</button>
+                                <button class="btn-small btn-danger" onclick="deleteManualIncentive('${item.id}')">삭제</button>
+                            </td>
+                        </tr>`;
+                    });
+                    html += `</tbody></table>
+                        </td>
+                    </tr>`;
+                }
+            });
+            
+            tbody.innerHTML = html;
+        } catch(e) {
+            console.error('인센티브 상세 로드 실패:', e);
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red)">로드 실패</td></tr>';
         }
+    }
+    
+    // 인센티브 상세 토글
+    function toggleIncentiveDetail(employeeName) {
+        const row = document.getElementById(`detail-${employeeName}`);
+        if (row) {
+            row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+        }
+    }
+    
+    // 전체 펼치기
+    function expandAllIncentiveDetails() {
+        const details = document.querySelectorAll('[id^="detail-"]');
+        details.forEach(row => {
+            row.style.display = 'table-row';
+        });
+    }
+    
+    // toggleIncItemFields 함수 수정 (일본인 내원객수 필드 추가)
+    const originalToggleIncItemFields = window.toggleIncItemFields;
+    window.toggleIncItemFields = function() {
+        const type = document.getElementById('incItemType')?.value;
+        const perCaseFields = document.getElementById('perCaseFields');
+        const salesPercentFields = document.getElementById('salesPercentFields');
+        const japanVisitorsFields = document.getElementById('japanVisitorsFields');
+        
+        if (perCaseFields) perCaseFields.style.display = type === 'perCase' ? 'block' : 'none';
+        if (salesPercentFields) salesPercentFields.style.display = type === 'salesPercent' ? 'block' : 'none';
+        if (japanVisitorsFields) japanVisitorsFields.style.display = type === 'japanVisitors' ? 'block' : 'none';
+    };
+    
+    // 페이지 로드 시 자동 실행
+    if (typeof window.loadData === 'function') {
+        const originalLoadData = window.loadData;
+        window.loadData = function() {
+            originalLoadData();
+            if (document.getElementById('manualIncentiveTable')) {
+                loadManualIncentives();
+            }
+            if (document.getElementById('incentiveDetailTable')) {
+                loadIncentiveDetails();
+            }
+        };
+    }
     </script>
 </body>
 </html>
