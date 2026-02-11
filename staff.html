@@ -703,9 +703,15 @@
                         <input type="number" class="form-input" id="newItemStock" min="0" step="1" placeholder="0">
                     </div>
                     <div class="form-group" style="flex:1">
-                        <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(발주기준)</span></label>
-                        <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0">
+                        <label class="form-label">보관 장소</label>
+                        <select class="form-select" id="newItemLocation">
+                            <option value="">선택</option>
+                        </select>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(발주기준)</span></label>
+                    <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0">
                 </div>
                 <div class="form-group">
                     <label class="form-label">유통기한</label>
@@ -770,19 +776,25 @@
                         </select>
                     </div>
                     <div class="form-group" style="flex:1">
-                        <label class="form-label">현재고</label>
-                        <input type="number" class="form-input" id="editItemStock" min="0" step="0.01">
+                        <label class="form-label">보관 장소</label>
+                        <select class="form-select" id="editItemLocation">
+                            <option value="">선택</option>
+                        </select>
                     </div>
                 </div>
                 <div style="display:flex;gap:.5rem">
                     <div class="form-group" style="flex:1">
+                        <label class="form-label">현재고</label>
+                        <input type="number" class="form-input" id="editItemStock" min="0" step="0.01">
+                    </div>
+                    <div class="form-group" style="flex:1">
                         <label class="form-label">안전재고</label>
                         <input type="number" class="form-input" id="editItemSafety" min="0" step="1">
                     </div>
-                    <div class="form-group" style="flex:1">
-                        <label class="form-label">유통기한</label>
-                        <input type="date" class="form-input" id="editItemExpiry">
-                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">유통기한</label>
+                    <input type="date" class="form-input" id="editItemExpiry">
                 </div>
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-top:.5rem">
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보 수정</div>
@@ -2665,6 +2677,10 @@
             document.getElementById('newItemBoxes').value='1';
             document.getElementById('newItemPerBox').value='1';
             document.getElementById('newItemUnitCalc').textContent='낱개당 단가: -';
+            
+            // 장소 목록 로드
+            loadLocationOptions('newItemLocation');
+            
             openModal('newItemModal');
         }
 
@@ -2691,11 +2707,14 @@
             const perBox=parseFloat(document.getElementById('newItemPerBox').value)||1;
             const totalQty=boxes*perBox;
             const unitPrice=totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0;
+            const location=document.getElementById('newItemLocation').value||'';
+            
             const data={
                 name:name,
                 type:document.getElementById('newItemType').value,
                 category:document.getElementById('newItemCategory').value,
                 unit:'개',
+                location:location, // 보관 장소 추가
                 currentStock:parseFloat(document.getElementById('newItemStock').value)||0,
                 safetyStock:parseFloat(document.getElementById('newItemSafety').value)||0,
                 purchasePrice:totalPrice,
@@ -2729,6 +2748,10 @@
             document.getElementById('editItemSafety').value=item.safetyStock||0;
             document.getElementById('editItemExpiry').value=item.expiryDate||'';
             document.getElementById('editItemPurchaseLink').value=item.purchaseLink||'';
+            
+            // 장소 목록 로드 후 현재 값 설정
+            loadLocationOptions('editItemLocation', item.location);
+            
             // 구매 정보 역산: purchasePrice=총액, purchaseQty=총낱개수
             const totalPrice=item.purchasePrice||0;
             const totalQty=item.purchaseQty||1;
@@ -2762,8 +2785,11 @@
             const boxes=parseFloat(document.getElementById('editItemBoxes').value)||1;
             const perBox=parseFloat(document.getElementById('editItemPerBox').value)||1;
             const totalQty=boxes*perBox;
+            const location=document.getElementById('editItemLocation').value||'';
+            
             const data={
                 category:document.getElementById('editItemCategory').value,
+                location:location, // 보관 장소 추가
                 currentStock:parseFloat(document.getElementById('editItemStock').value)||0,
                 safetyStock:parseFloat(document.getElementById('editItemSafety').value)||0,
                 expiryDate:document.getElementById('editItemExpiry').value||null,
@@ -2919,6 +2945,45 @@
                     const opt=document.createElement('option');
                     opt.value=loc;
                     opt.textContent=loc;
+                    sel.appendChild(opt);
+                });
+            }
+        }
+        
+        // 장소 옵션을 특정 select에 로드하는 범용 함수
+        function loadLocationOptions(selectId, currentValue = '') {
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            
+            sel.innerHTML = '<option value="">선택</option>';
+            
+            // DB에서 로드된 장소 사용
+            if (receivingLocations.length > 0) {
+                receivingLocations.forEach(loc => {
+                    const opt = document.createElement('option');
+                    const locationValue = `${loc.floor}-${loc.name}`;
+                    opt.value = locationValue;
+                    opt.textContent = locationValue;
+                    if (locationValue === currentValue) {
+                        opt.selected = true;
+                    }
+                    sel.appendChild(opt);
+                });
+            } else {
+                // 기본 장소
+                const defaults = [
+                    '5층-처치실', '5층-냉장고',
+                    '6층-시술실', '6층-수액실', '6층-줄기세포센터', '6층-수술실',
+                    '6층-준비실', '6층-준비실옆보관실', '6층-준비실 냉장고',
+                    '6층-어븀실', '6층-레이저실', '6층-리팟실'
+                ];
+                defaults.forEach(loc => {
+                    const opt = document.createElement('option');
+                    opt.value = loc;
+                    opt.textContent = loc;
+                    if (loc === currentValue) {
+                        opt.selected = true;
+                    }
                     sel.appendChild(opt);
                 });
             }
