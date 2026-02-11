@@ -721,18 +721,19 @@
                         </select>
                     </div>
                 </div>
-                <div style="display:flex;gap:.5rem">
-                    <div class="form-group" style="flex:1">
-                        <label class="form-label">현재고</label>
-                        <input type="number" class="form-input" id="newItemStock" min="0" step="1" placeholder="0">
+                
+                <!-- 장소별 초기 재고 입력 -->
+                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:.5rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                        <label class="form-label" style="margin:0;font-weight:600">📍 보관 장소별 초기 재고</label>
+                        <button type="button" class="btn btn-secondary" onclick="addNewLocationRow()" style="font-size:.75rem;padding:.3rem .6rem">+ 장소 추가</button>
                     </div>
-                    <div class="form-group" style="flex:1">
-                        <label class="form-label">보관 장소</label>
-                        <select class="form-select" id="newItemLocation">
-                            <option value="">선택</option>
-                        </select>
+                    <div id="newLocationsList"></div>
+                    <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:4px;text-align:center">
+                        총 재고: <strong id="newTotalStockDisplay">0</strong>개
                     </div>
                 </div>
+                
                 <div class="form-group">
                     <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(발주기준)</span></label>
                     <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0">
@@ -789,32 +790,31 @@
                     <label class="form-label">품목명</label>
                     <input type="text" class="form-input" id="editItemName" disabled style="background:#f5f5f5">
                 </div>
-                <div style="display:flex;gap:.5rem">
-                    <div class="form-group" style="flex:1">
-                        <label class="form-label">카테고리</label>
-                        <select class="form-select" id="editItemCategory">
-                            <option value="nursing">간호</option>
-                            <option value="skin">피부</option>
-                            <option value="desk">데스크</option>
-                            <option value="common">공통</option>
-                        </select>
+                <div class="form-group">
+                    <label class="form-label">카테고리</label>
+                    <select class="form-select" id="editItemCategory">
+                        <option value="nursing">간호</option>
+                        <option value="skin">피부</option>
+                        <option value="desk">데스크</option>
+                        <option value="common">공통</option>
+                    </select>
+                </div>
+                
+                <!-- 장소별 재고 입력 -->
+                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:.5rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                        <label class="form-label" style="margin:0;font-weight:600">📍 보관 장소별 재고</label>
+                        <button type="button" class="btn btn-secondary" onclick="addEditLocationRow()" style="font-size:.75rem;padding:.3rem .6rem">+ 장소 추가</button>
                     </div>
-                    <div class="form-group" style="flex:1">
-                        <label class="form-label">보관 장소</label>
-                        <select class="form-select" id="editItemLocation">
-                            <option value="">선택</option>
-                        </select>
+                    <div id="editLocationsList"></div>
+                    <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:4px;text-align:center">
+                        총 재고: <strong id="editTotalStockDisplay">0</strong>개
                     </div>
                 </div>
-                <div style="display:flex;gap:.5rem">
-                    <div class="form-group" style="flex:1">
-                        <label class="form-label">현재고</label>
-                        <input type="number" class="form-input" id="editItemStock" min="0" step="0.01">
-                    </div>
-                    <div class="form-group" style="flex:1">
-                        <label class="form-label">안전재고</label>
-                        <input type="number" class="form-input" id="editItemSafety" min="0" step="1">
-                    </div>
+                
+                <div class="form-group">
+                    <label class="form-label">안전재고</label>
+                    <input type="number" class="form-input" id="editItemSafety" min="0" step="1">
                 </div>
                 <div class="form-group">
                     <label class="form-label">유통기한</label>
@@ -859,27 +859,27 @@
             </div>
             <div class="modal-body">
                 <!-- 새 장소 추가 -->
-                <div style="background:var(--bg);border:1px solid var(--border);padding:1rem;border-radius:6px;margin-bottom:1rem">
-                    <div style="font-weight:600;font-size:.9rem;margin-bottom:.75rem;color:var(--text)">➕ 새 장소 추가</div>
-                    <div style="display:flex;gap:.75rem;align-items:end">
+                <div style="background:var(--bg);border:2px solid var(--border);padding:1.25rem;border-radius:8px;margin-bottom:1.5rem">
+                    <div style="font-weight:700;font-size:1rem;margin-bottom:1rem;color:var(--text)">➕ 새 장소 추가</div>
+                    <div style="display:flex;gap:1rem;align-items:end">
                         <div class="form-group" style="flex:1;margin:0">
-                            <label class="form-label" style="font-size:.85rem;font-weight:600;margin-bottom:.4rem;display:block;color:var(--text)">층</label>
-                            <select class="form-select" id="newLocationFloor" style="padding:.7rem;font-size:.9rem;border:2px solid var(--border);border-radius:6px">
+                            <label class="form-label" style="font-size:.95rem;font-weight:700;margin-bottom:.5rem;display:block;color:var(--text)">층</label>
+                            <select class="form-select" id="newLocationFloor" style="padding:.85rem;font-size:1rem;border:2px solid var(--border);border-radius:6px;font-weight:600">
                                 <option value="5층">5층</option>
                                 <option value="6층" selected>6층</option>
                             </select>
                         </div>
                         <div class="form-group" style="flex:2;margin:0">
-                            <label class="form-label" style="font-size:.85rem;font-weight:600;margin-bottom:.4rem;display:block;color:var(--text)">장소명</label>
+                            <label class="form-label" style="font-size:.95rem;font-weight:700;margin-bottom:.5rem;display:block;color:var(--text)">장소명</label>
                             <input type="text" class="form-input" id="newLocationName" placeholder="예: 준비실, 레이저실" 
-                                style="padding:.7rem;font-size:.9rem;border:2px solid var(--border);border-radius:6px">
+                                style="padding:.85rem;font-size:1rem;border:2px solid var(--border);border-radius:6px;font-weight:600">
                         </div>
-                        <button class="btn btn-primary" onclick="addLocation()" style="padding:.7rem 1.2rem;font-size:.9rem;white-space:nowrap;font-weight:600">추가</button>
+                        <button class="btn btn-primary" onclick="addLocation()" style="padding:.85rem 1.5rem;font-size:1rem;white-space:nowrap;font-weight:700">추가</button>
                     </div>
                 </div>
                 
                 <!-- 기존 장소 목록 -->
-                <div style="font-weight:600;font-size:.9rem;margin-bottom:.75rem;color:var(--text)">📋 기존 장소 목록</div>
+                <div style="font-weight:700;font-size:1rem;margin-bottom:1rem;color:var(--text)">📋 기존 장소 목록</div>
                 <div id="locationsList" style="max-height:400px;overflow-y:auto"></div>
             </div>
             <div class="modal-footer">
@@ -2765,16 +2765,63 @@
             ['newItemName','newItemTotalPrice','newItemExpiry','newItemPurchaseLink'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
             document.getElementById('newItemType').value='disposable';
             document.getElementById('newItemCategory').value='common';
-            document.getElementById('newItemStock').value='';
             document.getElementById('newItemSafety').value='';
             document.getElementById('newItemBoxes').value='1';
             document.getElementById('newItemPerBox').value='1';
             document.getElementById('newItemUnitCalc').textContent='낱개당 단가: -';
             
-            // 장소 목록 로드
-            loadLocationOptions('newItemLocation');
+            // 장소별 재고 초기화
+            document.getElementById('newLocationsList').innerHTML='';
+            document.getElementById('newTotalStockDisplay').textContent='0';
+            addNewLocationRow(); // 기본 1개 행 추가
             
             openModal('newItemModal');
+        }
+        
+        // 신규 품목 - 장소 행 추가
+        function addNewLocationRow(){
+            const container = document.getElementById('newLocationsList');
+            const rowId = 'newLoc_' + Date.now();
+            
+            const row = document.createElement('div');
+            row.id = rowId;
+            row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center';
+            row.innerHTML = `
+                <select class="form-select" style="flex:1.5;padding:.6rem" onchange="calcNewTotalStock()">
+                    <option value="">장소 선택</option>
+                    ${receivingLocations.map(loc => 
+                        `<option value="${loc.floor}-${loc.name}">${loc.floor}-${loc.name}</option>`
+                    ).join('')}
+                </select>
+                <input type="number" class="form-input" placeholder="수량" min="0" step="1" 
+                    style="flex:1;padding:.6rem" oninput="calcNewTotalStock()">
+                <button type="button" class="btn btn-secondary" onclick="removeNewLocationRow('${rowId}')" 
+                    style="padding:.6rem;font-size:.75rem">삭제</button>
+            `;
+            container.appendChild(row);
+            calcNewTotalStock();
+        }
+        
+        // 신규 품목 - 장소 행 삭제
+        function removeNewLocationRow(rowId){
+            const row = document.getElementById(rowId);
+            if(row) row.remove();
+            calcNewTotalStock();
+        }
+        
+        // 신규 품목 - 총 재고 계산
+        function calcNewTotalStock(){
+            const container = document.getElementById('newLocationsList');
+            const rows = container.querySelectorAll('div[id^="newLoc_"]');
+            let total = 0;
+            
+            rows.forEach(row => {
+                const qtyInput = row.querySelector('input[type="number"]');
+                const qty = parseFloat(qtyInput?.value || 0);
+                if(qty > 0) total += qty;
+            });
+            
+            document.getElementById('newTotalStockDisplay').textContent = total;
         }
 
         function calcNewItemUnit(){
@@ -2795,20 +2842,38 @@
         async function saveNewItem(){
             const name=document.getElementById('newItemName').value.trim();
             if(!name){alert('품목명을 입력하세요.');return;}
+            
+            // 장소별 재고 수집
+            const container = document.getElementById('newLocationsList');
+            const rows = container.querySelectorAll('div[id^="newLoc_"]');
+            const locations = {};
+            let totalStock = 0;
+            
+            rows.forEach(row => {
+                const locSelect = row.querySelector('select');
+                const qtyInput = row.querySelector('input[type="number"]');
+                const loc = locSelect?.value;
+                const qty = parseFloat(qtyInput?.value || 0);
+                
+                if(loc && qty > 0){
+                    locations[loc] = qty;
+                    totalStock += qty;
+                }
+            });
+            
             const totalPrice=parseFloat(document.getElementById('newItemTotalPrice').value)||0;
             const boxes=parseFloat(document.getElementById('newItemBoxes').value)||1;
             const perBox=parseFloat(document.getElementById('newItemPerBox').value)||1;
             const totalQty=boxes*perBox;
             const unitPrice=totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0;
-            const location=document.getElementById('newItemLocation').value||'';
             
             const data={
                 name:name,
                 type:document.getElementById('newItemType').value,
                 category:document.getElementById('newItemCategory').value,
                 unit:'개',
-                location:location, // 보관 장소 추가
-                currentStock:parseFloat(document.getElementById('newItemStock').value)||0,
+                locations:locations, // 다중 장소
+                currentStock:totalStock, // 총 재고
                 safetyStock:parseFloat(document.getElementById('newItemSafety').value)||0,
                 purchasePrice:totalPrice,
                 purchaseQty:totalQty,
@@ -2837,23 +2902,85 @@
             document.getElementById('editItemId').value=itemId;
             document.getElementById('editItemName').value=item.name||'';
             document.getElementById('editItemCategory').value=item.category||'common';
-            document.getElementById('editItemStock').value=item.currentStock||0;
             document.getElementById('editItemSafety').value=item.safetyStock||0;
             document.getElementById('editItemExpiry').value=item.expiryDate||'';
             document.getElementById('editItemPurchaseLink').value=item.purchaseLink||'';
             
-            // 장소 목록 로드 후 현재 값 설정
-            loadLocationOptions('editItemLocation', item.location);
+            // 장소별 재고 로드
+            const container = document.getElementById('editLocationsList');
+            container.innerHTML = '';
             
-            // 구매 정보 역산: purchasePrice=총액, purchaseQty=총낱개수
+            if(item.locations && Object.keys(item.locations).length > 0){
+                Object.entries(item.locations).forEach(([loc, qty]) => {
+                    if(qty > 0){
+                        addEditLocationRow(loc, qty);
+                    }
+                });
+            }else if(item.location){
+                // 기존 단일 location 필드 처리
+                addEditLocationRow(item.location, item.currentStock || 0);
+            }else{
+                // 빈 행 1개 추가
+                addEditLocationRow();
+            }
+            
+            calcEditTotalStock();
+            
+            // 구매 정보 역산
             const totalPrice=item.purchasePrice||0;
             const totalQty=item.purchaseQty||1;
-            // 박스수는 1로 기본, 박스당 낱개=totalQty
             document.getElementById('editItemTotalPrice').value=totalPrice||'';
             document.getElementById('editItemBoxes').value=1;
             document.getElementById('editItemPerBox').value=totalQty||1;
             calcEditItemUnit();
             openModal('editItemModal');
+        }
+        
+        // 수정 모달 - 장소 행 추가
+        function addEditLocationRow(location='', quantity=0){
+            const container = document.getElementById('editLocationsList');
+            const rowId = 'editLoc_' + Date.now();
+            
+            const row = document.createElement('div');
+            row.id = rowId;
+            row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center';
+            row.innerHTML = `
+                <select class="form-select" style="flex:1.5;padding:.6rem" onchange="calcEditTotalStock()">
+                    <option value="">장소 선택</option>
+                    ${receivingLocations.map(loc => {
+                        const locValue = `${loc.floor}-${loc.name}`;
+                        const selected = locValue === location ? 'selected' : '';
+                        return `<option value="${locValue}" ${selected}>${locValue}</option>`;
+                    }).join('')}
+                </select>
+                <input type="number" class="form-input" placeholder="수량" min="0" step="1" value="${quantity}" 
+                    style="flex:1;padding:.6rem" oninput="calcEditTotalStock()">
+                <button type="button" class="btn btn-secondary" onclick="removeEditLocationRow('${rowId}')" 
+                    style="padding:.6rem;font-size:.75rem">삭제</button>
+            `;
+            container.appendChild(row);
+        }
+        
+        // 수정 모달 - 장소 행 삭제
+        function removeEditLocationRow(rowId){
+            const row = document.getElementById(rowId);
+            if(row) row.remove();
+            calcEditTotalStock();
+        }
+        
+        // 수정 모달 - 총 재고 계산
+        function calcEditTotalStock(){
+            const container = document.getElementById('editLocationsList');
+            const rows = container.querySelectorAll('div[id^="editLoc_"]');
+            let total = 0;
+            
+            rows.forEach(row => {
+                const qtyInput = row.querySelector('input[type="number"]');
+                const qty = parseFloat(qtyInput?.value || 0);
+                if(qty > 0) total += qty;
+            });
+            
+            document.getElementById('editTotalStockDisplay').textContent = total;
         }
 
         function calcEditItemUnit(){
@@ -2874,16 +3001,34 @@
         async function saveEditItem(){
             const id=document.getElementById('editItemId').value;
             if(!id)return;
+            
+            // 장소별 재고 수집
+            const container = document.getElementById('editLocationsList');
+            const rows = container.querySelectorAll('div[id^="editLoc_"]');
+            const locations = {};
+            let totalStock = 0;
+            
+            rows.forEach(row => {
+                const locSelect = row.querySelector('select');
+                const qtyInput = row.querySelector('input[type="number"]');
+                const loc = locSelect?.value;
+                const qty = parseFloat(qtyInput?.value || 0);
+                
+                if(loc && qty > 0){
+                    locations[loc] = qty;
+                    totalStock += qty;
+                }
+            });
+            
             const totalPrice=parseFloat(document.getElementById('editItemTotalPrice').value)||0;
             const boxes=parseFloat(document.getElementById('editItemBoxes').value)||1;
             const perBox=parseFloat(document.getElementById('editItemPerBox').value)||1;
             const totalQty=boxes*perBox;
-            const location=document.getElementById('editItemLocation').value||'';
             
             const data={
                 category:document.getElementById('editItemCategory').value,
-                location:location, // 보관 장소 추가
-                currentStock:parseFloat(document.getElementById('editItemStock').value)||0,
+                locations:locations, // 다중 장소
+                currentStock:totalStock, // 총 재고
                 safetyStock:parseFloat(document.getElementById('editItemSafety').value)||0,
                 expiryDate:document.getElementById('editItemExpiry').value||null,
                 purchasePrice:totalPrice,
