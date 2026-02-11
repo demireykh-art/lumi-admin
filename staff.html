@@ -244,7 +244,7 @@
                     <div class="info-row"><span class="info-label">상태</span><span class="info-value" id="todayStatus">-</span></div>
                 </div>
                 <button class="btn btn-primary" id="checkInBtn" onclick="checkIn()">출근하기</button>
-                <button class="btn btn-gold" id="checkOutBtn" onclick="checkOut()">퇴근하기</button>
+                <button class="btn btn-gold" id="checkOutBtn" onclick="checkOut()" style="display:none">퇴근하기</button>
             </div>
             
             <!-- OT 탭 -->
@@ -422,7 +422,12 @@
                             </div>
                         </div>
                         
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.75rem">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+                            <div>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">입고 수량 *</label>
+                                <input type="number" id="receivingQty" placeholder="0" step="0.01" min="0.01" 
+                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
+                            </div>
                             <div>
                                 <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">유통기한 *</label>
                                 <input type="date" id="receivingExpiry" 
@@ -430,33 +435,18 @@
                             </div>
                         </div>
                         
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-                            <div>
-                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">유통기한 *</label>
-                                <input type="date" id="receivingExpiry" 
-                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
-                            </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.75rem">
                             <div>
                                 <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">구매단가 (원)</label>
                                 <input type="number" id="receivingPrice" placeholder="0" min="0" 
                                     style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
                             </div>
-                        </div>
-                        
-                        <!-- 장소별 입고 -->
-                        <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-top:.75rem">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-                                <div style="font-weight:600;font-size:.85rem">📍 장소별 입고 수량</div>
-                                <button type="button" onclick="addReceivingLocationRow()" style="padding:.3rem .6rem;background:var(--primary);color:white;border:none;border-radius:4px;cursor:pointer;font-size:.75rem">+ 장소 추가</button>
-                            </div>
-                            <div id="receivingLocationsList" style="display:flex;flex-direction:column;gap:.5rem">
-                                <!-- 장소별 입력 행이 여기에 추가됩니다 -->
-                            </div>
-                            <div style="text-align:center;padding:.75rem;background:var(--bg-card);border-radius:4px;margin-top:.5rem;font-weight:600;color:var(--primary)">
-                                총 입고량: <span id="receivingTotalQtyDisplay">0</span><span id="receivingTotalUnit">개</span>
-                            </div>
-                            <div style="font-size:.7rem;color:var(--text-muted);margin-top:.4rem;line-height:1.4">
-                                💡 예: 100개 입고 → 5층-처치실 50개 + 6층-시술실 50개
+                            <div>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">보관 장소 *</label>
+                                <select id="receivingLocation" 
+                                    style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
+                                    <option value="">장소 선택</option>
+                                </select>
                             </div>
                         </div>
                         
@@ -673,27 +663,15 @@
                         </select>
                     </div>
                 </div>
-                
-                <!-- 장소별 재고 입력 -->
-                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin:.75rem 0">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-                        <div style="font-weight:600;font-size:.85rem">📍 장소별 초기 재고</div>
-                        <button type="button" class="btn btn-sm btn-primary" onclick="addNewItemLocationRow()" style="padding:.3rem .6rem;font-size:.75rem">+ 장소 추가</button>
+                <div style="display:flex;gap:.5rem">
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">현재고</label>
+                        <input type="number" class="form-input" id="newItemStock" min="0" step="1" placeholder="0">
                     </div>
-                    <div id="newItemLocationsList" style="display:flex;flex-direction:column;gap:.5rem">
-                        <!-- 장소별 입력 행이 여기에 추가됩니다 -->
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(발주기준)</span></label>
+                        <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0">
                     </div>
-                    <div style="text-align:center;padding:.75rem;background:var(--bg-card);border-radius:4px;margin-top:.5rem;font-weight:600;color:var(--primary)">
-                        총 재고: <span id="newItemTotalStockDisplay">0</span>개
-                    </div>
-                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:.4rem;line-height:1.4">
-                        💡 예: 33g 바늘 100개 → 5층-처치실 50개 + 6층-시술실 50개
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(발주기준)</span></label>
-                    <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0">
                 </div>
                 <div class="form-group">
                     <label class="form-label">유통기한</label>
@@ -1424,17 +1402,14 @@
                 const statusBadge=todayAtt.status==='late'?'badge-orange':todayAtt.status==='early'?'badge-red':'badge-green';
                 document.getElementById('todayStatus').innerHTML=`<span class="badge ${statusBadge}">${statusText}</span>`;
                 
-                // 버튼 항상 표시 (숨기지 않음)
-                // document.getElementById('checkInBtn').style.display='block';
-                // document.getElementById('checkOutBtn').style.display='block';
+                document.getElementById('checkInBtn').style.display=todayAtt.checkOut?'none':'none';
+                document.getElementById('checkOutBtn').style.display=todayAtt.checkOut?'none':'block';
             }else{
                 document.getElementById('todayCheckIn').textContent='-';
                 document.getElementById('todayCheckOut').textContent='-';
                 document.getElementById('todayStatus').textContent='-';
-                
-                // 버튼 항상 표시 (숨기지 않음)
-                // document.getElementById('checkInBtn').style.display='block';
-                // document.getElementById('checkOutBtn').style.display='block';
+                document.getElementById('checkInBtn').style.display='block';
+                document.getElementById('checkOutBtn').style.display='none';
             }
         }
         
@@ -1793,19 +1768,6 @@
         
         // Actions
         async function checkIn(){
-            // 오늘 이미 출근했는지 확인
-            const today = getToday();
-            const todayAtt = attendance.find(a => a.date === today);
-            
-            if (todayAtt && todayAtt.checkIn) {
-                const confirmRetry = confirm(`오늘은 이미 출근 기록이 있습니다.\n출근 시간: ${todayAtt.checkIn}\n\n다시 출근 처리하시겠습니까?\n(기존 기록을 덮어씁니다)`);
-                if (!confirmRetry) return;
-            }
-            
-            // 출근 확인
-            const confirmCheckIn = confirm(`출근 처리하시겠습니까?\n\n현재 시간으로 출근이 기록됩니다.`);
-            if (!confirmCheckIn) return;
-            
             if(!userLocation){
                 alert('위치를 확인할 수 없습니다. 위치 권한을 허용해주세요.');
                 checkLocation();
@@ -1820,45 +1782,27 @@
             
             const now=new Date();
             const time=now.toTimeString().substring(0,5);
+            const today=getToday();
             const h=now.getHours(),m=now.getMinutes();
             const status=(h>9||(h===9&&m>10))?'late':'normal';
             
             try{
-                if (todayAtt && todayAtt.id) {
-                    // 기존 기록 업데이트
-                    await db.collection('attendance').doc(todayAtt.id).update({
-                        checkIn:time,
-                        status:status,
-                        location:{lat:userLocation.lat,lng:userLocation.lng},
-                        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    alert(`✅ 출근 기록이 수정되었습니다.\n출근 시간: ${time}${status==='late'?' (지각)':''}\n\n※ 잘못 입력된 경우 관리자에게 수정을 요청하세요.`);
-                } else {
-                    // 새 기록 생성
-                    await db.collection('attendance').add({
-                        employeeId:currentUser.id,
-                        employeeName:currentUser.name,
-                        date:today,
-                        checkIn:time,
-                        status:status,
-                        location:{lat:userLocation.lat,lng:userLocation.lng},
-                        createdAt:firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    alert(`✅ 출근 완료!\n출근 시간: ${time}${status==='late'?' (지각)':''}`);
-                }
+                await db.collection('attendance').add({
+                    employeeId:currentUser.id,
+                    employeeName:currentUser.name,
+                    date:today,
+                    checkIn:time,
+                    status:status,
+                    location:{lat:userLocation.lat,lng:userLocation.lng},
+                    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+                });
+                alert('출근 완료: '+time+(status==='late'?' (지각)':''));
                 await loadAttendance();
                 renderAttendance();
-            }catch(e){
-                console.error('출근 처리 실패:', e);
-                alert('출근 실패: '+e.message);
-            }
+            }catch(e){alert('출근 실패: '+e.message);}
         }
         
         async function checkOut(){
-            // 퇴근 확인
-            const confirmCheckOut = confirm(`퇴근 처리하시겠습니까?\n\n현재 시간으로 퇴근이 기록됩니다.`);
-            if (!confirmCheckOut) return;
-            
             if(!userLocation){
                 alert('위치를 확인할 수 없습니다.');
                 checkLocation();
@@ -1876,15 +1820,7 @@
             const today=getToday();
             const todayAtt=attendance.find(a=>a.date===today);
             
-            if(!todayAtt){
-                alert('⚠️ 오늘 출근 기록이 없습니다.\n\n먼저 출근 처리를 해주세요.');
-                return;
-            }
-            
-            if(todayAtt.checkOut){
-                const confirmRetry = confirm(`오늘은 이미 퇴근 기록이 있습니다.\n퇴근 시간: ${todayAtt.checkOut}\n\n다시 퇴근 처리하시겠습니까?\n(기존 기록을 덮어씁니다)`);
-                if (!confirmRetry) return;
-            }
+            if(!todayAtt){alert('오늘 출근 기록이 없습니다.');return;}
             
             const h=now.getHours();
             const newStatus=h<18?'early':todayAtt.status;
@@ -1892,16 +1828,12 @@
             try{
                 await db.collection('attendance').doc(todayAtt.id).update({
                     checkOut:time,
-                    status:newStatus,
-                    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+                    status:newStatus
                 });
-                alert(`✅ 퇴근 완료!\n퇴근 시간: ${time}${newStatus==='early'?' (조퇴)':''}\n\n※ 잘못 입력된 경우 관리자에게 수정을 요청하세요.`);
+                alert('퇴근 완료: '+time+(newStatus==='early'?' (조퇴)':''));
                 await loadAttendance();
                 renderAttendance();
-            }catch(e){
-                console.error('퇴근 처리 실패:', e);
-                alert('퇴근 실패: '+e.message);
-            }
+            }catch(e){alert('퇴근 실패: '+e.message);}
         }
         
         function openModal(id){document.getElementById(id).classList.add('active');}
@@ -2071,13 +2003,7 @@
             const total=parseInt(document.getElementById('mealTotalAmount').value)||0;
             const memo=document.getElementById('mealMemo').value.trim();
             const selected=Object.keys(mealSelectedStaff);
-            
-            if(!date||!total||!selected.length){
-                alert('날짜, 금액, 인원을 모두 입력해주세요.');
-                return;
-            }
-            
-            console.log('📝 식대 정산 시작:', {date, total, selected, memo});
+            if(!date||!total||!selected.length){alert('날짜, 금액, 인원을 모두 입력해주세요.');return;}
 
             // 각 직원별 차감 금액 계산
             const deductions={};
@@ -2085,8 +2011,6 @@
                 if(mealMode==='even') deductions[empId]=Math.round(total/selected.length);
                 else deductions[empId]=mealManualAmounts[empId]||0;
             }
-            
-            console.log('💰 차감 금액:', deductions);
 
             const groupId=Date.now().toString(36);
             try{
@@ -2117,7 +2041,7 @@
                         const amt=deductions[empId];
                         if(amt<=0)continue;
                         const ref=db.collection('mealRecords').doc();
-                        const record = {
+                        tx.set(ref,{
                             employeeId:empId,
                             employeeName:mealAllStaff.find(e=>e.id===empId)?.name||empId,
                             date,amount:amt,memo,
@@ -2126,28 +2050,15 @@
                             splitMode:mealMode,headCount:selected.length,
                             createdBy:currentUser?.name||currentUser?.id||'staff',
                             createdAt:new Date().toISOString()
-                        };
-                        console.log('📄 mealRecord 생성:', record);
-                        tx.set(ref, record);
+                        });
                     }
                 });
-                
-                console.log('✅ Firebase 트랜잭션 완료');
-                
-                // 정산 완료 후 확실한 데이터 리로드
+                closeModal('mealModal');
+                alert('✅ '+selected.length+'명 식대 정산 완료');
                 await loadMealRecords();
                 await loadMealStaffList(); // employees 잔액 재로드
                 renderMeal();
-                
-                console.log('✅ 데이터 리로드 완료');
-                
-                closeModal('mealModal');
-                alert('✅ '+selected.length+'명 식대 정산 완료\n\n기록이 저장되었습니다.');
-                
-            }catch(e){
-                console.error('❌ 식대 정산 실패:', e);
-                alert('정산 실패: '+e.message+'\n\n다시 시도해주세요.');
-            }
+            }catch(e){alert('정산 실패: '+e.message);}
         }
         
         function openLeaveModal(){
@@ -2624,67 +2535,12 @@
             ['newItemName','newItemTotalPrice','newItemExpiry','newItemPurchaseLink'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
             document.getElementById('newItemType').value='disposable';
             document.getElementById('newItemCategory').value='common';
+            document.getElementById('newItemStock').value='';
             document.getElementById('newItemSafety').value='';
             document.getElementById('newItemBoxes').value='1';
             document.getElementById('newItemPerBox').value='1';
             document.getElementById('newItemUnitCalc').textContent='낱개당 단가: -';
-            
-            // 장소별 재고 초기화
-            document.getElementById('newItemLocationsList').innerHTML = '';
-            document.getElementById('newItemTotalStockDisplay').textContent = '0';
-            addNewItemLocationRow(); // 첫 번째 행 자동 추가
-            
             openModal('newItemModal');
-        }
-
-        // 신규 품목: 장소 행 추가
-        function addNewItemLocationRow() {
-            const container = document.getElementById('newItemLocationsList');
-            const row = document.createElement('div');
-            row.className = 'location-row';
-            row.style.cssText = 'display:flex;gap:.5rem;align-items:center';
-            
-            row.innerHTML = `
-                <select class="location-select" style="flex:1.5;padding:.5rem;border:1px solid var(--border);border-radius:4px;font-size:.85rem" onchange="calcNewItemTotalStock()">
-                    <option value="">장소 선택</option>
-                    ${receivingLocations.map(loc => `<option value="${loc.name}">${loc.name}</option>`).join('')}
-                </select>
-                <input type="number" class="location-qty" min="0" step="1" placeholder="수량" 
-                    style="flex:1;padding:.5rem;border:1px solid var(--border);border-radius:4px;font-size:.85rem"
-                    oninput="calcNewItemTotalStock()">
-                <button type="button" onclick="removeNewItemLocationRow(this)" 
-                    style="padding:.5rem .7rem;background:var(--red);color:white;border:none;border-radius:4px;cursor:pointer;font-size:.75rem">삭제</button>
-            `;
-            
-            container.appendChild(row);
-        }
-
-        // 신규 품목: 장소 행 삭제
-        function removeNewItemLocationRow(btn) {
-            const row = btn.closest('.location-row');
-            if (row) {
-                row.remove();
-                calcNewItemTotalStock();
-            }
-            
-            // 최소 1개 행 유지
-            const container = document.getElementById('newItemLocationsList');
-            if (container.children.length === 0) {
-                addNewItemLocationRow();
-            }
-        }
-
-        // 신규 품목: 총 재고 계산
-        function calcNewItemTotalStock() {
-            const rows = document.querySelectorAll('#newItemLocationsList .location-row');
-            let total = 0;
-            
-            rows.forEach(row => {
-                const qty = parseFloat(row.querySelector('.location-qty')?.value) || 0;
-                total += qty;
-            });
-            
-            document.getElementById('newItemTotalStockDisplay').textContent = total;
         }
 
         function calcNewItemUnit(){
@@ -2705,43 +2561,17 @@
         async function saveNewItem(){
             const name=document.getElementById('newItemName').value.trim();
             if(!name){alert('품목명을 입력하세요.');return;}
-            
-            // 장소별 재고 수집
-            const locations = {};
-            const locationRows = document.querySelectorAll('#newItemLocationsList .location-row');
-            let totalStock = 0;
-            
-            locationRows.forEach(row => {
-                const locationSelect = row.querySelector('.location-select');
-                const qtyInput = row.querySelector('.location-qty');
-                const location = locationSelect?.value;
-                const qty = parseFloat(qtyInput?.value) || 0;
-                
-                if (location && qty > 0) {
-                    locations[location] = (locations[location] || 0) + qty;
-                    totalStock += qty;
-                }
-            });
-            
-            if (totalStock === 0) {
-                alert('최소 하나의 장소에 재고를 입력해주세요.');
-                return;
-            }
-            
             const totalPrice=parseFloat(document.getElementById('newItemTotalPrice').value)||0;
             const boxes=parseFloat(document.getElementById('newItemBoxes').value)||1;
             const perBox=parseFloat(document.getElementById('newItemPerBox').value)||1;
             const totalQty=boxes*perBox;
             const unitPrice=totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0;
-            
             const data={
                 name:name,
                 type:document.getElementById('newItemType').value,
                 category:document.getElementById('newItemCategory').value,
                 unit:'개',
-                locations: locations,  // 장소별 재고
-                totalStock: totalStock,  // 총 재고
-                currentStock: totalStock,  // 하위 호환성 유지
+                currentStock:parseFloat(document.getElementById('newItemStock').value)||0,
                 safetyStock:parseFloat(document.getElementById('newItemSafety').value)||0,
                 purchasePrice:totalPrice,
                 purchaseQty:totalQty,
@@ -2752,21 +2582,15 @@
                 updatedAt:new Date().toISOString(),
                 createdBy:currentUser?.name||'staff'
             };
-            
-            console.log('📦 신규 품목 저장:', data);
-            
             try{
                 await db.collection('inventory').add(data);
                 closeModal('newItemModal');
-                alert(`✅ "${name}" 품목이 등록되었습니다.\n\n총 ${totalStock}개가 ${Object.keys(locations).length}개 장소에 보관됩니다.`);
+                alert('✅ "'+name+'" 품목이 등록되었습니다.');
                 await loadInventoryForStaff();
                 renderInvCatButtons();
                 renderInvAuditList();
                 renderLowStockAlert();
-            }catch(e){
-                console.error('❌ 품목 등록 실패:', e);
-                alert('등록 실패: '+e.message);
-            }
+            }catch(e){alert('등록 실패: '+e.message);}
         }
 
         // ===== 품목 수정 기능 =====
@@ -3015,67 +2839,13 @@
             document.getElementById('receivingItemName').textContent=item.name;
             document.getElementById('receivingCurrentStock').textContent=(item.totalStock||0)+' '+(item.unit||'개');
             document.getElementById('receivingItemUnit').textContent=item.unit||'개';
-            document.getElementById('receivingTotalUnit').textContent=item.unit||'개';
             
             // 입력 초기화
+            document.getElementById('receivingQty').value='';
             document.getElementById('receivingExpiry').value='';
             document.getElementById('receivingPrice').value='';
+            document.getElementById('receivingLocation').value='';
             document.getElementById('receivingMemo').value='';
-            
-            // 장소별 입고 초기화
-            document.getElementById('receivingLocationsList').innerHTML = '';
-            document.getElementById('receivingTotalQtyDisplay').textContent = '0';
-            addReceivingLocationRow(); // 첫 번째 행 자동 추가
-        }
-        
-        // 입고: 장소 행 추가
-        function addReceivingLocationRow() {
-            const container = document.getElementById('receivingLocationsList');
-            const row = document.createElement('div');
-            row.className = 'receiving-location-row';
-            row.style.cssText = 'display:flex;gap:.5rem;align-items:center';
-            
-            row.innerHTML = `
-                <select class="receiving-location-select" style="flex:1.5;padding:.5rem;border:1px solid var(--border);border-radius:4px;font-size:.85rem" onchange="calcReceivingTotalQty()">
-                    <option value="">장소 선택</option>
-                    ${receivingLocations.map(loc => `<option value="${loc.name}">${loc.name}</option>`).join('')}
-                </select>
-                <input type="number" class="receiving-location-qty" min="0" step="1" placeholder="수량" 
-                    style="flex:1;padding:.5rem;border:1px solid var(--border);border-radius:4px;font-size:.85rem"
-                    oninput="calcReceivingTotalQty()">
-                <button type="button" onclick="removeReceivingLocationRow(this)" 
-                    style="padding:.5rem .7rem;background:var(--red);color:white;border:none;border-radius:4px;cursor:pointer;font-size:.75rem">삭제</button>
-            `;
-            
-            container.appendChild(row);
-        }
-
-        // 입고: 장소 행 삭제
-        function removeReceivingLocationRow(btn) {
-            const row = btn.closest('.receiving-location-row');
-            if (row) {
-                row.remove();
-                calcReceivingTotalQty();
-            }
-            
-            // 최소 1개 행 유지
-            const container = document.getElementById('receivingLocationsList');
-            if (container.children.length === 0) {
-                addReceivingLocationRow();
-            }
-        }
-
-        // 입고: 총 수량 계산
-        function calcReceivingTotalQty() {
-            const rows = document.querySelectorAll('#receivingLocationsList .receiving-location-row');
-            let total = 0;
-            
-            rows.forEach(row => {
-                const qty = parseFloat(row.querySelector('.receiving-location-qty')?.value) || 0;
-                total += qty;
-            });
-            
-            document.getElementById('receivingTotalQtyDisplay').textContent = total;
         }
         
         function cancelReceiving(){
@@ -3086,59 +2856,40 @@
         
         async function submitReceiving(){
             const itemId=document.getElementById('receivingItemId').value;
+            const qty=parseFloat(document.getElementById('receivingQty').value)||0;
             const expiry=document.getElementById('receivingExpiry').value;
             const price=parseFloat(document.getElementById('receivingPrice').value)||0;
+            const location=document.getElementById('receivingLocation').value;
             const memo=document.getElementById('receivingMemo').value.trim();
             
-            // 장소별 수량 수집
-            const locationRows = document.querySelectorAll('#receivingLocationsList .receiving-location-row');
-            const locationQtys = {};
-            let totalQty = 0;
-            
-            locationRows.forEach(row => {
-                const locationSelect = row.querySelector('.receiving-location-select');
-                const qtyInput = row.querySelector('.receiving-location-qty');
-                const location = locationSelect?.value;
-                const qty = parseFloat(qtyInput?.value) || 0;
-                
-                if (location && qty > 0) {
-                    locationQtys[location] = (locationQtys[location] || 0) + qty;
-                    totalQty += qty;
-                }
-            });
-            
-            if(!itemId||!expiry||totalQty === 0){
-                alert('필수 항목을 모두 입력해주세요.\n(장소별 입고 수량, 유통기한)');
+            if(!itemId||!qty||!expiry||!location){
+                alert('필수 항목을 모두 입력해주세요.\n(입고 수량, 유통기한, 보관 장소)');
                 return;
             }
             
+            if(qty<=0){alert('입고 수량은 0보다 커야 합니다.');return;}
             if(typeof db==='undefined'){alert('시스템 초기화 중입니다.');return;}
             
             const item=invItems.find(i=>i.id===itemId);
             if(!item){alert('품목을 찾을 수 없습니다.');return;}
-            
-            console.log('📥 입고 시작:', {itemId, totalQty, locations: locationQtys, expiry});
             
             try{
                 // 배치 번호 생성 (B날짜-순번)
                 const today=new Date().toISOString().split('T')[0].replace(/-/g,'');
                 const batchNo=`B${today}-${Date.now().toString(36).toUpperCase().substr(-3)}`;
                 
-                // 장소별로 배치 생성
-                const newBatches = [];
-                for (const [location, qty] of Object.entries(locationQtys)) {
-                    newBatches.push({
-                        batchNo: `${batchNo}-${location}`,
-                        expiryDate: expiry,
-                        location: location,
-                        qty: qty,
-                        purchasePrice: price,
-                        purchaseDate: new Date().toISOString().split('T')[0],
-                        memo: memo,
-                        createdBy: currentUser?.name||currentUser?.id||'직원',
-                        createdAt: new Date().toISOString()
-                    });
-                }
+                // 새 배치 객체
+                const newBatch={
+                    batchNo:batchNo,
+                    expiryDate:expiry,
+                    location:location,
+                    qty:qty,
+                    purchasePrice:price,
+                    purchaseDate:new Date().toISOString().split('T')[0],
+                    memo:memo,
+                    createdBy:currentUser?.name||currentUser?.id||'직원',
+                    createdAt:new Date().toISOString()
+                };
                 
                 // Firestore 트랜잭션
                 await db.runTransaction(async tx=>{
@@ -3151,55 +2902,29 @@
                     const itemLocations=data.locations||{};
                     
                     // 배치 추가
-                    batches.push(...newBatches);
+                    batches.push(newBatch);
                     
                     // 장소별 재고 업데이트
-                    for (const [location, qty] of Object.entries(locationQtys)) {
-                        itemLocations[location]=(itemLocations[location]||0)+qty;
-                    }
+                    itemLocations[location]=(itemLocations[location]||0)+qty;
                     
                     // 총재고 계산
                     const totalStock=Object.values(itemLocations).reduce((sum,v)=>sum+v,0);
-                    
-                    console.log('✅ 재고 업데이트:', {locations: itemLocations, totalStock});
                     
                     tx.update(docRef,{
                         batches:batches,
                         locations:itemLocations,
                         totalStock:totalStock,
-                        currentStock: totalStock, // 하위 호환성
                         updatedAt:new Date().toISOString()
                     });
                 });
                 
                 // 입고 기록 저장 (receivingHistory 컬렉션)
-                for (const batch of newBatches) {
-                    await db.collection('receivingHistory').add({
-                        itemId:itemId,
-                        itemName:item.name,
-                        batchNo:batch.batchNo,
-                        qty:batch.qty,
-                        expiryDate:expiry,
-                        location:batch.location,
-                        purchasePrice:price,
-                        memo:memo,
-                        createdBy:currentUser?.name||currentUser?.id||'직원',
-                        createdAt:new Date().toISOString()
-                    });
-                }
-                
-                alert(`✅ 입고 완료!\n\n${item.name} 총 ${totalQty}개\n${Object.keys(locationQtys).length}개 장소에 분산 입고되었습니다.`);
-                cancelReceiving();
-                await loadInventoryForStaff();
-                renderInvAuditList();
-                renderLowStockAlert();
-                await loadReceivingHistory();
-            }catch(e){
-                console.error('❌ 입고 실패:', e);
-                alert('입고 실패: '+e.message);
-            }
-        }
-
+                await db.collection('receivingHistory').add({
+                    itemId:itemId,
+                    itemName:item.name,
+                    batchNo:batchNo,
+                    qty:qty,
+                    expiryDate:expiry,
                     location:location,
                     price:price,
                     memo:memo,
