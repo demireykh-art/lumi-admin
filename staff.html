@@ -358,25 +358,49 @@
             <!-- 재고 실사 탭 -->
             <div class="tab-content" id="tab-inventory">
                 <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
-                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                        📦 재고 실사
-                        <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
-                        <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openWishlistModal()">🛍️ 비품 요청</button>
+                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+                        <span>📦 재고 실사</span>
+                        <div style="display:flex;gap:.5rem">
+                            <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
+                            <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openWishlistModal()">🛍️ 비품 요청</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 검색 기능 -->
+                    <div style="margin-bottom:.75rem;margin-top:.75rem">
+                        <input type="text" id="invSearchInput" placeholder="🔍 품목명 검색..." 
+                            oninput="filterInventoryItems()"
+                            style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
                     </div>
                     
                     <!-- 장소 선택 필터 -->
-                    <div style="margin-bottom:.75rem;margin-top:.5rem">
+                    <div style="margin-bottom:.75rem">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
                             <label style="font-size:.85rem;font-weight:600;color:var(--text)">
                                 📍 실사 장소 선택
                             </label>
                             <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .6rem" onclick="openLocationManageModal()">장소 관리</button>
                         </div>
-                        <select id="invAuditLocationFilter" class="form-select" onchange="filterInvAuditByLocation()" style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
+                        <select id="invAuditLocationFilter" class="form-select" onchange="filterInventoryItems()" style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
                             <option value="">전체 장소 (모든 품목)</option>
                         </select>
                         <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.3rem">
                             장소를 선택하면 해당 장소에 있는 품목만 표시됩니다
+                        </div>
+                    </div>
+                    
+                    <!-- 정렬 옵션 -->
+                    <div style="margin-bottom:.75rem">
+                        <label style="font-size:.85rem;font-weight:600;color:var(--text);margin-bottom:.3rem;display:block">
+                            📊 정렬
+                        </label>
+                        <div style="display:flex;gap:.5rem">
+                            <select id="invSortBy" class="form-select" onchange="filterInventoryItems()" style="flex:1;padding:.5rem;border:1px solid var(--border);border-radius:6px;font-size:.85rem">
+                                <option value="name">이름순 (가나다)</option>
+                                <option value="location">장소순</option>
+                                <option value="stock-low">재고 적은순</option>
+                                <option value="stock-high">재고 많은순</option>
+                            </select>
                         </div>
                     </div>
                     
@@ -835,26 +859,27 @@
             </div>
             <div class="modal-body">
                 <!-- 새 장소 추가 -->
-                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:1rem">
-                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">➕ 새 장소 추가</div>
-                    <div style="display:flex;gap:.5rem;align-items:end">
+                <div style="background:var(--bg);border:1px solid var(--border);padding:1rem;border-radius:6px;margin-bottom:1rem">
+                    <div style="font-weight:600;font-size:.9rem;margin-bottom:.75rem;color:var(--text)">➕ 새 장소 추가</div>
+                    <div style="display:flex;gap:.75rem;align-items:end">
                         <div class="form-group" style="flex:1;margin:0">
-                            <label class="form-label" style="font-size:.8rem">층</label>
-                            <select class="form-select" id="newLocationFloor" style="padding:.5rem">
+                            <label class="form-label" style="font-size:.85rem;font-weight:600;margin-bottom:.4rem;display:block;color:var(--text)">층</label>
+                            <select class="form-select" id="newLocationFloor" style="padding:.7rem;font-size:.9rem;border:2px solid var(--border);border-radius:6px">
                                 <option value="5층">5층</option>
                                 <option value="6층" selected>6층</option>
                             </select>
                         </div>
                         <div class="form-group" style="flex:2;margin:0">
-                            <label class="form-label" style="font-size:.8rem">장소명</label>
-                            <input type="text" class="form-input" id="newLocationName" placeholder="예: 준비실, 레이저실" style="padding:.5rem">
+                            <label class="form-label" style="font-size:.85rem;font-weight:600;margin-bottom:.4rem;display:block;color:var(--text)">장소명</label>
+                            <input type="text" class="form-input" id="newLocationName" placeholder="예: 준비실, 레이저실" 
+                                style="padding:.7rem;font-size:.9rem;border:2px solid var(--border);border-radius:6px">
                         </div>
-                        <button class="btn btn-primary" onclick="addLocation()" style="padding:.5rem 1rem;white-space:nowrap">추가</button>
+                        <button class="btn btn-primary" onclick="addLocation()" style="padding:.7rem 1.2rem;font-size:.9rem;white-space:nowrap;font-weight:600">추가</button>
                     </div>
                 </div>
                 
                 <!-- 기존 장소 목록 -->
-                <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">📋 기존 장소 목록</div>
+                <div style="font-weight:600;font-size:.9rem;margin-bottom:.75rem;color:var(--text)">📋 기존 장소 목록</div>
                 <div id="locationsList" style="max-height:400px;overflow-y:auto"></div>
             </div>
             <div class="modal-footer">
@@ -2317,12 +2342,6 @@
             }catch(e){console.error('장소 로드:',e);}
         }
         
-        function filterInvAuditByLocation(){
-            const select=document.getElementById('invAuditLocationFilter');
-            currentAuditLocation=select?select.value:'';
-            renderInvAuditList();
-        }
-        
         // ===== 장소 관리 =====
         async function openLocationManageModal(){
             await loadLocationsList();
@@ -2497,21 +2516,56 @@
         function renderInvAuditList(){
             const container=document.getElementById('invAuditList');
             if(!container)return;
+            
             let items=invItems;
+            
+            // 검색 필터
+            const searchTerm = document.getElementById('invSearchInput')?.value?.trim().toLowerCase();
+            if(searchTerm){
+                items = items.filter(i => (i.name || '').toLowerCase().includes(searchTerm));
+            }
+            
+            // 카테고리 필터
             if(currentInvCat){
                 items=items.filter(i=>i.category===currentInvCat);
             }
+            
+            // 장소 필터
             if(currentAuditLocation){
                 items=items.filter(i=>{
-                    if(!i.locations)return false;
-                    const qty=i.locations[currentAuditLocation];
-                    return qty&&qty>0;
+                    // locations 객체 확인
+                    if(i.locations){
+                        const qty=i.locations[currentAuditLocation];
+                        return qty&&qty>0;
+                    }
+                    // 구 형식 location 필드 확인
+                    if(i.location === currentAuditLocation){
+                        return true;
+                    }
+                    return false;
                 });
             }
-            items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+            
+            // 정렬
+            const sortBy = document.getElementById('invSortBy')?.value || 'name';
+            if(sortBy === 'name'){
+                items.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+            }else if(sortBy === 'location'){
+                items.sort((a,b)=>{
+                    const locA = getFirstLocation(a);
+                    const locB = getFirstLocation(b);
+                    return locA.localeCompare(locB,'ko');
+                });
+            }else if(sortBy === 'stock-low'){
+                items.sort((a,b)=>(a.currentStock||0) - (b.currentStock||0));
+            }else if(sortBy === 'stock-high'){
+                items.sort((a,b)=>(b.currentStock||0) - (a.currentStock||0));
+            }
             
             if(!items.length){
-                const msg=currentAuditLocation?'선택한 장소에 품목이 없습니다.':'등록된 품목이 없습니다.';
+                const msg=searchTerm ? '검색 결과가 없습니다.' : 
+                          currentAuditLocation ? '선택한 장소에 품목이 없습니다.' : 
+                          '등록된 품목이 없습니다.';
                 container.innerHTML=`<div style="text-align:center;color:var(--text-muted);padding:2rem">${msg}</div>`;
                 return;
             }
@@ -2528,18 +2582,29 @@
                 const buyLink=item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" style="display:inline-block;background:#f0f0f0;color:#333;font-size:.65rem;padding:2px 6px;border-radius:3px;text-decoration:none;margin-left:4px;vertical-align:middle">🛒</a>`:'';
                 const lowBg=isLow?'background:rgba(255,152,0,0.08);border-left:3px solid #ff9800':'';
                 
-                // 위치 정보 처리
+                // 위치 정보 처리 - 개선
                 let locationInfo='';
-                if(currentAuditLocation&&item.locations&&item.locations[currentAuditLocation]){
-                    const locQty=item.locations[currentAuditLocation];
-                    locationInfo=`<span style="color:var(--primary);font-weight:600">📍 이 장소: ${locQty}${item.unit||'개'}</span>`;
+                if(currentAuditLocation){
+                    // 특정 장소 선택 시
+                    if(item.locations && item.locations[currentAuditLocation]){
+                        const locQty=item.locations[currentAuditLocation];
+                        locationInfo=`<span style="color:var(--primary);font-weight:600">📍 이 장소: ${locQty}${item.unit||'개'}</span>`;
+                    }else if(item.location === currentAuditLocation){
+                        locationInfo=`<span style="color:var(--primary);font-weight:600">📍 ${item.location}</span>`;
+                    }
                 }else{
-                    const locationsList = item.locations ? 
-                        Object.entries(item.locations)
+                    // 전체 보기 시 - 위치 정보 표시
+                    if(item.locations && Object.keys(item.locations).length > 0){
+                        const locList = Object.entries(item.locations)
                             .filter(([loc, qty]) => qty > 0)
-                            .map(([loc, qty]) => `${loc}(${qty})`).join(', ') 
-                        : '위치 미지정';
-                    locationInfo=locationsList;
+                            .map(([loc, qty]) => `${loc}(${qty})`)
+                            .join(', ');
+                        locationInfo = locList || '위치 미지정';
+                    }else if(item.location){
+                        locationInfo = item.location;
+                    }else{
+                        locationInfo = '위치 미지정';
+                    }
                 }
                 
                 return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
@@ -2548,8 +2613,8 @@
                         <div class="inv-item-meta">
                             <span>${catLabel}</span>
                             <span style="color:var(--text-secondary);font-size:.85rem">📍 ${locationInfo}</span>
-                            <span>시스템: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
-                            ${isLow?`<span style="color:var(--red)">안전재고: ${item.safetyStock}</span>`:''}
+                            <span>재고: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
+                            ${isLow?`<span style="color:var(--red)">안전: ${item.safetyStock}</span>`:''}
                             ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
                             <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">✏️ 수정</button>
                             <button onclick="deleteInventoryItem('${item.id}','${item.name.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--red);color:var(--red);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🗑️ 삭제</button>
@@ -2567,6 +2632,21 @@
             }).join('');
 
             updateInvProgress();
+        }
+        
+        // 품목의 첫 번째 장소 가져오기 (정렬용)
+        function getFirstLocation(item){
+            if(item.locations && Object.keys(item.locations).length > 0){
+                const locs = Object.keys(item.locations).filter(loc => item.locations[loc] > 0);
+                return locs.length > 0 ? locs[0] : '';
+            }
+            return item.location || '';
+        }
+        
+        // 통합 필터링 함수
+        function filterInventoryItems(){
+            currentAuditLocation = document.getElementById('invAuditLocationFilter')?.value || '';
+            renderInvAuditList();
         }
 
         function onInvInputLive(itemId,val){
@@ -2648,7 +2728,20 @@
         }
 
         async function initInventoryTab(){
-            await Promise.all([loadInventoryForStaff(),loadLastWeekAudits()]);
+            await Promise.all([loadInventoryForStaff(),loadLastWeekAudits(),loadReceivingLocations()]);
+            
+            // 장소 필터 초기화
+            const locFilter = document.getElementById('invAuditLocationFilter');
+            if(locFilter && receivingLocations.length > 0){
+                locFilter.innerHTML = '<option value="">전체 장소 (모든 품목)</option>';
+                receivingLocations.forEach(loc => {
+                    const opt = document.createElement('option');
+                    opt.value = `${loc.floor}-${loc.name}`;
+                    opt.textContent = `${loc.floor}-${loc.name}`;
+                    locFilter.appendChild(opt);
+                });
+            }
+            
             renderInvCatButtons();
             renderInvAuditList();
             renderLowStockAlert();
