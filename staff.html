@@ -791,18 +791,20 @@
                 <!-- 새 장소 추가 -->
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:1rem">
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">➕ 새 장소 추가</div>
-                    <div class="form-group" style="margin-bottom:.5rem">
-                        <label class="form-label" style="font-size:.8rem">층</label>
-                        <select class="form-select" id="newLocationFloor" style="padding:.6rem;font-size:.9rem">
-                            <option value="5층">5층</option>
-                            <option value="6층" selected>6층</option>
-                        </select>
+                    <div style="display:flex;gap:.5rem;align-items:end">
+                        <div class="form-group" style="flex:1;margin:0">
+                            <label class="form-label" style="font-size:.8rem">층</label>
+                            <select class="form-select" id="newLocationFloor" style="padding:.5rem">
+                                <option value="5층">5층</option>
+                                <option value="6층" selected>6층</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:2;margin:0">
+                            <label class="form-label" style="font-size:.8rem">장소명</label>
+                            <input type="text" class="form-input" id="newLocationName" placeholder="예: 준비실, 레이저실" style="padding:.5rem">
+                        </div>
+                        <button class="btn btn-primary" onclick="addLocation()" style="padding:.5rem 1rem;white-space:nowrap">추가</button>
                     </div>
-                    <div class="form-group" style="margin-bottom:.5rem">
-                        <label class="form-label" style="font-size:.8rem">장소명</label>
-                        <input type="text" class="form-input" id="newLocationName" placeholder="예: 준비실, 레이저실" style="padding:.6rem;font-size:.9rem">
-                    </div>
-                    <button class="btn btn-primary" onclick="addLocation()" style="width:100%;padding:.7rem;font-size:.9rem">추가</button>
                 </div>
                 
                 <!-- 기존 장소 목록 -->
@@ -2212,23 +2214,23 @@
                 let html='';
                 
                 if(floor5.length>0){
-                    html+=`<div style="font-weight:700;font-size:1rem;color:#333;margin-top:.5rem;padding:.7rem;background:#f8f9fa;border-radius:6px;border-left:4px solid var(--primary)">5층 (${floor5.length}개)</div>`;
+                    html+='<div style="font-weight:600;font-size:.8rem;color:var(--text-secondary);margin-top:.5rem;padding:.5rem;background:var(--bg);border-radius:4px">5층</div>';
                     floor5.forEach(loc=>{
-                        html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:.7rem;border-bottom:1px solid var(--border);background:#fff">
-                            <span style="font-size:.95rem;font-weight:500">${loc.name}</span>
+                        html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem;border-bottom:1px solid var(--border)">
+                            <span style="font-size:.9rem">${loc.name}</span>
                             <button onclick="deleteLocation('${loc.id}','${loc.name.replace(/'/g,"\\'")}')" 
-                                    style="background:var(--red);color:#fff;border:none;padding:.4rem .8rem;border-radius:4px;font-size:.8rem;cursor:pointer;font-weight:600">삭제</button>
+                                    style="background:var(--red);color:#fff;border:none;padding:.3rem .6rem;border-radius:4px;font-size:.75rem;cursor:pointer">삭제</button>
                         </div>`;
                     });
                 }
                 
                 if(floor6.length>0){
-                    html+=`<div style="font-weight:700;font-size:1rem;color:#333;margin-top:1rem;padding:.7rem;background:#f8f9fa;border-radius:6px;border-left:4px solid var(--primary)">6층 (${floor6.length}개)</div>`;
+                    html+='<div style="font-weight:600;font-size:.8rem;color:var(--text-secondary);margin-top:.5rem;padding:.5rem;background:var(--bg);border-radius:4px">6층</div>';
                     floor6.forEach(loc=>{
-                        html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:.7rem;border-bottom:1px solid var(--border);background:#fff">
-                            <span style="font-size:.95rem;font-weight:500">${loc.name}</span>
+                        html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem;border-bottom:1px solid var(--border)">
+                            <span style="font-size:.9rem">${loc.name}</span>
                             <button onclick="deleteLocation('${loc.id}','${loc.name.replace(/'/g,"\\'")}')" 
-                                    style="background:var(--red);color:#fff;border:none;padding:.4rem .8rem;border-radius:4px;font-size:.8rem;cursor:pointer;font-weight:600">삭제</button>
+                                    style="background:var(--red);color:#fff;border:none;padding:.3rem .6rem;border-radius:4px;font-size:.75rem;cursor:pointer">삭제</button>
                         </div>`;
                     });
                 }
@@ -2783,12 +2785,19 @@
                     sel.appendChild(opt);
                 });
             }else{
-                // 장소가 없으면 안내 메시지
-                const opt=document.createElement('option');
-                opt.value='';
-                opt.textContent='장소를 먼저 등록해주세요 (장소 관리)';
-                opt.disabled=true;
-                sel.appendChild(opt);
+                // 기본 장소 (DB 로드 실패 시 fallback)
+                const defaults=[
+                    '5층-처치실','5층-냉장고',
+                    '6층-시술실','6층-수액실','6층-줄기세포센터','6층-수술실',
+                    '6층-준비실','6층-준비실옆보관실','6층-준비실 냉장고',
+                    '6층-어븀실','6층-레이저실','6층-리팟실'
+                ];
+                defaults.forEach(loc=>{
+                    const opt=document.createElement('option');
+                    opt.value=loc;
+                    opt.textContent=loc;
+                    sel.appendChild(opt);
+                });
             }
         }
         
