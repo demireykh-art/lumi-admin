@@ -275,7 +275,7 @@
                     <div class="info-row"><span class="info-label">남은 금액</span><span class="info-value" id="mealRemain" style="color:var(--green);font-weight:700">₩300,000</span></div>
                     <div class="progress-bar"><div class="progress-fill" id="mealProgress" style="width:0%"></div></div>
                 </div>
-                <button class="btn btn-primary" onclick="openMealModal()">🍽 식사 정산</button>
+                <button class="btn btn-primary" onclick="openPersonalMealModal()">🍽 개인 식사 입력</button>
                 <div class="card">
                     <div class="card-title">이번 달 식사 내역</div>
                     <div id="mealList"><div style="text-align:center;color:var(--text-muted);padding:1rem">내역이 없습니다</div></div>
@@ -559,6 +559,40 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('mealModal')" style="flex:1">취소</button>
                 <button class="btn btn-primary" id="mealSaveBtn" onclick="saveMealGroup()" style="flex:2">정산 저장</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 개인 식사 입력 모달 -->
+    <div class="modal" id="personalMealModal">
+        <div class="modal-content" style="max-width:400px">
+            <div class="modal-header">
+                <div class="modal-title">🍽 개인 식사 입력</div>
+                <button class="modal-close" onclick="closeModal('personalMealModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">날짜 *</label>
+                    <input type="date" class="form-input" id="personalMealDate">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">금액 (원) *</label>
+                    <input type="number" class="form-input" id="personalMealAmount" min="0" placeholder="예: 12000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">메모</label>
+                    <input type="text" class="form-input" id="personalMealMemo" placeholder="예: 점심 - 김치찌개">
+                </div>
+                <div style="background:var(--bg);padding:.75rem;border-radius:6px;margin-top:.5rem">
+                    <div style="font-size:.75rem;color:var(--text-muted);line-height:1.5">
+                        💡 개인 식사 입력은 본인 계정에서만 가능하며,<br>
+                        30만원 한도에서 자동으로 차감됩니다.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('personalMealModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" onclick="savePersonalMeal()" style="flex:2">입력</button>
             </div>
         </div>
     </div>
@@ -1070,7 +1104,8 @@
             
             // ═══ 계정별 탭 노출 ═══
             if(shared){
-                displayTabs(['inventory','receiving','meal','wishlist']);
+                // 공용계정: 재고, 입고, 비품 요청만 (식사 제거)
+                displayTabs(['inventory','receiving','wishlist']);
             }else{
                 // 개인계정: visibleTabs 우선, 없으면 기본값
                 if(currentUser.visibleTabs&&currentUser.visibleTabs.length>0){
@@ -1883,6 +1918,94 @@
             document.getElementById('mealSplitDetail').innerHTML='';
             document.getElementById('mealValidation').innerHTML='';
             openModal('mealModal');
+        }
+        
+        // ===== 개인 식사 입력 =====
+        function openPersonalMealModal(){
+            document.getElementById('personalMealDate').value=getToday();
+            document.getElementById('personalMealAmount').value='';
+            document.getElementById('personalMealMemo').value='';
+            openModal('personalMealModal');
+        }
+        
+        async function savePersonalMeal(){
+            const date=document.getElementById('personalMealDate').value;
+            const amount=parseInt(document.getElementById('personalMealAmount').value)||0;
+            const memo=document.getElementById('personalMealMemo').value.trim();
+            
+            if(!date || !amount){
+                alert('날짜와 금액을 입력해주세요.');
+                return;
+            }
+            
+            if(amount <= 0){
+                alert('금액은 0보다 커야 합니다.');
+                return;
+            }
+            
+            console.log('📝 개인 식사 입력 시작:', {date, amount, memo});
+            
+            try{
+                await db.runTransaction(async tx=>{
+                    // 1) 직원 문서 읽기
+                    const ref=db.collection('employees').doc(currentUser.id);
+                    const doc=await tx.get(ref);
+                    
+                    if(!doc.exists){
+                        throw new Error('직원 정보를 찾을 수 없습니다.');
+                    }
+                    
+                    const data=doc.data();
+                    const curAllowance=data.foodAllowance!=null?data.foodAllowance:300000;
+                    
+                    // 2) 잔액 검증
+                    if(amount > curAllowance){
+                        throw new Error(`잔액 부족 (잔액 ${curAllowance.toLocaleString()}원, 차감 ${amount.toLocaleString()}원)`);
+                    }
+                    
+                    // 3) 잔액 차감
+                    tx.update(ref, {
+                        foodAllowance: curAllowance - amount
+                    });
+                    
+                    // 4) mealRecords 생성
+                    const record = {
+                        employeeId: currentUser.id,
+                        employeeName: currentUser.name,
+                        date: date,
+                        amount: amount,
+                        memo: memo || '개인 식사',
+                        yearMonth: date.substring(0, 7),
+                        groupId: null, // 개인 입력은 groupId 없음
+                        totalAmount: amount,
+                        splitMode: 'personal', // 개인 입력 표시
+                        headCount: 1,
+                        createdBy: currentUser.name || currentUser.id,
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    console.log('📄 mealRecord 생성:', record);
+                    
+                    const mealRef = db.collection('mealRecords').doc();
+                    tx.set(mealRef, record);
+                });
+                
+                console.log('✅ Firebase 트랜잭션 완료');
+                
+                // 데이터 리로드
+                await loadMealRecords();
+                await loadAllData(); // 잔액 업데이트
+                renderMeal();
+                
+                console.log('✅ 데이터 리로드 완료');
+                
+                closeModal('personalMealModal');
+                alert(`✅ 개인 식사가 입력되었습니다.\n\n금액: ${amount.toLocaleString()}원`);
+                
+            }catch(e){
+                console.error('❌ 개인 식사 입력 실패:', e);
+                alert('입력 실패: '+e.message+'\n\n다시 시도해주세요.');
+            }
         }
 
         let mealMode='even'; // 'even' or 'manual'
