@@ -348,6 +348,7 @@ function processFile(file){
                     monthlyData[ym]={
                         total:0,japan:0,nonInsurance:0,transactions:0,
                         patients:new Set(),nonInsurancePatients:new Set(),
+                        japanPatients:new Set(),  // 총 일본인 내원객 (차트번호 기준)
                         doctorSales:{},staffSales:{},
                         japanCharts:{},japanStaffSales:{},
                         treatmentCounts:{}
@@ -398,18 +399,25 @@ function processFile(file){
                 // 일본인 매출
                 if(nationality&&String(nationality).includes('일본')){
                     monthlyData[ym].japan+=amount;
+                    
+                    // 총 일본인 내원객 추적 (차트번호 기준 중복 제거)
                     if(chartNo){
+                        monthlyData[ym].japanPatients.add(chartNo);
+                        
                         if(!monthlyData[ym].japanCharts[chartNo]){
                             monthlyData[ym].japanCharts[chartNo]={amount:0,staff:staff||'미지정'};
                         }
                         monthlyData[ym].japanCharts[chartNo].amount+=amount;
                     }
+                    
                     const staffKey=staff||'미지정';
                     if(!monthlyData[ym].japanStaffSales[staffKey]){
-                        monthlyData[ym].japanStaffSales[staffKey]={patients:new Set(),amount:0};
+                        monthlyData[ym].japanStaffSales[staffKey]={
+                            totalPatients:0,  // 총 일본인 내원객 수 (나중에 채움)
+                            amount:0
+                        };
                     }
                     monthlyData[ym].japanStaffSales[staffKey].amount+=amount;
-                    if(chartNo)monthlyData[ym].japanStaffSales[staffKey].patients.add(chartNo);
                 }
                 
                 // 시술명(오더명)별 횟수 집계 - 재고 차감/손익 계산용
@@ -457,11 +465,12 @@ function processFile(file){
                         niPatients:data.niPatients?data.niPatients.size:0
                     };
                 }
-                // japanStaffSales의 Set을 숫자로 변환
+                // japanStaffSales 저장 - 총 일본인 내원객 수 적용
+                const totalJapanPatients = d.japanPatients.size;  // 총 일본인 내원객 수
                 const japanStaffSalesForDB={};
                 for(const[staff,data]of Object.entries(d.japanStaffSales||{})){
                     japanStaffSalesForDB[staff]={
-                        patients:data.patients.size,
+                        patients:totalJapanPatients,  // 모든 담당자에게 동일한 총 내원객 수
                         amount:data.amount
                     };
                 }
