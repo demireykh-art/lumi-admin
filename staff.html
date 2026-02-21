@@ -141,15 +141,22 @@
         .inv-cat-btn.active{border-color:var(--primary);background:var(--primary);color:#fff}
         .inv-cat-btn .cat-icon{font-size:1.2rem;display:block;margin-bottom:.2rem}
         .inv-cat-btn .cat-count{font-size:.7rem;font-weight:400;opacity:.7}
-        .inv-item-row{background:var(--bg-card);border:1px solid var(--border);padding:1rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem;border-radius:6px}
+        .inv-item-row{background:var(--bg-card);border:1px solid var(--border);padding:1rem;margin-bottom:.5rem;border-radius:6px}
         .inv-item-row.saved{border-color:var(--green);background:rgba(90,122,90,.05)}
+        .inv-item-row-header{display:flex;align-items:flex-start;gap:.75rem}
         .inv-item-info{flex:1;min-width:0}
         .inv-item-name{font-weight:600;font-size:.9rem;margin-bottom:.2rem}
         .inv-item-meta{font-size:.75rem;color:var(--text-muted);display:flex;gap:.75rem;flex-wrap:wrap}
         .inv-item-meta span{white-space:nowrap}
-        .inv-stock-input{width:80px;padding:.6rem;border:1px solid var(--border);font-size:1rem;text-align:center;font-weight:600;border-radius:4px;background:#fff}
+        /* 장소별 실사 입력 영역 */
+        .inv-loc-inputs{margin-top:.6rem;display:flex;flex-direction:column;gap:.35rem}
+        .inv-loc-input-row{display:flex;align-items:center;gap:.5rem;padding:.35rem .5rem;background:var(--bg);border:1px solid var(--border);border-radius:5px}
+        .inv-loc-input-row.loc-filled{border-color:var(--green);background:rgba(90,122,90,.06)}
+        .inv-loc-label{flex:1;font-size:.78rem;color:var(--text-secondary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .inv-loc-sys{font-size:.75rem;color:var(--text-muted);min-width:38px;text-align:right;white-space:nowrap}
+        .inv-stock-input{width:70px;padding:.4rem .3rem;border:1px solid var(--border);font-size:.95rem;text-align:center;font-weight:600;border-radius:4px;background:#fff;flex-shrink:0}
         .inv-stock-input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(154,139,122,.2)}
-        .inv-stock-unit{font-size:.8rem;color:var(--text-muted);min-width:25px}
+        .inv-stock-unit{font-size:.78rem;color:var(--text-muted);min-width:20px;flex-shrink:0}
         .inv-progress{display:flex;align-items:center;gap:.5rem;padding:.75rem 1rem;background:var(--bg-card);border:1px solid var(--border);margin-bottom:1rem;border-radius:6px;font-size:.85rem}
         .inv-progress-bar{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
         .inv-progress-fill{height:100%;background:var(--green);transition:width .3s}
@@ -159,25 +166,28 @@
         .inv-submit-btn.disabled{background:var(--border);color:var(--text-muted);pointer-events:none}
         /* 태블릿/아이패드 반응형 */
         @media(min-width:768px){
-            .inv-item-row{padding:.8rem 1rem;display:grid;grid-template-columns:1fr 110px 40px;align-items:center;gap:.75rem}
+            .inv-item-row{padding:.8rem 1rem}
             .inv-item-name{font-size:1rem}
             .inv-item-meta{font-size:.8rem;gap:1rem;flex-wrap:nowrap}
-            .inv-stock-input{width:110px;font-size:1.1rem;padding:.6rem}
+            .inv-stock-input{width:80px;font-size:1rem;padding:.45rem}
             .inv-cat-btn{padding:.8rem 1.2rem;font-size:.95rem}
             .inv-cat-btn .cat-icon{font-size:1.4rem}
             .inv-cat-filters{gap:.5rem}
             .card{padding:1.2rem}
             .bottom-nav{padding:.5rem 1rem;gap:.5rem}
             .nav-item{font-size:.75rem;padding:.5rem .5rem}
+            .inv-loc-input-row{padding:.4rem .6rem}
+            .inv-loc-label{font-size:.82rem}
+            .inv-stock-input{width:82px}
         }
         /* 아이패드 가로모드 최적화 */
         @media(min-width:1024px){
             .inv-cat-btn{padding:1rem 1.5rem;font-size:1.05rem;min-width:120px}
             .inv-cat-btn .cat-icon{font-size:1.6rem}
-            .inv-item-row{grid-template-columns:1fr 130px 50px;padding:1rem 1.5rem}
+            .inv-item-row{padding:1rem 1.5rem}
             .inv-item-name{font-size:1.1rem}
             .inv-item-meta{font-size:.85rem;gap:1.2rem}
-            .inv-stock-input{width:130px;font-size:1.2rem;padding:.7rem}
+            .inv-stock-input{width:90px;font-size:1.05rem;padding:.5rem}
         }
     </style>
 </head>
@@ -2312,7 +2322,7 @@
         const INV_CATEGORIES={nursing:'간호',skin:'피부',desk:'데스크',common:'공통'};
         const CAT_ICONS={nursing:'💉',skin:'✨',desk:'🖥️',common:'📎'};
         let invItems=[];
-        let auditInputs={}; // {itemId: value}
+        let auditInputs={}; // {itemId: {locId: qty, ...}} - 장소별 실사값
         let lastWeekAudits={}; // {itemId: lastAuditData}
         let currentInvCat=''; // '' = 전체
         let currentAuditLocation=''; // '' = 전체 장소
@@ -2574,60 +2584,78 @@
                 const lastAudit=lastWeekAudits[item.id];
                 const lastQty=lastAudit?lastAudit.actualStock:null;
                 const lastDate=lastAudit?new Date(lastAudit.createdAt).toLocaleDateString('ko-KR',{month:'short',day:'numeric'}):'';
-                const val=auditInputs[item.id];
-                const isSaved=val!=null&&val!=='';
+                const itemAuditInputs=auditInputs[item.id]||{};
+                const isSaved=Object.values(itemAuditInputs).some(v=>v!=null&&v!=='');
                 const catLabel=INV_CATEGORIES[item.category]||'';
                 const isLow=item.safetyStock&&item.currentStock<item.safetyStock;
                 const sysStock=item.currentStock||0;
                 const buyLink=item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" style="display:inline-block;background:#f0f0f0;color:#333;font-size:.65rem;padding:2px 6px;border-radius:3px;text-decoration:none;margin-left:4px;vertical-align:middle">🛒</a>`:'';
                 const lowBg=isLow?'background:rgba(255,152,0,0.08);border-left:3px solid #ff9800':'';
-                
-                // 위치 정보 처리 - 개선
-                let locationInfo='';
-                if(currentAuditLocation){
-                    // 특정 장소 선택 시
-                    if(item.locations && item.locations[currentAuditLocation]){
-                        const locQty=item.locations[currentAuditLocation];
-                        locationInfo=`<span style="color:var(--primary);font-weight:600">📍 이 장소: ${locQty}${item.unit||'개'}</span>`;
-                    }else if(item.location === currentAuditLocation){
-                        locationInfo=`<span style="color:var(--primary);font-weight:600">📍 ${item.location}</span>`;
-                    }
+
+                // 장소별 실사 입력 rows 생성
+                let locRows='';
+                const itemLocs=item.locations&&Object.keys(item.locations).length>0?item.locations:{};
+                const hasLocData=Object.keys(itemLocs).length>0;
+
+                if(hasLocData){
+                    const sortedLocs=Object.entries(itemLocs)
+                        .sort(([aId],[bId])=>{
+                            const aIs5=aId.startsWith('5층')?0:1;
+                            const bIs5=bId.startsWith('5층')?0:1;
+                            if(aIs5!==bIs5)return aIs5-bIs5;
+                            return aId.localeCompare(bId,'ko');
+                        });
+                    locRows=sortedLocs.map(([locId,sysQty])=>{
+                        const safeLocId=locId.replace(/[^a-zA-Z0-9]/g,'_');
+                        const inputVal=itemAuditInputs[locId];
+                        const isFilled=inputVal!=null&&inputVal!=='';
+                        return `<div class="inv-loc-input-row${isFilled?' loc-filled':''}" id="inv-loc-row-${item.id}-${safeLocId}">
+                            <span class="inv-loc-label">📍 ${locId}</span>
+                            <span class="inv-loc-sys">시스템: ${sysQty}</span>
+                            <input type="number" class="inv-stock-input"
+                                id="inv-input-${item.id}-${safeLocId}"
+                                placeholder="-" step="0.01" min="0"
+                                value="${inputVal!=null?inputVal:''}"
+                                onchange="onInvInput('${item.id}','${locId.replace(/'/g,"\\'")}',this.value)"
+                                oninput="onInvInputLive('${item.id}','${locId.replace(/'/g,"\\'")}',this.value)"
+                                inputmode="decimal">
+                            <span class="inv-stock-unit">${item.unit||'개'}</span>
+                        </div>`;
+                    }).join('');
                 }else{
-                    // 전체 보기 시 - 위치 정보 표시
-                    if(item.locations && Object.keys(item.locations).length > 0){
-                        const locList = Object.entries(item.locations)
-                            .filter(([loc, qty]) => qty > 0)
-                            .map(([loc, qty]) => `${loc}(${qty})`)
-                            .join(', ');
-                        locationInfo = locList || '위치 미지정';
-                    }else if(item.location){
-                        locationInfo = item.location;
-                    }else{
-                        locationInfo = '위치 미지정';
-                    }
+                    // 구형 단일 위치 데이터
+                    const inputVal=itemAuditInputs['__total__'];
+                    const isFilled=inputVal!=null&&inputVal!=='';
+                    const locLabel=item.location||'위치 미지정';
+                    locRows=`<div class="inv-loc-input-row${isFilled?' loc-filled':''}" id="inv-loc-row-${item.id}-__total__">
+                        <span class="inv-loc-label">📍 ${locLabel}</span>
+                        <span class="inv-loc-sys">시스템: ${sysStock}</span>
+                        <input type="number" class="inv-stock-input"
+                            id="inv-input-${item.id}-__total__"
+                            placeholder="-" step="0.01" min="0"
+                            value="${inputVal!=null?inputVal:''}"
+                            onchange="onInvInput('${item.id}','__total__',this.value)"
+                            oninput="onInvInputLive('${item.id}','__total__',this.value)"
+                            inputmode="decimal">
+                        <span class="inv-stock-unit">${item.unit||'개'}</span>
+                    </div>`;
                 }
-                
+
                 return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
-                    <div class="inv-item-info">
-                        <div class="inv-item-name">${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':''}</div>
-                        <div class="inv-item-meta">
-                            <span>${catLabel}</span>
-                            <span style="color:var(--text-secondary);font-size:.85rem">📍 ${locationInfo}</span>
-                            <span>재고: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
-                            ${isLow?`<span style="color:var(--red)">안전: ${item.safetyStock}</span>`:''}
-                            ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
-                            <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">✏️ 수정</button>
-                            <button onclick="deleteInventoryItem('${item.id}','${item.name.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--red);color:var(--red);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🗑️ 삭제</button>
+                    <div class="inv-item-row-header">
+                        <div class="inv-item-info">
+                            <div class="inv-item-name">${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':'' }</div>
+                            <div class="inv-item-meta">
+                                <span>${catLabel}</span>
+                                <span>총 재고: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
+                                ${isLow?`<span style="color:var(--red)">안전: ${item.safetyStock}</span>`:''}
+                                ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
+                                <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">✏️ 수정</button>
+                                <button onclick="deleteInventoryItem('${item.id}','${item.name.replace(/'/g,"\\'")}' )" style="background:none;border:1px solid var(--red);color:var(--red);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🗑️ 삭제</button>
+                            </div>
                         </div>
                     </div>
-                    <input type="number" class="inv-stock-input" 
-                        id="inv-input-${item.id}"
-                        placeholder="-" step="0.01" min="0"
-                        value="${val!=null?val:''}"
-                        onchange="onInvInput('${item.id}',this.value)"
-                        oninput="onInvInputLive('${item.id}',this.value)"
-                        inputmode="decimal">
-                    <span class="inv-stock-unit">${item.unit||'개'}</span>
+                    <div class="inv-loc-inputs">${locRows}</div>
                 </div>`;
             }).join('');
 
@@ -2649,25 +2677,37 @@
             renderInvAuditList();
         }
 
-        function onInvInputLive(itemId,val){
+        function onInvInputLive(itemId,locId,val){
+            if(!auditInputs[itemId])auditInputs[itemId]={};
             if(val===''||val==null){
-                delete auditInputs[itemId];
+                delete auditInputs[itemId][locId];
+                if(Object.keys(auditInputs[itemId]).length===0)delete auditInputs[itemId];
             }else{
-                auditInputs[itemId]=parseFloat(val);
+                auditInputs[itemId][locId]=parseFloat(val);
+            }
+            // 행 입력 색상 업데이트
+            const safeLocId=locId.replace(/[^a-zA-Z0-9]/g,'_');
+            const locRow=document.getElementById('inv-loc-row-'+itemId+'-'+safeLocId);
+            if(locRow){
+                if(val!==''&&val!=null)locRow.classList.add('loc-filled');
+                else locRow.classList.remove('loc-filled');
             }
             const row=document.getElementById('inv-row-'+itemId);
             if(row){
-                if(val!==''&&val!=null)row.classList.add('saved');
+                const hasFilled=auditInputs[itemId]&&Object.values(auditInputs[itemId]).some(v=>v!=null&&v!=='');
+                if(hasFilled)row.classList.add('saved');
                 else row.classList.remove('saved');
             }
             updateInvProgress();
         }
 
         function updateInvProgress(){
-            const totalItems=currentInvCat?invItems.filter(i=>i.category===currentInvCat).length:invItems.length;
-            const filledItems=currentInvCat
-                ?invItems.filter(i=>i.category===currentInvCat&&auditInputs[i.id]!=null).length
-                :Object.keys(auditInputs).length;
+            const visibleItems=currentInvCat?invItems.filter(i=>i.category===currentInvCat):invItems;
+            const totalItems=visibleItems.length;
+            // 하나라도 장소 입력된 품목 수
+            const filledItems=visibleItems.filter(i=>auditInputs[i.id]&&Object.keys(auditInputs[i.id]).length>0).length;
+            // 총 입력된 장소-품목 쌍 수
+            const totalLocEntries=Object.values(auditInputs).reduce((s,locs)=>s+Object.keys(locs).length,0);
             const pct=totalItems?Math.round(filledItems/totalItems*100):0;
             const fill=document.getElementById('invProgressFill');
             const text=document.getElementById('invProgressText');
@@ -2675,16 +2715,16 @@
             if(fill)fill.style.width=pct+'%';
             if(text)text.textContent=filledItems+'/'+totalItems;
             if(btn){
-                if(filledItems>0){btn.classList.remove('disabled');btn.classList.add('ready');btn.textContent=`실사 결과 제출 (${filledItems}건)`;}
+                if(totalLocEntries>0){btn.classList.remove('disabled');btn.classList.add('ready');btn.textContent=`실사 결과 제출 (${totalLocEntries}건)` ;}
                 else{btn.classList.add('disabled');btn.classList.remove('ready');btn.textContent='실사 결과 제출';}
             }
         }
 
         // 개별 품목 즉시 저장 (onchange 시 Firebase 트랜잭션)
-        async function onInvInput(itemId,val){
-            onInvInputLive(itemId,val);
+        async function onInvInput(itemId,locId,val){
+            onInvInputLive(itemId,locId,val);
             if(val===''||val==null)return;
-            const actualStock=parseFloat(val);
+            const locQty=parseFloat(val);
             const item=invItems.find(i=>i.id===itemId);
             if(!item)return;
             const staffName=currentUser?.name||currentUser?.id||'staff';
@@ -2692,34 +2732,54 @@
                 const ref=db.collection('inventory').doc(itemId);
                 await db.runTransaction(async tx=>{
                     const doc=await tx.get(ref);
-                    const prevStock=doc.data()?.currentStock||0;
-                    tx.update(ref,{currentStock:actualStock,lastAuditAt:new Date().toISOString(),lastAuditBy:staffName});
-                    // inventoryLogs 기록
-                    const logRef=db.collection('inventoryLogs').doc();
-                    tx.set(logRef,{
-                        itemId,itemName:item.name,
-                        prevStock,newStock:actualStock,diff:actualStock-prevStock,
-                        type:'audit',staffName,
-                        createdAt:new Date().toISOString()
-                    });
+                    const data=doc.data()||{};
+                    const prevStock=data.currentStock||0;
+                    // locations 업데이트
+                    let newLocations={...(data.locations||{})};
+                    if(locId==='__total__'){
+                        // 구형: 총량으로 저장
+                        const newTotal=locQty;
+                        tx.update(ref,{currentStock:newTotal,lastAuditAt:new Date().toISOString(),lastAuditBy:staffName});
+                        // inventoryLogs
+                        const logRef=db.collection('inventoryLogs').doc();
+                        tx.set(logRef,{itemId,itemName:item.name,prevStock,newStock:newTotal,diff:newTotal-prevStock,type:'audit',staffName,createdAt:new Date().toISOString()});
+                    }else{
+                        // 신형: 해당 장소 수량 업데이트 → 총량 재계산
+                        newLocations[locId]=locQty;
+                        const newTotal=Object.values(newLocations).reduce((s,q)=>s+(q||0),0);
+                        tx.update(ref,{locations:newLocations,currentStock:newTotal,lastAuditAt:new Date().toISOString(),lastAuditBy:staffName});
+                        // 로컬 locations도 업데이트
+                        if(!item.locations)item.locations={};
+                        item.locations[locId]=locQty;
+                        // inventoryLogs
+                        const logRef=db.collection('inventoryLogs').doc();
+                        tx.set(logRef,{itemId,itemName:item.name,location:locId,prevLocQty:(data.locations||{})[locId]||0,newLocQty:locQty,prevStock,newStock:newTotal,diff:newTotal-prevStock,type:'audit',staffName,createdAt:new Date().toISOString()});
+                    }
                 });
-                // inventoryAudits에도 기록 (관리자 리포트용)
+                // inventoryAudits 기록 (장소 정보 포함)
+                const allLocInputs=auditInputs[itemId]||{};
+                const totalAuditQty=Object.values(allLocInputs).reduce((s,q)=>s+(parseFloat(q)||0),0);
                 await db.collection('inventoryAudits').add({
-                    itemId,actualStock,
+                    itemId,location:locId,locationQty:locQty,actualStock:totalAuditQty,
                     staffId:currentUser?.id||'unknown',staffName,
                     createdAt:new Date().toISOString()
                 });
-                // 로컬 데이터 동기화
-                if(item)item.currentStock=actualStock;
+                // 로컬 총재고 동기화
+                if(locId!=='__total__'){
+                    item.currentStock=Object.values(item.locations||{}).reduce((s,q)=>s+(q||0),0);
+                }else{
+                    item.currentStock=locQty;
+                }
                 const row=document.getElementById('inv-row-'+itemId);
                 if(row)row.classList.add('saved');
             }catch(e){console.error('실사 저장 오류:',e);}
         }
 
         async function submitInventoryAudit(){
-            const entries=Object.entries(auditInputs).filter(([k,v])=>v!=null&&v!=='');
-            if(!entries.length){alert('입력된 실사 데이터가 없습니다.');return;}
-            alert('✅ '+entries.length+'개 품목 실사 완료!\n\n각 품목은 입력 즉시 시스템에 반영되었습니다.');
+            const filledItems=Object.keys(auditInputs).length;
+            const totalLocEntries=Object.values(auditInputs).reduce((s,locs)=>s+Object.keys(locs).length,0);
+            if(!totalLocEntries){alert('입력된 실사 데이터가 없습니다.');return;}
+            alert(`✅ ${filledItems}개 품목 / ${totalLocEntries}개 장소 실사 완료!\n\n각 항목은 입력 즉시 시스템에 반영되었습니다.`);
             auditInputs={};
             await loadInventoryForStaff();
             await loadLastWeekAudits();
