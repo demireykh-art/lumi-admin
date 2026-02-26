@@ -531,30 +531,40 @@
         </nav>
     </div>
     
-    <!-- 점심 OT 모달 -->
+    <!-- 점심 OT 모달 v2.0 -->
     <div class="modal" id="lunchOTModal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width:380px">
             <div class="modal-header">
-                <div class="modal-title">점심 OT 입력</div>
+                <div class="modal-title">🍽️ 점심시간 OT 입력</div>
                 <button class="modal-close" onclick="closeModal('lunchOTModal')">&times;</button>
             </div>
             <div class="modal-body">
+                <div id="lunchOTDayHint" style="font-size:.8rem;padding:.4rem .7rem;background:var(--bg);border-radius:6px;color:var(--text-muted);margin-bottom:.9rem"></div>
                 <div class="form-group">
                     <label class="form-label">날짜</label>
-                    <input type="date" class="form-input" id="lunchOTDate">
+                    <input type="date" class="form-input" id="lunchOTDate" onchange="updateLunchOTHint()">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">시간 (분)</label>
-                    <input type="number" class="form-input" id="lunchOTMinutes" value="30" min="0" max="60">
+                    <label class="form-label">점심시간 사용 (분) <span style="font-size:.75rem;font-weight:400;color:var(--text-muted)">— 기준시간 초과분만 OT</span></label>
+                    <div style="display:flex;gap:.5rem;align-items:center">
+                        <input type="number" class="form-input" id="lunchOTMinutes" value="30" min="1" max="120" inputmode="numeric" style="flex:1;font-size:1.05rem;text-align:center;font-weight:700">
+                        <span style="color:var(--text-muted)">분</span>
+                    </div>
+                    <div style="display:flex;gap:.4rem;margin-top:.5rem">
+                        <button type="button" onclick="document.getElementById('lunchOTMinutes').value=10" style="flex:1;padding:.35rem;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;font-size:.8rem">10</button>
+                        <button type="button" onclick="document.getElementById('lunchOTMinutes').value=20" style="flex:1;padding:.35rem;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;font-size:.8rem">20</button>
+                        <button type="button" onclick="document.getElementById('lunchOTMinutes').value=30" style="flex:1;padding:.35rem;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;font-size:.8rem">30</button>
+                        <button type="button" onclick="document.getElementById('lunchOTMinutes').value=60" style="flex:1;padding:.35rem;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;font-size:.8rem">60</button>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">사유</label>
-                    <input type="text" class="form-input" id="lunchOTReason" placeholder="예: 점심시간 업무">
+                <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">사유 (선택)</label>
+                    <input type="text" class="form-input" id="lunchOTReason" placeholder="예: 점심시간 업무 처리">
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('lunchOTModal')">취소</button>
-                <button class="btn btn-primary" onclick="saveLunchOT()">저장</button>
+                <button class="btn btn-secondary" onclick="closeModal('lunchOTModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" onclick="saveLunchOT()" style="flex:2">저장</button>
             </div>
         </div>
     </div>
@@ -787,6 +797,66 @@
         </div>
     </div>
 
+    <!-- 재고 품목 입고 모달 -->
+    <div class="modal" id="receiveItemModal">
+        <div class="modal-content" style="max-width:440px">
+            <div class="modal-header">
+                <div class="modal-title">📥 품목 입고</div>
+                <button class="modal-close" onclick="closeModal('receiveItemModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="receiveItemId">
+                <div class="form-group">
+                    <label class="form-label">품목명</label>
+                    <input type="text" class="form-input" id="receiveItemName" disabled style="background:#f5f5f5;font-weight:600">
+                </div>
+                <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+                    <div class="form-group" style="flex:1;margin-bottom:0">
+                        <label class="form-label">입고일 *</label>
+                        <input type="date" class="form-input" id="receiveDate">
+                    </div>
+                    <div class="form-group" style="flex:1;margin-bottom:0">
+                        <label class="form-label">유통기한</label>
+                        <input type="date" class="form-input" id="receiveExpiry">
+                    </div>
+                </div>
+                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:.75rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                        <label class="form-label" style="margin:0;font-weight:600">📍 장소별 입고 수량 <span style="font-size:.72rem;color:var(--text-muted);font-weight:400">(기존 재고에 추가됨)</span></label>
+                        <button type="button" class="btn btn-secondary" onclick="addReceiveLocationRow()" style="font-size:.75rem;padding:.3rem .6rem">+ 장소 추가</button>
+                    </div>
+                    <div id="receiveLocationsList"></div>
+                    <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:4px;text-align:center;font-size:.85rem">
+                        총 입고량: <strong id="receiveTotalDisplay" style="color:var(--green)">0</strong>개
+                    </div>
+                </div>
+                <div id="receiveCurrentStock" style="font-size:.8rem;color:var(--text-muted);padding:.5rem .75rem;background:var(--bg);border-radius:4px;margin-bottom:.75rem"></div>
+                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px">
+                    <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보 (선택)</div>
+                    <div style="display:flex;gap:.5rem">
+                        <div class="form-group" style="flex:1;margin-bottom:0">
+                            <label class="form-label" style="font-size:.75rem">구매 총액 (원)</label>
+                            <input type="number" class="form-input" id="receivePrice" min="0" placeholder="0" oninput="calcReceiveUnit()">
+                        </div>
+                        <div class="form-group" style="flex:1;margin-bottom:0">
+                            <label class="form-label" style="font-size:.75rem">박스 수</label>
+                            <input type="number" class="form-input" id="receiveBoxes" min="1" value="1" oninput="calcReceiveUnit()">
+                        </div>
+                        <div class="form-group" style="flex:1;margin-bottom:0">
+                            <label class="form-label" style="font-size:.75rem">박스당 낱개</label>
+                            <input type="number" class="form-input" id="receivePerBox" min="1" value="1" oninput="calcReceiveUnit()">
+                        </div>
+                    </div>
+                    <div id="receiveUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:4px;font-size:.85rem;font-weight:600;color:var(--primary);margin-top:.4rem">낱개당 단가: -</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('receiveItemModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" onclick="saveReceiveItem()" style="flex:2;background:var(--green)">📥 입고 완료</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 재고 품목 수정 모달 -->
     <div class="modal" id="editItemModal">
         <div class="modal-content" style="max-width:440px">
@@ -941,10 +1011,46 @@
         firebase.initializeApp(firebaseConfig);
         const db=firebase.firestore();
         
-        // 클리닉 위치 (GPS 출퇴근용)
-        const CLINIC_LAT=37.5037435;  // 루미클리닉 위도
-        const CLINIC_LNG=127.0892416; // 루미클리닉 경도
-        const CLINIC_RADIUS=100;   // 100m 반경
+        // ===== 근태 v2.0 — Firebase 동적 설정 (기본값) =====
+        let CLINIC_LAT=37.5037435, CLINIC_LNG=127.0892416, CLINIC_RADIUS=100;
+        let ATT_LATE_H=9, ATT_LATE_M=10; // 지각 기준 09:10
+
+        // 요일별 정규 퇴근시간 (0=일~6=토) — admin에서 설정 가능
+        let DAY_SCHEDULE = {
+            0:{work:false,endH:18,endM:0},  // 일(휴무)
+            1:{work:true, endH:18,endM:30}, // 월
+            2:{work:true, endH:18,endM:30}, // 화
+            3:{work:true, endH:18,endM:0},  // 수
+            4:{work:true, endH:18,endM:0},  // 목
+            5:{work:true, endH:18,endM:30}, // 금
+            6:{work:true, endH:15,endM:0},  // 토
+        };
+
+        // 날짜 문자열(YYYY-MM-DD)로 해당 요일 정규 퇴근 분(분) 반환
+        function getWorkEndMin(dateStr){
+            const day=dateStr?new Date(dateStr).getDay():new Date().getDay();
+            const s=DAY_SCHEDULE[day]??DAY_SCHEDULE[1];
+            return s.endH*60+s.endM;
+        }
+
+        async function loadAttendanceSettings(){
+            try{
+                const doc=await db.collection('settings').doc('attendance').get();
+                if(!doc.exists) return;
+                const d=doc.data();
+                if(typeof d.lat==='number') CLINIC_LAT=d.lat;
+                if(typeof d.lng==='number') CLINIC_LNG=d.lng;
+                if(typeof d.radius==='number') CLINIC_RADIUS=d.radius;
+                if(typeof d.lateH==='number') ATT_LATE_H=d.lateH;
+                if(typeof d.lateM==='number') ATT_LATE_M=d.lateM;
+                if(d.schedule&&typeof d.schedule==='object'){
+                    Object.entries(d.schedule).forEach(([k,v])=>{
+                        const day=parseInt(k);
+                        if(!isNaN(day)&&v) DAY_SCHEDULE[day]={...DAY_SCHEDULE[day],...v};
+                    });
+                }
+            }catch(e){console.warn('[근태v2.0] 설정 로드 실패, 기본값 사용',e);}
+        }
         
         let currentUser=null;
         let attendance=[];
@@ -1170,6 +1276,7 @@
                 await loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
             }
             checkLocation();
+            await loadAttendanceSettings(); // v2.0
             await loadAllData();
             await loadSettings();
             startAutoLogoutTimer();
@@ -1502,15 +1609,20 @@
             const monthOT=lunchOT.filter(ot=>ot.date?.startsWith(ym));
             const lunchMinutes=monthOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
             
-            // 퇴근 후 OT
+            // 퇴근 후 OT — v2.0 요일별 정규퇴근 기준
             const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
             let afterMinutes=0;
+            const afterItems=[];
             monthAtt.forEach(a=>{
                 if(a.checkOut){
                     const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
                     const checkOutMin=h*60+m;
-                    const endMin=18*60;
-                    if(checkOutMin>endMin)afterMinutes+=checkOutMin-endMin;
+                    const endMin=getWorkEndMin(a.date);
+                    if(checkOutMin>endMin){
+                        const diff=checkOutMin-endMin;
+                        afterMinutes+=diff;
+                        afterItems.push({date:a.date,minutes:diff,endMin});
+                    }
                 }
             });
             
@@ -1526,15 +1638,26 @@
             document.getElementById('otHourlyRate').textContent=formatCurrency(otRate)+'/시간';
             document.getElementById('otExpected').textContent=formatCurrency(expected);
             
-            // OT 내역
-            if(monthOT.length>0){
-                document.getElementById('otList').innerHTML=monthOT.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(ot=>`
+            // OT 내역 — 점심OT + 퇴근후OT 통합
+            const DAY_KO=['일','월','화','수','목','금','토'];
+            const lunchRows=monthOT.map(ot=>({date:ot.date,minutes:ot.minutes,label:ot.reason||'점심시간 OT',type:'lunch',id:ot.id}));
+            const afterRows=afterItems.map(a=>{
+                const eh=Math.floor(a.endMin/60),em=a.endMin%60;
+                return {date:a.date,minutes:a.minutes,label:`퇴근후 OT (기준 ${eh}:${String(em).padStart(2,'0')})`,type:'after'};
+            });
+            const allRows=[...lunchRows,...afterRows].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+            if(allRows.length){
+                document.getElementById('otList').innerHTML=allRows.map(ot=>`
                     <div class="list-item">
-                        <div>
+                        <div style="flex:1">
                             <div class="list-item-title">${ot.date}</div>
-                            <div class="list-item-sub">${ot.reason||'점심 OT'}</div>
+                            <div class="list-item-sub" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                                <span style="font-size:.62rem;padding:1px 5px;border-radius:3px;${ot.type==='lunch'?'background:#ede7f6;color:#6a1b9a':'background:#e3f2fd;color:#1565c0'}">${ot.type==='lunch'?'점심':'퇴근후'}</span>
+                                ${ot.label}
+                                ${ot.type==='lunch'&&ot.id?`<button onclick="deleteLunchOTItem('${ot.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.75rem;padding:0">✕</button>`:''}
+                            </div>
                         </div>
-                        <span class="badge badge-purple">${ot.minutes}분</span>
+                        <span class="badge ${ot.type==='lunch'?'badge-purple':'badge-blue'}">${ot.minutes}분</span>
                     </div>
                 `).join('');
             }else{
@@ -1827,7 +1950,8 @@
                     if(a.checkOut){
                         const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
                         const checkOutMin=h*60+m;
-                        if(checkOutMin>18*60)afterMinutes+=checkOutMin-18*60;
+                        const endMin2=getWorkEndMin(a.date); // v2.0 동적
+                        if(checkOutMin>endMin2)afterMinutes+=checkOutMin-endMin2;
                     }
                 });
                 const totalOTMinutes=lunchMinutes+afterMinutes;
@@ -1868,7 +1992,7 @@
             const time=now.toTimeString().substring(0,5);
             const today=getToday();
             const h=now.getHours(),m=now.getMinutes();
-            const status=(h>9||(h===9&&m>10))?'late':'normal';
+            const status=(h*60+m > ATT_LATE_H*60+ATT_LATE_M)?'late':'normal'; // v2.0 동적
             
             try{
                 await db.collection('attendance').add({
@@ -1906,8 +2030,8 @@
             
             if(!todayAtt){alert('오늘 출근 기록이 없습니다.');return;}
             
-            const h=now.getHours();
-            const newStatus=h<18?'early':todayAtt.status;
+            const hh=now.getHours(),mm2=now.getMinutes();
+            const newStatus=(hh*60+mm2<getWorkEndMin(today))?'early':todayAtt.status; // v2.0 동적
             
             try{
                 await db.collection('attendance').doc(todayAtt.id).update({
@@ -1923,34 +2047,61 @@
         function openModal(id){document.getElementById(id).classList.add('active');}
         function closeModal(id){document.getElementById(id).classList.remove('active');}
         
+        // ===== 점심 OT v2.0 =====
+        function updateLunchOTHint(){
+            const DAY_KO=['일','월','화','수','목','금','토'];
+            const dateVal=document.getElementById('lunchOTDate').value;
+            const hint=document.getElementById('lunchOTDayHint');
+            if(!hint) return;
+            if(!dateVal){hint.textContent='';return;}
+            const day=new Date(dateVal).getDay();
+            const s=DAY_SCHEDULE[day]??DAY_SCHEDULE[1];
+            if(!s.work){
+                hint.innerHTML=`${DAY_KO[day]}요일은 휴무입니다.`;
+                hint.style.color='var(--red)';
+            } else {
+                hint.innerHTML=`${DAY_KO[day]}요일 정규퇴근 <strong>${s.endH}:${String(s.endM).padStart(2,'0')}</strong>`;
+                hint.style.color='var(--text-muted)';
+            }
+        }
+
         function openLunchOTModal(){
             document.getElementById('lunchOTDate').value=getToday();
             document.getElementById('lunchOTMinutes').value='30';
             document.getElementById('lunchOTReason').value='';
+            updateLunchOTHint();
             openModal('lunchOTModal');
+            setTimeout(()=>document.getElementById('lunchOTMinutes')?.select(),150);
         }
         
         async function saveLunchOT(){
             const date=document.getElementById('lunchOTDate').value;
             const minutes=parseInt(document.getElementById('lunchOTMinutes').value)||0;
             const reason=document.getElementById('lunchOTReason').value.trim();
-            
             if(!date||minutes<=0){alert('날짜와 시간을 입력해주세요.');return;}
-            
             try{
                 await db.collection('lunchOT').add({
                     employeeId:currentUser.id,
                     employeeName:currentUser.name,
                     date:date,
                     minutes:minutes,
-                    reason:reason,
+                    reason:reason||'점심시간 OT',
                     createdAt:firebase.firestore.FieldValue.serverTimestamp()
                 });
                 closeModal('lunchOTModal');
-                alert('점심 OT가 저장되었습니다.');
+                alert(`✅ 점심 OT 저장\n${date} / ${minutes}분`);
                 await loadLunchOT();
                 renderOT();
             }catch(e){alert('저장 실패: '+e.message);}
+        }
+
+        async function deleteLunchOTItem(id){
+            if(!confirm('이 점심 OT 기록을 삭제하시겠습니까?'))return;
+            try{
+                await db.collection('lunchOT').doc(id).delete();
+                lunchOT=lunchOT.filter(o=>o.id!==id);
+                renderOT();
+            }catch(e){alert('삭제 실패: '+e.message);}
         }
         
         function openMealModal(){
@@ -2649,8 +2800,10 @@
                                 <span>${catLabel}</span>
                                 <span>총 재고: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
                                 ${isLow?`<span style="color:var(--red)">안전: ${item.safetyStock}</span>`:''}
-                                ${lastQty!=null?`<span>지난: ${lastQty} (${lastDate})</span>`:''}
-                                <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">✏️ 수정</button>
+                                ${lastQty!=null?`<span>지난실사: ${lastQty} (${lastDate})</span>`:''}
+                                ${item.lastReceiveDate?`<span style="color:var(--green)">최근입고: ${item.lastReceiveDate}</span>`:''}
+                                <button onclick="openReceiveItemModal('${item.id}')" style="background:none;border:1px solid var(--green);color:var(--green);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">📥 입고</button>
+                                <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">✏️ 수정</button>
                                 <button onclick="deleteInventoryItem('${item.id}','${item.name.replace(/'/g,"\\'")}' )" style="background:none;border:1px solid var(--red);color:var(--red);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🗑️ 삭제</button>
                             </div>
                         </div>
@@ -2956,6 +3109,180 @@
         }
 
         // ===== 품목 수정 기능 =====
+
+        // ===== 📥 입고 모달 =====
+        function openReceiveItemModal(itemId){
+            const item = invItems.find(i => i.id === itemId);
+            if(!item){ alert('품목을 찾을 수 없습니다.'); return; }
+
+            document.getElementById('receiveItemId').value = itemId;
+            document.getElementById('receiveItemName').value = item.name || '';
+
+            // 기본값: 오늘 날짜
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('receiveDate').value = today;
+            document.getElementById('receiveExpiry').value = item.expiryDate || '';
+
+            // 구매정보 초기화
+            document.getElementById('receivePrice').value = '';
+            document.getElementById('receiveBoxes').value = 1;
+            document.getElementById('receivePerBox').value = 1;
+            document.getElementById('receiveUnitCalc').textContent = '낱개당 단가: -';
+            document.getElementById('receiveUnitCalc').style.color = 'var(--primary)';
+
+            // 현재 장소별 재고 미리보기
+            const stockDiv = document.getElementById('receiveCurrentStock');
+            if(item.locations && Object.keys(item.locations).length > 0){
+                const locLines = Object.entries(item.locations)
+                    .filter(([,q]) => q > 0)
+                    .map(([loc,q]) => `📍 ${loc}: ${q}${item.unit||'개'}`)
+                    .join('  |  ');
+                stockDiv.innerHTML = `<strong>현재 재고</strong> — ${locLines || '없음'}`;
+            } else {
+                stockDiv.innerHTML = `<strong>현재 재고</strong> — ${item.currentStock||0}${item.unit||'개'}`;
+            }
+
+            // 장소 행 초기화 — 기존 장소들로 시작 (수량 0)
+            const container = document.getElementById('receiveLocationsList');
+            container.innerHTML = '';
+            if(item.locations && Object.keys(item.locations).length > 0){
+                Object.keys(item.locations).filter(loc => item.locations[loc] > 0).forEach(loc => {
+                    addReceiveLocationRow(loc, 0);
+                });
+            } else {
+                addReceiveLocationRow();
+            }
+            calcReceiveTotal();
+
+            openModal('receiveItemModal');
+        }
+
+        function addReceiveLocationRow(location='', quantity=0){
+            const container = document.getElementById('receiveLocationsList');
+            const rowId = 'recvLoc_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+            const row = document.createElement('div');
+            row.id = rowId;
+            row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:stretch;width:100%';
+            row.innerHTML = `
+                <select class="form-select" style="width:45%;padding:1.1rem;font-size:1rem;font-weight:600;flex-shrink:0" onchange="calcReceiveTotal()">
+                    <option value="">장소 선택</option>
+                    ${receivingLocations.map(loc => {
+                        const v = loc.floor + '-' + loc.name;
+                        return '<option value="' + v + '"' + (v === location ? ' selected' : '') + '>' + v + '</option>';
+                    }).join('')}
+                </select>
+                <input type="number" class="form-input" placeholder="입고 수량" min="0" step="1" value="${quantity}"
+                    style="width:35%;padding:1.1rem;font-size:1.4rem;font-weight:700;text-align:center;flex-shrink:0" oninput="calcReceiveTotal()">
+                <button type="button" class="btn btn-secondary" onclick="this.closest('div[id]').remove();calcReceiveTotal();"
+                    style="width:15%;padding:.5rem;font-size:.75rem;white-space:nowrap;flex-shrink:0">삭제</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function calcReceiveTotal(){
+            const container = document.getElementById('receiveLocationsList');
+            let total = 0;
+            container.querySelectorAll('input[type="number"]').forEach(inp => {
+                total += parseFloat(inp.value || 0);
+            });
+            document.getElementById('receiveTotalDisplay').textContent = total;
+        }
+
+        function calcReceiveUnit(){
+            const total = parseFloat(document.getElementById('receivePrice').value) || 0;
+            const boxes = parseFloat(document.getElementById('receiveBoxes').value) || 1;
+            const perBox = parseFloat(document.getElementById('receivePerBox').value) || 1;
+            const el = document.getElementById('receiveUnitCalc');
+            if(total > 0 && boxes > 0 && perBox > 0){
+                const unit = Math.round(total / (boxes * perBox));
+                el.textContent = '낱개당 단가: ' + unit.toLocaleString() + '원';
+                el.style.color = 'var(--green)';
+            } else {
+                el.textContent = '낱개당 단가: -';
+                el.style.color = 'var(--primary)';
+            }
+        }
+
+        async function saveReceiveItem(){
+            const id = document.getElementById('receiveItemId').value;
+            const receiveDate = document.getElementById('receiveDate').value;
+            const receiveExpiry = document.getElementById('receiveExpiry').value;
+            if(!id || !receiveDate){ alert('입고일을 입력해주세요.'); return; }
+
+            const container = document.getElementById('receiveLocationsList');
+            const rows = container.querySelectorAll('div[id^="recvLoc_"]');
+            const addMap = {}; // { 장소: 추가수량 }
+            let totalAdd = 0;
+
+            rows.forEach(row => {
+                const locSel = row.querySelector('select');
+                const qtyInp = row.querySelector('input[type="number"]');
+                const loc = locSel?.value;
+                const qty = parseFloat(qtyInp?.value || 0);
+                if(loc && qty > 0){
+                    addMap[loc] = (addMap[loc] || 0) + qty;
+                    totalAdd += qty;
+                }
+            });
+
+            if(totalAdd <= 0){ alert('입고 수량을 1개 이상 입력해주세요.'); return; }
+
+            const item = invItems.find(i => i.id === id);
+            if(!item){ alert('품목을 찾을 수 없습니다.'); return; }
+
+            // 기존 locations에 더하기
+            const newLocations = Object.assign({}, item.locations || {});
+            Object.entries(addMap).forEach(([loc, qty]) => {
+                newLocations[loc] = (newLocations[loc] || 0) + qty;
+            });
+            const newTotal = Object.values(newLocations).reduce((s,q) => s + q, 0);
+
+            // 구매정보 업데이트 (입력된 경우만)
+            const totalPrice = parseFloat(document.getElementById('receivePrice').value) || 0;
+            const boxes = parseFloat(document.getElementById('receiveBoxes').value) || 1;
+            const perBox = parseFloat(document.getElementById('receivePerBox').value) || 1;
+            const totalQty = boxes * perBox;
+
+            const updateData = {
+                locations: newLocations,
+                currentStock: newTotal,
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser?.name || 'staff',
+                lastReceiveDate: receiveDate,
+            };
+            if(receiveExpiry) updateData.expiryDate = receiveExpiry;
+            if(totalPrice > 0){
+                updateData.purchasePrice = totalPrice;
+                updateData.purchaseQty = totalQty;
+                updateData.unitPrice = Math.round(totalPrice / totalQty);
+            }
+
+            try{
+                await db.collection('inventory').doc(id).update(updateData);
+
+                // 입고 이력 기록
+                await db.collection('receiveHistory').add({
+                    itemId: id,
+                    itemName: item.name,
+                    receiveDate: receiveDate,
+                    expiryDate: receiveExpiry || null,
+                    locations: addMap,
+                    totalQty: totalAdd,
+                    purchasePrice: totalPrice || null,
+                    receivedBy: currentUser?.name || 'staff',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                closeModal('receiveItemModal');
+                alert('✅ 입고 완료!
+' + item.name + ' ' + totalAdd + '개 입고되었습니다.');
+                await loadInventoryForStaff();
+                renderInvCatButtons();
+                renderInvAuditList();
+                renderLowStockAlert();
+            }catch(e){ alert('입고 실패: ' + e.message); }
+        }
+
         function openEditItemModal(itemId){
             const item=invItems.find(i=>i.id===itemId);
             if(!item){alert('품목을 찾을 수 없습니다.');return;}
