@@ -124,8 +124,9 @@ function renderOvertime(){
     attendance.forEach(a=>{
         if(a.checkOut){
             const [h,m]=a.checkOut.split(':').map(Number);
-            const totalMinutes=h*60+m;
-            if(totalMinutes>18*60){eveningMinutes+=totalMinutes-18*60;}
+            const checkOutMin=h*60+m;
+            const endMin=getAdminWorkEndMin(a.date); // v2.0 요일별
+            if(checkOutMin>endMin){eveningMinutes+=checkOutMin-endMin;}
         }
     });
     const lunchMinutes=lunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
@@ -243,7 +244,8 @@ function renderSalary(){
         empAttendance.forEach(a=>{
             if(a.checkOut){
                 const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
-                if(h*60+m>18*60)otMinutes+=(h*60+m)-18*60;
+                const endMin=getAdminWorkEndMin(a.date); // v2.0 요일별
+                if(h*60+m>endMin)otMinutes+=(h*60+m)-endMin;
             }
         });
         const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
@@ -575,7 +577,8 @@ function exportPrePayroll(){
         empAttendance.forEach(a=>{
             if(a.checkOut){
                 const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
-                if(h*60+m>18*60)otMinutes+=(h*60+m)-18*60;
+                const endMin=getAdminWorkEndMin(a.date); // v2.0 요일별
+                if(h*60+m>endMin)otMinutes+=(h*60+m)-endMin;
             }
         });
         const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
@@ -619,19 +622,91 @@ function exportPrePayroll(){
     XLSX.writeFile(wb,'사전급여대장_'+ym+'_노무사전달용.xlsx');
 }
 
-// Staff App Settings
+// ===== Staff App Settings + 근태 v2.0 =====
+const DAY_NAMES=['일','월','화','수','목','금','토'];
+// admin에서 관리하는 요일 스케줄 (로드 후 채워짐)
+let adminSchedule={
+    0:{work:false,endH:18,endM:0},
+    1:{work:true, endH:18,endM:30},
+    2:{work:true, endH:18,endM:30},
+    3:{work:true, endH:18,endM:0},
+    4:{work:true, endH:18,endM:0},
+    5:{work:true, endH:18,endM:30},
+    6:{work:true, endH:15,endM:0},
+};
+
+// 날짜 문자열로 해당 요일 정규 퇴근 분 반환 (admin용)
+function getAdminWorkEndMin(dateStr){
+    const day=dateStr?new Date(dateStr).getDay():1;
+    const s=adminSchedule[day]??adminSchedule[1];
+    return s.endH*60+s.endM;
+}
+
+// 요일 테이블 렌더링
+function renderScheduleTable(schedule){
+    const tbody=document.getElementById('scheduleTableBody');
+    if(!tbody) return;
+    tbody.innerHTML=Object.entries(schedule)
+        .sort(([a],[b])=>Number(a)-Number(b))
+        .map(([day,s])=>`
+        <tr>
+            <td style="padding:.35rem .5rem;text-align:center;border:1px solid var(--border);font-weight:600;color:${Number(day)===0?'var(--red)':Number(day)===6?'#1565c0':'inherit'}">${DAY_NAMES[Number(day)]}</td>
+            <td style="padding:.35rem .5rem;text-align:center;border:1px solid var(--border)">
+                <input type="checkbox" id="schWork_${day}" ${s.work?'checked':''}
+                    onchange="toggleDayWork(${day})" style="width:16px;height:16px;cursor:pointer">
+            </td>
+            <td style="padding:.35rem .5rem;text-align:center;border:1px solid var(--border)">
+                <div id="schTimeRow_${day}" style="display:${s.work?'flex':'none'};gap:.3rem;align-items:center;justify-content:center">
+                    <input type="number" id="schEndH_${day}" value="${s.endH}" min="0" max="23"
+                        style="width:50px;padding:.25rem;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:.82rem">
+                    <span>:</span>
+                    <select id="schEndM_${day}" style="width:52px;padding:.25rem;border:1px solid var(--border);border-radius:4px;font-size:.82rem">
+                        ${[0,10,20,30,40,50].map(v=>`<option value="${v}" ${s.endM===v?'selected':''}>${String(v).padStart(2,'0')}</option>`).join('')}
+                    </select>
+                </div>
+                ${!s.work?'<span style="font-size:.78rem;color:var(--text-muted)">휴무</span>':''}
+            </td>
+        </tr>`).join('');
+}
+
+function toggleDayWork(day){
+    const chk=document.getElementById(`schWork_${day}`);
+    const row=document.getElementById(`schTimeRow_${day}`);
+    if(!chk||!row) return;
+    if(chk.checked){
+        row.style.display='flex';
+        // 휴무 텍스트 제거
+        const span=row.nextElementSibling;
+        if(span&&span.tagName==='SPAN') span.remove();
+    } else {
+        row.style.display='none';
+    }
+}
+
 async function loadStaffSettings(){
     try{
         const doc=await db.collection('settings').doc('staff').get();
         if(doc.exists){
             const data=doc.data();
-            document.getElementById('autoLogoutMinutes').value=data.autoLogoutMinutes||10;
+            const v=data.autoLogoutMinutes||10;
+            ['autoLogoutMinutes','cfgAutoLogout'].forEach(id=>{
+                const el=document.getElementById(id);
+                if(el) el.value=v;
+            });
         }
     }catch(e){console.error('설정 로드 오류:',e);}
+    await loadAttendanceSettings_admin();
 }
 
 async function saveStaffSettings(){
-    const autoLogoutMinutes=parseInt(document.getElementById('autoLogoutMinutes').value)||10;
+    // cfgAutoLogout (Staff App 설정 카드) 또는 autoLogoutMinutes (기존) 둘 다 지원
+    const cfgEl=document.getElementById('cfgAutoLogout')||document.getElementById('autoLogoutMinutes');
+    const autoLogoutMinutes=parseInt(cfgEl?.value)||10;
+    // 두 필드 동기화
+    ['cfgAutoLogout','autoLogoutMinutes'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.value=autoLogoutMinutes;
+    });
     try{
         await db.collection('settings').doc('staff').set({
             autoLogoutMinutes,
@@ -639,6 +714,55 @@ async function saveStaffSettings(){
         },{merge:true});
         alert('설정이 저장되었습니다.\n자동 로그아웃: '+autoLogoutMinutes+'분');
     }catch(e){alert('설정 저장 실패: '+e.message);}
+}
+
+async function loadAttendanceSettings_admin(){
+    try{
+        const doc=await db.collection('settings').doc('attendance').get();
+        const d=doc.exists?doc.data():{};
+        const setVal=(id,v)=>{const el=document.getElementById(id);if(el&&v!=null)el.value=v;};
+        setVal('attLat',d.lat);
+        setVal('attLng',d.lng);
+        setVal('attRadius',d.radius??100);
+        setVal('attLateH',d.lateH??9);
+        setVal('attLateM',d.lateM??10);
+        if(d.schedule){
+            Object.entries(d.schedule).forEach(([k,v])=>{
+                const day=parseInt(k);
+                if(!isNaN(day)&&v) adminSchedule[day]={...adminSchedule[day],...v};
+            });
+        }
+    }catch(e){console.error('근태 설정 로드 오류:',e);}
+    renderScheduleTable(adminSchedule);
+}
+
+async function saveAttendanceSettings(){
+    const num=(id,def)=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?def:v;};
+    const int=(id,def)=>{const v=parseInt(document.getElementById(id)?.value);return isNaN(v)?def:v;};
+    const lat=num('attLat',37.5037435);
+    const lng=num('attLng',127.0892416);
+    const radius=int('attRadius',100);
+    const lateH=int('attLateH',9);
+    const lateM=int('attLateM',10);
+    const schedule={};
+    for(let day=0;day<=6;day++){
+        const work=document.getElementById(`schWork_${day}`)?.checked??adminSchedule[day].work;
+        const endH=work?int(`schEndH_${day}`,adminSchedule[day].endH):adminSchedule[day].endH;
+        const endM=work?parseInt(document.getElementById(`schEndM_${day}`)?.value??0):adminSchedule[day].endM;
+        schedule[day]={work,endH,endM};
+    }
+    try{
+        await db.collection('settings').doc('attendance').set({
+            lat,lng,radius,lateH,lateM,schedule,
+            updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+        });
+        adminSchedule=schedule;
+        const msg=document.getElementById('attSettingMsg');
+        if(msg){
+            msg.textContent='✅ 저장 완료 — '+Object.entries(schedule).map(([d,s])=>`${DAY_NAMES[Number(d)]}:${s.work?s.endH+':'+String(s.endM).padStart(2,'0'):'휴무'}`).join(' ');
+            setTimeout(()=>msg.textContent='',8000);
+        }
+    }catch(e){alert('저장 실패: '+e.message);}
 }
 
 // Initialize
