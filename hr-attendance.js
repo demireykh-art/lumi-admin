@@ -348,6 +348,7 @@ function openEmployeeModal(id=null){
     document.getElementById('empUsedLeave').value='0';
     document.getElementById('autoAnnualLeave').textContent='0';
     document.getElementById('empId').value='';
+    document.getElementById('empMealLimit').value='300000';
     // 탭 체크박스 초기화
     document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
     
@@ -364,6 +365,7 @@ function openEmployeeModal(id=null){
             document.getElementById('empStatus').value=emp.status||'active';
             document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
+            document.getElementById('empMealLimit').value=emp.mealLimit||300000;
             document.getElementById('empId').value=emp.id;
             // 법정 연차 자동계산 표시
             const autoLeave=calculateLegalAnnualLeave(emp.joinDate);
@@ -464,6 +466,7 @@ async function saveEmployee(){
         status:document.getElementById('empStatus').value,
         annualLeave:annualLeave,
         usedLeave:usedLeave,
+        mealLimit:parseInt(document.getElementById('empMealLimit').value)||300000,
         isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
         visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
     };
