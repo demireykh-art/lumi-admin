@@ -304,11 +304,6 @@
                     <div class="stat-card purple"><div class="stat-value" id="otLunch">0H</div><div class="stat-label">점심 OT</div></div>
                     <div class="stat-card orange"><div class="stat-value" id="otAfter">0H</div><div class="stat-label">퇴근후 OT</div></div>
                 </div>
-                <div class="card">
-                    <div class="card-title">예상 OT수당 (세전)</div>
-                    <div class="info-row"><span class="info-label">시급 × 1.5</span><span class="info-value" id="otHourlyRate">-</span></div>
-                    <div class="info-row"><span class="info-label">예상 금액</span><span class="info-value" id="otExpected" style="color:var(--primary);font-weight:700">₩0</span></div>
-                </div>
                 <button class="btn btn-primary" onclick="openLunchOTModal()">점심 OT 입력</button>
                 <div class="card">
                     <div class="card-title">이번 달 OT 내역</div>
@@ -339,8 +334,19 @@
             <div class="tab-content" id="tab-leave">
                 <div class="stats-grid">
                     <div class="stat-card"><div class="stat-value" id="leaveTotal">15</div><div class="stat-label">총 연차</div></div>
-                    <div class="stat-card orange"><div class="stat-value" id="leaveUsed">0</div><div class="stat-label">사용</div></div>
+                    <div class="stat-card orange"><div class="stat-value" id="leaveUsed">0</div><div class="stat-label">사용(예정)</div></div>
                     <div class="stat-card green"><div class="stat-value" id="leaveRemain">15</div><div class="stat-label">잔여</div></div>
+                </div>
+                <div style="background:var(--bg);padding:.6rem .75rem;border-radius:4px;margin-bottom:.75rem;font-size:.75rem;color:var(--text-muted);line-height:1.5">
+                    <span id="leaveCalcInfo">-</span><br>
+                    ※ 현재 주기 예상 연차까지 미리 신청 가능합니다.<br>
+                    ※ 중도퇴사 시 초과 사용분은 급여에서 정산됩니다.
+                </div>
+                
+                <!-- 팀 연차 현황 -->
+                <div class="card" style="margin-bottom:.75rem">
+                    <div class="card-title">👥 팀 연차 현황</div>
+                    <div id="teamLeaveList"><div style="text-align:center;color:var(--text-muted);padding:.5rem;font-size:.85rem">로딩 중...</div></div>
                 </div>
                 
                 <!-- 황금연휴 슬라이더 -->
@@ -388,17 +394,6 @@
                     <div class="info-row"><span class="info-label">직급</span><span class="info-value" id="infoRole">-</span></div>
                     <div class="info-row"><span class="info-label">입사일</span><span class="info-value" id="infoJoinDate">-</span></div>
                     <div class="info-row"><span class="info-label">근속기간</span><span class="info-value" id="infoTenure">-</span></div>
-                </div>
-                <div class="card">
-                    <div class="card-title">
-                        <span id="salaryTitle">급여 정보</span>
-                        <div class="month-select">
-                            <select id="salaryMonth" onchange="renderSalary()"></select>
-                        </div>
-                    </div>
-                    <div class="info-row"><span class="info-label">실수령액</span><span class="info-value" id="infoNetPay">-</span></div>
-                    <div class="info-row"><span class="info-label">OT수당</span><span class="info-value" id="infoOT">-</span></div>
-                    <div class="info-row"><span class="info-label">인센티브</span><span class="info-value" id="infoIncentive">-</span></div>
                 </div>
                 <div class="card">
                     <div class="card-title">🔐 생체인식 로그인</div>
@@ -1539,6 +1534,7 @@
                     loadIncentiveItems(),
                     loadIncentiveRecords(),
                     loadLeaveRequests(),
+                    loadTeamLeave(),
                     loadPayrollData(),
                     loadSalesData()
                 ]);
@@ -1741,15 +1737,7 @@
             document.getElementById('otLunch').textContent=(lunchMinutes/60).toFixed(1)+'H';
             document.getElementById('otAfter').textContent=(afterMinutes/60).toFixed(1)+'H';
             
-            // 예상 OT수당 (시급 × 1.5)
-            const hourly=currentUser.hourly||12000;
-            const otRate=Math.round(hourly*1.5);
-            const expected=Math.round(otRate*(totalMinutes/60));
-            document.getElementById('otHourlyRate').textContent=formatCurrency(otRate)+'/시간';
-            document.getElementById('otExpected').textContent=formatCurrency(expected);
-            
             // OT 내역 — 점심OT + 퇴근후OT 통합
-            const DAY_KO=['일','월','화','수','목','금','토'];
             const lunchRows=monthOT.map(ot=>({date:ot.date,minutes:ot.minutes,label:ot.reason||'점심시간 OT',type:'lunch',id:ot.id}));
             const afterRows=afterItems.map(a=>{
                 const eh=Math.floor(a.endMin/60),em=a.endMin%60;
@@ -1827,21 +1815,42 @@
             }
         }
         
+        let teamLeaveData=[];
+        
+        async function loadTeamLeave(){
+            try{
+                // 모든 직원의 승인된+대기중 연차 로드
+                const snap=await db.collection('leaveRequests')
+                    .where('status','in',['approved','pending'])
+                    .get();
+                teamLeaveData=snap.docs.map(d=>({id:d.id,...d.data()}));
+            }catch(e){console.error('팀 연차 로드 오류:',e);teamLeaveData=[];}
+        }
+        
         function renderLeave(){
-            const approved=leaveRequests.filter(r=>r.status==='approved');
-            const usedDays=approved.reduce((sum,r)=>{
+            // 승인 + 대기중 모두 사용 예정으로 카운트
+            const myRequests=leaveRequests.filter(r=>r.status==='approved'||r.status==='pending');
+            const usedDays=myRequests.reduce((sum,r)=>{
                 if(r.type?.includes('반차'))return sum+0.5;
                 return sum+(r.dates?.length||1);
             },0);
             
-            // 연차: 개별 설정값 있으면 사용, 없으면 법정 자동계산
+            // 연차: 개별 설정값 있으면 사용, 없으면 입사일 기준 예상 총 연차
             const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
-            const adminUsed=currentUser.usedLeave||0; // admin에서 설정한 사용 연차
+            const adminUsed=currentUser.usedLeave||0;
             const totalUsed=usedDays+adminUsed;
+            const remain=Math.max(0,total-totalUsed);
             
             document.getElementById('leaveTotal').textContent=total;
             document.getElementById('leaveUsed').textContent=totalUsed;
-            document.getElementById('leaveRemain').textContent=Math.max(0,total-totalUsed);
+            document.getElementById('leaveRemain').textContent=remain;
+            
+            // 상세 연차 정보
+            const detail=getLeaveDetail(currentUser.joinDate);
+            document.getElementById('leaveCalcInfo').textContent=detail.info;
+            
+            // 팀 연차 현황 렌더링
+            renderTeamLeave();
             
             // 황금연휴 슬라이더 렌더링
             renderGoldenSlider();
@@ -1865,6 +1874,47 @@
             }else{
                 document.getElementById('leaveHistory').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem">신청 내역이 없습니다</div>';
             }
+        }
+        
+        function renderTeamLeave(){
+            const container=document.getElementById('teamLeaveList');
+            if(!container) return;
+            
+            // 오늘 이후 승인된 연차만 표시
+            const today=getToday();
+            const upcoming=teamLeaveData
+                .filter(r=>r.dates?.some(d=>d>=today))
+                .sort((a,b)=>{
+                    const aMin=a.dates?.filter(d=>d>=today).sort()[0]||'';
+                    const bMin=b.dates?.filter(d=>d>=today).sort()[0]||'';
+                    return aMin.localeCompare(bMin);
+                });
+            
+            if(upcoming.length===0){
+                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:.5rem;font-size:.85rem">예정된 연차가 없습니다</div>';
+                return;
+            }
+            
+            // 직원별로 그룹핑
+            const grouped={};
+            upcoming.forEach(r=>{
+                const futureDates=r.dates.filter(d=>d>=today);
+                futureDates.forEach(d=>{
+                    if(!grouped[d]) grouped[d]=[];
+                    const statusIcon=r.status==='approved'?'✅':'⏳';
+                    grouped[d].push({name:r.employeeName, type:r.type, status:statusIcon, isMe:r.employeeId===currentUser.id});
+                });
+            });
+            
+            const sortedDates=Object.keys(grouped).sort().slice(0,10);
+            container.innerHTML=sortedDates.map(date=>{
+                const people=grouped[date];
+                const names=people.map(p=>`<span style="font-size:.8rem;${p.isMe?'font-weight:700;color:var(--primary)':'color:var(--text-secondary)'}">${p.status}${p.name}(${p.type||'연차'})</span>`).join(' ');
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--border)">
+                    <span style="font-size:.8rem;font-weight:500;min-width:80px">${date.substring(5)}</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:.3rem;justify-content:flex-end">${names}</div>
+                </div>`;
+            }).join('');
         }
         
         // 황금연휴 슬라이더 렌더링
@@ -1896,8 +1946,10 @@
         }
         
         // 법정 연차 자동계산 (근로기준법)
+        // 입사일 기준 연차 계산 v2.1
+        // 현재 주기의 "예상 총 연차"를 반환 (미리 사용 가능)
         function calculateLegalAnnualLeave(joinDate){
-            if(!joinDate)return 15;
+            if(!joinDate) return 15;
             const join=new Date(joinDate);
             const now=new Date();
             const diffMs=now-join;
@@ -1905,13 +1957,42 @@
             const years=Math.floor(diffDays/365);
             
             if(years<1){
-                // 1년 미만: 1개월 개근 시 1일 (최대 11일)
-                const months=Math.floor(diffDays/30);
-                return Math.min(months,11);
+                // 1년 미만: 월 1일씩 (최대 11일)
+                // 예상: 입사일 기준 1년 될 때까지 → 최대 11일
+                return 11;
             }else{
                 // 1년 이상: 15일 + 2년마다 1일 추가 (최대 25일)
                 const extraDays=Math.floor((years-1)/2);
-                return Math.min(15+extraDays,25);
+                return Math.min(15+extraDays, 25);
+            }
+        }
+        
+        // 상세 연차 정보 (UI 표시용)
+        function getLeaveDetail(joinDate){
+            if(!joinDate) return {total:15, earned:15, info:'입사일 미등록'};
+            const join=new Date(joinDate);
+            const now=new Date();
+            const diffMs=now-join;
+            const diffDays=Math.floor(diffMs/(1000*60*60*24));
+            const years=Math.floor(diffDays/365);
+            const months=Math.floor(diffDays/30);
+            
+            if(years<1){
+                const earned=Math.min(months, 11);
+                return {
+                    total: 11,
+                    earned: earned,
+                    info: `입사 ${months}개월차 · 현재 ${earned}일 발생 · 1년차 예상 11일`
+                };
+            }else{
+                const extraDays=Math.floor((years-1)/2);
+                const total=Math.min(15+extraDays, 25);
+                const cycleYear=years+1;
+                return {
+                    total: total,
+                    earned: total, // 1년 이상은 주기 시작 시 전체 부여
+                    info: `입사 ${years}년차 (${cycleYear}년목) · 연차 ${total}일`
+                };
             }
         }
         
@@ -2031,11 +2112,6 @@
             document.getElementById('infoJoinDate').textContent=currentUser.joinDate||'-';
             document.getElementById('infoTenure').textContent=getTenure(currentUser.joinDate);
             
-            // 급여 월 선택 드롭다운
-            const months=[...new Set(payrollData.map(p=>p.yearMonth))].sort().reverse();
-            const select=document.getElementById('salaryMonth');
-            select.innerHTML=months.length>0?months.map(m=>`<option value="${m}">${m.replace('-','년 ')}월</option>`).join(''):'<option value="">데이터 없음</option>';
-            
             // 생체인식 상태 표시
             const bioStatus=document.getElementById('biometricStatus');
             const hasCredential=localStorage.getItem('lumi_biometric_credential');
@@ -2047,8 +2123,6 @@
             }else{
                 bioStatus.textContent='미등록';
             }
-            
-            renderSalary();
         }
         
         function removeBiometric(){
@@ -2057,51 +2131,6 @@
                 localStorage.removeItem('lumi_biometric_user');
                 renderInfo();
                 alert('생체인식이 해제되었습니다.');
-            }
-        }
-        
-        function renderSalary(){
-            const ym=document.getElementById('salaryMonth').value||getYM();
-            document.getElementById('salaryTitle').textContent=ym.replace('-','년 ')+'월 급여 정보';
-            
-            const myPayroll=payrollData.find(p=>(p.yearMonth===ym)&&(p.name===currentUser.name||p.name===currentUser.matchName));
-            if(myPayroll){
-                // 노무사에서 받은 급여대장 데이터가 있으면 표시
-                document.getElementById('infoNetPay').textContent=formatCurrency(myPayroll.netPay);
-                // OT수당 = 추가연장수당 필드 (중요!)
-                document.getElementById('infoOT').textContent=formatCurrency(myPayroll.extraOT||myPayroll.additionalOT||0);
-                document.getElementById('infoIncentive').textContent=formatCurrency(myPayroll.incentive||0);
-            }else{
-                // 급여대장 없으면 직접 계산한 예상 값 표시
-                const monthOT=lunchOT.filter(ot=>ot.date?.startsWith(ym));
-                const monthAtt=attendance.filter(a=>a.date?.startsWith(ym));
-                const lunchMinutes=monthOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
-                let afterMinutes=0;
-                monthAtt.forEach(a=>{
-                    if(a.checkOut){
-                        const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
-                        const checkOutMin=h*60+m;
-                        const endMin2=getWorkEndMin(a.date); // v2.0 동적
-                        if(checkOutMin>endMin2)afterMinutes+=checkOutMin-endMin2;
-                    }
-                });
-                const totalOTMinutes=lunchMinutes+afterMinutes;
-                const hourly=currentUser.hourly||12000;
-                const estimatedOT=Math.round((totalOTMinutes/60)*hourly*1.5);
-                
-                // 인센티브 계산
-                const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
-                let estimatedIncentive=0;
-                incentiveItems.forEach(item=>{
-                    if(item.type!=='japanSales'){
-                        const count=monthRecords.filter(r=>r.itemId===item.id).length;
-                        estimatedIncentive+=count*(item.price||0);
-                    }
-                });
-                
-                document.getElementById('infoNetPay').textContent='미확정';
-                document.getElementById('infoOT').textContent=formatCurrency(estimatedOT)+' (예상)';
-                document.getElementById('infoIncentive').textContent=formatCurrency(estimatedIncentive)+' (예상)';
             }
         }
         
@@ -2696,6 +2725,25 @@
             
             if(selectedLeaveDates.length===0){alert('날짜를 추가해주세요.');return;}
             
+            // 잔여 연차 확인
+            const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
+            const myRequests=leaveRequests.filter(r=>r.status==='approved'||r.status==='pending');
+            const usedDays=myRequests.reduce((sum,r)=>{
+                if(r.type?.includes('반차'))return sum+0.5;
+                return sum+(r.dates?.length||1);
+            },0);
+            const adminUsed=currentUser.usedLeave||0;
+            const totalUsed=usedDays+adminUsed;
+            
+            const requestDays=type.includes('반차')?0.5:selectedLeaveDates.length;
+            const afterUse=totalUsed+requestDays;
+            const remain=total-totalUsed;
+            
+            if(requestDays>remain){
+                alert(`잔여 연차가 부족합니다.\n\n총 연차: ${total}일\n사용(예정): ${totalUsed}일\n잔여: ${remain}일\n신청: ${requestDays}일\n\n※ 중도퇴사 시 초과 사용분은 급여에서 정산됩니다.`);
+                return;
+            }
+            
             try{
                 await db.collection('leaveRequests').add({
                     employeeId:currentUser.id,
@@ -2709,6 +2757,7 @@
                 closeModal('leaveModal');
                 alert('연차 신청이 완료되었습니다.');
                 await loadLeaveRequests();
+                await loadTeamLeave();
                 renderLeave();
             }catch(e){alert('신청 실패: '+e.message);}
         }
