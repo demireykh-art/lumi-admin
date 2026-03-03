@@ -276,14 +276,14 @@
                     </div>
                 </div>
                 <div class="sub-content" id="sub-attendance">
-                    <div class="cards-grid">
-                        <div class="card"><div class="card-label">이번 달 출근일</div><div class="card-value" id="workDays">0일</div></div>
-                        <div class="card"><div class="card-label">지각</div><div class="card-value" id="lateDays">0회</div></div>
-                        <div class="card"><div class="card-label">조퇴</div><div class="card-value" id="earlyDays">0회</div></div>
-                        <div class="card"><div class="card-label">결근</div><div class="card-value" id="absentDays">0회</div></div>
+                    <div class="cards-grid" style="grid-template-columns:1fr">
+                        <div class="card"><div class="card-label">이번 달 근무일</div><div class="card-value" id="workDays">0일</div></div>
                     </div>
+                    <!-- 직원별 OT 현황 -->
+                    <div class="section-header"><div class="section-title">직원별 OT 현황 (이번 달)</div></div>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>퇴근후OT</th><th>점심OT</th><th>총OT</th></tr></thead><tbody id="staffOTTable"></tbody></table></div>
                     <div class="section-header"><div class="section-title">근태 기록</div><select class="form-select" id="attendanceFilter" style="width:auto" onchange="renderAttendance()"><option value="all">전체 직원</option></select></div>
-                    <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>상태</th><th>관리</th></tr></thead><tbody id="attendanceTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>출근</th><th>퇴근</th><th>퇴근후OT</th><th>관리</th></tr></thead><tbody id="attendanceTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-overtime">
                     <div class="cards-grid">

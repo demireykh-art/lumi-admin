@@ -1142,7 +1142,11 @@
         
         function formatCurrency(n){return n?'₩'+Math.round(n).toLocaleString():'₩0';}
         function getYM(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
-        function getToday(){return new Date().toISOString().split('T')[0];}
+        function getToday(){
+            const now=new Date();
+            const kst=new Date(now.getTime()+9*60*60*1000);
+            return kst.toISOString().split('T')[0];
+        }
         
         function getTenure(joinDate){
             if(!joinDate)return '-';

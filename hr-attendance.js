@@ -69,21 +69,51 @@ function renderAttendance(){
     const filter=document.getElementById('attendanceFilter').value;
     let filtered=attendance;
     if(filter!=='all'){filtered=attendance.filter(a=>a.employeeId===filter);}
-    const workDays=filtered.filter(a=>a.checkIn).length;
-    const lateDays=filtered.filter(a=>a.status==='late').length;
-    const earlyDays=filtered.filter(a=>a.status==='early').length;
-    const absentDays=filtered.filter(a=>a.status==='absent').length;
-    document.getElementById('workDays').textContent=workDays+'일';
-    document.getElementById('lateDays').textContent=lateDays+'회';
-    document.getElementById('earlyDays').textContent=earlyDays+'회';
-    document.getElementById('absentDays').textContent=absentDays+'회';
+    // 이번 달 근무일 = 출근 기록이 있는 고유 날짜 수
+    const uniqueDates=new Set(filtered.filter(a=>a.checkIn).map(a=>a.date));
+    document.getElementById('workDays').textContent=uniqueDates.size+'일';
     const sorted=filtered.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     document.getElementById('attendanceTable').innerHTML=sorted.slice(0,50).map(a=>{
         const emp=employees.find(e=>e.id===a.employeeId);
-        const workHours=a.checkIn&&a.checkOut?calculateWorkHours(a.checkIn,a.checkOut):'-';
+        const otDisplay=calculateAfterOT(a);
         const statusBadge={normal:'<span class="badge badge-green">정상</span>',late:'<span class="badge badge-orange">지각</span>',early:'<span class="badge badge-blue">조퇴</span>',absent:'<span class="badge badge-red">결근</span>'};
-        return `<tr><td>${a.date||'-'}</td><td>${emp?emp.name:a.employeeId}</td><td>${a.checkIn||'-'}</td><td>${a.checkOut||'-'}</td><td>${workHours}</td><td>${statusBadge[a.status]||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editAttendance('${a.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteAttendance('${a.id}')">삭제</button></td></tr>`;
+        return `<tr><td>${a.date||'-'}</td><td>${emp?emp.name:a.employeeId}</td><td>${a.checkIn||'-'}</td><td>${a.checkOut||'-'}</td><td>${otDisplay}</td><td>${statusBadge[a.status]||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editAttendance('${a.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteAttendance('${a.id}')">삭제</button></td></tr>`;
     }).join('')||'<tr><td colspan="7" class="text-center">근태 기록 없음</td></tr>';
+}
+
+function formatOTMinutes(min){
+    const h=Math.floor(min/60);
+    const m=min%60;
+    return h>0?`${h}시간 ${m}분`:`${m}분`;
+}
+
+function calculateAfterOT(att){
+    if(!att.checkOut||!att.date) return '-';
+    const [h,m]=att.checkOut.split(':').map(Number);
+    const checkOutMin=h*60+m;
+    const endMin=getAdminWorkEndMin(att.date);
+    if(checkOutMin<=endMin) return '-';
+    return formatOTMinutes(checkOutMin-endMin);
+}
+
+function renderStaffOTTable(){
+    const tbody=document.getElementById('staffOTTable');
+    if(!tbody) return;
+    const activeEmps=employees.filter(e=>e.status==='active');
+    const rows=activeEmps.map(emp=>{
+        let afterMin=0;
+        attendance.filter(a=>a.employeeId===emp.id && a.checkOut).forEach(a=>{
+            const [h,m]=a.checkOut.split(':').map(Number);
+            const endMin=getAdminWorkEndMin(a.date);
+            if(h*60+m>endMin) afterMin+=h*60+m-endMin;
+        });
+        const lunchMin=lunchOT.filter(ot=>ot.employeeId===emp.id).reduce((s,ot)=>s+(ot.minutes||0),0);
+        return {name:emp.name, afterMin, lunchMin, totalMin:afterMin+lunchMin};
+    }).sort((a,b)=>b.totalMin-a.totalMin);
+    tbody.innerHTML=rows.map(r=>{
+        const hl=r.totalMin>0?'font-weight:600':'color:var(--text-muted)';
+        return `<tr><td>${r.name}</td><td>${r.afterMin>0?formatOTMinutes(r.afterMin):'-'}</td><td>${r.lunchMin>0?formatOTMinutes(r.lunchMin):'-'}</td><td style="${hl}">${r.totalMin>0?formatOTMinutes(r.totalMin):'-'}</td></tr>`;
+    }).join('')||'<tr><td colspan="4" class="text-center">직원 없음</td></tr>';
 }
 
 async function editAttendance(id){
