@@ -132,6 +132,20 @@
         .progress-fill.danger{background:var(--red)}
         
         .golden-slider{display:flex;gap:.5rem;overflow-x:auto;padding:.25rem 0;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory}
+        .tl-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;font-size:.7rem}
+        .tl-cal-hdr{text-align:center;padding:.3rem 0;font-weight:600;color:var(--text-muted);font-size:.65rem}
+        .tl-cal-hdr.sun{color:#e53935}
+        .tl-cal-hdr.sat{color:#1565c0}
+        .tl-cal-day{min-height:48px;border:1px solid var(--border);border-radius:4px;padding:2px;position:relative;background:var(--bg-card)}
+        .tl-cal-day.today{border-color:var(--primary);border-width:2px}
+        .tl-cal-day.other{opacity:.3}
+        .tl-cal-day.sun .tl-cal-num{color:#e53935}
+        .tl-cal-day.sat .tl-cal-num{color:#1565c0}
+        .tl-cal-num{font-size:.7rem;font-weight:500;padding:1px 2px;line-height:1}
+        .tl-cal-evt{font-size:.55rem;line-height:1.2;padding:1px 2px;border-radius:2px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .tl-cal-evt.approved{background:#c8e6c9;color:#2e7d32}
+        .tl-cal-evt.pending{background:#fff9c4;color:#f57f17}
+        .tl-cal-evt.me{font-weight:700}
         .golden-slider::-webkit-scrollbar{height:4px}
         .golden-slider::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
         .golden-card{flex:0 0 140px;scroll-snap-align:start;background:linear-gradient(135deg,#fff9f0,#fff);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:8px;padding:.6rem}
@@ -343,10 +357,14 @@
                     ※ 중도퇴사 시 초과 사용분은 급여에서 정산됩니다.
                 </div>
                 
-                <!-- 팀 연차 현황 -->
-                <div class="card" style="margin-bottom:.75rem">
-                    <div class="card-title">👥 팀 연차 현황</div>
-                    <div id="teamLeaveList"><div style="text-align:center;color:var(--text-muted);padding:.5rem;font-size:.85rem">로딩 중...</div></div>
+                <!-- 팀 연차 캘린더 -->
+                <div class="card" style="margin-bottom:.75rem;padding:.75rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+                        <button onclick="moveTeamLeaveMonth(-1)" style="background:none;border:none;font-size:1.1rem;cursor:pointer;padding:.2rem .5rem">◀</button>
+                        <span style="font-size:.9rem;font-weight:700" id="teamLeaveMonthTitle">2026년 3월</span>
+                        <button onclick="moveTeamLeaveMonth(1)" style="background:none;border:none;font-size:1.1rem;cursor:pointer;padding:.2rem .5rem">▶</button>
+                    </div>
+                    <div id="teamLeaveCal"></div>
                 </div>
                 
                 <!-- 황금연휴 슬라이더 -->
@@ -666,8 +684,16 @@
                     <input type="date" class="form-input" id="personalMealDate">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">금액 (원) *</label>
-                    <input type="number" class="form-input" id="personalMealAmount" min="0" placeholder="예: 12000">
+                    <label class="form-label">음식 금액 (원) *</label>
+                    <input type="number" class="form-input" id="personalMealAmount" min="0" placeholder="예: 12000" oninput="updatePersonalMealTotal()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">배달비 (원)</label>
+                    <input type="number" class="form-input" id="personalMealDelivery" min="0" placeholder="0" value="0" oninput="updatePersonalMealTotal()">
+                </div>
+                <div style="background:var(--bg);padding:.5rem .75rem;border-radius:4px;margin-bottom:.5rem;display:flex;justify-content:space-between">
+                    <span style="font-size:.85rem;color:var(--text-secondary)">총액</span>
+                    <span style="font-size:.85rem;font-weight:700" id="personalMealTotalDisplay">₩0</span>
                 </div>
                 <div class="form-group">
                     <label class="form-label">메모</label>
@@ -1876,45 +1902,87 @@
             }
         }
         
+        let teamLeaveMonth=new Date(); // 현재 표시 중인 월
+        
+        function moveTeamLeaveMonth(delta){
+            teamLeaveMonth.setMonth(teamLeaveMonth.getMonth()+delta);
+            renderTeamLeave();
+        }
+        
         function renderTeamLeave(){
-            const container=document.getElementById('teamLeaveList');
+            const container=document.getElementById('teamLeaveCal');
             if(!container) return;
             
-            // 오늘 이후 승인된 연차만 표시
+            const year=teamLeaveMonth.getFullYear();
+            const month=teamLeaveMonth.getMonth();
+            const titleEl=document.getElementById('teamLeaveMonthTitle');
+            if(titleEl) titleEl.textContent=`${year}년 ${month+1}월`;
+            
             const today=getToday();
-            const upcoming=teamLeaveData
-                .filter(r=>r.dates?.some(d=>d>=today))
-                .sort((a,b)=>{
-                    const aMin=a.dates?.filter(d=>d>=today).sort()[0]||'';
-                    const bMin=b.dates?.filter(d=>d>=today).sort()[0]||'';
-                    return aMin.localeCompare(bMin);
-                });
+            const firstDay=new Date(year, month, 1).getDay(); // 0=일
+            const lastDate=new Date(year, month+1, 0).getDate();
             
-            if(upcoming.length===0){
-                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:.5rem;font-size:.85rem">예정된 연차가 없습니다</div>';
-                return;
-            }
-            
-            // 직원별로 그룹핑
-            const grouped={};
-            upcoming.forEach(r=>{
-                const futureDates=r.dates.filter(d=>d>=today);
-                futureDates.forEach(d=>{
-                    if(!grouped[d]) grouped[d]=[];
-                    const statusIcon=r.status==='approved'?'✅':'⏳';
-                    grouped[d].push({name:r.employeeName, type:r.type, status:statusIcon, isMe:r.employeeId===currentUser.id});
+            // 연차 데이터 → 날짜별 맵
+            const leaveMap={};
+            teamLeaveData.forEach(r=>{
+                if(!r.dates) return;
+                r.dates.forEach(d=>{
+                    if(!d.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)) return;
+                    if(!leaveMap[d]) leaveMap[d]=[];
+                    leaveMap[d].push({
+                        name:r.employeeName,
+                        type:r.type||'연차',
+                        status:r.status,
+                        isMe:r.employeeId===currentUser.id
+                    });
                 });
             });
             
-            const sortedDates=Object.keys(grouped).sort().slice(0,10);
-            container.innerHTML=sortedDates.map(date=>{
-                const people=grouped[date];
-                const names=people.map(p=>`<span style="font-size:.8rem;${p.isMe?'font-weight:700;color:var(--primary)':'color:var(--text-secondary)'}">${p.status}${p.name}(${p.type||'연차'})</span>`).join(' ');
-                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem 0;border-bottom:1px solid var(--border)">
-                    <span style="font-size:.8rem;font-weight:500;min-width:80px">${date.substring(5)}</span>
-                    <div style="display:flex;flex-wrap:wrap;gap:.3rem;justify-content:flex-end">${names}</div>
-                </div>`;
-            }).join('');
+            // 헤더 (일~토)
+            const dayNames=['일','월','화','수','목','금','토'];
+            let html='<div class="tl-cal">';
+            dayNames.forEach((d,i)=>{
+                const cls=i===0?'sun':i===6?'sat':'';
+                html+=`<div class="tl-cal-hdr ${cls}">${d}</div>`;
+            });
+            
+            // 이전달 빈칸
+            const prevLast=new Date(year, month, 0).getDate();
+            for(let i=firstDay-1;i>=0;i--){
+                html+=`<div class="tl-cal-day other"><div class="tl-cal-num">${prevLast-i}</div></div>`;
+            }
+            
+            // 이번달
+            for(let d=1;d<=lastDate;d++){
+                const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dow=(firstDay+d-1)%7;
+                const isToday=dateStr===today;
+                const isSun=dow===0;
+                const isSat=dow===6;
+                let cls='tl-cal-day';
+                if(isToday) cls+=' today';
+                if(isSun) cls+=' sun';
+                if(isSat) cls+=' sat';
+                
+                const events=leaveMap[dateStr]||[];
+                let evtHtml=events.slice(0,3).map(e=>{
+                    const eCls='tl-cal-evt '+(e.status==='approved'?'approved':'pending')+(e.isMe?' me':'');
+                    return `<div class="${eCls}">${e.name}</div>`;
+                }).join('');
+                if(events.length>3) evtHtml+=`<div class="tl-cal-evt" style="color:var(--text-muted)">+${events.length-3}</div>`;
+                
+                html+=`<div class="${cls}"><div class="tl-cal-num">${d}</div>${evtHtml}</div>`;
+            }
+            
+            // 다음달 빈칸 (6주 채우기)
+            const totalCells=firstDay+lastDate;
+            const remaining=(7-totalCells%7)%7;
+            for(let i=1;i<=remaining;i++){
+                html+=`<div class="tl-cal-day other"><div class="tl-cal-num">${i}</div></div>`;
+            }
+            
+            html+='</div>';
+            container.innerHTML=html;
         }
         
         // 황금연휴 슬라이더 렌더링
@@ -2439,23 +2507,31 @@
         function openPersonalMealModal(){
             document.getElementById('personalMealDate').value=getToday();
             document.getElementById('personalMealAmount').value='';
+            document.getElementById('personalMealDelivery').value='0';
+            document.getElementById('personalMealTotalDisplay').textContent='₩0';
             document.getElementById('personalMealMemo').value='';
-            // 잔액 힌트 표시
             const remain=getMealRemain(currentUser.id);
             const hint=document.getElementById('personalMealRemainHint');
             if(hint) hint.textContent=formatCurrency(remain);
             openModal('personalMealModal');
         }
         
+        function updatePersonalMealTotal(){
+            const food=parseInt(document.getElementById('personalMealAmount').value)||0;
+            const delivery=parseInt(document.getElementById('personalMealDelivery').value)||0;
+            document.getElementById('personalMealTotalDisplay').textContent=formatCurrency(food+delivery);
+        }
+        
         async function savePersonalMeal(){
             const date=document.getElementById('personalMealDate').value;
-            const amount=parseInt(document.getElementById('personalMealAmount').value)||0;
+            const foodAmount=parseInt(document.getElementById('personalMealAmount').value)||0;
+            const deliveryFee=parseInt(document.getElementById('personalMealDelivery').value)||0;
+            const amount=foodAmount+deliveryFee;
             const memo=document.getElementById('personalMealMemo').value.trim();
             
-            if(!date||!amount){alert('날짜와 금액을 입력해주세요.');return;}
-            if(amount<=0){alert('금액은 0보다 커야 합니다.');return;}
+            if(!date||!foodAmount){alert('날짜와 음식 금액을 입력해주세요.');return;}
+            if(foodAmount<=0){alert('음식 금액은 0보다 커야 합니다.');return;}
             
-            // 잔액 확인 (SSoT: mealRecords 합산)
             const remain=getMealRemain(currentUser.id);
             if(amount>remain){
                 alert('잔액 부족입니다. (잔액: '+formatCurrency(remain)+')');
@@ -2468,6 +2544,8 @@
                     employeeName:currentUser.name,
                     date:date,
                     amount:amount,
+                    foodAmount:foodAmount,
+                    deliveryFee:deliveryFee,
                     memo:memo||'개인 식사',
                     yearMonth:date.substring(0,7),
                     groupId:null,
