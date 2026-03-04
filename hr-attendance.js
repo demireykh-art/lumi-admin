@@ -200,73 +200,157 @@ function renderIncentiveItems(){
     }).join('')||'<tr><td colspan="4" class="text-center">등록된 항목 없음</td></tr>';
 }
 
+// ===== 매출 인센티브 시스템 v2 (동적) =====
+let monthlyIncInput = {}; // {totalRevenue, japanVisitors, staffRevenue:{id:amount}}
+
+async function loadMonthlyIncentiveInput(){
+    const ym=getYM();
+    try{
+        const doc=await db.collection('monthlyIncentiveInput').doc(ym).get();
+        if(doc.exists) monthlyIncInput=doc.data();
+        else monthlyIncInput={totalRevenue:0, japanVisitors:0, staffRevenue:{}};
+    }catch(e){monthlyIncInput={totalRevenue:0, japanVisitors:0, staffRevenue:{}};}
+    renderIncInputForm();
+}
+
+function renderIncInputForm(){
+    // 총매출 + 일본인 입력 복원
+    document.getElementById('incTotalRevenue').value=monthlyIncInput.totalRevenue||'';
+    document.getElementById('incJapanVisitors').value=monthlyIncInput.japanVisitors||'';
+    
+    // 개인매출 입력 — incType=personal인 직원만
+    const personalEmps=employees.filter(e=>e.status==='active' && e.incType==='personal');
+    const container=document.getElementById('incStaffRevenueInputs');
+    if(!container) return;
+    
+    if(personalEmps.length===0){
+        container.innerHTML='<div style="font-size:.8rem;color:var(--text-muted)">개인매출 기반 직원이 없습니다. (직원 수정에서 설정)</div>';
+        return;
+    }
+    
+    container.innerHTML='<label class="form-label" style="font-weight:600">직원별 매출 입력</label>'+
+        personalEmps.map(emp=>{
+            const val=monthlyIncInput.staffRevenue?.[emp.id]||'';
+            return `<div class="form-row" style="margin-bottom:.3rem">
+                <div class="form-group" style="flex:0 0 100px"><label class="form-label" style="font-size:.85rem;margin-top:.4rem">${emp.name}</label></div>
+                <div class="form-group"><input type="number" class="form-input" id="incStaff_${emp.id}" value="${val}" placeholder="매출액" oninput="previewIncentive()"></div>
+            </div>`;
+        }).join('');
+}
+
+async function saveMonthlyIncentiveInput(){
+    const ym=getYM();
+    const totalRevenue=parseInt(document.getElementById('incTotalRevenue').value)||0;
+    const japanVisitors=parseInt(document.getElementById('incJapanVisitors').value)||0;
+    
+    const staffRevenue={};
+    employees.filter(e=>e.status==='active'&&e.incType==='personal').forEach(emp=>{
+        const el=document.getElementById('incStaff_'+emp.id);
+        if(el){
+            const val=parseInt(el.value)||0;
+            if(val>0) staffRevenue[emp.id]=val;
+        }
+    });
+    
+    monthlyIncInput={totalRevenue, japanVisitors, staffRevenue};
+    
+    try{
+        await db.collection('monthlyIncentiveInput').doc(ym).set(monthlyIncInput);
+        alert('✅ 매출 인센티브 입력 저장 완료');
+        renderIncentiveSummary();
+    }catch(e){alert('저장 실패: '+e.message);}
+}
+
+function calculateIncentiveForEmp(emp){
+    const totalRevenue=monthlyIncInput.totalRevenue||0;
+    const japanVisitors=monthlyIncInput.japanVisitors||0;
+    const staffRevenue=monthlyIncInput.staffRevenue||{};
+    const percent=(emp.incPercent||0)/100;
+    
+    let salesIncentive=0;
+    let japanIncentive=0;
+    
+    if(emp.incType==='totalMinusPersonal'){
+        // 총매출 - 개인매출 직원 합계
+        const personalTotal=Object.values(staffRevenue).reduce((s,v)=>s+v,0);
+        salesIncentive=Math.round((totalRevenue-personalTotal)*percent);
+    }else if(emp.incType==='personal'){
+        // 본인 매출
+        const myRevenue=staffRevenue[emp.id]||0;
+        salesIncentive=Math.round(myRevenue*percent);
+    }else if(emp.incType==='totalAll'){
+        // 총매출 전체
+        salesIncentive=Math.round(totalRevenue*percent);
+    }
+    
+    if(emp.incJapan){
+        japanIncentive=japanVisitors*10000;
+    }
+    
+    return {salesIncentive, japanIncentive};
+}
+
+function previewIncentive(){
+    // 임시로 입력값 반영
+    const totalRevenue=parseInt(document.getElementById('incTotalRevenue').value)||0;
+    const japanVisitors=parseInt(document.getElementById('incJapanVisitors').value)||0;
+    const staffRevenue={};
+    employees.filter(e=>e.status==='active'&&e.incType==='personal').forEach(emp=>{
+        const el=document.getElementById('incStaff_'+emp.id);
+        if(el) staffRevenue[emp.id]=parseInt(el.value)||0;
+    });
+    monthlyIncInput={totalRevenue, japanVisitors, staffRevenue};
+    renderIncentiveSummary();
+}
+
+function toggleEmpIncFields(){
+    // placeholder — 유형별 추가 UI 필요시 여기에
+}
+
 function renderIncentiveSummary(){
-    const ym=getYM();const detail=salesDetail[ym]||{};const staffSales=detail.staffSales||{};
-    const japanStaffSales=detail.japanStaffSales||{};
-    const rev=revenueData[ym]||{total:0,nonInsurance:0};
-    const niTotal=rev.nonInsurance||0;
-    const bomiNi=(staffSales['박보미']||{}).niAmount||0;
-    const jiyoonNi=(staffSales['박지윤']||{}).niAmount||0;
-    const okNiBase=Math.max(0,niTotal-bomiNi-jiyoonNi);
+    const ym=getYM();
     const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
     
     document.getElementById('incentiveSummaryTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
-        let salesIncentive=0;
-        let japanIncentive=0;
-        let niIncentive=0;
-        const name=emp.matchName||emp.name;
+        const {salesIncentive, japanIncentive}=calculateIncentiveForEmp(emp);
         
-        // 박보미, 박지윤: 담당매출 1% + 일본인 건당 1만원
-        if(name==='박보미'||name==='박지윤'){
-            const sd=staffSales[name]||{amount:0};
-            salesIncentive=Math.round(sd.amount*0.01);
-            const jpd=japanStaffSales[name]||{patients:0};
-            japanIncentive=(jpd.patients||0)*10000;
-        }
-        // 김옥경: 비보험(박보미+박지윤제외) 0.9%
-        else if(name==='김옥경'){
-            niIncentive=Math.round(okNiBase*0.009);
-        }
-        // 신인해: 비보험 전체 0.1%
-        else if(name==='신인해'){
-            niIncentive=Math.round(niTotal*0.001);
-        }
-        
-        // 피부관리사 등 기존 건별 인센티브
-        const perCaseItems=incentiveItems.filter(i=>i.type==='perCase'&&i.employees?.includes(emp.id));
+        // 건별 인센티브 (기존 유지)
         const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
         let perCaseIncentive=0;
         empRecords.forEach(r=>{
             const item=incentiveItems.find(i=>i.id===r.itemId);
-            if(item&&item.type==='perCase')perCaseIncentive+=item.price||0;
+            if(item&&item.type==='perCase') perCaseIncentive+=item.price||0;
         });
         
-        const total=salesIncentive+japanIncentive+niIncentive+perCaseIncentive;
-        if(total===0&&!['박보미','박지윤','김옥경','신인해'].includes(name)&&perCaseIncentive===0)return '';
+        const total=salesIncentive+japanIncentive+perCaseIncentive;
         
-        let detail2='';
-        if(salesIncentive>0)detail2+=`매출1%: ${formatCurrency(salesIncentive)}`;
-        if(japanIncentive>0)detail2+=(detail2?' + ':'')+ `일본인: ${formatCurrency(japanIncentive)}`;
-        if(niIncentive>0)detail2+=`비보험: ${formatCurrency(niIncentive)}`;
-        if(perCaseIncentive>0)detail2+=(detail2?' + ':'')+`건별: ${formatCurrency(perCaseIncentive)}`;
+        // 인센티브 설정이 있거나 건별 기록이 있는 직원만 표시
+        const hasConfig=emp.incType&&emp.incType!=='none';
+        if(!hasConfig&&perCaseIncentive===0) return '';
         
-        return `<tr><td><strong>${emp.name}</strong></td><td>${roleLabels[emp.role]||emp.role}</td><td class="text-right">${formatCurrency(salesIncentive+niIncentive)}</td><td class="text-right">${formatCurrency(japanIncentive+perCaseIncentive)}</td><td class="text-right"><strong>${formatCurrency(total)}</strong><br><small style="color:#888">${detail2}</small></td></tr>`;
-    }).filter(r=>r).join('')||'<tr><td colspan="5" class="text-center">직원 없음</td></tr>';
+        // 상세 설명
+        let detailParts=[];
+        if(salesIncentive>0){
+            const typeLabel=emp.incType==='totalMinusPersonal'?'총매출-개인':emp.incType==='personal'?'본인매출':emp.incType==='totalAll'?'총매출':'';
+            detailParts.push(`${typeLabel}×${emp.incPercent}%`);
+        }
+        if(perCaseIncentive>0) detailParts.push(`건별 ${empRecords.length}건`);
+        
+        return `<tr>
+            <td><strong>${emp.name}</strong></td>
+            <td>${roleLabels[emp.role]||emp.role}</td>
+            <td class="text-right">${formatCurrency(salesIncentive)}</td>
+            <td class="text-right">${japanIncentive>0?formatCurrency(japanIncentive):'-'}</td>
+            <td class="text-right">${perCaseIncentive>0?formatCurrency(perCaseIncentive):'-'}</td>
+            <td class="text-right"><strong>${formatCurrency(total)}</strong><br><small style="color:#888">${detailParts.join(' + ')}</small></td>
+        </tr>`;
+    }).filter(r=>r).join('')||'<tr><td colspan="6" class="text-center">인센티브 대상 직원 없음</td></tr>';
 }
 
 function renderSalary(){
     const ym=getYM();
-    const detail=salesDetail[ym]||{};
-    const staffSales=detail.staffSales||{};
-    const japanStaffSales=detail.japanStaffSales||{};
-    const rev=revenueData[ym]||{total:0,nonInsurance:0};
-    const niTotal=rev.nonInsurance||0;
-    const bomiNi=(staffSales['박보미']||{}).niAmount||0;
-    const jiyoonNi=(staffSales['박지윤']||{}).niAmount||0;
-    const okNiBase=Math.max(0,niTotal-bomiNi-jiyoonNi);
     const roleLabelsLocal={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
     
-    // 사전급여대장 렌더링
     document.getElementById('prePayrollTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
         // OT 시간 계산
         const empAttendance=attendance.filter(a=>a.employeeId===emp.id&&a.date?.startsWith(ym));
@@ -274,7 +358,7 @@ function renderSalary(){
         empAttendance.forEach(a=>{
             if(a.checkOut){
                 const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
-                const endMin=getAdminWorkEndMin(a.date); // v2.0 요일별
+                const endMin=getAdminWorkEndMin(a.date);
                 if(h*60+m>endMin)otMinutes+=(h*60+m)-endMin;
             }
         });
@@ -283,35 +367,16 @@ function renderSalary(){
         const otHours=(otMinutes/60).toFixed(1);
         const otPay=Math.round(otMinutes/60*(emp.hourly||12000)*1.5);
         
-        // 인센티브 계산 (새 구조)
-        const name=emp.matchName||emp.name;
-        let incentiveAmount=0;
-        
-        // 박보미/박지윤: 담당매출 1% + 일본인 건당 1만원
-        if(name==='박보미'||name==='박지윤'){
-            const sd=staffSales[name]||{amount:0};
-            incentiveAmount+=Math.round(sd.amount*0.01);
-            const jpd=japanStaffSales[name]||{patients:0};
-            incentiveAmount+=(jpd.patients||0)*10000;
-        }
-        // 김옥경: 비보험(박보미+박지윤제외) 0.9%
-        else if(name==='김옥경'){
-            incentiveAmount+=Math.round(okNiBase*0.009);
-        }
-        // 신인해: 비보험 전체 0.1%
-        else if(name==='신인해'){
-            incentiveAmount+=Math.round(niTotal*0.001);
-        }
-        
-        // 피부관리사 등 건별 인센티브
+        // 인센티브 계산 (동적 v2)
+        const {salesIncentive, japanIncentive}=calculateIncentiveForEmp(emp);
         const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
-        let incentiveCount=empRecords.length;
+        let perCaseIncentive=0;
         empRecords.forEach(r=>{
             const item=incentiveItems.find(i=>i.id===r.itemId);
-            if(item&&item.type==='perCase'){
-                incentiveAmount+=item.price||0;
-            }
+            if(item&&item.type==='perCase') perCaseIncentive+=item.price||0;
         });
+        const incentiveAmount=salesIncentive+japanIncentive+perCaseIncentive;
+        const incentiveCount=empRecords.length;
         
         return `<tr>
             <td><strong>${emp.name}</strong></td>
@@ -379,6 +444,10 @@ function openEmployeeModal(id=null){
     document.getElementById('autoAnnualLeave').textContent='0';
     document.getElementById('empId').value='';
     document.getElementById('empMealLimit').value='300000';
+    // 인센티브 설정 초기화
+    document.getElementById('empIncType').value='none';
+    document.getElementById('empIncPercent').value='0';
+    document.getElementById('empIncJapan').checked=false;
     // 탭 체크박스 초기화
     document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
     
@@ -396,6 +465,10 @@ function openEmployeeModal(id=null){
             document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
             document.getElementById('empMealLimit').value=emp.mealLimit||300000;
+            // 인센티브 설정 복원
+            document.getElementById('empIncType').value=emp.incType||'none';
+            document.getElementById('empIncPercent').value=emp.incPercent||0;
+            document.getElementById('empIncJapan').checked=!!emp.incJapan;
             document.getElementById('empId').value=emp.id;
             // 법정 연차 자동계산 표시
             const autoLeave=calculateLegalAnnualLeave(emp.joinDate);
@@ -497,6 +570,9 @@ async function saveEmployee(){
         annualLeave:annualLeave,
         usedLeave:usedLeave,
         mealLimit:parseInt(document.getElementById('empMealLimit').value)||300000,
+        incType:document.getElementById('empIncType').value||'none',
+        incPercent:parseFloat(document.getElementById('empIncPercent').value)||0,
+        incJapan:document.getElementById('empIncJapan').checked,
         isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
         visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
     };

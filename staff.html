@@ -1133,6 +1133,7 @@
         let payrollData=[];
         let salesDetail={};
         let revenueData={};
+        let monthlyIncInput={};
         let selectedLeaveDates=[];
         let userLocation=null;
         let autoLogoutTimer=null;
@@ -1621,6 +1622,9 @@
                 if(detailDoc.exists)salesDetail[ym]=detailDoc.data();
                 const revDoc=await db.collection('revenue').doc(ym).get();
                 if(revDoc.exists)revenueData[ym]=revDoc.data();
+                const incDoc=await db.collection('monthlyIncentiveInput').doc(ym).get();
+                if(incDoc.exists)monthlyIncInput=incDoc.data();
+                else monthlyIncInput={totalRevenue:0,japanVisitors:0,staffRevenue:{}};
             }catch(e){console.error('매출 데이터 로드 오류:',e);}
         }
         
@@ -2073,58 +2077,50 @@
             const monthRecords=incentiveRecords.filter(r=>r.yearMonth===ym);
             const name=currentUser.matchName||currentUser.name;
             
-            // 매출 기반 인센티브 계산
-            const detail=salesDetail[ym]||{};
-            const staffSales=detail.staffSales||{};
-            const japanStaffSales=detail.japanStaffSales||{};
-            const rev=revenueData[ym]||{total:0,nonInsurance:0};
-            const niTotal=rev.nonInsurance||0;
-            const bomiNi=(staffSales['박보미']||{}).niAmount||0;
-            const jiyoonNi=(staffSales['박지윤']||{}).niAmount||0;
-            const okNiBase=Math.max(0,niTotal-bomiNi-jiyoonNi);
+            // 매출 기반 인센티브 계산 (동적 v2 — monthlyIncInput 기반)
+            const incType=currentUser.incType||'none';
+            const incPercent=(currentUser.incPercent||0)/100;
+            const incJapan=!!currentUser.incJapan;
+            const totalRevenue=monthlyIncInput.totalRevenue||0;
+            const japanVisitors=monthlyIncInput.japanVisitors||0;
+            const staffRevenue=monthlyIncInput.staffRevenue||{};
             
             let salesBasedIncentive=0;
             let salesDetailHTML='';
             const card=document.getElementById('salesIncentiveCard');
             
-            if(name==='박보미'||name==='박지윤'){
-                const sd=staffSales[name]||{amount:0,patients:0};
-                const jpd=japanStaffSales[name]||{amount:0,patients:0};
-                const salesInc=Math.round(sd.amount*0.01);
-                const jpPatients=jpd.patients||0;
-                const jpVisitInc=jpPatients*10000;
-                const jpAmount=jpd.amount||0;
-                const jpAvg=jpPatients?Math.round(jpAmount/jpPatients):0;
-                salesBasedIncentive=salesInc+jpVisitInc;
+            if(incType!=='none'&&incPercent>0){
+                let baseRevenue=0;
+                let typeLabel='';
+                
+                if(incType==='totalMinusPersonal'){
+                    const personalTotal=Object.values(staffRevenue).reduce((s,v)=>s+v,0);
+                    baseRevenue=Math.max(0,totalRevenue-personalTotal);
+                    typeLabel='총매출-개인매출 합계';
+                }else if(incType==='personal'){
+                    baseRevenue=staffRevenue[currentUser.id]||0;
+                    typeLabel='본인 매출';
+                }else if(incType==='totalAll'){
+                    baseRevenue=totalRevenue;
+                    typeLabel='총매출';
+                }
+                
+                const salesInc=Math.round(baseRevenue*incPercent);
+                const japanInc=incJapan?japanVisitors*10000:0;
+                salesBasedIncentive=salesInc+japanInc;
+                
                 salesDetailHTML=`
                     <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>본인 담당 매출 1%</span><span style="font-weight:700">${formatCurrency(salesInc)}</span></div>
-                        <div style="font-size:.85rem;color:var(--text-secondary)">본인매출: ${formatCurrency(sd.amount)} (${sd.patients||0}명, 객단가 ${formatCurrency(sd.patients?Math.round(sd.amount/(sd.patients||1)):0)})</div>
-                    </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>${typeLabel} × ${currentUser.incPercent}%</span><span style="font-weight:700">${formatCurrency(salesInc)}</span></div>
+                        <div style="font-size:.85rem;color:var(--text-secondary)">대상매출: ${formatCurrency(baseRevenue)}</div>
+                    </div>`;
+                if(incJapan&&japanVisitors>0){
+                    salesDetailHTML+=`
                     <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>일본인 내원 (${jpPatients}명 × ₩10,000)</span><span style="font-weight:700">${formatCurrency(jpVisitInc)}</span></div>
-                        <div style="font-size:.85rem;color:var(--text-secondary)">일본인 매출: ${formatCurrency(jpAmount)} (${jpPatients}명, 객단가 ${formatCurrency(jpAvg)})</div>
-                    </div>
-                    <div style="padding:.75rem;text-align:right;font-weight:700;font-size:1.1rem;color:var(--primary)">합계: ${formatCurrency(salesBasedIncentive)}</div>
-                `;
-                card.style.display='block';
-            }else if(name==='김옥경'){
-                salesBasedIncentive=Math.round(okNiBase*0.009);
-                salesDetailHTML=`
-                    <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>비보험 전체 상담매출 0.9%</span><span style="font-weight:700">${formatCurrency(salesBasedIncentive)}</span></div>
-                        <div style="font-size:.85rem;color:var(--text-secondary)">대상매출: ${formatCurrency(okNiBase)}</div>
-                    </div>
-                `;
-                card.style.display='block';
-            }else if(name==='신인해'){
-                salesBasedIncentive=Math.round(niTotal*0.001);
-                salesDetailHTML=`
-                    <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>비보험 매출 0.1%</span><span style="font-weight:700">${formatCurrency(salesBasedIncentive)}</span></div>
-                        <div style="font-size:.85rem;color:var(--text-secondary)">비보험 매출: ${formatCurrency(niTotal)}</div>
-                    </div>
-                `;
+                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>일본인 내원 (${japanVisitors}명 × ₩10,000)</span><span style="font-weight:700">${formatCurrency(japanInc)}</span></div>
+                    </div>`;
+                }
+                salesDetailHTML+=`<div style="padding:.75rem;text-align:right;font-weight:700;font-size:1.1rem;color:var(--primary)">합계: ${formatCurrency(salesBasedIncentive)}</div>`;
                 card.style.display='block';
             }else{
                 card.style.display='none';

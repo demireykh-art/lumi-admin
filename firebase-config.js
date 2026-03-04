@@ -365,7 +365,8 @@ async function loadAllData(){
             loadIncentiveRecords(),loadLeaveRequests(),loadLunchOT(),
             typeof loadAuditRecords==='function'?loadAuditRecords():Promise.resolve(),
             typeof loadPurchaseRequests==='function'?loadPurchaseRequests():Promise.resolve(),
-            loadMealAllRecords()
+            loadMealAllRecords(),
+            typeof loadMonthlyIncentiveInput==='function'?loadMonthlyIncentiveInput():Promise.resolve()
         ]);
         
         renderAll();
@@ -431,6 +432,7 @@ function renderAll(){
     if(typeof renderAttendance==='function')renderAttendance();
     if(typeof renderOvertime==='function')renderOvertime();
     if(typeof renderIncentiveItems==='function')renderIncentiveItems();
+    if(typeof renderIncInputForm==='function')renderIncInputForm();
     if(typeof renderIncentiveSummary==='function')renderIncentiveSummary();
     if(typeof renderSalary==='function')renderSalary();
     if(typeof renderLeaveManagement==='function')renderLeaveManagement();

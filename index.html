@@ -79,7 +79,7 @@
                     <div class="section"><div class="section-header"><div class="section-title">담당직원별 매출 & 인센티브</div></div>
                         <div class="table-container"><table><thead><tr><th>담당직원</th><th class="text-right">환자 수</th><th class="text-right">담당 매출</th><th class="text-right">객단가</th><th class="text-right">일본인 내원</th><th class="text-right">일본인 매출</th><th class="text-right">인센티브</th></tr></thead><tbody id="staffSalesTable"></tbody></table></div>
                     </div>
-                    <div class="section"><div class="section-header"><div class="section-title">비보험 매출 기반 인센티브 (김옥경 · 신인해)</div></div>
+                    <div class="section"><div class="section-header"><div class="section-title">매출 기반 인센티브</div></div>
                         <div class="table-container"><table><thead><tr><th>직원</th><th class="text-right">대상 매출</th><th class="text-right">비율</th><th class="text-right">인센티브</th><th>비고</th></tr></thead><tbody id="nonInsuranceIncentiveTable"></tbody></table></div>
                     </div>
                 </div>
@@ -296,10 +296,23 @@
                     <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>시간(분)</th><th>사유</th><th>관리</th></tr></thead><tbody id="lunchOTTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-incentive">
-                    <div class="section-header"><div class="section-title">인센티브 항목 관리</div><button class="btn btn-primary" onclick="openIncentiveItemModal()">+ 항목 추가</button></div>
+                    <!-- 매월 매출 입력 -->
+                    <div class="card" style="margin-bottom:1.5rem;padding:1.25rem">
+                        <div class="card-title" style="margin-bottom:1rem">📊 매출 인센티브 입력 (매월)</div>
+                        <div class="form-row">
+                            <div class="form-group"><label class="form-label">총 매출 (원)</label><input type="number" class="form-input" id="incTotalRevenue" placeholder="예: 200000000" oninput="previewIncentive()"></div>
+                            <div class="form-group"><label class="form-label">일본인 내원 환자수</label><input type="number" class="form-input" id="incJapanVisitors" placeholder="예: 50" oninput="previewIncentive()"></div>
+                        </div>
+                        <div id="incStaffRevenueInputs" style="margin-top:.75rem"></div>
+                        <div style="margin-top:1rem;display:flex;gap:.5rem">
+                            <button class="btn btn-primary" onclick="saveMonthlyIncentiveInput()">💾 저장</button>
+                            <button class="btn btn-secondary" onclick="previewIncentive()">미리보기</button>
+                        </div>
+                    </div>
+                    <div class="section-header"><div class="section-title">인센티브 항목 관리 (건별)</div><button class="btn btn-primary" onclick="openIncentiveItemModal()">+ 항목 추가</button></div>
                     <div class="table-container"><table><thead><tr><th>항목명</th><th>유형/단가</th><th>적용 직원</th><th>관리</th></tr></thead><tbody id="incentiveItemTable"></tbody></table></div>
                     <div class="section-header mt-1"><div class="section-title">직원별 인센티브 현황</div></div>
-                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 기반</th><th class="text-right">건별/기타</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
+                    <div class="table-container"><table><thead><tr><th>직원</th><th>직급</th><th class="text-right">매출 인센티브</th><th class="text-right">일본인 건별</th><th class="text-right">건별/기타</th><th class="text-right">합계</th></tr></thead><tbody id="incentiveSummaryTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-salary">
                     <div class="section-header"><div class="section-title">사전급여대장 (노무사 전달용)</div><button class="btn btn-secondary" onclick="exportPrePayroll()">엑셀 다운로드</button></div>
@@ -530,6 +543,33 @@
                         <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">미입력시 기본 30만원</p>
                     </div>
                     <div class="form-group"><label class="form-label">&nbsp;</label></div>
+                </div>
+                <!-- 인센티브 설정 -->
+                <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem">
+                    <label class="form-label" style="font-weight:600;margin-bottom:.5rem">💰 매출 인센티브 설정</label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">매출 인센티브 유형</label>
+                            <select class="form-select" id="empIncType" onchange="toggleEmpIncFields()">
+                                <option value="none">없음</option>
+                                <option value="totalMinusPersonal">총매출 - 개인매출직원 합계 (실장)</option>
+                                <option value="personal">본인 매출 기반 (코디네이터)</option>
+                                <option value="totalAll">총매출 전체 (마케팅)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">인센티브 비율 (%)</label>
+                            <input type="number" class="form-input" id="empIncPercent" value="0" step="0.1" min="0" max="10" placeholder="예: 0.9">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" style="display:flex;align-items:center;gap:.5rem;padding-top:.5rem">
+                            <label style="margin:0;cursor:pointer;display:flex;align-items:center;gap:.5rem;font-size:.85rem">
+                                <input type="checkbox" id="empIncJapan" style="width:16px;height:16px">
+                                🗾 일본인 내원 건별 인센티브 (1명당 10,000원)
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
