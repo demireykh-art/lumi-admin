@@ -139,6 +139,58 @@ async function handleAdminLogin(){
     }
 }
 function logout(){localStorage.removeItem('lumi_admin_auth');currentAdmin=null;location.reload();}
+
+// ===== Admin 자동 로그아웃 (미활동 감지) =====
+let _adminLogoutTimer=null;
+let _adminLogoutMs=30*60*1000; // 기본 30분
+
+function initAdminAutoLogout(){
+    // 설정 로드
+    db.collection('settings').doc('admin').get().then(doc=>{
+        if(doc.exists){
+            const mins=doc.data().autoLogoutMinutes;
+            if(typeof mins==='number'){
+                _adminLogoutMs=mins*60*1000;
+                const el=document.getElementById('adminAutoLogoutMinutes');
+                if(el) el.value=mins;
+            }
+        }
+        if(_adminLogoutMs>0) startAdminLogoutTimer();
+    }).catch(()=>{});
+    
+    // 활동 감지 이벤트
+    ['click','keydown','mousemove','touchstart','scroll'].forEach(evt=>{
+        document.addEventListener(evt, resetAdminLogoutTimer, {passive:true});
+    });
+}
+
+function startAdminLogoutTimer(){
+    clearTimeout(_adminLogoutTimer);
+    if(_adminLogoutMs<=0) return;
+    _adminLogoutTimer=setTimeout(()=>{
+        alert('장시간 미활동으로 자동 로그아웃됩니다.');
+        logout();
+    }, _adminLogoutMs);
+}
+
+function resetAdminLogoutTimer(){
+    if(_adminLogoutMs>0) startAdminLogoutTimer();
+}
+
+async function saveAdminAutoLogout(){
+    const val=parseInt(document.getElementById('adminAutoLogoutMinutes').value)||0;
+    try{
+        await db.collection('settings').doc('admin').set({autoLogoutMinutes:val},{merge:true});
+        _adminLogoutMs=val*60*1000;
+        if(val>0){
+            startAdminLogoutTimer();
+            document.getElementById('adminLogoutStatus').textContent='✅ '+val+'분 미활동 시 자동 로그아웃';
+        }else{
+            clearTimeout(_adminLogoutTimer);
+            document.getElementById('adminLogoutStatus').textContent='✅ 자동 로그아웃 비활성화됨';
+        }
+    }catch(e){alert('저장 실패: '+e.message);}
+}
 function checkAuth(){
     const saved=localStorage.getItem('lumi_admin_auth');
     if(saved){
@@ -457,6 +509,7 @@ async function initApp(){
     if(typeof initDefaultLocations==='function')await initDefaultLocations();
     if(typeof loadLocations==='function')await loadLocations();
     updateAdminUI();
+    initAdminAutoLogout();
 }
 
 // Auto-check auth on load
