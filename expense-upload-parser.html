@@ -547,6 +547,82 @@ let allRows = [];       // 파싱된 전체 트랜잭션
 let filteredRows = [];  // 필터 적용 후
 let activeSource = 'all';
 
+// ============================================================
+// 가맹점 카테고리 기억 (localStorage + Firestore)
+// ============================================================
+const MEMORY_LS_KEY = 'lumi_expense_cat_memory';
+
+// 로컬에서 메모리 로드
+function loadMemoryLocal() {
+  try {
+    return JSON.parse(localStorage.getItem(MEMORY_LS_KEY) || '{}');
+  } catch(e) { return {}; }
+}
+
+// 로컬에 저장
+function saveMemoryLocal(mem) {
+  localStorage.setItem(MEMORY_LS_KEY, JSON.stringify(mem));
+}
+
+// Firestore에서 메모리 로드 (페이지 시작 시)
+async function loadMemoryFirestore() {
+  try {
+    const doc = await db.collection('config').doc('expenseCatMemory').get();
+    if (doc.exists) {
+      const remote = doc.data().memory || {};
+      // 로컬과 병합 (로컬 우선)
+      const local = loadMemoryLocal();
+      const merged = Object.assign({}, remote, local);
+      saveMemoryLocal(merged);
+      return merged;
+    }
+  } catch(e) { console.warn('메모리 Firestore 로드 실패:', e); }
+  return loadMemoryLocal();
+}
+
+// Firestore에 메모리 저장 (비동기, 실패해도 무시)
+async function saveMemoryFirestore(mem) {
+  try {
+    await db.collection('config').doc('expenseCatMemory').set(
+      { memory: mem, updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
+  } catch(e) { console.warn('메모리 Firestore 저장 실패:', e); }
+}
+
+// 가맹점명 정규화 (숫자·특수문자 제거 후 앞 10자)
+function normalizeVendor(name) {
+  return (name || '').replace(/[ds()[]]/g, '').substring(0, 10).toLowerCase();
+}
+
+// 카테고리 기억 저장
+function rememberCategory(vendorRaw, category) {
+  const key = normalizeVendor(vendorRaw);
+  if (!key || category === '미분류') return;
+  const mem = loadMemoryLocal();
+  if (mem[key] === category) return; // 변화 없으면 스킵
+  mem[key] = category;
+  saveMemoryLocal(mem);
+  saveMemoryFirestore(mem); // 백그라운드 저장
+}
+
+// 기억된 카테고리 조회
+function recallCategory(vendorRaw) {
+  const key = normalizeVendor(vendorRaw);
+  if (!key) return null;
+  const mem = loadMemoryLocal();
+  return mem[key] || null;
+}
+
+// 파싱 후 전체 rows에 기억 적용
+function applyMemoryToRows(rows) {
+  rows.forEach(r => {
+    if (r.category !== '미분류') return; // 자동분류된 건 유지
+    const remembered = recallCategory(r.description);
+    if (remembered) r.category = remembered;
+  });
+}
+
 const CATEGORIES = [
   '미분류',
   '인건비', '급여', '인센티브', '4대보험', '퇴직금',
@@ -558,6 +634,7 @@ const CATEGORIES = [
   '식비·간식', '복지·식대',
   '세무·노무', '금융·대출', '카드결제(세금등)',
   '차량·교통', '기타유동비',
+  '환불',
   '제외(본인이체)', '제외(개인용도)',
 ];
 
@@ -872,6 +949,7 @@ async function loadFile(type, input) {
     // 해당 출처 기존 데이터 교체
     allRows = allRows.filter(r => r.source !== type);
     allRows = allRows.concat(rows);
+    applyMemoryToRows(rows); // 기억된 카테고리 자동 적용
 
     setSlotStatus(type, 'ok', `✓ ${rows.length}건 로드`);
     applyFilter();
@@ -967,6 +1045,7 @@ const CAT_COLORS = {
   '보험료':'#FFF0F8,#9D174D','금융·대출':'#F8FAFC,#475569',
   '레이저리스':'#EEF2FF,#3730A3','카드결제(세금등)':'#FEF9EC,#B45309',
   '차량·교통':'#FFFBEB,#D97706','기타유동비':'#F9FAFB,#6B7280',
+  '환불':'#ECFEFF,#0E7490',
   '미분류':'#F3F4F6,#9CA3AF',
   '제외(본인이체)':'#F3F4F6,#9CA3AF','제외(개인용도)':'#FEF2F2,#991B1B',
 };
@@ -1019,11 +1098,11 @@ function renderTable() {
 }
 
 function updateCategory(absIdx, newCat) {
-  allRows[absIdx].category = newCat;
-  // 색상 즉시 업데이트
-  const selects = document.querySelectorAll('.cat-select');
-  // find the one matching this index - easier to re-render just the cell color
-  applyFilter(); // lightweight enough
+  const row = allRows[absIdx];
+  row.category = newCat;
+  // 가맹점 카테고리 기억 저장
+  rememberCategory(row.description, newCat);
+  applyFilter();
 }
 
 // ============================================================
@@ -1186,8 +1265,10 @@ function showToast(msg, isError = false) {
   toastTimer = setTimeout(() => t.style.display = 'none', 3000);
 }
 
-// init
-applyFilter();
+// init — Firestore에서 카테고리 기억 로드 후 시작
+loadMemoryFirestore().then(() => {
+  applyFilter();
+});
 </script>
 </body>
 </html>
