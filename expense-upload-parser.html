@@ -686,6 +686,11 @@ const VARIABLE_CATEGORIES = [
   { value:'기타',         label:'기타' },
 ];
 
+// ── 인건비 카테고리 (별도 그룹) ──
+const PAYROLL_CATEGORIES = [
+  { value:'인건비',       label:'인건비(급여)' },
+];
+
 // 통합 목록 (필터 드롭다운용)
 const ALL_CAT_VALUES = [
   '미분류',
@@ -1210,11 +1215,13 @@ function renderTable() {
     FIXED_CATEGORIES.map(c => `<option value="${c.value}">${c.label}</option>`).join('') + '</optgroup>';
   const varOptGroup = '<optgroup label="── 유동비 ──">' +
     VARIABLE_CATEGORIES.map(c => `<option value="${c.value}">${c.label}</option>`).join('') + '</optgroup>';
+  const payrollOptGroup = '<optgroup label="── 인건비 ──">' +
+    PAYROLL_CATEGORIES.map(c => `<option value="${c.value}">${c.label}</option>`).join('') + '</optgroup>';
   const excludeOptGroup = '<optgroup label="── 제외 ──">' +
     '<option value="제외(본인이체)">제외(본인이체)</option>' +
     '<option value="제외(개인용도)">제외(개인용도)</option>' +
     '</optgroup>';
-  const baseOptGroups = '<option value="미분류">미분류</option>' + fixedOptGroup + varOptGroup + excludeOptGroup;
+  const baseOptGroups = '<option value="미분류">미분류</option>' + fixedOptGroup + varOptGroup + payrollOptGroup + excludeOptGroup;
 
   tbody.innerHTML = filteredRows.map((row, idx) => {
     const [badgeClass, badgeName] = SOURCE_BADGE[row.source] || ['',''];
