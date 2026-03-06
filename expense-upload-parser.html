@@ -683,6 +683,9 @@ const VARIABLE_CATEGORIES = [
   { value:'소모품비',     label:'일반소모품' },
   { value:'금융/이체',    label:'금융/이체' },
   { value:'환불',         label:'환불' },
+  { value:'이자',         label:'이자' },
+  { value:'광고비',       label:'광고비' },
+  { value:'루미컨설팅비', label:'루미컨설팅비' },
   { value:'기타',         label:'기타' },
 ];
 
@@ -768,8 +771,10 @@ const AUTO_CAT_RULES = [
   { keywords: ['롯데카드','현대카드','삼성카드','신한카드','fb카드'], cat: '세금' },
   // 일반소모품
   { keywords: ['쿠팡','홈플러스','롯데마트','롯데쇼핑','오아시스','컬리','네이버파이낸셜','다이소'], cat: '소모품비' },
+  // 증권 관련 이체 → 제외
+  { keywords: ['증권'], cat: '제외(개인용도)' },
   // 금융/이체
-  { keywords: ['증권','atm출금'], cat: '금융/이체' },
+  { keywords: ['atm출금'], cat: '금융/이체' },
   // 미분류 (토스 개인이체 등)
   { keywords: ['토스','오픈뱅킹','모바일'], cat: '미분류' },
 ];

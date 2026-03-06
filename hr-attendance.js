@@ -428,6 +428,9 @@ const variableCategories=[
     {value:'금융/이체',label:'금융/이체'},
     {value:'인건비',label:'인건비'},
     {value:'환불',label:'환불'},
+    {value:'이자',label:'이자'},
+    {value:'광고비',label:'광고비'},
+    {value:'루미컨설팅비',label:'루미컨설팅비'},
     {value:'기타',label:'기타'}
 ];
 function openEmployeeModal(id=null){
