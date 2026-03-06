@@ -426,6 +426,7 @@ const variableCategories=[
     {value:'리스료',label:'리스료'},
     {value:'소모품비',label:'일반소모품'},
     {value:'금융/이체',label:'금융/이체'},
+    {value:'인건비',label:'인건비'},
     {value:'기타',label:'기타'}
 ];
 function openEmployeeModal(id=null){
