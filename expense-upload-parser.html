@@ -296,6 +296,7 @@
   .badge-hyundai { background: #FFF0E8; color: #A03010; }
   .badge-samsung { background: #E8F5FF; color: #005AA0; }
   .badge-shinhan-card { background: #F0E8FF; color: #6010A0; }
+  .badge-payroll      { background: #D1FAE5; color: #065F46; }
 
   .cat-badge {
     display: inline-block;
@@ -449,7 +450,7 @@
   <div class="filter-bar">
     <div class="filter-group">
       <div class="filter-label">기간</div>
-      <input type="month" class="filter-input" id="filterMonth" value="2026-02" onchange="applyFilter()">
+      <input type="month" class="filter-input" id="filterMonth" value="2026-02" onchange="onMonthChange()">
     </div>
     <div class="filter-group">
       <div class="filter-label">출처</div>
@@ -459,6 +460,19 @@
         <div class="cat-tab" onclick="setSourceFilter('hyundai', this)">현대카드</div>
         <div class="cat-tab" onclick="setSourceFilter('samsung', this)">삼성카드</div>
         <div class="cat-tab" onclick="setSourceFilter('shinhan-card', this)">신한카드</div>
+        <div class="cat-tab" onclick="setSourceFilter('payroll', this)">💚 인건비</div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">유형</div>
+      <div class="cat-tabs" id="typeTabs">
+        <div class="cat-tab active" onclick="setTypeFilter('all', this)">전체</div>
+        <div class="cat-tab" onclick="setTypeFilter('fixed', this)">🔵 고정비</div>
+        <div class="cat-tab" onclick="setTypeFilter('variable', this)">🟠 유동비</div>
+        <div class="cat-tab" onclick="setTypeFilter('payroll', this)">🟢 인건비</div>
+        <div class="cat-tab" onclick="setTypeFilter('tax', this)">🟡 세금</div>
+        <div class="cat-tab" onclick="setTypeFilter('excluded', this)">⬜ 제외</div>
+        <div class="cat-tab" onclick="setTypeFilter('unclassified', this)">❓ 미분류</div>
       </div>
     </div>
     <div class="spacer"></div>
@@ -472,25 +486,30 @@
       <div class="summary-amount" id="sumTotal">—</div>
       <div class="summary-count" id="sumTotalCount">0건</div>
     </div>
-    <div class="summary-card">
-      <div class="summary-label">신한은행 출금</div>
-      <div class="summary-amount" id="sumBank">—</div>
-      <div class="summary-count" id="sumBankCount">0건</div>
+    <div class="summary-card" style="border-left-color:#3730A3">
+      <div class="summary-label">🔵 고정비</div>
+      <div class="summary-amount" id="sumFixed">—</div>
+      <div class="summary-count" id="sumFixedCount">0건</div>
     </div>
-    <div class="summary-card">
-      <div class="summary-label">현대카드</div>
-      <div class="summary-amount" id="sumHyundai">—</div>
-      <div class="summary-count" id="sumHyundaiCount">0건</div>
+    <div class="summary-card" style="border-left-color:#EA580C">
+      <div class="summary-label">🟠 유동비</div>
+      <div class="summary-amount" id="sumVariable">—</div>
+      <div class="summary-count" id="sumVariableCount">0건</div>
     </div>
-    <div class="summary-card">
-      <div class="summary-label">삼성카드</div>
-      <div class="summary-amount" id="sumSamsung">—</div>
-      <div class="summary-count" id="sumSamsungCount">0건</div>
+    <div class="summary-card" style="border-left-color:#047857">
+      <div class="summary-label">🟢 인건비</div>
+      <div class="summary-amount" id="sumPayroll">—</div>
+      <div class="summary-count" id="sumPayrollCount">0명</div>
     </div>
-    <div class="summary-card">
-      <div class="summary-label">신한카드</div>
-      <div class="summary-amount" id="sumShinhanCard">—</div>
-      <div class="summary-count" id="sumShinhanCardCount">0건</div>
+    <div class="summary-card" style="border-left-color:#B45309">
+      <div class="summary-label">🟡 세금(원천세)</div>
+      <div class="summary-amount" id="sumTax">—</div>
+      <div class="summary-count" id="sumTaxCount">0건</div>
+    </div>
+    <div class="summary-card" style="border-left-color:#9CA3AF">
+      <div class="summary-label">⬜ 제외/미분류</div>
+      <div class="summary-amount" id="sumExcluded">—</div>
+      <div class="summary-count" id="sumExcludedCount">0건</div>
     </div>
   </div>
 
@@ -509,9 +528,10 @@
           <tr>
             <th>날짜</th>
             <th>출처</th>
+            <th>유형</th>
             <th>적요/가맹점</th>
             <th>내용</th>
-            <th>지출 카테고리</th>
+            <th>카테고리</th>
             <th style="text-align:right">금액</th>
           </tr>
         </thead>
@@ -543,8 +563,9 @@
 // ============================================================
 // STATE
 // ============================================================
-let allRows = [];       // 파싱된 전체 트랜잭션
-let filteredRows = [];  // 필터 적용 후
+let allRows = [];       // 파싱된 전체 트랜잭션 (카드/은행)
+let payrollRows = [];   // 인건비 (Firestore payroll)
+let filteredRows = [];  // 필터 적용 후 (allRows + payrollRows 합산)
 let activeSource = 'all';
 
 // ============================================================
@@ -623,59 +644,129 @@ function applyMemoryToRows(rows) {
   });
 }
 
-const CATEGORIES = [
+// ── 고정비 카테고리 (ERP fixedCategories 동일) ──
+const FIXED_CATEGORIES = [
+  { value:'임대료',       label:'임대료/관리비' },
+  { value:'공과금',       label:'공과금(전기/가스/수도)' },
+  { value:'장비리스',     label:'장비리스/렌탈' },
+  { value:'대출이자',     label:'대출이자' },
+  { value:'통신_인터넷',  label:'인터넷' },
+  { value:'통신_전화',    label:'전화' },
+  { value:'세무노무',     label:'세무/노무' },
+  { value:'보험료',       label:'보험료' },
+  { value:'청소비',       label:'청소비' },
+  { value:'수탁_폐기물',  label:'수탁-폐기물' },
+  { value:'수탁_검사',    label:'수탁-검사' },
+  { value:'정수기',       label:'정수기' },
+  { value:'보안_캡스',    label:'보안(캡스)' },
+  { value:'복리후생',     label:'복리후생' },
+  { value:'마케팅',       label:'마케팅' },
+  { value:'기타고정',     label:'기타(고정)' },
+];
+
+// ── 유동비 카테고리 (ERP variableCategories 동일) ──
+const VARIABLE_CATEGORIES = [
+  { value:'의료소모품',   label:'의료소모품' },
+  { value:'미용소모품',   label:'미용소모품' },
+  { value:'사무용품',     label:'사무/비품' },
+  { value:'복리후생비',   label:'복리후생비(식대/음료)' },
+  { value:'접대비',       label:'접대비' },
+  { value:'차량유지비',   label:'차량유지비' },
+  { value:'교통비',       label:'교통/주차' },
+  { value:'시설보수',     label:'시설/보수' },
+  { value:'장비수리',     label:'장비수리' },
+  { value:'인테리어',     label:'인테리어' },
+  { value:'교육비',       label:'교육/세미나' },
+  { value:'공과금',       label:'공과금' },
+  { value:'세금',         label:'세금' },
+  { value:'리스료',       label:'리스료' },
+  { value:'소모품비',     label:'일반소모품' },
+  { value:'금융/이체',    label:'금융/이체' },
+  { value:'환불',         label:'환불' },
+  { value:'기타',         label:'기타' },
+];
+
+// 통합 목록 (필터 드롭다운용)
+const ALL_CAT_VALUES = [
   '미분류',
-  '인건비', '급여', '인센티브', '4대보험', '퇴직금',
-  '임대료', '관리비', '보험료',
-  '의료소모품', '약품재료비',
-  '레이저리스',
-  '마케팅·광고', 'SNS·구독',
-  '공과금·전기', '통신비',
-  '식비·간식', '복지·식대',
-  '세무·노무', '금융·대출', '카드결제(세금등)',
-  '차량·교통', '기타유동비',
-  '환불',
+  ...FIXED_CATEGORIES.map(c => c.value),
+  ...VARIABLE_CATEGORIES.map(c => c.value),
   '제외(본인이체)', '제외(개인용도)',
 ];
 
-// 자동 카테고리 분류 규칙 (키워드 → 카테고리)
+// 고정비 value set
+const FIXED_CAT_SET = new Set(FIXED_CATEGORIES.map(c => c.value));
+
+// 카테고리 label 조회
+function catLabel(value) {
+  const found = [...FIXED_CATEGORIES, ...VARIABLE_CATEGORIES].find(c => c.value === value);
+  return found ? found.label : value;
+}
+
+// 고정비 여부
+function isFixed(cat) {
+  return FIXED_CAT_SET.has(cat);
+}
+
+// ============================================================
+// 자동 카테고리 분류 규칙
+// 고정비 우선 → 유동비 → 제외 → 미분류
+// ============================================================
 const AUTO_CAT_RULES = [
-  // 급여/인건비
-  { keywords: ['급여','월급','인건비','임금'], cat: '급여' },
-  { keywords: ['4대보험','국민연금','건강보험','고용보험','산재'], cat: '4대보험' },
-  { keywords: ['퇴직금','퇴직연금','퇴직연금수수료'], cat: '퇴직금' },
-  // 고정비
-  { keywords: ['임대료','케이타워','보증금'], cat: '임대료' },
-  { keywords: ['세무','노무','세무회계','노무법인'], cat: '세무·노무' },
-  { keywords: ['KB손'], cat: '보험료' },
-  // 장비리스 — 금액 기반 매칭 (parseShinhanBank에서 우선 처리)
-  // 메리츠캐피탈(1,833,400=하이드라페이셜), 오릭스코리아(8,665,540=싸이톤)
-  { keywords: ['메리츠캐피탈','오릭스코리아'], cat: '레이저리스' },
+  // ── 제외 (먼저 처리) ──
+  { keywords: ['유경훈'], cat: '제외(본인이체)' },
+  { keywords: ['학원','아이스크림에듀','황소수학','아이보람','이비인후과','여성의원','레이크팰리스'], cat: '제외(개인용도)' },
+
+  // ── 고정비 ──────────────────────────────────────────────
+  // 임대료 (케이타워)
+  { keywords: ['케이타워','임대료'], cat: '임대료' },
+  // 공과금
+  { keywords: ['한국전력','코원에너지','가스','전기료'], cat: '공과금' },
+  // 장비리스 (금액 기반은 LEASE_AMOUNT_MAP 우선 처리, 여기선 회사명 fallback)
+  { keywords: ['메리츠캐피탈','오릭스코리아','캐피탈','리스'], cat: '장비리스' },
+  // 대출이자
+  { keywords: ['대출이자','한도대출이자','이자'], cat: '대출이자' },
+  // 인터넷
+  { keywords: ['에스케이브로드밴드','skb','kt인터넷','인터넷'], cat: '통신_인터넷' },
+  // 전화
+  { keywords: ['lgu+','sk통신','kt통신','tnh','통신요금'], cat: '통신_전화' },
+  // 세무노무
+  { keywords: ['세무','노무','세무회계','노무법인'], cat: '세무노무' },
+  // 보험료
+  { keywords: ['kb손','보험료','보험'], cat: '보험료' },
+  // 청소
+  { keywords: ['청소','크린토피아'], cat: '청소비' },
+  // 정수기
+  { keywords: ['코웨이','sk매직'], cat: '정수기' },
+  // 보안
+  { keywords: ['에스케이쉴더스','캡스','보안'], cat: '보안_캡스' },
+  // 폐기물
+  { keywords: ['폐기물','수탁'], cat: '수탁_폐기물' },
+  // 마케팅 (고정)
+  { keywords: ['마케이션','광고대행','마케팅'], cat: '마케팅' },
+  // 복리후생 (고정 — 구독 서비스)
+  { keywords: ['넷플릭스','디즈니','disney','구글','openai','chatgpt','x corp','효성에프엠에스'], cat: '복리후생' },
+
+  // ── 유동비 ──────────────────────────────────────────────
   // 의료소모품
   { keywords: ['쥴릭파마','블루엠텍','유비케어','휴온스','씨엠에스랩','파마리서치','프리모리스','hskorea','hs코퍼레이션','웰스팜텍','굿유','글로벌텍스프리'], cat: '의료소모품' },
-  // 마케팅
-  { keywords: ['마케이션','광고','마케팅'], cat: '마케팅·광고' },
-  { keywords: ['넷플릭스','디즈니','disney','구글','line official','openai','chatgpt','x corp'], cat: 'SNS·구독' },
-  // 통신/공과금
-  { keywords: ['lgu+','sk통신','skb','kt통신','에스케이브로드밴드','tnh','통신요금'], cat: '통신비' },
-  { keywords: ['전기료','한국전력','코원에너지','가스'], cat: '공과금·전기' },
-  // 금융
-  { keywords: ['대출이자','한도대출이자'], cat: '금융·대출' },
-  { keywords: ['롯데카드','현대카드','삼성카드','신한카드','카드결제','fb카드'], cat: '카드결제(세금등)' },
-  // 복지 — 우아한형제들(배민), 컴포즈커피 = 직원 복지
-  { keywords: ['우아한형제들','컴포즈커피','메가엠지씨커피','본죽','씨유삼전'], cat: '복지·식대' },
-  { keywords: ['코웨이','sk매직','효성에프엠에스','에스케이쉴더스','크린토피아'], cat: '복지·식대' },
-  // 개인 제외 항목 — 학원비
-  { keywords: ['학원','아이스크림에듀','책나무','황소수학','아이보람','이비인후과','여성의원','약국','레이크팰리스'], cat: '제외(개인용도)' },
-  // 식비 (병원 업무 식비)
-  { keywords: ['면옥','만두','스테이크','아웃백','파리바게뜨','뚜레쥬르','크리스피','써브웨이','오마뎅','르봉','포스톤','봉식이','다래연','마리아쥬'], cat: '식비·간식' },
-  // 차량
-  { keywords: ['주유소','주유','티머니','카카오모빌리티','잠실자동차'], cat: '차량·교통' },
-  // 기타
-  { keywords: ['쿠팡','홈플러스','롯데마트','롯데쇼핑','오아시스','컬리','네이버파이낸셜'], cat: '기타유동비' },
-  { keywords: ['증권적립','증권'], cat: '기타유동비' },
-  { keywords: ['atm출금'], cat: '기타유동비' },
-  { keywords: ['인터넷 이체','오픈뱅킹','모바일','토스'], cat: '미분류' },
+  // 복리후생비 (식대/음료)
+  { keywords: ['우아한형제들','컴포즈커피','메가엠지씨커피','본죽','씨유삼전','배달의민족'], cat: '복리후생비' },
+  { keywords: ['다래연','면옥','만두','스테이크','아웃백','파리바게뜨','뚜레쥬르','르봉','포스톤','봉식이','마리아쥬'], cat: '복리후생비' },
+  // 교육비
+  { keywords: ['somers','세미나','컨퍼런스','교육','연수','학회'], cat: '교육비' },
+  // 차량유지비
+  { keywords: ['주유소','주유','sk에너지','gs칼텍스','세차','타이어','잠실자동차'], cat: '차량유지비' },
+  // 교통비
+  { keywords: ['티머니','카카오모빌리티','택시','주차'], cat: '교통비' },
+  // 세금 (원천세 등 카드결제)
+  { keywords: ['롯데카드','현대카드','삼성카드','신한카드','fb카드'], cat: '세금' },
+  // 일반소모품
+  { keywords: ['쿠팡','홈플러스','롯데마트','롯데쇼핑','오아시스','컬리','네이버파이낸셜','다이소'], cat: '소모품비' },
+  // 금융/이체
+  { keywords: ['증권','atm출금'], cat: '금융/이체' },
+  // 미분류 (토스 개인이체 등)
+  { keywords: ['토스','오픈뱅킹','모바일'], cat: '미분류' },
 ];
 
 // 장비리스 금액 매칭 테이블 (날짜 무관, 금액으로 확정 매칭)
@@ -983,11 +1074,45 @@ function setSourceFilter(src, el) {
   applyFilter();
 }
 
+let activeTypeFilter = 'all';
+
+async function onMonthChange() {
+  const month = document.getElementById('filterMonth').value;
+  if (month) {
+    await loadPayrollRows(month);  // 해당 월 인건비 재로드
+  }
+  applyFilter();
+}
+
+function setTypeFilter(type, el) {
+  activeTypeFilter = type;
+  document.querySelectorAll('#typeTabs .cat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  applyFilter();
+}
+
 function applyFilter() {
   const month = document.getElementById('filterMonth').value; // YYYY-MM
 
-  filteredRows = allRows.filter(r => {
+  // 인건비(payrollRows)는 출처 필터를 'all' 또는 'payroll'일 때만 포함
+  const combined = [
+    ...allRows,
+    ...(activeSource === 'all' || activeSource === 'payroll' ? payrollRows : [])
+  ];
+
+  // 인건비 날짜를 선택 월에 맞춰 동적 조정 (payrollRows는 항상 해당 월)
+  if (month) {
+    payrollRows.forEach(r => { r.date = month + '-25'; });
+  }
+
+  filteredRows = combined.filter(r => {
     if (activeSource !== 'all' && r.source !== activeSource) return false;
+    if (activeTypeFilter === 'fixed'        && !isFixed(r.category)) return false;
+    if (activeTypeFilter === 'variable'     && (isFixed(r.category) || r.category === '세금' || r.category === '인건비' || r.category.startsWith('제외') || r.category === '미분류')) return false;
+    if (activeTypeFilter === 'tax'          && r.category !== '세금') return false;
+    if (activeTypeFilter === 'payroll'      && r.category !== '인건비') return false;
+    if (activeTypeFilter === 'excluded'     && !r.category.startsWith('제외')) return false;
+    if (activeTypeFilter === 'unclassified' && r.category !== '미분류') return false;
     if (month && !r.date.startsWith(month)) return false;
     return true;
   });
@@ -998,35 +1123,35 @@ function applyFilter() {
 }
 
 function renderSummary() {
-  const fmt = n => n > 0 ? (n/10000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '만원' : '—';
   const fmtKr = n => n > 0 ? n.toLocaleString() + '원' : '—';
 
-  const sources = ['shinhan-bank','hyundai','samsung','shinhan-card'];
-  const totals = {};
-  // 집계에서 제외 항목 모두 빼기
-  const countableRows = filteredRows.filter(r => !r.category.startsWith('제외'));
-  let grandTotal = 0;
+  const excluded  = filteredRows.filter(r => r.category.startsWith('제외') || r.category === '미분류');
+  const countable = filteredRows.filter(r => !r.category.startsWith('제외') && r.category !== '미분류');
 
-  sources.forEach(s => {
-    const rows = countableRows.filter(r => r.source === s);
-    const sum = rows.reduce((a,r) => a + r.amount, 0);
-    totals[s] = { sum, count: rows.length };
-    grandTotal += sum;
-  });
+  const fixedRows    = countable.filter(r => isFixed(r.category));
+  const taxRows      = countable.filter(r => r.category === '세금');
+  const payrollR     = countable.filter(r => r.category === '인건비');
+  const variableRows = countable.filter(r => !isFixed(r.category) && r.category !== '세금' && r.category !== '인건비');
 
-  const allCount = countableRows.length;
-  const excludedCount = filteredRows.length - allCount;
-  document.getElementById('sumTotal').textContent = fmtKr(grandTotal);
-  document.getElementById('sumTotalCount').textContent = `${allCount}건 (제외 ${excludedCount}건)`;
+  const fixedTotal    = fixedRows.reduce((s,r) => s + r.amount, 0);
+  const taxTotal      = taxRows.reduce((s,r) => s + r.amount, 0);
+  const payrollTotal  = payrollR.reduce((s,r) => s + r.amount, 0);
+  const variableTotal = variableRows.reduce((s,r) => s + r.amount, 0);
+  const grandTotal    = fixedTotal + taxTotal + payrollTotal + variableTotal;
+  const excludedTotal = excluded.reduce((s,r) => s + r.amount, 0);
 
-  document.getElementById('sumBank').textContent = fmtKr(totals['shinhan-bank'].sum);
-  document.getElementById('sumBankCount').textContent = `${totals['shinhan-bank'].count}건`;
-  document.getElementById('sumHyundai').textContent = fmtKr(totals['hyundai'].sum);
-  document.getElementById('sumHyundaiCount').textContent = `${totals['hyundai'].count}건`;
-  document.getElementById('sumSamsung').textContent = fmtKr(totals['samsung'].sum);
-  document.getElementById('sumSamsungCount').textContent = `${totals['samsung'].count}건`;
-  document.getElementById('sumShinhanCard').textContent = fmtKr(totals['shinhan-card'].sum);
-  document.getElementById('sumShinhanCardCount').textContent = `${totals['shinhan-card'].count}건`;
+  document.getElementById('sumTotal').textContent         = fmtKr(grandTotal);
+  document.getElementById('sumTotalCount').textContent    = `${countable.length}건`;
+  document.getElementById('sumFixed').textContent         = fmtKr(fixedTotal);
+  document.getElementById('sumFixedCount').textContent    = `${fixedRows.length}건`;
+  document.getElementById('sumVariable').textContent      = fmtKr(variableTotal);
+  document.getElementById('sumVariableCount').textContent = `${variableRows.length}건`;
+  document.getElementById('sumPayroll').textContent       = fmtKr(payrollTotal);
+  document.getElementById('sumPayrollCount').textContent  = `${payrollR.length}명`;
+  document.getElementById('sumTax').textContent           = fmtKr(taxTotal);
+  document.getElementById('sumTaxCount').textContent      = `${taxRows.length}건`;
+  document.getElementById('sumExcluded').textContent      = fmtKr(excludedTotal);
+  document.getElementById('sumExcludedCount').textContent = `${excluded.length}건 (제외/미분류)`;
 }
 
 const SOURCE_BADGE = {
@@ -1034,9 +1159,20 @@ const SOURCE_BADGE = {
   'hyundai': ['badge-hyundai', '현대카드'],
   'samsung': ['badge-samsung', '삼성카드'],
   'shinhan-card': ['badge-shinhan-card', '신한카드'],
+  'payroll': ['badge-payroll', '인건비'],
 };
 
 const CAT_COLORS = {
+  // 고정비
+  '임대료':'#EFF6FF,#1D4ED8','공과금':'#FFF7ED,#EA580C',
+  '장비리스':'#EEF2FF,#3730A3','대출이자':'#F8FAFC,#475569',
+  '통신_인터넷':'#F0F9FF,#0369A1','통신_전화':'#F0F9FF,#0284C7',
+  '세무노무':'#FDF2F8,#9D174D','보험료':'#FFF0F8,#BE185D',
+  '청소비':'#F0FDF4,#166534','정수기':'#ECFDF5,#059669',
+  '보안_캡스':'#FEF3C7,#92400E','수탁_폐기물':'#FEF2F2,#991B1B',
+  '수탁_검사':'#FFF7ED,#C2410C','복리후생':'#F5F3FF,#6D28D9',
+  '마케팅':'#FEF3C7,#B45309','기타고정':'#F9FAFB,#374151',
+  // 유동비
   '인건비':'#F4E6FF,#7B2FBE','급여':'#EDE9FF,#5B21B6','4대보험':'#E8F4FF,#1D4ED8',
   '퇴직금':'#FEF9EC,#92400E','임대료':'#FFF7ED,#C2410C','세무·노무':'#FDF2F8,#9D174D',
   '의료소모품':'#ECFDF5,#065F46','마케팅·광고':'#FEF3C7,#92400E','SNS·구독':'#F0FFFE,#0E7490',
@@ -1061,7 +1197,7 @@ function renderTable() {
   document.getElementById('tableCount').textContent = `${filteredRows.length}건`;
 
   if (filteredRows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6">
+    tbody.innerHTML = `<tr><td colspan="7">
       <div class="empty-state">
         <div class="empty-icon">${allRows.length === 0 ? '📂' : '🔍'}</div>
         <div class="empty-text">${allRows.length === 0 ? '파일을 업로드하면 지출내역이 표시됩니다' : '해당 기간/출처의 내역이 없습니다'}</div>
@@ -1069,28 +1205,59 @@ function renderTable() {
     return;
   }
 
-  const catOptions = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+  // 고정비/유동비 통합 드롭다운 옵션
+  const fixedOptGroup = '<optgroup label="── 고정비 ──">' +
+    FIXED_CATEGORIES.map(c => `<option value="${c.value}">${c.label}</option>`).join('') + '</optgroup>';
+  const varOptGroup = '<optgroup label="── 유동비 ──">' +
+    VARIABLE_CATEGORIES.map(c => `<option value="${c.value}">${c.label}</option>`).join('') + '</optgroup>';
+  const excludeOptGroup = '<optgroup label="── 제외 ──">' +
+    '<option value="제외(본인이체)">제외(본인이체)</option>' +
+    '<option value="제외(개인용도)">제외(개인용도)</option>' +
+    '</optgroup>';
+  const baseOptGroups = '<option value="미분류">미분류</option>' + fixedOptGroup + varOptGroup + excludeOptGroup;
 
   tbody.innerHTML = filteredRows.map((row, idx) => {
     const [badgeClass, badgeName] = SOURCE_BADGE[row.source] || ['',''];
     const absIdx = allRows.indexOf(row);
     const isExcluded = row.category.startsWith('제외');
+    const fixedBadge = isFixed(row.category)
+      ? '<span style="font-size:.65rem;padding:1px 5px;background:#EEF2FF;color:#3730A3;border-radius:3px;margin-left:4px">고정</span>'
+      : (!isExcluded && row.category !== '미분류' ? '<span style="font-size:.65rem;padding:1px 5px;background:#FFF7ED;color:#C2410C;border-radius:3px;margin-left:4px">유동</span>' : '');
 
-    const catSelectOpts = CATEGORIES.map(c =>
-      `<option value="${c}"${c === row.category ? ' selected' : ''}>${c}</option>`
-    ).join('');
-
+    // 선택된 option 반영
+    const catSelectOpts = baseOptGroups.replace(
+      `value="${row.category}"`,
+      `value="${row.category}" selected`
+    );
     const rowStyle = isExcluded ? 'opacity:0.4; text-decoration:line-through;' : '';
+
+    // 유형 배지
+    let typeBadge = '';
+    if (row.category.startsWith('제외')) {
+      typeBadge = '<span style="font-size:.7rem;padding:2px 7px;background:#F3F4F6;color:#6B7280;border-radius:4px">제외</span>';
+    } else if (row.category === '미분류') {
+      typeBadge = '<span style="font-size:.7rem;padding:2px 7px;background:#F3F4F6;color:#9CA3AF;border-radius:4px">미분류</span>';
+    } else if (row.category === '인건비') {
+      typeBadge = '<span style="font-size:.7rem;padding:2px 7px;background:#D1FAE5;color:#065F46;border-radius:4px;font-weight:600">인건비</span>';
+    } else if (row.category === '세금') {
+      typeBadge = '<span style="font-size:.7rem;padding:2px 7px;background:#FEF9EC;color:#B45309;border-radius:4px;font-weight:600">세금</span>';
+    } else if (isFixed(row.category)) {
+      typeBadge = '<span style="font-size:.7rem;padding:2px 7px;background:#EEF2FF;color:#3730A3;border-radius:4px;font-weight:600">고정비</span>';
+    } else {
+      typeBadge = '<span style="font-size:.7rem;padding:2px 7px;background:#FFF7ED;color:#C2410C;border-radius:4px;font-weight:600">유동비</span>';
+    }
 
     return `<tr style="${rowStyle}">
       <td class="cell-date">${row.date}</td>
       <td><span class="badge ${badgeClass}">${badgeName}</span></td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.memo}">${row.memo}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.description}">${row.description}</td>
-      <td>
-        <select class="cat-select" onchange="updateCategory(${absIdx}, this.value)" style="${catBadgeStyle(row.category)}">
-          ${catSelectOpts}
-        </select>
+      <td>${typeBadge}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.memo}">${row.memo}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.description}">${row.description}</td>
+      <td style="white-space:nowrap">
+        ${row.readonly
+          ? `<span style="font-size:.78rem;color:#065F46;font-weight:600" title="기본급:${(row.detail?.basePay||0).toLocaleString()}원 / OT:${(row.detail?.extraOT||0).toLocaleString()}원 / 인센:${(row.detail?.incentive||0).toLocaleString()}원">📋 ERP 연동</span>`
+          : `<select class="cat-select" onchange="updateCategory(${absIdx}, this.value)" style="${catBadgeStyle(row.category)}">${catSelectOpts}</select>`
+        }
       </td>
       <td class="cell-amount ${isExcluded ? '' : 'out'}">${row.amount.toLocaleString()}원</td>
     </tr>`;
@@ -1109,9 +1276,12 @@ function updateCategory(absIdx, newCat) {
 // BULK CATEGORY
 // ============================================================
 function toggleAllCategories() {
-  const cat = prompt('전체 미분류 항목의 카테고리를 일괄 설정합니다.\n\n' +
-    CATEGORIES.join('\n') + '\n\n카테고리명 입력:');
-  if (!cat || !CATEGORIES.includes(cat)) {
+  const allVals = ['미분류', ...FIXED_CATEGORIES.map(c=>c.value), ...VARIABLE_CATEGORIES.map(c=>c.value)];
+  const cat = prompt('전체 미분류 항목의 카테고리를 일괄 설정합니다.\n\n고정비: ' +
+    FIXED_CATEGORIES.map(c=>c.label).join(', ') +
+    '\n\n유동비: ' + VARIABLE_CATEGORIES.map(c=>c.label).join(', ') +
+    '\n\n카테고리 값(value)을 입력하세요:');
+  if (!cat || !allVals.includes(cat)) {
     if (cat) alert('올바른 카테고리명을 입력하세요.');
     return;
   }
@@ -1127,7 +1297,7 @@ function toggleAllCategories() {
 // EXPORT
 // ============================================================
 function exportCSV() {
-  const exportRows = filteredRows.filter(r => !r.category.startsWith('제외'));
+  const exportRows = filteredRows.filter(r => !r.category.startsWith('제외') && !r.readonly);
   if (exportRows.length === 0) { showToast('내역이 없습니다', true); return; }
   const header = ['날짜','출처','적요','내용','카테고리','금액'];
   const rows = exportRows.map(r => [
@@ -1167,12 +1337,13 @@ function mapCategory(cat) {
 }
 
 async function exportToFirebase() {
-  const exportRows = filteredRows.filter(r => !r.category.startsWith('제외'));
+  const exportRows = filteredRows.filter(r => !r.category.startsWith('제외') && !r.readonly);
   if (exportRows.length === 0) { showToast('저장할 내역이 없습니다', true); return; }
 
-  // 세금(원천세) 항목과 일반 유동비 분리
-  const taxRows  = exportRows.filter(r => r.category === '카드결제(세금등)');
-  const expRows  = exportRows.filter(r => r.category !== '카드결제(세금등)');
+  // 고정비 / 유동비 / 세금(원천세) 분리
+  const fixedRows    = exportRows.filter(r => isFixed(r.category));
+  const taxRows      = exportRows.filter(r => r.category === '세금');
+  const variableRows = exportRows.filter(r => !isFixed(r.category) && r.category !== '세금');
 
   // 저장 전 요약 확인
   const byCat = {};
@@ -1188,16 +1359,35 @@ async function exportToFirebase() {
   )) return;
 
   try {
-    // ── variableExpenses 저장 ──
-    if (expRows.length) {
+    // ── fixedExpenses 저장 ──
+    if (fixedRows.length) {
       const batch = db.batch();
-      expRows.forEach(r => {
+      fixedRows.forEach(r => {
+        const ref = db.collection('fixedExpenses').doc();
+        batch.set(ref, {
+          date:        r.date,
+          name:        r.description,
+          amount:      r.amount,
+          category:    r.category,
+          note:        `[${r.sourceName}] ${r.description}`,
+          yearMonth:   r.date.substring(0, 7),
+          createdAt:   new Date().toISOString(),
+          uploadBatch: true,
+        });
+      });
+      await batch.commit();
+    }
+
+    // ── variableExpenses 저장 ──
+    if (variableRows.length) {
+      const batch = db.batch();
+      variableRows.forEach(r => {
         const ref = db.collection('variableExpenses').doc();
         batch.set(ref, {
           date:        r.date,
           name:        r.description,
           amount:      r.amount,
-          category:    mapCategory(r.category),
+          category:    r.category,
           card:        r.sourceName,
           merchant:    r.description,
           note:        `[${r.sourceName}] ${r.description}`,
@@ -1233,7 +1423,7 @@ async function exportToFirebase() {
     showToast(`✓ ${msg.join(' + ')} 저장 완료`);
 
     // 저장 후 초기화
-    expRows.concat(taxRows).forEach(r => allRows.splice(allRows.indexOf(r), 1));
+    [...fixedRows, ...variableRows, ...taxRows].forEach(r => { const i = allRows.indexOf(r); if (i > -1) allRows.splice(i, 1); });
     applyFilter();
 
   } catch(e) {
@@ -1245,6 +1435,7 @@ async function exportToFirebase() {
 function clearAll() {
   if (!confirm('모든 데이터를 초기화하시겠습니까?')) return;
   allRows = [];
+  // payrollRows는 Firestore 연동 — 초기화 안 함
   ['shinhan-bank','hyundai','samsung','shinhan-card'].forEach(type => {
     setSlotStatus(type, 'wait', '파일 없음');
   });
@@ -1265,8 +1456,49 @@ function showToast(msg, isError = false) {
   toastTimer = setTimeout(() => t.style.display = 'none', 3000);
 }
 
+// ============================================================
+// 인건비: Firestore payroll 컬렉션에서 해당 월 데이터 로드
+// ============================================================
+async function loadPayrollRows(yearMonth) {
+  try {
+    const snap = await db.collection('payroll')
+      .where('yearMonth', '==', yearMonth)
+      .get();
+
+    payrollRows = snap.docs.map(doc => {
+      const d = doc.data();
+      return {
+        source:      'payroll',
+        sourceName:  '인건비',
+        date:        yearMonth + '-25',
+        memo:        '급여',
+        description: d.name || '',
+        amount:      d.netPay || 0,
+        category:    '인건비',
+        excluded:    false,
+        readonly:    true,
+        detail: {
+          basePay:   d.basePay   || 0,
+          extraOT:   d.extraOT   || 0,
+          incentive: d.incentive || 0,
+          grossPay:  d.grossPay  || 0,
+          netPay:    d.netPay    || 0,
+        }
+      };
+    });
+    console.log(`payroll ${yearMonth}: ${payrollRows.length}명 로드`);
+  } catch(e) {
+    console.warn('payroll 로드 실패:', e);
+    payrollRows = [];
+  }
+}
+
+// ============================================================
 // init — Firestore에서 카테고리 기억 로드 후 시작
-loadMemoryFirestore().then(() => {
+loadMemoryFirestore().then(async () => {
+  // 초기 선택 월의 인건비 Firestore에서 로드
+  const initMonth = document.getElementById('filterMonth').value;
+  if (initMonth) await loadPayrollRows(initMonth);
   applyFilter();
 });
 </script>
