@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUMI ERP — 지출내역 업로드</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  firebase.initializeApp({
+    apiKey:            "AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",
+    authDomain:        "lumiclinic-c1a95.firebaseapp.com",
+    projectId:         "lumiclinic-c1a95",
+    storageBucket:     "lumiclinic-c1a95.firebasestorage.app",
+    messagingSenderId: "901456209944",
+    appId:             "1:901456209944:web:f287418cd0541f324d3b6d"
+  });
+  const db = firebase.firestore();
+</script>
+<!-- SheetJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --gold: #B8975A;
+    --gold-light: #D4B483;
+    --gold-dark: #8B6F3A;
+    --cream: #FAF7F2;
+    --beige: #F0EAE0;
+    --beige-mid: #E0D5C5;
+    --text: #2C2418;
+    --text-mid: #6B5A3E;
+    --text-light: #9E8B72;
+    --white: #FFFFFF;
+    --red: #C0392B;
+    --green: #27AE60;
+    --blue: #2C6FAC;
+    --shadow: 0 2px 16px rgba(44,36,24,0.10);
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+
+  /* HEADER */
+  .header {
+    background: var(--text);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 2px solid var(--gold);
+  }
+  .header-logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 2px;
+  }
+  .header-sub {
+    font-size: 12px;
+    color: var(--text-light);
+    letter-spacing: 1px;
+  }
+  .header-divider { flex: 1; }
+  .header-tag {
+    font-size: 11px;
+    background: var(--gold-dark);
+    color: var(--cream);
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+  }
+
+  /* LAYOUT */
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gold-dark);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--beige-mid);
+  }
+
+  /* UPLOAD PANEL */
+  .upload-panel {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 28px;
+    margin: 28px 0 20px;
+    border: 1px solid var(--beige-mid);
+  }
+
+  .upload-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+
+  .upload-slot {
+    border: 2px dashed var(--beige-mid);
+    border-radius: 8px;
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    background: var(--cream);
+  }
+  .upload-slot:hover { border-color: var(--gold); background: #FDF9F3; }
+  .upload-slot.active { border-color: var(--green); border-style: solid; background: #F0FBF4; }
+  .upload-slot.error { border-color: var(--red); border-style: solid; }
+  .upload-slot input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  .slot-icon { font-size: 28px; margin-bottom: 8px; }
+  .slot-bank {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .slot-desc { font-size: 11px; color: var(--text-light); }
+  .slot-status {
+    font-size: 11px;
+    font-weight: 500;
+    margin-top: 8px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    display: inline-block;
+  }
+  .slot-status.ok { background: #E8F8EE; color: var(--green); }
+  .slot-status.err { background: #FDECEA; color: var(--red); }
+  .slot-status.wait { background: var(--beige); color: var(--text-light); }
+
+  /* PERIOD FILTER */
+  .filter-bar {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px 24px;
+    margin-bottom: 20px;
+    border: 1px solid var(--beige-mid);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .filter-group { display: flex; align-items: center; gap: 8px; }
+  .filter-label { font-size: 12px; font-weight: 500; color: var(--text-mid); }
+  .filter-input {
+    border: 1px solid var(--beige-mid);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-family: 'DM Mono', monospace;
+    background: var(--cream);
+    color: var(--text);
+    outline: none;
+  }
+  .filter-input:focus { border-color: var(--gold); }
+
+  .btn {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .btn-gold { background: var(--gold); color: var(--white); }
+  .btn-gold:hover { background: var(--gold-dark); }
+  .btn-outline { background: transparent; border: 1px solid var(--gold); color: var(--gold-dark); }
+  .btn-outline:hover { background: var(--beige); }
+  .btn-sm { padding: 5px 14px; font-size: 12px; }
+
+  /* SUMMARY CARDS */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .summary-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--beige-mid);
+    border-left: 3px solid var(--gold);
+  }
+  .summary-card.bank { border-left-color: var(--blue); }
+  .summary-card.highlight { background: var(--text); }
+  .summary-label { font-size: 11px; color: var(--text-light); letter-spacing: 1px; margin-bottom: 6px; }
+  .summary-card.highlight .summary-label { color: var(--gold-light); }
+  .summary-amount {
+    font-family: 'DM Mono', monospace;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .summary-card.highlight .summary-amount { color: var(--gold); }
+  .summary-count { font-size: 11px; color: var(--text-light); margin-top: 4px; }
+  .summary-card.highlight .summary-count { color: var(--text-light); }
+
+  /* TABLE */
+  .table-panel {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--beige-mid);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .table-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--beige-mid);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .table-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .table-count {
+    font-size: 12px;
+    background: var(--beige);
+    color: var(--text-mid);
+    padding: 2px 10px;
+    border-radius: 12px;
+  }
+  .spacer { flex: 1; }
+
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--beige); }
+  th {
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-mid);
+    letter-spacing: 1px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--beige-mid);
+  }
+  td {
+    padding: 9px 14px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--beige);
+    color: var(--text);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #FDFAF6; }
+
+  .cell-date {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-mid);
+    white-space: nowrap;
+  }
+  .cell-amount {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .cell-amount.out { color: var(--red); }
+  .cell-amount.in { color: var(--green); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .badge-shinhan-bank { background: #E8F0FF; color: #1A4FA0; }
+  .badge-hyundai { background: #FFF0E8; color: #A03010; }
+  .badge-samsung { background: #E8F5FF; color: #005AA0; }
+  .badge-shinhan-card { background: #F0E8FF; color: #6010A0; }
+
+  .cat-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  /* Category select */
+  .cat-select {
+    border: 1px solid var(--beige-mid);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 11px;
+    background: var(--cream);
+    color: var(--text);
+    cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    outline: none;
+    min-width: 110px;
+  }
+  .cat-select:focus { border-color: var(--gold); }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-light);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-text { font-size: 14px; }
+
+  /* EXPORT BAR */
+  .export-bar {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px 24px;
+    border: 1px solid var(--beige-mid);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .export-label { font-size: 13px; font-weight: 500; color: var(--text-mid); }
+
+  /* CATEGORY FILTER TABS */
+  .cat-tabs {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .cat-tab {
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--beige-mid);
+    background: var(--cream);
+    color: var(--text-mid);
+    transition: all 0.15s;
+  }
+  .cat-tab.active {
+    background: var(--gold);
+    color: var(--white);
+    border-color: var(--gold);
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--text);
+    color: var(--cream);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 9999;
+    display: none;
+    border-left: 3px solid var(--gold);
+  }
+
+  @media (max-width: 600px) {
+    .header { padding: 14px 16px; }
+    .container { padding: 0 12px; }
+    .upload-grid { grid-template-columns: 1fr 1fr; }
+    .filter-bar { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="header-logo">LUMI ERP</div>
+    <div class="header-sub">THE CLINIC LUMI</div>
+  </div>
+  <div class="header-divider"></div>
+  <div class="header-tag">지출내역 업로드</div>
+</div>
+
+<div class="container">
+
+  <!-- UPLOAD SLOTS -->
+  <div class="upload-panel">
+    <div class="section-title">파일 업로드</div>
+    <div class="upload-grid">
+
+      <div class="upload-slot" id="slot-shinhan-bank">
+        <input type="file" accept=".xls,.xlsx" onchange="loadFile('shinhan-bank', this)">
+        <div class="slot-icon">🏦</div>
+        <div class="slot-bank">신한은행</div>
+        <div class="slot-desc">거래내역조회 XLS</div>
+        <div class="slot-status wait" id="status-shinhan-bank">파일 없음</div>
+      </div>
+
+      <div class="upload-slot" id="slot-hyundai">
+        <input type="file" accept=".xls,.xlsx" onchange="loadFile('hyundai', this)">
+        <div class="slot-icon">💳</div>
+        <div class="slot-bank">현대카드</div>
+        <div class="slot-desc">이용대금명세서 XLS</div>
+        <div class="slot-status wait" id="status-hyundai">파일 없음</div>
+      </div>
+
+      <div class="upload-slot" id="slot-samsung">
+        <input type="file" accept=".xls,.xlsx" onchange="loadFile('samsung', this)">
+        <div class="slot-icon">💳</div>
+        <div class="slot-bank">삼성카드</div>
+        <div class="slot-desc">이용내역 XLSX</div>
+        <div class="slot-status wait" id="status-samsung">파일 없음</div>
+      </div>
+
+      <div class="upload-slot" id="slot-shinhan-card">
+        <input type="file" accept=".xls,.xlsx" onchange="loadFile('shinhan-card', this)">
+        <div class="slot-icon">💳</div>
+        <div class="slot-bank">신한카드</div>
+        <div class="slot-desc">이용대금명세서 XLS</div>
+        <div class="slot-status wait" id="status-shinhan-card">파일 없음</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <div class="filter-label">기간</div>
+      <input type="month" class="filter-input" id="filterMonth" value="2026-02" onchange="applyFilter()">
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">출처</div>
+      <div class="cat-tabs" id="sourceTabs">
+        <div class="cat-tab active" onclick="setSourceFilter('all', this)">전체</div>
+        <div class="cat-tab" onclick="setSourceFilter('shinhan-bank', this)">신한은행</div>
+        <div class="cat-tab" onclick="setSourceFilter('hyundai', this)">현대카드</div>
+        <div class="cat-tab" onclick="setSourceFilter('samsung', this)">삼성카드</div>
+        <div class="cat-tab" onclick="setSourceFilter('shinhan-card', this)">신한카드</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-outline btn-sm" onclick="toggleAllCategories()">카테고리 일괄 설정</button>
+  </div>
+
+  <!-- SUMMARY CARDS -->
+  <div class="summary-grid" id="summaryGrid">
+    <div class="summary-card highlight">
+      <div class="summary-label">총 지출</div>
+      <div class="summary-amount" id="sumTotal">—</div>
+      <div class="summary-count" id="sumTotalCount">0건</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">신한은행 출금</div>
+      <div class="summary-amount" id="sumBank">—</div>
+      <div class="summary-count" id="sumBankCount">0건</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">현대카드</div>
+      <div class="summary-amount" id="sumHyundai">—</div>
+      <div class="summary-count" id="sumHyundaiCount">0건</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">삼성카드</div>
+      <div class="summary-amount" id="sumSamsung">—</div>
+      <div class="summary-count" id="sumSamsungCount">0건</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">신한카드</div>
+      <div class="summary-amount" id="sumShinhanCard">—</div>
+      <div class="summary-count" id="sumShinhanCardCount">0건</div>
+    </div>
+  </div>
+
+  <!-- MAIN TABLE -->
+  <div class="table-panel">
+    <div class="table-header">
+      <div class="table-title">지출 내역</div>
+      <div class="table-count" id="tableCount">0건</div>
+      <div class="spacer"></div>
+      <button class="btn btn-gold btn-sm" onclick="exportToFirebase()">🔥 ERP에 저장</button>
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">CSV 다운로드</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>날짜</th>
+            <th>출처</th>
+            <th>적요/가맹점</th>
+            <th>내용</th>
+            <th>지출 카테고리</th>
+            <th style="text-align:right">금액</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="6">
+            <div class="empty-state">
+              <div class="empty-icon">📂</div>
+              <div class="empty-text">파일을 업로드하면 지출내역이 표시됩니다</div>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EXPORT BAR -->
+  <div class="export-bar">
+    <span class="export-label">💡 카테고리를 분류한 후 ERP에 저장하거나 CSV로 다운로드하세요</span>
+    <div class="spacer"></div>
+    <button class="btn btn-outline btn-sm" onclick="clearAll()">전체 초기화</button>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let allRows = [];       // 파싱된 전체 트랜잭션
+let filteredRows = [];  // 필터 적용 후
+let activeSource = 'all';
+
+const CATEGORIES = [
+  '미분류',
+  '인건비', '급여', '인센티브', '4대보험', '퇴직금',
+  '임대료', '관리비', '보험료',
+  '의료소모품', '약품재료비',
+  '레이저리스',
+  '마케팅·광고', 'SNS·구독',
+  '공과금·전기', '통신비',
+  '식비·간식', '복지·식대',
+  '세무·노무', '금융·대출', '카드결제(세금등)',
+  '차량·교통', '기타유동비',
+  '제외(본인이체)', '제외(개인용도)',
+];
+
+// 자동 카테고리 분류 규칙 (키워드 → 카테고리)
+const AUTO_CAT_RULES = [
+  // 급여/인건비
+  { keywords: ['급여','월급','인건비','임금'], cat: '급여' },
+  { keywords: ['4대보험','국민연금','건강보험','고용보험','산재'], cat: '4대보험' },
+  { keywords: ['퇴직금','퇴직연금','퇴직연금수수료'], cat: '퇴직금' },
+  // 고정비
+  { keywords: ['임대료','케이타워','보증금'], cat: '임대료' },
+  { keywords: ['세무','노무','세무회계','노무법인'], cat: '세무·노무' },
+  { keywords: ['KB손'], cat: '보험료' },
+  // 장비리스 — 금액 기반 매칭 (parseShinhanBank에서 우선 처리)
+  // 메리츠캐피탈(1,833,400=하이드라페이셜), 오릭스코리아(8,665,540=싸이톤)
+  { keywords: ['메리츠캐피탈','오릭스코리아'], cat: '레이저리스' },
+  // 의료소모품
+  { keywords: ['쥴릭파마','블루엠텍','유비케어','휴온스','씨엠에스랩','파마리서치','프리모리스','hskorea','hs코퍼레이션','웰스팜텍','굿유','글로벌텍스프리'], cat: '의료소모품' },
+  // 마케팅
+  { keywords: ['마케이션','광고','마케팅'], cat: '마케팅·광고' },
+  { keywords: ['넷플릭스','디즈니','disney','구글','line official','openai','chatgpt','x corp'], cat: 'SNS·구독' },
+  // 통신/공과금
+  { keywords: ['lgu+','sk통신','skb','kt통신','에스케이브로드밴드','tnh','통신요금'], cat: '통신비' },
+  { keywords: ['전기료','한국전력','코원에너지','가스'], cat: '공과금·전기' },
+  // 금융
+  { keywords: ['대출이자','한도대출이자'], cat: '금융·대출' },
+  { keywords: ['롯데카드','현대카드','삼성카드','신한카드','카드결제','fb카드'], cat: '카드결제(세금등)' },
+  // 복지 — 우아한형제들(배민), 컴포즈커피 = 직원 복지
+  { keywords: ['우아한형제들','컴포즈커피','메가엠지씨커피','본죽','씨유삼전'], cat: '복지·식대' },
+  { keywords: ['코웨이','sk매직','효성에프엠에스','에스케이쉴더스','크린토피아'], cat: '복지·식대' },
+  // 개인 제외 항목 — 학원비
+  { keywords: ['학원','아이스크림에듀','책나무','황소수학','아이보람','이비인후과','여성의원','약국','레이크팰리스'], cat: '제외(개인용도)' },
+  // 식비 (병원 업무 식비)
+  { keywords: ['면옥','만두','스테이크','아웃백','파리바게뜨','뚜레쥬르','크리스피','써브웨이','오마뎅','르봉','포스톤','봉식이','다래연','마리아쥬'], cat: '식비·간식' },
+  // 차량
+  { keywords: ['주유소','주유','티머니','카카오모빌리티','잠실자동차'], cat: '차량·교통' },
+  // 기타
+  { keywords: ['쿠팡','홈플러스','롯데마트','롯데쇼핑','오아시스','컬리','네이버파이낸셜'], cat: '기타유동비' },
+  { keywords: ['증권적립','증권'], cat: '기타유동비' },
+  { keywords: ['atm출금'], cat: '기타유동비' },
+  { keywords: ['인터넷 이체','오픈뱅킹','모바일','토스'], cat: '미분류' },
+];
+
+// 장비리스 금액 매칭 테이블 (날짜 무관, 금액으로 확정 매칭)
+const LEASE_AMOUNT_MAP = {
+  3612100:  { name: '리팟',              cat: '레이저리스' },
+  2661300:  { name: 'LDMtriple·벨루스큐', cat: '레이저리스' },
+  1833400:  { name: '하이드라페이셜',     cat: '레이저리스' },
+  8665540:  { name: '싸이톤(BBL·어붐)',   cat: '레이저리스' },
+};
+
+function autoCategory(text, amount) {
+  // 금액 우선 매칭 (장비리스)
+  if (amount && LEASE_AMOUNT_MAP[amount]) return LEASE_AMOUNT_MAP[amount].cat;
+
+  const lower = text.toLowerCase();
+  for (const rule of AUTO_CAT_RULES) {
+    for (const kw of rule.keywords) {
+      if (lower.includes(kw.toLowerCase())) return rule.cat;
+    }
+  }
+  return '미분류';
+}
+
+// 장비리스 항목명 반환 (description 보강용)
+function leaseItemName(amount) {
+  return LEASE_AMOUNT_MAP[amount] ? LEASE_AMOUNT_MAP[amount].name : null;
+}
+
+// ============================================================
+// PARSERS
+// ============================================================
+
+/* 공통: 금액 문자열 → 숫자 */
+function parseMoney(str) {
+  if (!str) return 0;
+  return parseInt(String(str).replace(/[,\s원]/g, '')) || 0;
+}
+
+/* 날짜 정규화 → YYYY-MM-DD */
+function normalizeDate(str) {
+  if (!str) return '';
+  str = String(str).trim();
+  // 2026.01.02 / 2026-01-02 / 20260109 / 2026년 01월 02일
+  str = str.replace(/년\s*/g,'-').replace(/월\s*/g,'-').replace(/일/g,'').trim();
+  str = str.replace(/\./g,'-');
+  str = str.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
+  return str.substring(0,10);
+}
+
+/* 신한은행 XLS */
+async function parseShinhanBank(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const sh = wb.Sheets[wb.SheetNames[0]];
+        const raw = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '' });
+        const rows = [];
+        for (let i = 7; i < raw.length; i++) {
+          const r = raw[i];
+          const dateStr = String(r[0] || '').trim();
+          if (!dateStr.match(/\d{4}/)) continue;
+          const out = parseMoney(r[3]);
+          if (out <= 0) continue;
+
+          const memo = String(r[2] || '').trim();
+          const desc = String(r[5] || '').trim();
+          const fullText = memo + ' ' + desc;
+
+          // ① 유경훈 본인 이체 제외
+          if (desc.includes('유경훈')) {
+            rows.push({
+              date: normalizeDate(dateStr), source: 'shinhan-bank', sourceName: '신한은행',
+              memo, description: desc, amount: out, category: '제외(본인이체)', excluded: true,
+            });
+            continue;
+          }
+
+          // ② 롯데카드 19일 → 카드결제(세금등)  [25일은 금액 매칭으로 레이저리스 처리됨]
+          let cat;
+          if ((desc.includes('롯데카드') || memo.includes('롯데카드'))) {
+            const day = parseInt(normalizeDate(dateStr).split('-')[2]);
+            if (day === 19) {
+              cat = '카드결제(세금등)';
+            } else {
+              cat = autoCategory(fullText, out); // 25일 금액(3,612,100 / 2,661,300) → LEASE_AMOUNT_MAP 매칭
+            }
+          } else {
+            cat = autoCategory(fullText, out);
+          }
+
+          // ③ 장비리스 항목명 보강
+          const leaseName = leaseItemName(out);
+          const richDesc = leaseName ? `${desc} [${leaseName}]` : desc;
+
+          rows.push({
+            date: normalizeDate(dateStr), source: 'shinhan-bank', sourceName: '신한은행',
+            memo, description: richDesc, amount: out, category: cat,
+          });
+        }
+        resolve(rows);
+      } catch(e) { reject(e); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* 현대카드 HTML-XLS */
+async function parseHyundai(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const html = e.target.result;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const tables = doc.querySelectorAll('table');
+        const rows = [];
+
+        tables.forEach(table => {
+          const trs = table.querySelectorAll('tr');
+          trs.forEach(tr => {
+            const cells = [...tr.querySelectorAll('td,th')].map(td => td.textContent.trim());
+            // 헤더행 스킵
+            if (!cells[0] || !cells[0].match(/\d{4}년/)) return;
+            // 소계/합계 행 스킵
+            if (cells[2] && cells[2].includes('소계')) return;
+            if (cells[2] && cells[2].includes('합계')) return;
+
+            const dateStr = cells[0]; // '2026년 01월 02일'
+            const merchant = cells[2] || '';
+            // 결제원금 = cells[7], 이용금액 = cells[3]
+            let amt = parseMoney(cells[7]);
+            if (!amt) amt = parseMoney(cells[3]);
+            if (!amt || amt <= 0) return;
+            // 취소 건 제외 (마이너스 이용금액)
+            if (parseMoney(cells[3]) < 0) return;
+
+            const fullText = merchant;
+            rows.push({
+              date: normalizeDate(dateStr),
+              source: 'hyundai',
+              sourceName: '현대카드',
+              memo: '현대카드',
+              description: merchant,
+              amount: amt,
+              category: autoCategory(fullText),
+            });
+          });
+        });
+        resolve(rows);
+      } catch(e) { reject(e); }
+    };
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+/* 삼성카드 XLSX */
+async function parseSamsung(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const rows = [];
+        // 시트: '일시불', '할부' 등 순회
+        wb.SheetNames.forEach(shName => {
+          if (shName.includes('요약') || shName.includes('수수료') || shName.includes('해외')) return;
+          const sh = wb.Sheets[shName];
+          const raw = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '' });
+          // row 0: 시트 제목, row 1: 헤더
+          for (let i = 2; i < raw.length; i++) {
+            const r = raw[i];
+            const dateStr = String(r[0] || '').trim();
+            if (!dateStr.match(/^\d{8}$/)) continue; // YYYYMMDD
+            const merchant = String(r[2] || '').trim();
+            if (!merchant || merchant.includes('합계')) continue;
+            // 원금 = r[9], 이용금액 = r[3]
+            let amt = parseMoney(r[9]);
+            if (!amt) amt = parseMoney(r[3]);
+            if (!amt || amt <= 0) continue;
+
+            rows.push({
+              date: normalizeDate(dateStr),
+              source: 'samsung',
+              sourceName: '삼성카드',
+              memo: '삼성카드',
+              description: merchant,
+              amount: amt,
+              category: autoCategory(merchant),
+            });
+          }
+        });
+        resolve(rows);
+      } catch(e) { reject(e); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* 신한카드 HTML-XLS — 신규 명세서 포맷 (26년2월 기준)
+   Table 10: 이용일자별 카드사용내역
+   헤더: [이용일자, 이용카드, 이용가맹점, 이용금액, 할부기간, 회차, 이번달내실금액, 적용구분, 결제후잔액, 포인트, 원금, 수수료]
+   날짜형식: YYYY.MM.DD, 금액: col[3]=이용금액
+*/
+async function parseShinhanCard(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const html = e.target.result;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const tables = doc.querySelectorAll('table');
+        const rows = [];
+
+        // 신규 포맷: Table 10이 상세 거래 내역 (85행)
+        // 구 포맷: 날짜 패턴 YYYY.MM.DD 으로 탐색
+        const datePattern = /^\d{4}\.\d{2}\.\d{2}$/;
+        const skipKeywords = ['소계','합계','이용일자별 카드사용내역이 없습니다'];
+
+        tables.forEach(table => {
+          const trs = table.querySelectorAll('tr');
+          trs.forEach(tr => {
+            const cells = [...tr.querySelectorAll('td,th')].map(td => td.textContent.trim());
+            if (!cells[0] || !datePattern.test(cells[0])) return;
+            
+            const merchant = cells[2] || '';
+            if (skipKeywords.some(k => merchant.includes(k))) return;
+
+            // 이용금액(col[3])을 기준으로 사용
+            // col[6] = 이번달내실금액(할인 후) 사용 — 실제 청구금액
+            const amtRaw = parseMoney(cells[6]) || parseMoney(cells[3]);
+            if (!amtRaw || amtRaw <= 0) return;
+
+            rows.push({
+              date: normalizeDate(cells[0]),
+              source: 'shinhan-card',
+              sourceName: '신한카드',
+              memo: `신한카드 ${cells[1] || ''}`.trim(),
+              description: merchant,
+              amount: amtRaw,
+              category: autoCategory(merchant),
+            });
+          });
+        });
+
+        resolve(rows);
+      } catch(e) { reject(e); }
+    };
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+// ============================================================
+// FILE LOAD DISPATCH
+// ============================================================
+async function loadFile(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  setSlotStatus(type, 'wait', '파싱 중...');
+  try {
+    let rows;
+    if (type === 'shinhan-bank') rows = await parseShinhanBank(file);
+    else if (type === 'hyundai') rows = await parseHyundai(file);
+    else if (type === 'samsung') rows = await parseSamsung(file);
+    else if (type === 'shinhan-card') rows = await parseShinhanCard(file);
+
+    // 해당 출처 기존 데이터 교체
+    allRows = allRows.filter(r => r.source !== type);
+    allRows = allRows.concat(rows);
+
+    setSlotStatus(type, 'ok', `✓ ${rows.length}건 로드`);
+    applyFilter();
+    showToast(`${getSourceName(type)}: ${rows.length}건 파싱 완료`);
+  } catch(err) {
+    setSlotStatus(type, 'err', '파싱 실패');
+    showToast(`오류: ${err.message}`, true);
+    console.error(err);
+  }
+}
+
+function getSourceName(type) {
+  return { 'shinhan-bank':'신한은행','hyundai':'현대카드','samsung':'삼성카드','shinhan-card':'신한카드' }[type] || type;
+}
+
+function setSlotStatus(type, cls, text) {
+  const el = document.getElementById(`status-${type}`);
+  const slot = document.getElementById(`slot-${type}`);
+  el.className = `slot-status ${cls}`;
+  el.textContent = text;
+  slot.className = `upload-slot ${cls === 'ok' ? 'active' : cls === 'err' ? 'error' : ''}`;
+}
+
+// ============================================================
+// FILTER & RENDER
+// ============================================================
+function setSourceFilter(src, el) {
+  activeSource = src;
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  applyFilter();
+}
+
+function applyFilter() {
+  const month = document.getElementById('filterMonth').value; // YYYY-MM
+
+  filteredRows = allRows.filter(r => {
+    if (activeSource !== 'all' && r.source !== activeSource) return false;
+    if (month && !r.date.startsWith(month)) return false;
+    return true;
+  });
+
+  filteredRows.sort((a, b) => a.date.localeCompare(b.date));
+  renderSummary();
+  renderTable();
+}
+
+function renderSummary() {
+  const fmt = n => n > 0 ? (n/10000).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '만원' : '—';
+  const fmtKr = n => n > 0 ? n.toLocaleString() + '원' : '—';
+
+  const sources = ['shinhan-bank','hyundai','samsung','shinhan-card'];
+  const totals = {};
+  // 집계에서 제외 항목 모두 빼기
+  const countableRows = filteredRows.filter(r => !r.category.startsWith('제외'));
+  let grandTotal = 0;
+
+  sources.forEach(s => {
+    const rows = countableRows.filter(r => r.source === s);
+    const sum = rows.reduce((a,r) => a + r.amount, 0);
+    totals[s] = { sum, count: rows.length };
+    grandTotal += sum;
+  });
+
+  const allCount = countableRows.length;
+  const excludedCount = filteredRows.length - allCount;
+  document.getElementById('sumTotal').textContent = fmtKr(grandTotal);
+  document.getElementById('sumTotalCount').textContent = `${allCount}건 (제외 ${excludedCount}건)`;
+
+  document.getElementById('sumBank').textContent = fmtKr(totals['shinhan-bank'].sum);
+  document.getElementById('sumBankCount').textContent = `${totals['shinhan-bank'].count}건`;
+  document.getElementById('sumHyundai').textContent = fmtKr(totals['hyundai'].sum);
+  document.getElementById('sumHyundaiCount').textContent = `${totals['hyundai'].count}건`;
+  document.getElementById('sumSamsung').textContent = fmtKr(totals['samsung'].sum);
+  document.getElementById('sumSamsungCount').textContent = `${totals['samsung'].count}건`;
+  document.getElementById('sumShinhanCard').textContent = fmtKr(totals['shinhan-card'].sum);
+  document.getElementById('sumShinhanCardCount').textContent = `${totals['shinhan-card'].count}건`;
+}
+
+const SOURCE_BADGE = {
+  'shinhan-bank': ['badge-shinhan-bank', '신한은행'],
+  'hyundai': ['badge-hyundai', '현대카드'],
+  'samsung': ['badge-samsung', '삼성카드'],
+  'shinhan-card': ['badge-shinhan-card', '신한카드'],
+};
+
+const CAT_COLORS = {
+  '인건비':'#F4E6FF,#7B2FBE','급여':'#EDE9FF,#5B21B6','4대보험':'#E8F4FF,#1D4ED8',
+  '퇴직금':'#FEF9EC,#92400E','임대료':'#FFF7ED,#C2410C','세무·노무':'#FDF2F8,#9D174D',
+  '의료소모품':'#ECFDF5,#065F46','마케팅·광고':'#FEF3C7,#92400E','SNS·구독':'#F0FFFE,#0E7490',
+  '통신비':'#F0F9FF,#0369A1','공과금·전기':'#FFF7ED,#EA580C',
+  '식비·간식':'#FFF5F5,#B91C1C','복지·식대':'#F0FDF4,#166534',
+  '보험료':'#FFF0F8,#9D174D','금융·대출':'#F8FAFC,#475569',
+  '레이저리스':'#EEF2FF,#3730A3','카드결제(세금등)':'#FEF9EC,#B45309',
+  '차량·교통':'#FFFBEB,#D97706','기타유동비':'#F9FAFB,#6B7280',
+  '미분류':'#F3F4F6,#9CA3AF',
+  '제외(본인이체)':'#F3F4F6,#9CA3AF','제외(개인용도)':'#FEF2F2,#991B1B',
+};
+
+function catBadgeStyle(cat) {
+  const c = CAT_COLORS[cat] || '#F3F4F6,#6B7280';
+  const [bg, fg] = c.split(',');
+  return `background:${bg};color:${fg};`;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  document.getElementById('tableCount').textContent = `${filteredRows.length}건`;
+
+  if (filteredRows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6">
+      <div class="empty-state">
+        <div class="empty-icon">${allRows.length === 0 ? '📂' : '🔍'}</div>
+        <div class="empty-text">${allRows.length === 0 ? '파일을 업로드하면 지출내역이 표시됩니다' : '해당 기간/출처의 내역이 없습니다'}</div>
+      </div></td></tr>`;
+    return;
+  }
+
+  const catOptions = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  tbody.innerHTML = filteredRows.map((row, idx) => {
+    const [badgeClass, badgeName] = SOURCE_BADGE[row.source] || ['',''];
+    const absIdx = allRows.indexOf(row);
+    const isExcluded = row.category.startsWith('제외');
+
+    const catSelectOpts = CATEGORIES.map(c =>
+      `<option value="${c}"${c === row.category ? ' selected' : ''}>${c}</option>`
+    ).join('');
+
+    const rowStyle = isExcluded ? 'opacity:0.4; text-decoration:line-through;' : '';
+
+    return `<tr style="${rowStyle}">
+      <td class="cell-date">${row.date}</td>
+      <td><span class="badge ${badgeClass}">${badgeName}</span></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.memo}">${row.memo}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.description}">${row.description}</td>
+      <td>
+        <select class="cat-select" onchange="updateCategory(${absIdx}, this.value)" style="${catBadgeStyle(row.category)}">
+          ${catSelectOpts}
+        </select>
+      </td>
+      <td class="cell-amount ${isExcluded ? '' : 'out'}">${row.amount.toLocaleString()}원</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateCategory(absIdx, newCat) {
+  allRows[absIdx].category = newCat;
+  // 색상 즉시 업데이트
+  const selects = document.querySelectorAll('.cat-select');
+  // find the one matching this index - easier to re-render just the cell color
+  applyFilter(); // lightweight enough
+}
+
+// ============================================================
+// BULK CATEGORY
+// ============================================================
+function toggleAllCategories() {
+  const cat = prompt('전체 미분류 항목의 카테고리를 일괄 설정합니다.\n\n' +
+    CATEGORIES.join('\n') + '\n\n카테고리명 입력:');
+  if (!cat || !CATEGORIES.includes(cat)) {
+    if (cat) alert('올바른 카테고리명을 입력하세요.');
+    return;
+  }
+  let count = 0;
+  allRows.forEach(r => {
+    if (r.category === '미분류') { r.category = cat; count++; }
+  });
+  applyFilter();
+  showToast(`미분류 ${count}건 → ${cat} 설정 완료`);
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+function exportCSV() {
+  const exportRows = filteredRows.filter(r => !r.category.startsWith('제외'));
+  if (exportRows.length === 0) { showToast('내역이 없습니다', true); return; }
+  const header = ['날짜','출처','적요','내용','카테고리','금액'];
+  const rows = exportRows.map(r => [
+    r.date, r.sourceName, r.memo, r.description, r.category, r.amount
+  ]);
+  const csv = [header, ...rows].map(r =>
+    r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
+  ).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `lumi_expenses_${document.getElementById('filterMonth').value}.csv`;
+  a.click();
+  showToast('CSV 다운로드 완료');
+}
+
+// ============================================================
+// ERP 카테고리 변환 맵 (파서 카테고리 → expense.js 카테고리)
+// ============================================================
+const CAT_MAP = {
+  '레이저리스':       '리스료',
+  '카드결제(세금등)': '세금',
+  '식비·간식':        '복리후생비',
+  '복지·식대':        '복리후생비',
+  '통신비':           '공과금',
+  '세무·노무':        '세무노무',
+  '공과금·전기':      '공과금',
+  '마케팅·광고':      '마케팅',
+  '금융·대출':        '대출이자',
+  '차량·교통':        '차량유지비',
+  '기타유동비':       '기타',
+  '미분류':           '기타',
+};
+
+function mapCategory(cat) {
+  return CAT_MAP[cat] || cat;
+}
+
+async function exportToFirebase() {
+  const exportRows = filteredRows.filter(r => !r.category.startsWith('제외'));
+  if (exportRows.length === 0) { showToast('저장할 내역이 없습니다', true); return; }
+
+  // 세금(원천세) 항목과 일반 유동비 분리
+  const taxRows  = exportRows.filter(r => r.category === '카드결제(세금등)');
+  const expRows  = exportRows.filter(r => r.category !== '카드결제(세금등)');
+
+  // 저장 전 요약 확인
+  const byCat = {};
+  exportRows.forEach(r => { const c = mapCategory(r.category); byCat[c] = (byCat[c]||0) + r.amount; });
+  const catSummary = Object.entries(byCat).sort((a,b)=>b[1]-a[1])
+    .map(([c,a]) => `  • ${c}: ${a.toLocaleString()}원`).join('\n');
+  const total = exportRows.reduce((s,r)=>s+r.amount, 0);
+  const taxNote = taxRows.length ? `\n\n⚠ 세금 ${taxRows.length}건은 withholdingTaxes에 저장됩니다.` : '';
+
+  if (!confirm(
+    `📊 저장 전 요약\n━━━━━━━━━━━━━━━━━━\n${catSummary}\n` +
+    `━━━━━━━━━━━━━━━━━━\n총 ${exportRows.length}건 / ${total.toLocaleString()}원${taxNote}\n\n저장하시겠습니까?`
+  )) return;
+
+  try {
+    // ── variableExpenses 저장 ──
+    if (expRows.length) {
+      const batch = db.batch();
+      expRows.forEach(r => {
+        const ref = db.collection('variableExpenses').doc();
+        batch.set(ref, {
+          date:        r.date,
+          name:        r.description,
+          amount:      r.amount,
+          category:    mapCategory(r.category),
+          card:        r.sourceName,
+          merchant:    r.description,
+          note:        `[${r.sourceName}] ${r.description}`,
+          yearMonth:   r.date.substring(0, 7),
+          createdAt:   new Date().toISOString(),
+          uploadBatch: true,
+        });
+      });
+      await batch.commit();
+    }
+
+    // ── withholdingTaxes 저장 (세금 항목) ──
+    if (taxRows.length) {
+      const batch = db.batch();
+      taxRows.forEach(r => {
+        const ref = db.collection('withholdingTaxes').doc();
+        batch.set(ref, {
+          date:           r.date,
+          attributeMonth: r.date.substring(0, 7),
+          incomeTax:      r.amount,
+          localTax:       0,
+          note:           `[${r.sourceName}] ${r.description}`,
+          createdAt:      new Date().toISOString(),
+          uploadBatch:    true,
+        });
+      });
+      await batch.commit();
+    }
+
+    let msg = [];
+    if (expRows.length)  msg.push(`유동비 ${expRows.length}건`);
+    if (taxRows.length)  msg.push(`세금 ${taxRows.length}건`);
+    showToast(`✓ ${msg.join(' + ')} 저장 완료`);
+
+    // 저장 후 초기화
+    expRows.concat(taxRows).forEach(r => allRows.splice(allRows.indexOf(r), 1));
+    applyFilter();
+
+  } catch(e) {
+    showToast(`저장 실패: ${e.message}`, true);
+    console.error(e);
+  }
+}
+
+function clearAll() {
+  if (!confirm('모든 데이터를 초기화하시겠습니까?')) return;
+  allRows = [];
+  ['shinhan-bank','hyundai','samsung','shinhan-card'].forEach(type => {
+    setSlotStatus(type, 'wait', '파일 없음');
+  });
+  applyFilter();
+  showToast('초기화 완료');
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+let toastTimer;
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderLeftColor = isError ? '#C0392B' : '#B8975A';
+  t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.style.display = 'none', 3000);
+}
+
+// init
+applyFilter();
+</script>
+</body>
+</html>
