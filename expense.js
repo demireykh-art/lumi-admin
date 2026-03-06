@@ -916,7 +916,18 @@ const EXP_CATEGORY_RULES=[
     {category:'교육비',keywords:['학회','세미나','컨퍼런스','교육','수강','연수']},
 ];
 
-function classifyExpense(name){
+function classifyExpense(name, date, amount){
+    // 유경훈 본인 이체 → 집계 제외
+    if((name||'').includes('유경훈')) return {category:'금융/이체',exclude:true};
+
+    // 롯데카드 출금: 날짜·금액 기준으로 키워드 규칙보다 먼저 처리
+    if((name||'').includes('롯데카드')){
+        const day=parseInt((date||'').split('-')[2])||0;
+        if(day===19) return {category:'세금',exclude:false};
+        if(day===25&&(amount===3612100||amount===2661300)) return {category:'리스료',exclude:false};
+    }
+
+    // 기존 키워드 규칙 (변경 없음)
     const n=(name||'').toLowerCase().replace(/\s/g,'');
     for(const rule of EXP_CATEGORY_RULES){
         for(const kw of rule.keywords){
@@ -1089,7 +1100,7 @@ function parseShinhanBank(rows,fileName){
         const displayName=name||(memo||'(내용없음)');
         const amount=normalizeAmount(r[iOut]);
         if(!date||!amount)continue;
-        const cls=classifyExpense(displayName);
+        const cls=classifyExpense(displayName, date, amount);
         // note: 원본 내용+적요 모두 기록
         const noteParts=['[신한은행]'];
         if(name)noteParts.push(name);
