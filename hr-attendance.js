@@ -266,21 +266,19 @@ function calculateIncentiveForEmp(emp){
     const japanVisitors=monthlyIncInput.japanVisitors||0;
     const staffRevenue=monthlyIncInput.staffRevenue||{};
     const percent=(emp.incPercent||0)/100;
+    const rounding=emp.incRounding||0; // 0=1원올림, -1=10원올림, -2=100원올림
     
     let salesIncentive=0;
     let japanIncentive=0;
     
     if(emp.incType==='totalMinusPersonal'){
-        // 총매출 - 개인매출 직원 합계
         const personalTotal=Object.values(staffRevenue).reduce((s,v)=>s+v,0);
-        salesIncentive=Math.round((totalRevenue-personalTotal)*percent);
+        salesIncentive=roundUp((totalRevenue-personalTotal)*percent, rounding);
     }else if(emp.incType==='personal'){
-        // 본인 매출
         const myRevenue=staffRevenue[emp.id]||0;
-        salesIncentive=Math.round(myRevenue*percent);
+        salesIncentive=roundUp(myRevenue*percent, rounding);
     }else if(emp.incType==='totalAll'){
-        // 총매출 전체
-        salesIncentive=Math.round(totalRevenue*percent);
+        salesIncentive=roundUp(totalRevenue*percent, rounding);
     }
     
     if(emp.incJapan){
@@ -288,6 +286,13 @@ function calculateIncentiveForEmp(emp){
     }
     
     return {salesIncentive, japanIncentive};
+}
+
+// Excel ROUNDUP 구현: roundUp(123.4, 0)=124, roundUp(191867, -1)=191870
+function roundUp(value, digits){
+    if(digits>=0) return Math.ceil(value);
+    const factor=Math.pow(10, Math.abs(digits));
+    return Math.ceil(value/factor)*factor;
 }
 
 function previewIncentive(){
@@ -351,7 +356,10 @@ function renderSalary(){
     const ym=getYM();
     const roleLabelsLocal={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
     
-    document.getElementById('prePayrollTable').innerHTML=employees.filter(e=>e.status==='active').map(emp=>{
+    // lumi_ 계정 제외, 실제 직원만
+    const realEmployees=employees.filter(e=>e.status==='active'&&!e.id.startsWith('lumi'));
+    
+    document.getElementById('prePayrollTable').innerHTML=realEmployees.map(emp=>{
         // OT 시간 계산
         const empAttendance=attendance.filter(a=>a.employeeId===emp.id&&a.date?.startsWith(ym));
         let otMinutes=0;
@@ -365,7 +373,6 @@ function renderSalary(){
         const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
         otMinutes+=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
         const otHours=(otMinutes/60).toFixed(1);
-        const otPay=Math.round(otMinutes/60*(emp.hourly||12000)*1.5);
         
         // 인센티브 계산 (동적 v2)
         const {salesIncentive, japanIncentive}=calculateIncentiveForEmp(emp);
@@ -376,18 +383,28 @@ function renderSalary(){
             if(item&&item.type==='perCase') perCaseIncentive+=item.price||0;
         });
         const incentiveAmount=salesIncentive+japanIncentive+perCaseIncentive;
-        const incentiveCount=empRecords.length;
+        
+        // 연봉 표시: 부원장은 "세후" 표기
+        let salaryDisplay=emp.salary?emp.salary+'만원':'-';
+        if(emp.role==='doctor'&&emp.salaryType==='afterTax') salaryDisplay=emp.salary+'만원(세후)';
         
         return `<tr>
             <td><strong>${emp.name}</strong></td>
             <td>${roleLabelsLocal[emp.role]||emp.role}</td>
-            <td>${emp.salary?emp.salary+'만원':'-'}</td>
+            <td>${salaryDisplay}</td>
             <td class="text-right">${otHours}H</td>
-            <td class="text-right">${formatCurrency(otPay)}</td>
-            <td class="text-right">${incentiveCount>0?incentiveCount+'건':'-'}</td>
-            <td class="text-right">${formatCurrency(incentiveAmount)}</td>
+            <td class="text-right">${incentiveAmount>0?formatCurrency(incentiveAmount):''}</td>
+            <td><input type="text" class="form-input" style="font-size:.8rem;padding:.25rem .5rem;border:1px solid var(--border)" placeholder="" value="${emp._payrollMemo||''}" onchange="updatePayrollMemo('${emp.id}',this.value)"></td>
         </tr>`;
-    }).join('')||'<tr><td colspan="7" class="text-center">직원 없음</td></tr>';
+    }).join('')||'<tr><td colspan="6" class="text-center">직원 없음</td></tr>';
+}
+
+// 기타 메모 임시 저장 (세션 내)
+const _payrollMemos={};
+function updatePayrollMemo(empId, val){
+    _payrollMemos[empId]=val;
+    const emp=employees.find(e=>e.id===empId);
+    if(emp) emp._payrollMemo=val;
 }
 
 // CRUD Operations - Expense
@@ -426,11 +443,6 @@ const variableCategories=[
     {value:'리스료',label:'리스료'},
     {value:'소모품비',label:'일반소모품'},
     {value:'금융/이체',label:'금융/이체'},
-    {value:'인건비',label:'인건비'},
-    {value:'환불',label:'환불'},
-    {value:'이자',label:'이자'},
-    {value:'광고비',label:'광고비'},
-    {value:'루미컨설팅비',label:'루미컨설팅비'},
     {value:'기타',label:'기타'}
 ];
 function openEmployeeModal(id=null){
@@ -452,6 +464,7 @@ function openEmployeeModal(id=null){
     // 인센티브 설정 초기화
     document.getElementById('empIncType').value='none';
     document.getElementById('empIncPercent').value='0';
+    document.getElementById('empIncRounding').value='0';
     document.getElementById('empIncJapan').checked=false;
     // 탭 체크박스 초기화
     document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
@@ -473,6 +486,7 @@ function openEmployeeModal(id=null){
             // 인센티브 설정 복원
             document.getElementById('empIncType').value=emp.incType||'none';
             document.getElementById('empIncPercent').value=emp.incPercent||0;
+            document.getElementById('empIncRounding').value=emp.incRounding!=null?emp.incRounding:0;
             document.getElementById('empIncJapan').checked=!!emp.incJapan;
             document.getElementById('empId').value=emp.id;
             // 법정 연차 자동계산 표시
@@ -577,6 +591,7 @@ async function saveEmployee(){
         mealLimit:parseInt(document.getElementById('empMealLimit').value)||300000,
         incType:document.getElementById('empIncType').value||'none',
         incPercent:parseFloat(document.getElementById('empIncPercent').value)||0,
+        incRounding:parseInt(document.getElementById('empIncRounding').value)||0,
         incJapan:document.getElementById('empIncJapan').checked,
         isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
         visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
@@ -678,59 +693,50 @@ uploadZone.addEventListener('dragleave',()=>{uploadZone.style.borderColor='var(-
 uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.style.borderColor='var(--border-color)';if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
 function exportPrePayroll(){
     const ym=getYM();
-    const detail=salesDetail[ym]||{};
-    const japanStaffSales=detail.japanStaffSales||{};
     const roleLabelsLocal={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
     
-    const rows=[['직원','직급','연봉(만원)','시급','OT시간(H)','예상OT수당','인센티브실적(건)','예상인센티브']];
+    const rows=[['','직책','연봉(만원) 세전','OT(시간)','인센티브(원) 세전','기타']];
     
-    employees.filter(e=>e.status==='active').forEach(emp=>{
-        // OT 계산
-        const empAttendance=attendance.filter(a=>a.employeeId===emp.id&&a.date?.startsWith(ym));
-        let otMinutes=0;
-        empAttendance.forEach(a=>{
+    const realEmployees=employees.filter(e=>e.status==='active'&&!e.id.startsWith('lumi'));
+    realEmployees.forEach(emp=>{
+        // OT
+        const empAtt=attendance.filter(a=>a.employeeId===emp.id&&a.date?.startsWith(ym));
+        let otMin=0;
+        empAtt.forEach(a=>{
             if(a.checkOut){
                 const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
-                const endMin=getAdminWorkEndMin(a.date); // v2.0 요일별
-                if(h*60+m>endMin)otMinutes+=(h*60+m)-endMin;
+                const endMin=getAdminWorkEndMin(a.date);
+                if(h*60+m>endMin) otMin+=(h*60+m)-endMin;
             }
         });
-        const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
-        otMinutes+=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
-        const otHours=(otMinutes/60).toFixed(1);
-        const otPay=Math.round(otMinutes/60*(emp.hourly||12000)*1.5);
+        otMin+=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym)).reduce((s,ot)=>s+(ot.minutes||0),0);
+        const otH=(otMin/60).toFixed(1);
         
-        // 인센티브 계산
+        // 인센티브
+        const {salesIncentive,japanIncentive}=calculateIncentiveForEmp(emp);
         const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
-        let incentiveCount=empRecords.length;
-        let incentiveAmount=0;
+        let perCase=0;
         empRecords.forEach(r=>{
             const item=incentiveItems.find(i=>i.id===r.itemId);
-            if(item&&item.type!=='japanSales'){
-                incentiveAmount+=item.price||0;
-            }
+            if(item&&item.type==='perCase') perCase+=item.price||0;
         });
-        // 일본인 매출 인센티브
-        const japanItems=incentiveItems.filter(i=>i.type==='japanSales'&&i.employees?.includes(emp.id));
-        japanItems.forEach(item=>{
-            if(emp.matchName&&japanStaffSales[emp.matchName]){
-                incentiveAmount+=Math.round(japanStaffSales[emp.matchName]*(item.percent||1)/100);
-            }
-        });
+        const incTotal=salesIncentive+japanIncentive+perCase;
+        
+        let salaryDisplay=emp.salary?emp.salary+'만원':'';
+        if(emp.role==='doctor'&&emp.salaryType==='afterTax') salaryDisplay=emp.salary+'만원(세후)';
         
         rows.push([
             emp.name,
             roleLabelsLocal[emp.role]||emp.role,
-            emp.salary||0,
-            emp.hourly||12000,
-            otHours,
-            otPay,
-            incentiveCount,
-            incentiveAmount
+            salaryDisplay,
+            otH+'H',
+            incTotal>0?incTotal:'',
+            _payrollMemos[emp.id]||''
         ]);
     });
     
     const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:10},{wch:12},{wch:18},{wch:10},{wch:18},{wch:25}];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'사전급여대장');
     XLSX.writeFile(wb,'사전급여대장_'+ym+'_노무사전달용.xlsx');
