@@ -400,6 +400,19 @@ function changeMonth(delta){
         currentYear=parseInt(document.getElementById('yearSelect').value);
         currentMonth=parseInt(document.getElementById('monthSelect').value);
     }
+    // 월별 데이터 재로드 후 렌더링
+    reloadMonthlyData();
+}
+async function reloadMonthlyData(){
+    try{
+        await Promise.all([
+            loadAttendance(),
+            loadLunchOT(),
+            loadRevenueData(),
+            loadSalesDetailData(),
+            typeof loadMonthlyIncentiveInput==='function'?loadMonthlyIncentiveInput():Promise.resolve()
+        ]);
+    }catch(e){console.error('Monthly reload error:',e);}
     renderAll();
 }
 function loadData(){changeMonth();}
