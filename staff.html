@@ -613,9 +613,14 @@
                         <button type="button" onclick="document.getElementById('lunchOTMinutes').value=60" style="flex:1;padding:.35rem;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;font-size:.8rem">60</button>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">환자 이름 (필수) <span style="color:#dc2626">*</span></label>
+                    <input type="text" class="form-input" id="lunchOTPatient" placeholder="예: 홍길동">
+                    <p style="font-size:.7rem;color:var(--text-muted);margin-top:.25rem">점심시간 OT 사유가 된 환자명을 입력해주세요</p>
+                </div>
                 <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">사유 (선택)</label>
-                    <input type="text" class="form-input" id="lunchOTReason" placeholder="예: 점심시간 업무 처리">
+                    <input type="text" class="form-input" id="lunchOTReason" placeholder="예: 시술 지연, 점심시간 업무">
                 </div>
             </div>
             <div class="modal-footer">
@@ -2419,28 +2424,33 @@
         function openLunchOTModal(){
             document.getElementById('lunchOTDate').value=getToday();
             document.getElementById('lunchOTMinutes').value='30';
+            document.getElementById('lunchOTPatient').value='';
             document.getElementById('lunchOTReason').value='';
             updateLunchOTHint();
             openModal('lunchOTModal');
-            setTimeout(()=>document.getElementById('lunchOTMinutes')?.select(),150);
+            setTimeout(()=>document.getElementById('lunchOTPatient')?.focus(),150);
         }
         
         async function saveLunchOT(){
             const date=document.getElementById('lunchOTDate').value;
             const minutes=parseInt(document.getElementById('lunchOTMinutes').value)||0;
+            const patient=document.getElementById('lunchOTPatient').value.trim();
             const reason=document.getElementById('lunchOTReason').value.trim();
             if(!date||minutes<=0){alert('날짜와 시간을 입력해주세요.');return;}
+            if(!patient){alert('환자 이름을 입력해주세요.\n점심시간 OT 사유가 된 환자명이 필요합니다.');return;}
             try{
+                const fullReason=reason?`${patient} - ${reason}`:`${patient}`;
                 await db.collection('lunchOT').add({
                     employeeId:currentUser.id,
                     employeeName:currentUser.name,
                     date:date,
                     minutes:minutes,
-                    reason:reason||'점심시간 OT',
+                    patient:patient,
+                    reason:fullReason,
                     createdAt:firebase.firestore.FieldValue.serverTimestamp()
                 });
                 closeModal('lunchOTModal');
-                alert(`✅ 점심 OT 저장\n${date} / ${minutes}분`);
+                alert(`✅ 점심 OT 저장\n${date} / ${minutes}분 / ${patient}`);
                 await loadLunchOT();
                 renderOT();
             }catch(e){alert('저장 실패: '+e.message);}
