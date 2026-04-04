@@ -155,7 +155,7 @@ function renderOvertime(){
         if(a.checkOut){
             const [h,m]=a.checkOut.split(':').map(Number);
             const checkOutMin=h*60+m;
-            const endMin=getAdminWorkEndMin(a.date); // v2.0 요일별
+            const endMin=getAdminWorkEndMin(a.date);
             if(checkOutMin>endMin){eveningMinutes+=checkOutMin-endMin;}
         }
     });
@@ -167,7 +167,21 @@ function renderOvertime(){
     document.getElementById('eveningOT').textContent=Math.round(eveningMinutes/60*10)/10+'시간';
     document.getElementById('lunchOTVal').textContent=Math.round(lunchMinutes/60*10)/10+'시간';
     document.getElementById('totalOTPay').textContent=formatCurrency(totalPay);
-    const sorted=lunchOT.sort((a,b)=>b.date.localeCompare(a.date));
+    
+    // 점심 OT 필터 드롭다운 업데이트
+    const filterEl=document.getElementById('lunchOTFilter');
+    if(filterEl){
+        const current=filterEl.value;
+        filterEl.innerHTML='<option value="all">전체 직원</option>'+employees.filter(e=>e.status==='active').map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+        filterEl.value=current;
+    }
+    
+    // 필터 적용
+    const filter=filterEl?filterEl.value:'all';
+    let filtered=lunchOT;
+    if(filter!=='all') filtered=lunchOT.filter(ot=>ot.employeeId===filter);
+    
+    const sorted=filtered.sort((a,b)=>b.date.localeCompare(a.date));
     document.getElementById('lunchOTTable').innerHTML=sorted.map(ot=>{
         const emp=employees.find(e=>e.id===ot.employeeId);
         return `<tr><td>${ot.date}</td><td>${emp?emp.name:ot.employeeId}</td><td>${ot.minutes}분</td><td>${ot.reason||'-'}</td><td><button class="btn btn-sm btn-danger" onclick="deleteLunchOT('${ot.id}')">삭제</button></td></tr>`;

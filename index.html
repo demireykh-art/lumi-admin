@@ -302,7 +302,7 @@
                         <div class="card"><div class="card-label">점심 OT (수동)</div><div class="card-value" id="lunchOTVal">0시간</div></div>
                         <div class="card"><div class="card-label">OT 수당 합계</div><div class="card-value" id="totalOTPay">₩0</div></div>
                     </div>
-                    <div class="section-header"><div class="section-title">점심 OT 입력</div><button class="btn btn-primary" onclick="openOTModal()">+ OT 입력</button></div>
+                    <div class="section-header"><div class="section-title">점심 OT 입력</div><div style="display:flex;gap:.5rem;align-items:center"><select class="form-select" id="lunchOTFilter" style="width:auto" onchange="renderOvertime()"><option value="all">전체 직원</option></select><button class="btn btn-primary" onclick="openOTModal()">+ OT 입력</button></div></div>
                     <div class="table-container"><table><thead><tr><th>날짜</th><th>직원</th><th>시간(분)</th><th>사유</th><th>관리</th></tr></thead><tbody id="lunchOTTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-incentive">
