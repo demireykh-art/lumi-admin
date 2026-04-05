@@ -63,12 +63,13 @@ function renderExpenses(){
         return `<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td>${getCategoryBadge(e.category)}</td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.transferBank&&e.transferAccount?`<span style="font-size:12px">${e.transferBank} ${e.transferAccount}${e.transferHolder?' ('+e.transferHolder+')':''}</span>`:'<span style="color:#aaa;font-size:12px">미등록</span>'}</td><td>${noteDisplay}</td><td>${e.transferBank&&e.transferAccount?(e.lastTransferYM===getYM()?`<span style="color:#2e7d32;font-size:12px;font-weight:600;cursor:pointer" onclick="doTransfer('${e.id}')" title="클릭하여 재이체">✅ ${e.lastTransferDate?e.lastTransferDate.substring(5):''}</span>`:`<button class="btn btn-sm" style="background:#2e7d32;color:#fff;white-space:nowrap" onclick="doTransfer('${e.id}')">💸 이체</button>`):'<span style="color:#ccc">-</span>'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`;
     }).join('')||(searchText||filterCategory?`<tr><td colspan="8" class="text-center">검색 결과 없음 (전체 ${fixedExpenses.length}개 중)</td></tr>`:'<tr><td colspan="8" class="text-center">등록된 고정비 없음</td></tr>');
 
-    // 유동비
+    // 유동비 (현재 선택 월만)
     const variableSort=document.getElementById('variableSort')?.value||'date-desc';
-    const sortedVariable=sortExpenses(variableExpenses,variableSort);
-    const variableTotal=variableExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
+    const variableFiltered=variableExpenses.filter(e=>!e.yearMonth||e.yearMonth===getYM());
+    const sortedVariable=sortExpenses(variableFiltered,variableSort);
+    const variableTotal=variableFiltered.reduce((sum,e)=>sum+(e.amount||0),0);
     document.getElementById('variableTotal').textContent=formatCurrency(variableTotal);
-    document.getElementById('variableCount').textContent=variableExpenses.length+'건';
+    document.getElementById('variableCount').textContent=variableFiltered.length+'건';
     document.getElementById('variableTable').innerHTML=sortedVariable.map(e=>{
         const merchant=e.merchant||'';
         const note=e.note||'';
@@ -196,10 +197,10 @@ function renderExpenseChart(){
     
     for(let m=1;m<=12;m++){
         const ym=year+String(m).padStart(2,'0');
-        // 고정비는 현재 등록된 금액을 매월 동일하게 가정
-        const fixedTotal=fixedExpenses.reduce((sum,e)=>sum+(e.amount||0),0);
-        // 유동비는 해당 월 데이터만 (yearMonth 기준)
-        const varTotal=variableExpenses.filter(e=>e.yearMonth===ym).reduce((sum,e)=>sum+(e.amount||0),0);
+        // 고정비: 연간 전체 데이터에서 해당 월 필터
+        const fixedTotal=(typeof allFixedExpenses!=='undefined'?allFixedExpenses:fixedExpenses).filter(e=>e.yearMonth===ym).reduce((sum,e)=>sum+(e.amount||0),0);
+        // 유동비: 연간 전체 데이터에서 해당 월 필터
+        const varTotal=(typeof allVariableExpenses!=='undefined'?allVariableExpenses:variableExpenses).filter(e=>e.yearMonth===ym).reduce((sum,e)=>sum+(e.amount||0),0);
         const rev=revenueData[ym];
         const monthRev=rev?rev.total:0;
         
@@ -307,7 +308,7 @@ async function saveExpense(){
         data.leasePaymentMethod=document.getElementById('leasePaymentMethod').value||null;
         data.leaseCompany=document.getElementById('leaseCompany').value.trim()||null;
     }
-    data.yearMonth=date?date.substring(0,7).replace('-',''):getYM();
+    data.yearMonth=date?date.substring(0,7):getYM();
     try{
         if(editId){await db.collection(collection).doc(editId).update(data);}
         else{await db.collection(collection).add(data);}

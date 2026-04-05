@@ -9,7 +9,7 @@ const db=firebase.firestore();
 let currentYear=new Date().getFullYear();
 let currentMonth=new Date().getMonth()+1;
 let employees=[],attendance=[],revenueData={},salesDetail={};
-let fixedExpenses=[],variableExpenses=[];
+let fixedExpenses=[],variableExpenses=[],allFixedExpenses=[],allVariableExpenses=[];
 let incentiveItems=[],lunchOT=[],incentiveRecords=[],leaveRequests=[];
 let vatTaxes=[],incomeTaxes=[],payrollData=[],withholdingTaxes=[];
 let inventoryItems=[],recipes=[];
@@ -400,20 +400,11 @@ function changeMonth(delta){
         currentYear=parseInt(document.getElementById('yearSelect').value);
         currentMonth=parseInt(document.getElementById('monthSelect').value);
     }
-    // 월별 데이터 재로드 후 렌더링
-    reloadMonthlyData();
-}
-async function reloadMonthlyData(){
-    try{
-        await Promise.all([
-            loadAttendance(),
-            loadLunchOT(),
-            loadRevenueData(),
-            loadSalesDetailData(),
-            typeof loadMonthlyIncentiveInput==='function'?loadMonthlyIncentiveInput():Promise.resolve()
-        ]);
-    }catch(e){console.error('Monthly reload error:',e);}
-    renderAll();
+    // 월이 바뀌면 유동비·세금·인건비는 해당 월 데이터로 다시 로드
+    loadExpenses().then(()=>{
+        if(typeof loadPayrollData==='function') loadPayrollData();
+        renderAll();
+    }).catch(()=>renderAll());
 }
 function loadData(){changeMonth();}
 
@@ -442,13 +433,30 @@ async function loadEmployees(){try{const s=await db.collection('employees').get(
 async function loadRevenueData(){try{const s=await db.collection('revenue').get();revenueData={};s.docs.forEach(d=>{revenueData[d.id]=d.data();});}catch(e){console.error('Load revenue:',e);}}
 async function loadSalesDetailData(){try{const s=await db.collection('salesDetail').get();salesDetail={};s.docs.forEach(d=>{salesDetail[d.id]=d.data();});}catch(e){console.error('Load salesDetail:',e);}}
 async function loadExpenses(){
+    const ym=getYM();
     try{
-        const [f,v]=await Promise.all([db.collection('fixedExpenses').get(),db.collection('variableExpenses').get()]);
+        // 고정비: 현재 월만 (렌더링용) + 전체 (분석탭용)
+        // 유동비: 현재 월만 (렌더링용) + 전체 (분석탭용)
+        const [f,fa,v,va]=await Promise.all([
+            db.collection('fixedExpenses').where('yearMonth','==',ym).get(),
+            db.collection('fixedExpenses').get(),
+            db.collection('variableExpenses').where('yearMonth','==',ym).get(),
+            db.collection('variableExpenses').get()
+        ]);
         fixedExpenses=f.docs.map(d=>({id:d.id,...d.data()}));
+        allFixedExpenses=fa.docs.map(d=>({id:d.id,...d.data()}));
         variableExpenses=v.docs.map(d=>({id:d.id,...d.data()}));
+        allVariableExpenses=va.docs.map(d=>({id:d.id,...d.data()}));
     }catch(e){console.error('Load expenses:',e);}
     try{
-        const [vt,it,wt]=await Promise.all([db.collection('vatTaxes').get(),db.collection('incomeTaxes').get(),db.collection('withholdingTaxes').get()]);
+        // 원천세: 현재 월만 (date 기준) / 부가세·종소세: 전체
+        const ymStart=ym+'-01';
+        const ymEnd=ym+'-31';
+        const [vt,it,wt]=await Promise.all([
+            db.collection('vatTaxes').get(),
+            db.collection('incomeTaxes').get(),
+            db.collection('withholdingTaxes').where('date','>=',ymStart).where('date','<=',ymEnd).get()
+        ]);
         vatTaxes=vt.docs.map(d=>({id:d.id,...d.data()}));
         incomeTaxes=it.docs.map(d=>({id:d.id,...d.data()}));
         withholdingTaxes=wt.docs.map(d=>({id:d.id,...d.data()}));
