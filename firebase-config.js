@@ -376,6 +376,10 @@ function initNavigation(){
             parent.querySelectorAll('.sub-content').forEach(c=>c.classList.remove('active'));
             const target=parent.querySelector('#sub-'+tab.dataset.sub);
             if(target)target.classList.add('active');
+            // 카테고리 설정 탭 진입 시 렌더링
+            if(tab.dataset.sub==='category-settings'&&typeof renderCategorySettings==='function'){
+                renderCategorySettings();
+            }
         });
     });
 }
@@ -411,8 +415,11 @@ function loadData(){changeMonth();}
 // ===== Data Loading =====
 async function loadAllData(){
     try{
-        // Phase 1: 재고 & 레시피 먼저 로드 (원가 계산에 필요)
-        await Promise.all([loadInventory(),loadRecipes()]);
+        // Phase 1: 카테고리 + 재고 & 레시피 먼저 로드
+        await Promise.all([
+            typeof loadExpenseCategories==='function'?loadExpenseCategories():Promise.resolve(),
+            loadInventory(),loadRecipes()
+        ]);
         
         // Phase 2: 나머지 데이터 병렬 로드
         await Promise.all([

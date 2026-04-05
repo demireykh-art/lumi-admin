@@ -253,10 +253,15 @@ function openExpenseModal(type,id=null){
     document.getElementById('leasePaymentDay').value='';
     document.getElementById('leasePaymentMethod').value='롯데카드';
     document.getElementById('leaseCompany').value='';
-    // 카테고리 옵션 동적 변경
-    const cats=type==='fixed'?fixedCategories:variableCategories;
-    document.getElementById('expenseCategory').innerHTML=cats.map(c=>`<option value="${c.value}">${c.label}</option>`).join('');
-    document.getElementById('expenseCategory').value='기타';
+    // 카테고리 드롭다운 — Firestore 기반 (expense-categories.js)
+    const catSelect=document.getElementById('expenseCategory');
+    if(typeof buildExpenseCategoryDropdown==='function'){
+        buildExpenseCategoryDropdown(catSelect, type==='fixed'?'fixed':'variable', type==='fixed'?'기타고정':'기타');
+    }else{
+        const cats=type==='fixed'?fixedCategories:variableCategories;
+        catSelect.innerHTML=cats.map(c=>`<option value="${c.value}">${c.label}</option>`).join('');
+        catSelect.value='기타';
+    }
     if(id){const list=type==='fixed'?fixedExpenses:variableExpenses;const item=list.find(e=>e.id===id);if(item){
         document.getElementById('expenseName').value=item.name||'';document.getElementById('expenseCategory').value=item.category||'기타';
         document.getElementById('expenseAmount').value=item.amount||'';document.getElementById('expenseNote').value=item.note||'';
@@ -861,41 +866,40 @@ let expUploadParsed=[];
 
 // 카테고리별 배지 색상
 function getCategoryBadge(cat){
+    // expenseCategories가 로드된 경우 group 기반 색상 사용
+    if(typeof expenseCategories!=='undefined'&&expenseCategories.length){
+        const found=expenseCategories.find(c=>c.id===cat);
+        if(found){
+            const groupColors={
+                fixed:   ['#1e3a5f','#dbeafe'],
+                variable:['#7c3d0f','#fef3c7'],
+                payroll: ['#14532d','#dcfce7'],
+                tax:     ['#713f12','#fef9c3'],
+            };
+            const [fg,bg]=groupColors[found.group]||['#555','#f0f0f0'];
+            return `<span style="display:inline-block;font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:10px;color:${fg};background:${bg};white-space:nowrap">${found.name||cat}</span>`;
+        }
+    }
+    // fallback: 기존 하드코딩 색상
     const colors={
-        // 유동비 카테고리
-        '의료소모품':['#0277bd','#e1f5fe'],
-        '미용소모품':['#c2185b','#fce4ec'],
-        '소모품비':['#1565c0','#e3f2fd'],
-        '사무용품':['#37474f','#eceff1'],
-        '복리후생비':['#2e7d32','#e8f5e9'],
-        '접대비':['#ad1457','#fce4ec'],
-        '차량유지비':['#00838f','#e0f7fa'],
-        '교통비':['#1a237e','#e8eaf6'],
-        '시설보수':['#4e342e','#efebe9'],
-        '장비수리':['#455a64','#eceff1'],
-        '인테리어':['#00695c','#e0f2f1'],
-        '교육비':['#004d40','#e0f2f1'],
-        '공과금':['#e65100','#fff3e0'],
-        '세금':['#b71c1c','#ffebee'],
-        '리스료':['#6a1b9a','#f3e5f5'],
-        '금융/이체':['#757575','#f5f5f5'],
-        // 고정비 카테고리
-        '임대료':['#bf360c','#fbe9e7'],
-        '장비리스':['#6a1b9a','#f3e5f5'],
-        '대출이자':['#880e4f','#fce4ec'],
-        '통신_인터넷':['#0d47a1','#e3f2fd'],
-        '통신_전화':['#0d47a1','#e3f2fd'],
-        '세무노무':['#4a148c','#f3e5f5'],
-        '보험료':['#1b5e20','#e8f5e9'],
-        '청소비':['#33691e','#f1f8e9'],
-        '수탁_폐기물':['#827717','#f9fbe7'],
-        '수탁_검사':['#827717','#f9fbe7'],
-        '정수기':['#006064','#e0f7fa'],
-        '보안_캡스':['#263238','#eceff1'],
-        '복리후생':['#2e7d32','#e8f5e9'],
-        '마케팅':['#e65100','#fff3e0'],
-        '인건비':['#d32f2f','#ffebee'],
-        '기타':['#555','#f0f0f0']
+        '의료소모품':['#0277bd','#e1f5fe'],'미용소모품':['#c2185b','#fce4ec'],
+        '소모품비':['#1565c0','#e3f2fd'],'사무용품':['#37474f','#eceff1'],
+        '복리후생비':['#2e7d32','#e8f5e9'],'접대비':['#ad1457','#fce4ec'],
+        '차량유지비':['#00838f','#e0f7fa'],'교통비':['#1a237e','#e8eaf6'],
+        '시설보수':['#4e342e','#efebe9'],'장비수리':['#455a64','#eceff1'],
+        '인테리어':['#00695c','#e0f2f1'],'교육비':['#004d40','#e0f2f1'],
+        '공과금':['#e65100','#fff3e0'],'세금':['#b71c1c','#ffebee'],
+        '리스료':['#6a1b9a','#f3e5f5'],'금융/이체':['#757575','#f5f5f5'],
+        '임대료':['#bf360c','#fbe9e7'],'장비리스':['#6a1b9a','#f3e5f5'],
+        '대출이자':['#880e4f','#fce4ec'],'통신_인터넷':['#0d47a1','#e3f2fd'],
+        '통신_전화':['#0d47a1','#e3f2fd'],'세무노무':['#4a148c','#f3e5f5'],
+        '보험료':['#1b5e20','#e8f5e9'],'청소비':['#33691e','#f1f8e9'],
+        '수탁_폐기물':['#827717','#f9fbe7'],'수탁_검사':['#827717','#f9fbe7'],
+        '정수기':['#006064','#e0f7fa'],'보안_캡스':['#263238','#eceff1'],
+        '복리후생':['#2e7d32','#e8f5e9'],'마케팅':['#e65100','#fff3e0'],
+        '광고비':['#c2410c','#fff7ed'],'루미컨설팅비':['#6d28d9','#ede9fe'],
+        '인건비':['#d32f2f','#ffebee'],'환불':['#0f766e','#ccfbf1'],
+        '기타':['#555','#f0f0f0'],'기타고정':['#555','#eff6ff'],
     };
     const [fg,bg]=colors[cat]||colors['기타'];
     return `<span style="display:inline-block;font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:10px;color:${fg};background:${bg};white-space:nowrap">${cat}</span>`;
