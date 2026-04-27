@@ -372,8 +372,14 @@
                         </div>
                     </div>
                     <div class="table-container"><table><thead><tr>
-                        <th>품목명</th><th>카테고리</th><th>장소별 재고</th><th class="text-right">총재고</th><th class="text-right">안전재고</th>
-                        <th class="text-right">단가</th><th>유통기한</th><th>관리</th>
+                        <th onclick="setInvSort('name')" style="cursor:pointer;user-select:none;white-space:nowrap">품목명 <span id="invSortIcon_name">↕</span></th>
+                        <th onclick="setInvSort('category')" style="cursor:pointer;user-select:none;white-space:nowrap">카테고리 <span id="invSortIcon_category">↕</span></th>
+                        <th>장소별 재고</th>
+                        <th class="text-right" onclick="setInvSort('currentStock')" style="cursor:pointer;user-select:none;white-space:nowrap">총재고 <span id="invSortIcon_currentStock">↕</span></th>
+                        <th class="text-right" onclick="setInvSort('safetyStock')" style="cursor:pointer;user-select:none;white-space:nowrap">안전재고 <span id="invSortIcon_safetyStock">↕</span></th>
+                        <th class="text-right" onclick="setInvSort('unitCost')" style="cursor:pointer;user-select:none;white-space:nowrap">단가 <span id="invSortIcon_unitCost">↕</span></th>
+                        <th onclick="setInvSort('expiryDate')" style="cursor:pointer;user-select:none;white-space:nowrap">유통기한 <span id="invSortIcon_expiryDate">↕</span></th>
+                        <th>관리</th>
                     </tr></thead><tbody id="inventoryTable"></tbody></table></div>
                 </div>
                 

@@ -8,6 +8,23 @@ const LOSS_RATE=0.10;
 const BASE_HYGIENE_COST=1000;
 
 // ===== 재고 렌더링 =====
+// ── 정렬 상태 ──
+let invSortKey='name', invSortDir='asc';
+function setInvSort(key){
+    if(invSortKey===key){ invSortDir=invSortDir==='asc'?'desc':'asc'; }
+    else { invSortKey=key; invSortDir='asc'; }
+    renderInventory();
+}
+function updateInvSortIcons(){
+    const keys=['name','category','currentStock','safetyStock','unitCost','expiryDate'];
+    keys.forEach(k=>{
+        const el=document.getElementById('invSortIcon_'+k);
+        if(!el)return;
+        if(k===invSortKey) el.textContent=invSortDir==='asc'?'▲':'▼';
+        else el.textContent='↕';
+    });
+}
+
 function renderInventory(){
     const tbody=document.getElementById('inventoryTable');if(!tbody)return;
     const search=(document.getElementById('invSearch')?.value||'').toLowerCase();
@@ -18,7 +35,27 @@ function renderInventory(){
         if(typeFilter&&i.type!==typeFilter)return false;
         if(catFilter&&i.category!==catFilter)return false;
         return true;
-    }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    }).sort((a,b)=>{
+        const dir=invSortDir==='asc'?1:-1;
+        switch(invSortKey){
+            case 'name':       return dir*(a.name||'').localeCompare(b.name||'','ko');
+            case 'category':   return dir*(a.category||'').localeCompare(b.category||'');
+            case 'currentStock': return dir*((a.currentStock||0)-(b.currentStock||0));
+            case 'safetyStock':  return dir*((a.safetyStock||0)-(b.safetyStock||0));
+            case 'unitCost': {
+                const ua=a.purchasePrice&&a.purchaseQty?a.purchasePrice/a.purchaseQty:0;
+                const ub=b.purchasePrice&&b.purchaseQty?b.purchasePrice/b.purchaseQty:0;
+                return dir*(ua-ub);
+            }
+            case 'expiryDate': {
+                const da=a.expiryDate||'9999-99-99';
+                const db2=b.expiryDate||'9999-99-99';
+                return dir*(da<db2?-1:da>db2?1:0);
+            }
+            default: return dir*(a.name||'').localeCompare(b.name||'','ko');
+        }
+    });
+    updateInvSortIcons();
 
     if(!items.length){
         tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text-secondary);padding:2rem">등록된 소모품이 없습니다.</td></tr>';
