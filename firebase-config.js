@@ -4,6 +4,8 @@
 const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
+const auth=firebase.auth();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
 
 // ===== Global State =====
 let currentYear=new Date().getFullYear();
@@ -71,74 +73,47 @@ function formatBirthday(birthday){
     return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
-// ===== Auth (다수 관리자 지원) =====
+// ===== Auth (Firebase Auth + bizAdmins 화이트리스트) =====
+// (legacy: admins 컬렉션 관리 UI에서 예약어 검사용으로만 잔존)
 const SUPER_ADMIN_ID='adminhighgo';
-const DEFAULT_ADMIN_PW='gndls-asdk!jd-As';
-const DEFAULT_STAFF_PW='lumi2026!';
-let currentAdmin=null; // {id, name, role:'super'|'admin', ...}
+let currentAdmin=null; // {id:email, name, role:'admin'}
+let _appInitialized=false;
 
 async function handleAdminLogin(){
-    const id=document.getElementById('adminId').value.trim().toLowerCase();
+    const email=document.getElementById('adminId').value.trim().toLowerCase();
     const pw=document.getElementById('adminPw').value;
-    document.getElementById('loginError').textContent='';
-    if(!id||!pw){document.getElementById('loginError').textContent='ID와 비밀번호를 입력해주세요.';return;}
-    
-    // ── 1) 슈퍼 관리자 (기존 하드코딩 호환) ──
-    if(id===SUPER_ADMIN_ID){
-        let adminPw=DEFAULT_ADMIN_PW;
-        try{
-            const doc=await db.collection('config').doc('passwords').get();
-            if(doc.exists&&doc.data().admin_pw) adminPw=doc.data().admin_pw;
-        }catch(e){}
-        if(pw!==adminPw){
-            document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
-            return;
-        }
-        currentAdmin={id:SUPER_ADMIN_ID,name:'최고관리자',role:'super'};
-        localStorage.setItem('lumi_admin_auth',JSON.stringify(currentAdmin));
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('appContainer').classList.add('active');
-        initApp();
-        return;
-    }
-    
-    // ── 2) 추가 관리자 (admins 컬렉션) ──
+    const errEl=document.getElementById('loginError');
+    errEl.textContent='';
+    if(!email||!pw){errEl.textContent='이메일과 비밀번호를 입력해주세요.';return;}
+
     try{
-        let adminDoc=null;
-        // ID로 직접 조회
-        let d=await db.collection('admins').doc(id).get();
-        if(d.exists) adminDoc=d;
-        // 소문자 변환 시도
-        if(!adminDoc){
-            d=await db.collection('admins').doc(id.toLowerCase()).get();
-            if(d.exists) adminDoc=d;
-        }
-        if(!adminDoc){
-            document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
+        const cred=await auth.signInWithEmailAndPassword(email,pw);
+        const userEmail=(cred.user.email||'').toLowerCase();
+        const adminDoc=await db.collection('settings').doc('bizAdmins').get();
+        const allowed=adminDoc.exists&&Array.isArray(adminDoc.data().emails)
+            ? adminDoc.data().emails.map(e=>String(e).toLowerCase())
+            : [];
+        if(!allowed.includes(userEmail)){
+            await auth.signOut();
+            errEl.textContent='경영관리 권한이 없습니다.';
             return;
         }
-        const data=adminDoc.data();
-        if(data.status==='inactive'){
-            document.getElementById('loginError').textContent='비활성화된 계정입니다. 최고관리자에게 문의하세요.';
-            return;
-        }
-        if(data.password!==pw){
-            document.getElementById('loginError').textContent='ID 또는 비밀번호가 올바르지 않습니다.';
-            return;
-        }
-        currentAdmin={id:adminDoc.id,name:data.name||adminDoc.id,role:data.role||'admin'};
-        localStorage.setItem('lumi_admin_auth',JSON.stringify(currentAdmin));
-        // 마지막 로그인 시각 기록
-        db.collection('admins').doc(adminDoc.id).update({lastLogin:new Date().toISOString()}).catch(()=>{});
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('appContainer').classList.add('active');
-        initApp();
+        // onAuthStateChanged가 후속 처리(initApp)를 담당
     }catch(e){
         console.error('로그인 오류:',e);
-        document.getElementById('loginError').textContent='로그인 오류가 발생했습니다.';
+        const msg=(e&&e.code==='auth/wrong-password')||(e&&e.code==='auth/user-not-found')||(e&&e.code==='auth/invalid-credential')
+            ? '이메일 또는 비밀번호가 올바르지 않습니다.'
+            : '로그인 실패: '+(e.message||e);
+        errEl.textContent=msg;
     }
 }
-function logout(){localStorage.removeItem('lumi_admin_auth');currentAdmin=null;location.reload();}
+
+async function logout(){
+    try{await auth.signOut();}catch(e){}
+    localStorage.removeItem('lumi_admin_auth');
+    currentAdmin=null;
+    location.reload();
+}
 
 // ===== Admin 자동 로그아웃 (미활동 감지) =====
 let _adminLogoutTimer=null;
@@ -192,31 +167,42 @@ async function saveAdminAutoLogout(){
     }catch(e){alert('저장 실패: '+e.message);}
 }
 function checkAuth(){
-    const saved=localStorage.getItem('lumi_admin_auth');
-    if(saved){
+    // Firebase Auth 상태 변화로 로그인/로그아웃 UI 전환
+    auth.onAuthStateChanged(async user=>{
+        if(!user){
+            currentAdmin=null;
+            _appInitialized=false;
+            document.getElementById('appContainer').classList.remove('active');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            return;
+        }
+        // 화이트리스트 재검증 (세션 복원 시)
         try{
-            const parsed=JSON.parse(saved);
-            if(parsed&&parsed.id){
-                currentAdmin=parsed;
-                document.getElementById('loginScreen').classList.add('hidden');
-                document.getElementById('appContainer').classList.add('active');
-                initApp();
+            const adminDoc=await db.collection('settings').doc('bizAdmins').get();
+            const allowed=adminDoc.exists&&Array.isArray(adminDoc.data().emails)
+                ? adminDoc.data().emails.map(e=>String(e).toLowerCase())
+                : [];
+            const userEmail=(user.email||'').toLowerCase();
+            if(!allowed.includes(userEmail)){
+                await auth.signOut();
                 return;
             }
-        }catch(e){}
-        // 기존 'true' 문자열 호환 (마이그레이션)
-        if(saved==='true'){
-            currentAdmin={id:SUPER_ADMIN_ID,name:'최고관리자',role:'super'};
+            currentAdmin={id:userEmail,name:user.displayName||userEmail,role:'admin'};
             localStorage.setItem('lumi_admin_auth',JSON.stringify(currentAdmin));
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('appContainer').classList.add('active');
-            initApp();
-            return;
+            if(!_appInitialized){
+                _appInitialized=true;
+                initApp();
+            }
+        }catch(e){
+            console.error('인증 상태 확인 오류:',e);
+            try{await auth.signOut();}catch(_){}
         }
-    }
-    document.getElementById('loginScreen').classList.remove('hidden');
+    });
 }
-function isSuperAdmin(){return currentAdmin?.role==='super'||currentAdmin?.id===SUPER_ADMIN_ID;}
+// bizAdmins 화이트리스트를 통과한 모든 사용자가 풀 권한
+function isSuperAdmin(){return !!currentAdmin;}
 
 // ===== 관리자 계정 관리 =====
 let adminAccounts=[];

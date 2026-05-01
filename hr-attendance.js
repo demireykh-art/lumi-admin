@@ -57,12 +57,28 @@ function getUsedLeave(employeeId){
 }
 
 async function resetPassword(empId,empName){
-    if(!confirm(`${empName}님의 비밀번호를 초기화하시겠습니까?\n\n초기 비밀번호: fnal12890-`))return;
+    // Firebase Auth 마이그레이션 후: 클라이언트에서는 비밀번호를 초기화할 수 없음.
+    // Firebase Console > Authentication에서 해당 계정의 비밀번호를 재설정해 주세요.
+    alert(`Firebase Auth 마이그레이션 이후, 비밀번호 초기화는 Firebase Console에서 진행해 주세요.\n\n` +
+          `1) Firebase Console → Authentication → 사용자\n` +
+          `2) ${empName}(${empId}) 계정 검색\n` +
+          `3) "비밀번호 재설정" 또는 새 임시 비밀번호 설정\n\n` +
+          `※ 직원 이메일은 일반적으로 <staffId>@lumi.local 형식입니다.`);
+}
+
+// ───── Firebase Auth 계정 자동 생성 (보조 앱 사용) ─────
+// 메인 세션(관리자)을 유지한 채로 새 사용자를 생성하기 위해 secondary Firebase 앱을 일회용으로 사용한다.
+async function createAuthAccountForEmployee(email,initialPw){
+    if(!email||!initialPw) throw new Error('이메일/비밀번호가 비어있습니다.');
+    if(typeof firebaseConfig==='undefined') throw new Error('firebaseConfig를 찾을 수 없습니다.');
+    const name='secondary-emp-create-'+Date.now();
+    const secondary=firebase.initializeApp(firebaseConfig,name);
     try{
-        await db.collection('employees').doc(empId).update({password:'fnal12890-'});
-        alert(`${empName}님의 비밀번호가 초기화되었습니다.\n\n초기 비밀번호: fnal12890-`);
-        await loadEmployees();renderEmployees();
-    }catch(e){alert('초기화 실패: '+e.message);}
+        await secondary.auth().createUserWithEmailAndPassword(email,initialPw);
+        await secondary.auth().signOut();
+    } finally {
+        try{ await secondary.delete(); }catch(_){}
+    }
 }
 
 function renderAttendance(){
@@ -475,6 +491,11 @@ function openEmployeeModal(id=null){
     document.getElementById('autoAnnualLeave').textContent='0';
     document.getElementById('empId').value='';
     document.getElementById('empMealLimit').value='300000';
+    // Firebase Auth 관련 입력 초기화
+    const sidEl=document.getElementById('empStaffId');
+    const initPwEl=document.getElementById('empInitPw');
+    if(sidEl){sidEl.value='';sidEl.disabled=!!id;}
+    if(initPwEl){initPwEl.value='';initPwEl.disabled=!!id;}
     // 인센티브 설정 초기화
     document.getElementById('empIncType').value='none';
     document.getElementById('empIncPercent').value='0';
@@ -486,6 +507,8 @@ function openEmployeeModal(id=null){
     if(id){
         const emp=employees.find(e=>e.id===id);
         if(emp){
+            const sid2=document.getElementById('empStaffId');
+            if(sid2) sid2.value=emp.staffId||(emp.email?String(emp.email).split('@')[0]:'');
             document.getElementById('empName').value=emp.name||'';
             document.getElementById('empMatchName').value=emp.matchName||'';
             document.getElementById('empRole').value=emp.role||'staff';
@@ -559,16 +582,40 @@ async function saveEmployee(){
     const name=document.getElementById('empName').value.trim();
     const joinDate=document.getElementById('empJoinDate').value;
     if(!name||!joinDate){alert('이름과 입사일은 필수입니다.');return;}
-    
+
+    // 신규 등록 시: 로그인 ID(staffId)와 초기 비밀번호로 Firebase Auth 계정 자동 생성
+    const staffIdRaw=(document.getElementById('empStaffId')?.value||'').trim().toLowerCase();
+    const initialPw=(document.getElementById('empInitPw')?.value||'').trim();
+    let staffId='', email='';
+    if(staffIdRaw){
+        if(!/^[a-z0-9._-]{3,}$/.test(staffIdRaw)){
+            alert('로그인 ID는 3자 이상의 영문/숫자/._- 만 허용됩니다.');
+            return;
+        }
+        staffId=staffIdRaw;
+        email=staffId+'@lumi.local';
+    }
+
     // ID 결정: 수정 시 기존 ID, 신규 시 이름을 ID로 사용
     let empId=editId||name;
-    
+
     // 신규 등록 시 이름 중복 체크
     if(!editId){
         const existing=await db.collection('employees').doc(name).get();
         if(existing.exists){
             alert('이미 등록된 이름입니다: '+name);
             return;
+        }
+        if(staffId){
+            // staffId 중복 체크
+            try{
+                const dup=await db.collection('employees').where('staffId','==',staffId).limit(1).get();
+                if(!dup.empty){ alert('이미 사용 중인 로그인 ID입니다: '+staffId); return; }
+            }catch(_){}
+            if(!initialPw||initialPw.length<6){
+                alert('초기 비밀번호는 6자 이상이어야 합니다 (Firebase Auth 요구사항).');
+                return;
+            }
         }
     }
     
@@ -610,12 +657,34 @@ async function saveEmployee(){
         isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
         visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
     };
+    if(staffId){ data.staffId=staffId; data.email=email; }
+
     try{
+        // 신규 등록 + staffId 입력 시: Firebase Auth 계정 먼저 생성
+        if(!editId&&staffId){
+            try{
+                await createAuthAccountForEmployee(email,initialPw);
+            }catch(authErr){
+                console.error('Firebase Auth 계정 생성 실패:',authErr);
+                const code=authErr&&authErr.code;
+                if(code==='auth/email-already-in-use'){
+                    if(!confirm(`Firebase Auth에 이미 ${email} 계정이 존재합니다.\n그대로 직원 정보만 저장하시겠습니까?`)) return;
+                }else{
+                    alert('Firebase Auth 계정 생성 실패: '+(authErr.message||code));
+                    return;
+                }
+            }
+        }
         await db.collection('employees').doc(empId).set(data,{merge:true});
         closeModal('employeeModal');
         await loadEmployees();
         renderAll();
-        alert('직원 정보가 저장되었습니다.');
+        if(!editId&&staffId){
+            alert(`직원 정보가 저장되었습니다.\n\n로그인 ID: ${staffId}\n로그인 이메일: ${email}\n초기 비밀번호: ${initialPw}\n\n` +
+                  `직원에게 위 정보를 안내한 뒤, settings/employees.emails 배열에도 ${email}을(를) 추가해 주세요.`);
+        }else{
+            alert('직원 정보가 저장되었습니다.');
+        }
     }catch(e){alert('저장 실패: '+e.message);}
 }
 async function deleteEmployee(id){

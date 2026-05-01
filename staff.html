@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="apple-touch-icon" href="/favicon.png">
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -223,7 +224,7 @@
         <div class="login-logo">THE CLINIC</div>
         <div class="login-title">LUMI</div>
         <form class="login-form" onsubmit="attemptLogin(); return false;">
-            <input type="text" class="login-input" id="empIdInput" placeholder="이름" autocomplete="username">
+            <input type="text" class="login-input" id="empIdInput" placeholder="ID" autocomplete="username">
             <div class="pw-wrap">
                 <input type="password" class="login-input" id="empPwInput" placeholder="비밀번호" autocomplete="current-password">
                 <button type="button" class="pw-toggle" onclick="togglePw('empPwInput',this)">👁</button>
@@ -1145,6 +1146,15 @@
         const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
         firebase.initializeApp(firebaseConfig);
         const db=firebase.firestore();
+        const auth=firebase.auth();
+        // 공용 단말 가능성 → SESSION (브라우저 탭 닫으면 만료)
+        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(()=>{});
+
+        // 입력 ID → 이메일 변환 (@lumi.local 자동 부착)
+        function toAuthEmail(input){
+            const v=String(input||'').trim();
+            return v.includes('@')?v.toLowerCase():(v+'@lumi.local').toLowerCase();
+        }
         
         // ===== 근태 v2.0 — Firebase 동적 설정 (기본값) =====
         let CLINIC_LAT=37.5037435, CLINIC_LNG=127.0892416, CLINIC_RADIUS=100;
@@ -1268,125 +1278,97 @@
             return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
         }
         
-        // ===== Login System =====
-        let configPasswords={staff_pw:'lumi2026!'}; // 하드코딩 fallback (DB 실패 시)
-        
-        async function loadConfigPasswords(){
+        // ===== Login System (Firebase Auth) =====
+        // 공용(staff) 화이트리스트: settings/staff.emails
+        // 개인(employee) 화이트리스트: settings/employees.emails
+        const SHARED_ACCOUNT_ID='lumistaff';
+        function isSharedAccount(){return currentUser?.role==='shared';}
+
+        // 화이트리스트 조회 → {role:'shared'|'employee'|null}
+        async function resolveRole(email){
+            const e=String(email||'').toLowerCase();
             try{
-                if(typeof db==='undefined')return;
-                const doc=await db.collection('config').doc('passwords').get();
-                if(doc.exists){
-                    const data=doc.data();
-                    if(data.staff_pw) configPasswords.staff_pw=data.staff_pw;
-                }
-            }catch(e){console.warn('config 로드 실패, 기본값 사용:',e);}
+                const [staffDoc,empDoc]=await Promise.all([
+                    db.collection('settings').doc('staff').get(),
+                    db.collection('settings').doc('employees').get(),
+                ]);
+                const inList=(doc)=>doc.exists&&Array.isArray(doc.data().emails)
+                    && doc.data().emails.map(x=>String(x).toLowerCase()).includes(e);
+                if(inList(staffDoc)) return 'shared';
+                if(inList(empDoc)) return 'employee';
+            }catch(err){console.warn('화이트리스트 조회 실패:',err);}
+            return null;
         }
-        
+
+        // 로그인된 employee 이메일로 employees 문서 찾기
+        async function findEmployeeByEmail(email){
+            const e=String(email||'').toLowerCase();
+            // email 필드로 조회
+            try{
+                const snap=await db.collection('employees').where('email','==',e).limit(1).get();
+                if(!snap.empty) return {id:snap.docs[0].id,...snap.docs[0].data()};
+            }catch(_){}
+            // staffId 필드로 조회 (local-part 매칭)
+            const localPart=e.split('@')[0];
+            try{
+                const snap=await db.collection('employees').where('staffId','==',localPart).limit(1).get();
+                if(!snap.empty) return {id:snap.docs[0].id,...snap.docs[0].data()};
+            }catch(_){}
+            // 마지막: 문서 ID가 localPart와 동일
+            try{
+                const d=await db.collection('employees').doc(localPart).get();
+                if(d.exists) return {id:d.id,...d.data()};
+            }catch(_){}
+            return null;
+        }
+
         async function attemptLogin(){
-            const inputName=(document.getElementById('empIdInput').value||'').trim();
+            const inputId=(document.getElementById('empIdInput').value||'').trim();
             const pw=document.getElementById('empPwInput').value||'';
             const errEl=document.getElementById('loginError');
             errEl.textContent='';
-            
-            if(!inputName||!pw){errEl.textContent='이름과 비밀번호를 입력해주세요.';return;}
-            
-            // ── db 초기화 대기 (최대 2초) ──
+
+            if(!inputId||!pw){errEl.textContent='ID와 비밀번호를 입력해주세요.';return;}
             if(typeof db==='undefined'){
                 errEl.textContent='시스템 초기화 중... 잠시 후 다시 시도해주세요.';
                 return;
             }
-            
-            // ═══════════════════════════════════════
-            // 1) lumistaff 공용 계정 → DB 조회 없이 비밀번호만 대조
-            // ═══════════════════════════════════════
-            if(inputName.toLowerCase()==='lumistaff'){
-                try{ await loadConfigPasswords(); }catch(e){}
-                if(pw===configPasswords.staff_pw){
-                    currentUser={id:'lumistaff',name:'공용계정',role:'shared'};
-                    localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                    await showApp();
-                }else{
-                    errEl.textContent='공용계정 비밀번호가 올바르지 않습니다.';
-                }
-                return;
-            }
-            
-            // ═══════════════════════════════════════
-            // 2) 개인 계정 → employees 컬렉션에서 조회
-            // ═══════════════════════════════════════
+
+            const email=toAuthEmail(inputId);
             try{
-                let empDoc=null;
-                
-                // 2-1. 문서ID가 이름과 동일한 경우
-                try{
-                    const d=await db.collection('employees').doc(inputName).get();
-                    if(d.exists) empDoc=d;
-                }catch(e){}
-                
-                // 2-2. 소문자로 재시도
-                if(!empDoc){
-                    try{
-                        const d=await db.collection('employees').doc(inputName.toLowerCase()).get();
-                        if(d.exists) empDoc=d;
-                    }catch(e){}
-                }
-                
-                // 2-3. name 필드 where 검색
-                if(!empDoc){
-                    try{
-                        const snap=await db.collection('employees').where('name','==',inputName).limit(1).get();
-                        if(!snap.empty) empDoc=snap.docs[0];
-                    }catch(e){}
-                }
-                
-                if(!empDoc){
-                    errEl.textContent='등록되지 않은 이름입니다.';
-                    return;
-                }
-                
-                const emp={id:empDoc.id,...empDoc.data()};
-                
-                // 마스터키: 초기 비밀번호 설정 유도
-                if(pw==='fnal12890-'&&(!emp.password||emp.password==='fnal12890-')){
-                    currentUser=emp;
-                    document.getElementById('pwSetup').classList.add('active');
-                    return;
-                }
-                
-                if(emp.password!==pw){
-                    errEl.textContent='비밀번호가 올바르지 않습니다.';
-                    return;
-                }
-                
-                currentUser=emp;
-                localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                await showApp();
+                await auth.signInWithEmailAndPassword(email,pw);
+                // 후속 처리(화이트리스트, currentUser 세팅, showApp)는 onAuthStateChanged가 담당
             }catch(e){
                 console.error('로그인 오류:',e);
-                errEl.textContent='로그인 중 오류가 발생했습니다. 다시 시도해주세요.';
+                const code=e&&e.code;
+                if(code==='auth/wrong-password'||code==='auth/user-not-found'||code==='auth/invalid-credential'){
+                    errEl.textContent='ID 또는 비밀번호가 올바르지 않습니다.';
+                }else if(code==='auth/invalid-email'){
+                    errEl.textContent='ID 형식이 올바르지 않습니다.';
+                }else{
+                    errEl.textContent='로그인 실패: '+(e.message||code);
+                }
             }
         }
-        
+
         async function setupPassword(){
             const pw1=document.getElementById('newPw1').value;
             const pw2=document.getElementById('newPw2').value;
             document.getElementById('pwError').textContent='';
-            
+
             if(pw1.length<4){document.getElementById('pwError').textContent='4자 이상 입력해주세요.';return;}
             if(pw1!==pw2){document.getElementById('pwError').textContent='비밀번호가 일치하지 않습니다.';return;}
-            
+
             try{
-                await db.collection('employees').doc(currentUser.id).update({password:pw1});
-                currentUser.password=pw1;
-                localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                if(!auth.currentUser) throw new Error('인증 세션이 없습니다.');
+                await auth.currentUser.updatePassword(pw1);
                 document.getElementById('pwSetup').classList.remove('active');
                 await showApp();
-            }catch(e){document.getElementById('pwError').textContent='저장 실패: '+e.message;}
+            }catch(e){
+                console.error('비밀번호 변경 오류:',e);
+                document.getElementById('pwError').textContent='저장 실패: '+(e.message||e.code);
+            }
         }
-        
-        // 공용 계정: lumistaff
-        const SHARED_ACCOUNT_ID='lumistaff';
-        function isSharedAccount(){return currentUser?.id===SHARED_ACCOUNT_ID;}
 
         async function showApp(){
             document.getElementById('loginScreen').classList.add('hidden');
@@ -1449,8 +1431,9 @@
             if(defTab)defTab.classList.add('active');
         }
         
-        function logout(){
+        async function logout(){
             clearAutoLogoutTimer();
+            try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
             // 부드러운 UI 리셋 (location.reload 대신)
@@ -1460,21 +1443,43 @@
             document.getElementById('empPwInput').value='';
             document.getElementById('loginError').textContent='';
         }
-        
+
+        let _staffAppInitialized=false;
         async function checkAuth(){
-            // db 안전 체크 (firebase-config.js 미로드 또는 초기화 실패 대비)
-            if(typeof db==='undefined'||!db){
-                setTimeout(checkAuth,300);
-                return;
-            }
-            const saved=localStorage.getItem('lumi_staff_user');
-            if(saved){
-                try{
-                    currentUser=JSON.parse(saved);
-                    if(currentUser&&currentUser.id)await showApp();
-                    else{currentUser=null;localStorage.removeItem('lumi_staff_user');}
-                }catch(e){currentUser=null;localStorage.removeItem('lumi_staff_user');}
-            }
+            // Firebase Auth 상태 변화 → currentUser 결정 후 showApp/로그인 화면 전환
+            auth.onAuthStateChanged(async user=>{
+                if(!user){
+                    currentUser=null;
+                    _staffAppInitialized=false;
+                    localStorage.removeItem('lumi_staff_user');
+                    document.getElementById('appContainer').classList.remove('active');
+                    document.getElementById('loginScreen').classList.remove('hidden');
+                    return;
+                }
+                const errEl=document.getElementById('loginError');
+                const email=(user.email||'').toLowerCase();
+                const role=await resolveRole(email);
+                if(!role){
+                    if(errEl) errEl.textContent='접근 권한이 없는 계정입니다.';
+                    try{await auth.signOut();}catch(_){}
+                    return;
+                }
+                if(role==='shared'){
+                    currentUser={id:SHARED_ACCOUNT_ID,name:'공용계정',role:'shared',email};
+                }else{
+                    const emp=await findEmployeeByEmail(email);
+                    if(!emp){
+                        if(errEl) errEl.textContent='직원 정보를 찾을 수 없습니다. 관리자에게 문의하세요.';
+                        try{await auth.signOut();}catch(_){}
+                        return;
+                    }
+                    currentUser={...emp,role:emp.role||'employee',email};
+                }
+                localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                if(_staffAppInitialized) return;
+                _staffAppInitialized=true;
+                await showApp();
+            });
             checkBiometricAvailable();
         }
         
@@ -1514,13 +1519,11 @@
             document.addEventListener(event,resetAutoLogoutTimer,{passive:true});
         });
         
-        // 생체인식 로그인 (WebAuthn)
+        // 생체인식 로그인 (WebAuthn) — Firebase Auth 마이그레이션 후 일시 비활성화
+        // (WebAuthn 인증은 Firebase Auth 토큰을 발급하지 못하므로, Custom Token 서버 도입 전까지는 표시하지 않음)
         function checkBiometricAvailable(){
             const btn=document.getElementById('biometricBtn');
-            const hasCredential=localStorage.getItem('lumi_biometric_credential');
-            if(window.PublicKeyCredential&&hasCredential){
-                btn.style.display='block';
-            }
+            if(btn) btn.style.display='none';
         }
         
         async function biometricLogin(){

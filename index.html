@@ -6,6 +6,7 @@
     <title>THE CLINIC LUMI - 경영관리</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -19,7 +20,7 @@
         <div class="login-title">LUMI</div>
         <div class="login-subtitle">ADMIN PORTAL</div>
         <form class="login-form" onsubmit="handleAdminLogin();return false;">
-            <input type="text" class="login-input" id="adminId" placeholder="관리자 ID" autocomplete="username">
+            <input type="email" class="login-input" id="adminId" placeholder="이메일" autocomplete="username">
             <div class="pw-wrap">
                 <input type="password" class="login-input" id="adminPw" placeholder="비밀번호" autocomplete="current-password">
                 <button type="button" class="pw-toggle" onclick="togglePw('adminPw',this)">👁</button>
@@ -546,6 +547,18 @@
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">이름 *</label><input type="text" class="form-input" id="empName" required></div>
                     <div class="form-group"><label class="form-label">매칭 이름 (엑셀)</label><input type="text" class="form-input" id="empMatchName" placeholder="엑셀 담당직원명"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">로그인 ID <span style="font-size:.75rem;color:var(--text-muted)">(Staff App 로그인용, 영문/숫자)</span></label>
+                        <input type="text" class="form-input" id="empStaffId" placeholder="예: kim01">
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">신규 등록 시 Firebase Auth 계정이 자동 생성됩니다 (이메일: <code>&lt;ID&gt;@lumi.local</code>)</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">초기 비밀번호 <span style="font-size:.75rem;color:var(--text-muted)">(신규 등록 시만)</span></label>
+                        <input type="text" class="form-input" id="empInitPw" placeholder="예: lumi2026!">
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">직원에게 전달 후 첫 로그인 시 변경 안내</p>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">직급 *</label><select class="form-select" id="empRole"><option value="doctor">원장</option><option value="nurse">간호사</option><option value="coordinator">코디네이터</option><option value="marketing">마케팅</option><option value="manager">실장</option><option value="esthetician">피부관리사</option></select></div>
