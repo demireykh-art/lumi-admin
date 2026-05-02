@@ -402,8 +402,7 @@ function renderSalary(){
         });
         const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
         otMinutes+=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
-        const otHours=(otMinutes/60).toFixed(1);
-        
+
         // 인센티브 계산 (동적 v2)
         const {salesIncentive, japanIncentive}=calculateIncentiveForEmp(emp);
         const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
@@ -422,7 +421,7 @@ function renderSalary(){
             <td><strong>${emp.name}</strong></td>
             <td>${roleLabelsLocal[emp.role]||emp.role}</td>
             <td>${salaryDisplay}</td>
-            <td class="text-right">${otHours}H</td>
+            <td class="text-right">${otMinutes}분</td>
             <td class="text-right">${incentiveAmount>0?formatCurrency(incentiveAmount):''}</td>
             <td><input type="text" class="form-input" style="font-size:.8rem;padding:.25rem .5rem;border:1px solid var(--border)" placeholder="" value="${emp._payrollMemo||''}" onchange="updatePayrollMemo('${emp.id}',this.value)"></td>
         </tr>`;
@@ -778,7 +777,7 @@ function exportPrePayroll(){
     const ym=getYM();
     const roleLabelsLocal={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
     
-    const rows=[['','직책','연봉(만원) 세전','OT(시간)','인센티브(원) 세전','기타']];
+    const rows=[['','직책','연봉(만원) 세전','OT(분)','인센티브(원) 세전','기타']];
     
     const realEmployees=employees.filter(e=>e.status==='active'&&!e.id.startsWith('lumi'));
     realEmployees.forEach(emp=>{
@@ -793,8 +792,7 @@ function exportPrePayroll(){
             }
         });
         otMin+=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym)).reduce((s,ot)=>s+(ot.minutes||0),0);
-        const otH=(otMin/60).toFixed(1);
-        
+
         // 인센티브
         const {salesIncentive,japanIncentive}=calculateIncentiveForEmp(emp);
         const empRecords=incentiveRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym);
@@ -812,7 +810,7 @@ function exportPrePayroll(){
             emp.name,
             roleLabelsLocal[emp.role]||emp.role,
             salaryDisplay,
-            otH+'H',
+            otMin+'분',
             incTotal>0?incTotal:'',
             _payrollMemos[emp.id]||''
         ]);
