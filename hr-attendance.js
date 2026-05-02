@@ -260,6 +260,18 @@ function renderIncInputForm(){
     
     container.innerHTML='<label class="form-label" style="font-weight:600">직원별 매출 입력</label>'+
         personalEmps.map(emp=>{
+            const source=emp.personalSalesSource||'manual';
+            if(source!=='manual'){
+                const auto=getEmpPersonalRevenue(emp);
+                const label=source==='japan'?'일본인매출':'전체매출';
+                return `<div class="form-row" style="margin-bottom:.3rem">
+                    <div class="form-group" style="flex:0 0 100px"><label class="form-label" style="font-size:.85rem;margin-top:.4rem">${emp.name}</label></div>
+                    <div class="form-group">
+                        <input type="text" class="form-input" value="${auto?formatCurrency(auto):'(매출 데이터 없음)'}" readonly style="background:#f5f5f5;color:#666">
+                        <p style="font-size:.7rem;color:var(--text-muted);margin-top:.2rem">자동: ${label} (업로드 파일에서 산출, 직원 설정에서 변경 가능)</p>
+                    </div>
+                </div>`;
+            }
             const val=monthlyIncInput.staffRevenue?.[emp.id]||'';
             return `<div class="form-row" style="margin-bottom:.3rem">
                 <div class="form-group" style="flex:0 0 100px"><label class="form-label" style="font-size:.85rem;margin-top:.4rem">${emp.name}</label></div>
@@ -273,15 +285,16 @@ async function saveMonthlyIncentiveInput(){
     const totalRevenue=parseInt(document.getElementById('incTotalRevenue').value)||0;
     const japanVisitors=parseInt(document.getElementById('incJapanVisitors').value)||0;
     
+    // 수동 입력 직원만 staffRevenue에 저장 (자동 소스는 매월 입력 불필요)
     const staffRevenue={};
-    employees.filter(e=>e.status==='active'&&e.incType==='personal').forEach(emp=>{
+    employees.filter(e=>e.status==='active'&&e.incType==='personal'&&(e.personalSalesSource||'manual')==='manual').forEach(emp=>{
         const el=document.getElementById('incStaff_'+emp.id);
         if(el){
             const val=parseInt(el.value)||0;
             if(val>0) staffRevenue[emp.id]=val;
         }
     });
-    
+
     monthlyIncInput={totalRevenue, japanVisitors, staffRevenue};
     
     try{
@@ -291,30 +304,49 @@ async function saveMonthlyIncentiveInput(){
     }catch(e){alert('저장 실패: '+e.message);}
 }
 
+// incType=personal 직원의 본인매출을 산출 (personalSalesSource 설정에 따라 수동/자동 분기)
+function getEmpPersonalRevenue(emp){
+    const source=emp.personalSalesSource||'manual';
+    if(source==='manual'){
+        return (monthlyIncInput.staffRevenue||{})[emp.id]||0;
+    }
+    const ym=getYM();
+    const detail=(typeof salesDetail!=='undefined'&&salesDetail[ym])||{};
+    const key=emp.matchName||emp.name;
+    if(source==='japan'){
+        return detail.japanStaffSales?.[key]?.amount||0;
+    }
+    if(source==='total'){
+        return detail.staffSales?.[key]?.amount||0;
+    }
+    return 0;
+}
+
 function calculateIncentiveForEmp(emp){
     const totalRevenue=monthlyIncInput.totalRevenue||0;
     const japanVisitors=monthlyIncInput.japanVisitors||0;
-    const staffRevenue=monthlyIncInput.staffRevenue||{};
     const percent=(emp.incPercent||0)/100;
     const rounding=emp.incRounding||0; // 0=1원올림, -1=10원올림, -2=100원올림
-    
+
     let salesIncentive=0;
     let japanIncentive=0;
-    
+
     if(emp.incType==='totalMinusPersonal'){
-        const personalTotal=Object.values(staffRevenue).reduce((s,v)=>s+v,0);
+        // 본인 외 개인매출직원 합계 (수동 + 자동 모두 합산)
+        const personalEmps=employees.filter(e=>e.status==='active'&&e.incType==='personal');
+        const personalTotal=personalEmps.reduce((s,e)=>s+getEmpPersonalRevenue(e),0);
         salesIncentive=roundUp((totalRevenue-personalTotal)*percent, rounding);
     }else if(emp.incType==='personal'){
-        const myRevenue=staffRevenue[emp.id]||0;
+        const myRevenue=getEmpPersonalRevenue(emp);
         salesIncentive=roundUp(myRevenue*percent, rounding);
     }else if(emp.incType==='totalAll'){
         salesIncentive=roundUp(totalRevenue*percent, rounding);
     }
-    
+
     if(emp.incJapan){
         japanIncentive=japanVisitors*10000;
     }
-    
+
     return {salesIncentive, japanIncentive};
 }
 
@@ -326,11 +358,11 @@ function roundUp(value, digits){
 }
 
 function previewIncentive(){
-    // 임시로 입력값 반영
+    // 임시로 입력값 반영 (수동 소스만 staffRevenue에 반영, 자동 소스는 calculateIncentiveForEmp가 직접 산출)
     const totalRevenue=parseInt(document.getElementById('incTotalRevenue').value)||0;
     const japanVisitors=parseInt(document.getElementById('incJapanVisitors').value)||0;
     const staffRevenue={};
-    employees.filter(e=>e.status==='active'&&e.incType==='personal').forEach(emp=>{
+    employees.filter(e=>e.status==='active'&&e.incType==='personal'&&(e.personalSalesSource||'manual')==='manual').forEach(emp=>{
         const el=document.getElementById('incStaff_'+emp.id);
         if(el) staffRevenue[emp.id]=parseInt(el.value)||0;
     });
@@ -500,6 +532,7 @@ function openEmployeeModal(id=null){
     document.getElementById('empIncPercent').value='0';
     document.getElementById('empIncRounding').value='0';
     document.getElementById('empIncJapan').checked=false;
+    document.getElementById('empPersonalSalesSource').value='manual';
     // 탭 체크박스 초기화
     document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
     
@@ -524,6 +557,7 @@ function openEmployeeModal(id=null){
             document.getElementById('empIncPercent').value=emp.incPercent||0;
             document.getElementById('empIncRounding').value=emp.incRounding!=null?emp.incRounding:0;
             document.getElementById('empIncJapan').checked=!!emp.incJapan;
+            document.getElementById('empPersonalSalesSource').value=emp.personalSalesSource||'manual';
             document.getElementById('empId').value=emp.id;
             // 법정 연차 자동계산 표시
             const autoLeave=calculateLegalAnnualLeave(emp.joinDate);
@@ -653,6 +687,7 @@ async function saveEmployee(){
         incPercent:parseFloat(document.getElementById('empIncPercent').value)||0,
         incRounding:parseInt(document.getElementById('empIncRounding').value)||0,
         incJapan:document.getElementById('empIncJapan').checked,
+        personalSalesSource:document.getElementById('empPersonalSalesSource').value||'manual',
         isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
         visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
     };
