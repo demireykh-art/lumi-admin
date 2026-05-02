@@ -710,12 +710,23 @@ async function saveEmployee(){
             }
         }
         await db.collection('employees').doc(empId).set(data,{merge:true});
+        // 신규 등록 + email 있는 경우: settings/employees.emails 화이트리스트에 자동 추가
+        if(!editId&&email){
+            try{
+                await db.collection('settings').doc('employees').set(
+                    {emails:firebase.firestore.FieldValue.arrayUnion(email)},
+                    {merge:true}
+                );
+            }catch(wlErr){
+                console.warn('화이트리스트 자동 추가 실패:',wlErr);
+            }
+        }
         closeModal('employeeModal');
         await loadEmployees();
         renderAll();
         if(!editId&&staffId){
             alert(`직원 정보가 저장되었습니다.\n\n로그인 ID: ${staffId}\n로그인 이메일: ${email}\n초기 비밀번호: ${initialPw}\n\n` +
-                  `직원에게 위 정보를 안내한 뒤, settings/employees.emails 배열에도 ${email}을(를) 추가해 주세요.`);
+                  `직원에게 위 정보를 안내해 주세요. (화이트리스트 자동 등록 완료)`);
         }else{
             alert('직원 정보가 저장되었습니다.');
         }
@@ -724,9 +735,26 @@ async function saveEmployee(){
 async function deleteEmployee(id){
     if(!confirm('정말 삭제하시겠습니까?'))return;
     try{
+        // 삭제 전 이메일 조회 → 화이트리스트에서 제거
+        const emp=employees.find(e=>e.id===id);
+        const email=emp?.email||'';
         await db.collection('employees').doc(id).delete();
+        if(email){
+            try{
+                await db.collection('settings').doc('employees').set(
+                    {emails:firebase.firestore.FieldValue.arrayRemove(email)},
+                    {merge:true}
+                );
+            }catch(wlErr){
+                console.warn('화이트리스트 자동 제거 실패:',wlErr);
+            }
+        }
         await loadEmployees();
         renderAll();
+        if(email){
+            alert(`삭제 완료.\n화이트리스트에서 ${email}도 제거되었습니다.\n\n` +
+                  `※ Firebase Auth 계정 자체는 자동 삭제되지 않으므로, 필요시 Firebase Console에서 별도 삭제하세요.`);
+        }
     }catch(e){alert('삭제 실패: '+e.message);}
 }
 
