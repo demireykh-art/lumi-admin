@@ -390,8 +390,12 @@ function changeMonth(delta){
         currentYear=parseInt(document.getElementById('yearSelect').value);
         currentMonth=parseInt(document.getElementById('monthSelect').value);
     }
-    // 월이 바뀌면 유동비·세금·인건비는 해당 월 데이터로 다시 로드
-    loadExpenses().then(()=>{
+    // 월이 바뀌면 해당 월 기준으로 필터링되는 데이터(근태/점심OT/지출/인건비)를 다시 로드
+    Promise.all([
+        loadExpenses(),
+        loadAttendance(),
+        loadLunchOT(),
+    ]).then(()=>{
         if(typeof loadPayrollData==='function') loadPayrollData();
         renderAll();
     }).catch(()=>renderAll());
