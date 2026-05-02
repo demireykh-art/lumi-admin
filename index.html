@@ -6,6 +6,7 @@
     <title>THE CLINIC LUMI - 경영관리</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -19,7 +20,7 @@
         <div class="login-title">LUMI</div>
         <div class="login-subtitle">ADMIN PORTAL</div>
         <form class="login-form" onsubmit="handleAdminLogin();return false;">
-            <input type="text" class="login-input" id="adminId" placeholder="관리자 ID" autocomplete="username">
+            <input type="email" class="login-input" id="adminId" placeholder="이메일" autocomplete="username">
             <div class="pw-wrap">
                 <input type="password" class="login-input" id="adminPw" placeholder="비밀번호" autocomplete="current-password">
                 <button type="button" class="pw-toggle" onclick="togglePw('adminPw',this)">👁</button>
@@ -33,7 +34,7 @@
             <div class="header-content">
                 <div class="logo"><div class="logo-text"><div class="logo-sub">THE CLINIC</div><div class="logo-main">LUMI</div></div></div>
                 <div class="header-right">
-                    <a href="https://www.lumiclinic.co.kr/admin.html" target="_blank" style="padding:.5rem 1rem;background:var(--accent-color);color:white;text-decoration:none;font-size:.85rem;font-weight:500;cursor:pointer;border:none;display:flex;align-items:center;gap:6px"><img src="data:image/jpeg;base64,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" style="width:18px;height:18px;border-radius:3px" alt="LUMI"> 홈페이지 관리</a>
+                    <a href="https://www.lumiclinic.co.kr/admin.html" target="_blank" style="padding:.5rem 1rem;background:var(--accent-color);color:white;text-decoration:none;font-size:.85rem;font-weight:500;cursor:pointer;border:none;display:flex;align-items:center;gap:6px"><img src="/favicon.png" style="width:18px;height:18px;border-radius:3px" alt="LUMI"> 홈페이지 관리</a>
                     <div class="month-selector">
                         <button class="month-arrow" onclick="changeMonth(-1)">◀</button>
                         <select id="yearSelect" onchange="loadData()"></select><span>년</span>
@@ -546,6 +547,18 @@
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">이름 *</label><input type="text" class="form-input" id="empName" required></div>
                     <div class="form-group"><label class="form-label">매칭 이름 (엑셀)</label><input type="text" class="form-input" id="empMatchName" placeholder="엑셀 담당직원명"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">로그인 ID <span style="font-size:.75rem;color:var(--text-muted)">(Staff App 로그인용, 영문/숫자)</span></label>
+                        <input type="text" class="form-input" id="empStaffId" placeholder="예: kim01">
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">신규 등록 시 Firebase Auth 계정이 자동 생성됩니다 (이메일: <code>&lt;ID&gt;@lumi.local</code>)</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">초기 비밀번호 <span style="font-size:.75rem;color:var(--text-muted)">(신규 등록 시만)</span></label>
+                        <input type="text" class="form-input" id="empInitPw" placeholder="예: lumi2026!">
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">직원에게 전달 후 첫 로그인 시 변경 안내</p>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">직급 *</label><select class="form-select" id="empRole"><option value="doctor">원장</option><option value="nurse">간호사</option><option value="coordinator">코디네이터</option><option value="marketing">마케팅</option><option value="manager">실장</option><option value="esthetician">피부관리사</option></select></div>
