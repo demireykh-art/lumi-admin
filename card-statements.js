@@ -402,8 +402,11 @@ function makeRow(opts){
 
 // ───── detectAndParse 위임 진입점 ─────
 function parseCardStatement(rows, fileName){
-    const headerText = rows.slice(0,30).map(r=>(r||[]).join(',')).join('\n');
-    if(/이용가맹점/.test(headerText) && /할부\/회차/.test(headerText))    return parseHyundaiCard(rows, fileName);
+    const headerText = rows.slice(0,30).map(r=>(r||[]).join('|')).join('\n');
+    // 현대카드: '결제원금'이 가장 고유한 키워드 (PG 기반 카드사 양식 중 유일)
+    if(/이용가맹점/.test(headerText) && (/결제원금/.test(headerText) || /예상적립/.test(headerText) || /할부.{0,2}회차/.test(headerText))) {
+        return parseHyundaiCard(rows, fileName);
+    }
     if(/이용총액/.test(headerText) && /적립예정/.test(headerText))         return parseLotteCard(rows, fileName);
     if(/카드번호/.test(headerText) && /승인일자/.test(headerText))         return parseSamsungCardV2(rows, fileName);
     if(/거래일/.test(headerText)   && /카드구분/.test(headerText))         return parseShinhanCardV2(rows, fileName);
