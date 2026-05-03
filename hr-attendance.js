@@ -336,6 +336,9 @@ async function saveMonthlyIncentiveInput(){
         await db.collection('monthlyIncentiveInput').doc(ym).set(monthlyIncInput);
         alert('✅ 매출 인센티브 입력 저장 완료');
         renderIncentiveSummary();
+        // 사전급여대장 / 인센티브 입력 폼도 즉시 갱신 (저장값 반영)
+        if(typeof renderSalary==='function') renderSalary();
+        renderIncInputForm();
     }catch(e){alert('저장 실패: '+e.message);}
 }
 
