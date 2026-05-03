@@ -1140,13 +1140,15 @@ function parseGenericCSV(rows,fileName){
     return results;
 }
 
-// ===== 파일 핸들러 + 중복 제거 =====
+// ===== 파일 핸들러 + 중복 제거 (파일 여러 번 업로드 누적) =====
 async function handleExpenseFiles(files){
     if(!files||!files.length)return;
     const statusEl=document.getElementById('expUploadStatus');
     statusEl.style.display='block';
-    statusEl.innerHTML='⏳ 파일 분석 중...';
-    
+    const prevCount=expUploadParsed.length;
+    if(prevCount===0){statusEl.innerHTML='⏳ 파일 분석 중...';}
+    else{statusEl.innerHTML=`⏳ 추가 파일 분석 중... (기존 ${prevCount}건 유지)`;}
+
     let allParsed=[];
     for(const file of files){
         try{
@@ -1158,33 +1160,33 @@ async function handleExpenseFiles(files){
             statusEl.innerHTML+=`<br>❌ <strong>${file.name}</strong>: 읽기 실패 - ${e.message}`;
         }
     }
-    
-    // 중복 제거 (같은 날짜+가맹점+금액)
+
+    // ── 기존 누적 + 신규 합치고 중복 제거 ──
+    // 키: 출처+날짜+가맹점+금액 (다른 카드의 같은 가맹점/금액은 다른 거래로 간주)
+    const merged=[...expUploadParsed, ...allParsed];
     const seen=new Set();
     const deduped=[];
-    for(const item of allParsed){
-        const key=`${item.date}|${item.name}|${item.amount}`;
+    for(const item of merged){
+        const key=`${item.source||''}|${item.date}|${item.name}|${item.amount}|${item.cardLabel||''}`;
         if(!seen.has(key)){seen.add(key);deduped.push(item);}
     }
-    const dupCount=allParsed.length-deduped.length;
+    const dupCount=merged.length-deduped.length;
     if(dupCount>0) statusEl.innerHTML+=`<br>🔄 중복 ${dupCount}건 자동 제거`;
-    
-    // 금융/이체 제외 건수 표시
-    const excludeCount=deduped.filter(d=>d.exclude).length;
+
+    // 금융/이체 제외 건수 표시 (이번 신규분만 카운트)
+    const excludeCount=allParsed.filter(d=>d.exclude).length;
     if(excludeCount>0) statusEl.innerHTML+=`<br>🏦 카드대금/이체 ${excludeCount}건 자동 제외 표시`;
-    
+
     // ── DB 이력 기반 자동 재분류 ──
-    // 기존 유동비에서 가맹점→카테고리 매핑 학습
     const learnedMap={};
     variableExpenses.forEach(e=>{
         if(e.merchant&&e.category) learnedMap[e.merchant]=e.category;
         if(e.name&&e.category) learnedMap[e.name]=e.category;
     });
-    // 세션 내 수동 오버라이드 우선
     Object.assign(learnedMap,expMerchantOverrides);
-    
+
     let reClassified=0;
-    deduped.forEach(d=>{
+    allParsed.forEach(d=>{
         if(learnedMap[d.name]&&learnedMap[d.name]!==d.category){
             d.category=learnedMap[d.name];
             d.exclude=d.category==='금융/이체';
@@ -1192,7 +1194,8 @@ async function handleExpenseFiles(files){
         }
     });
     if(reClassified>0) statusEl.innerHTML+=`<br>📚 이전 분류 이력으로 ${reClassified}건 자동 재분류`;
-    
+    if(prevCount>0) statusEl.innerHTML+=`<br>📦 누적: 총 ${deduped.length}건 (이전 ${prevCount} + 신규 ${deduped.length-prevCount})`;
+
     expUploadParsed=deduped;
     renderExpUploadPreview();
 }
@@ -1400,42 +1403,108 @@ function renderExpUploadSummary(){
 }
 
 // ===== 일괄 저장 =====
+// 카테고리 그룹(고정/유동/인건/세금)에 따라 자동 분기 저장
+function getCategoryGroupSafe(catId){
+    if(typeof getCategoryGroup === 'function'){ return getCategoryGroup(catId); }
+    if(typeof expenseCategories !== 'undefined'){
+        const c = expenseCategories.find(x => x.id === catId);
+        return c?.group || 'variable';
+    }
+    return 'variable';
+}
+
 async function saveExpensesBulk(){
     const items=expUploadParsed.filter(d=>!d.exclude);
     if(!items.length){alert('저장할 항목이 없습니다.');return;}
-    
-    // 세금 / 유동비 분리
-    const taxItems=items.filter(d=>d.category==='세금');
-    const expItems=items.filter(d=>d.category!=='세금');
-    
-    // 카테고리별 합계 계산
+
+    // 카테고리 그룹별 분리
+    const fixedItems = items.filter(d => getCategoryGroupSafe(d.category) === 'fixed');
+    const taxItems   = items.filter(d => getCategoryGroupSafe(d.category) === 'tax');
+    const expItems   = items.filter(d => {
+        const g = getCategoryGroupSafe(d.category);
+        return g === 'variable' || g === 'payroll';  // 인건비도 우선 유동비로 (별도 흐름은 향후 확장)
+    });
+
+    // 카테고리별 합계 계산 (그룹 표시 추가)
     const byCat={};
     items.forEach(d=>{byCat[d.category]=(byCat[d.category]||0)+d.amount;});
-    const catSummary=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`  • ${cat}: ${formatCurrency(amt)}`).join('\n');
-    
+    const groupLabel = {fixed:'🔵고정', variable:'🟠유동', payroll:'🟢인건', tax:'🟡세금'};
+    const catSummary=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>{
+        const g = getCategoryGroupSafe(cat);
+        return `  ${groupLabel[g]||''} • ${cat}: ${formatCurrency(amt)}`;
+    }).join('\n');
+
     // 월별 합계 계산
     const byMonth={};
     items.forEach(d=>{const ym=d.date.substring(0,7);byMonth[ym]=(byMonth[ym]||0)+d.amount;});
     const monthSummary=Object.entries(byMonth).sort().map(([ym,amt])=>`  ${ym}: ${formatCurrency(amt)}`).join('\n');
-    
+
     const total=items.reduce((s,d)=>s+d.amount,0);
-    const taxNote=taxItems.length?`\n\n⚠ 세금 ${taxItems.length}건은 세금 탭(원천세)에 저장됩니다.`:'';
-    
-    if(!confirm(`📊 저장 전 요약\n━━━━━━━━━━━━━━━━━━\n\n[카테고리별 합계]\n${catSummary}\n\n[월별 합계]\n${monthSummary}\n\n━━━━━━━━━━━━━━━━━━\n총 ${items.length}건 / ${formatCurrency(total)}${taxNote}\n\n저장하시겠습니까?`))return;
-    
+    const personalCount = items.filter(d=>d.isPersonal).length;
+    const routeNote =
+        (fixedItems.length?`\n  • 고정비 ${fixedItems.length}건 → fixedExpenses`:'') +
+        (expItems.length?`\n  • 유동비/인건비 ${expItems.length}건 → variableExpenses`:'') +
+        (taxItems.length?`\n  • 세금 ${taxItems.length}건 → 원천세 (withholdingTaxes)`:'');
+    const personalNote = personalCount?`\n\n🔘 개인사용 표시 ${personalCount}건 (저장은 되되 사업비 합산에서 제외)`:'';
+
+    if(!confirm(`📊 저장 전 요약\n━━━━━━━━━━━━━━━━━━\n\n[저장 위치]${routeNote}\n\n[카테고리별 합계]\n${catSummary}\n\n[월별 합계]\n${monthSummary}\n\n━━━━━━━━━━━━━━━━━━\n총 ${items.length}건 / ${formatCurrency(total)}${personalNote}\n\n저장하시겠습니까?`))return;
+
     const btn=document.getElementById('expBulkSaveBtn');
     btn.disabled=true;btn.textContent='저장 중...';
-    
+
     try{
         const batchSize=450;
-        let savedExpCount=0,savedTaxCount=0,skipCount=0;
-        
-        // ── 유동비 저장 ──
+        let savedFixedCount=0, savedExpCount=0, savedTaxCount=0, skipCount=0;
+
+        // ── 고정비 저장 ──
+        if(fixedItems.length){
+            const existingKeys=new Set((typeof allFixedExpenses!=='undefined'?allFixedExpenses:fixedExpenses||[]).map(e=>`${e.date||e.yearMonth}|${e.name}|${e.amount}`));
+            const newFixed=fixedItems.filter(d=>!existingKeys.has(`${d.date}|${d.name}|${d.amount}`));
+            skipCount+=fixedItems.length-newFixed.length;
+
+            for(let i=0;i<newFixed.length;i+=batchSize){
+                const chunk=newFixed.slice(i,i+batchSize);
+                const batch=db.batch();
+                for(const item of chunk){
+                    const ref=db.collection('fixedExpenses').doc();
+                    batch.set(ref,{
+                        date:item.date,
+                        name:item.name,
+                        amount:item.amount,
+                        category:item.category,
+                        card:item.source,
+                        cardId:item.cardId||null,
+                        cardLabel:item.cardLabel||'',
+                        merchantNorm:item.merchantNorm||item.name,
+                        isPersonal: !!item.isPersonal,
+                        isCancel: !!item.isCancel,
+                        note:item.note||('['+item.source+'] '+item.name),
+                        merchant:item.name,
+                        yearMonth:item.date.substring(0,7),
+                        createdAt:new Date().toISOString(),
+                        uploadBatch:true
+                    });
+                }
+                await batch.commit();
+                savedFixedCount+=chunk.length;
+                if(typeof learnRule==='function'){
+                    const seen=new Set();
+                    for(const item of chunk){
+                        const key=(item.merchantNorm||item.name||'').trim();
+                        if(!key || seen.has(key)) continue;
+                        seen.add(key);
+                        try{ await learnRule(key, item.category, !!item.isPersonal); }catch(_){}
+                    }
+                }
+            }
+        }
+
+        // ── 유동비/인건비 저장 ──
         if(expItems.length){
             const existingKeys=new Set(variableExpenses.map(e=>`${e.date}|${e.name}|${e.amount}`));
             const newExp=expItems.filter(d=>!existingKeys.has(`${d.date}|${d.name}|${d.amount}`));
             skipCount+=expItems.length-newExp.length;
-            
+
             for(let i=0;i<newExp.length;i+=batchSize){
                 const chunk=newExp.slice(i,i+batchSize);
                 const batch=db.batch();
@@ -1462,7 +1531,6 @@ async function saveExpensesBulk(){
                 }
                 await batch.commit();
                 savedExpCount+=chunk.length;
-                // ── 룰 학습 ──: 명세서 행은 merchantNorm을 키로 학습
                 if(typeof learnRule==='function'){
                     const seen=new Set();
                     for(const item of chunk){
@@ -1504,9 +1572,10 @@ async function saveExpensesBulk(){
         }
         
         let msg=[];
+        if(savedFixedCount) msg.push(`고정비 ${savedFixedCount}건`);
         if(savedExpCount) msg.push(`유동비 ${savedExpCount}건`);
         if(savedTaxCount) msg.push(`세금 ${savedTaxCount}건`);
-        let result=`✅ 저장 완료! (${msg.join(' + ')})`;
+        let result=`✅ 저장 완료! (${msg.join(' + ')||'0건'})`;
         if(skipCount>0) result+=`\n🔄 ${skipCount}건은 이미 존재하여 건너뜀`;
         alert(result);
         
