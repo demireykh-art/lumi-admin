@@ -112,6 +112,7 @@
                     <div class="sub-tab" data-sub="tax">세금</div>
                     <div class="sub-tab" data-sub="expense-upload">📤 데이터 업로드</div>
                     <div class="sub-tab" data-sub="expense-summary">지출 분석</div>
+                    <div class="sub-tab" data-sub="cards">💳 카드 관리</div>
                     <div class="sub-tab" data-sub="category-settings">⚙ 카테고리</div>
                 </div>
                 <div class="sub-content active" id="sub-fixed">
@@ -198,7 +199,7 @@
                                 <button class="btn btn-primary" id="expBulkSaveBtn" onclick="saveExpensesBulk()" style="font-size:.85rem">💾 일괄 저장</button>
                             </div>
                         </div>
-                        <div class="table-container"><table><thead><tr><th>출처</th><th>거래일</th><th>가맹점명</th><th>분류</th><th class="text-right">금액</th><th>비고</th><th>제외</th><th>삭제</th></tr></thead><tbody id="expPreviewTable"></tbody></table></div>
+                        <div class="table-container"><table><thead><tr><th>출처</th><th>거래일</th><th>가맹점명</th><th>분류</th><th class="text-right">금액</th><th>비고</th><th title="개인사용 (사업비 합산에서 제외)">개인</th><th title="제외 (저장 안 함)">제외</th><th>삭제</th></tr></thead><tbody id="expPreviewTable"></tbody></table></div>
                         <div style="display:flex;gap:1.5rem;margin-top:1rem;flex-wrap:wrap" id="expPreviewSummary"></div>
                     </div>
                 </div>
@@ -215,6 +216,23 @@
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
                         <div><h4 style="margin-bottom:12px">고정비</h4><div id="fixedByCategory"></div></div>
                         <div><h4 style="margin-bottom:12px">유동비</h4><div id="variableByCategory"></div></div>
+                    </div>
+                </div>
+                <!-- ── 카드 관리 ── -->
+                <div class="sub-content" id="sub-cards">
+                    <div class="section-header" style="display:flex;align-items:center;justify-content:space-between">
+                        <div class="section-title">💳 카드 마스터 관리</div>
+                        <button class="btn btn-primary" onclick="openCardModal()" style="white-space:nowrap">+ 카드 추가</button>
+                    </div>
+                    <p style="font-size:.85rem;color:#888;margin-bottom:16px">
+                        명세서 업로드 시 카드사별 양식의 "이용카드" / "카드번호" 값으로 자동 매칭됩니다.<br>
+                        매칭 패턴은 콤마(,)로 여러 개 등록 가능 — 예: <code>본인 대한항공카드, 8111, 831</code>
+                    </p>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>별칭</th><th>카드사</th><th>매칭 패턴</th><th>소유</th><th>기본 분류</th><th>관리</th></tr></thead>
+                            <tbody id="cardsTable"><tr><td colspan="6" class="text-center" style="color:#888;padding:1rem">로딩 중...</td></tr></tbody>
+                        </table>
                     </div>
                 </div>
                 <!-- ── 카테고리 설정 ── -->
@@ -760,6 +778,57 @@
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('expenseModal')">취소</button><button class="btn btn-primary" onclick="saveExpense()">저장</button></div>
         </div>
     </div>
+    <!-- ── 카드 추가/수정 모달 ── -->
+    <div class="modal" id="cardModal" style="display:none">
+        <div class="modal-content" style="max-width:520px">
+            <div class="modal-header">
+                <div class="modal-title" id="cardModalTitle">카드 등록</div>
+                <button class="modal-close" onclick="closeCardModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="cardEditId">
+                <div class="form-group">
+                    <label class="form-label">별칭 *</label>
+                    <input type="text" class="form-input" id="cardAlias" placeholder="예: 현대 대한항공카드">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">카드사</label>
+                    <select class="form-select" id="cardIssuer">
+                        <option value="hyundai">현대카드</option>
+                        <option value="lotte">롯데카드</option>
+                        <option value="samsung">삼성카드</option>
+                        <option value="shinhan">신한카드</option>
+                        <option value="kb">KB국민카드</option>
+                        <option value="bc">BC카드</option>
+                        <option value="woori">우리카드</option>
+                        <option value="hana">하나카드</option>
+                        <option value="other">기타</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">매칭 패턴 <span style="font-size:.75rem;color:#aaa">(콤마로 구분)</span></label>
+                    <input type="text" class="form-input" id="cardAliasPatterns" placeholder="예: 본인 대한항공카드, 8111">
+                    <p style="font-size:.75rem;color:#888;margin-top:4px">명세서의 "이용카드" 또는 "카드번호" 컬럼 값과 매칭됩니다. 끝 4자리(8111)/3자리(831)도 인식됩니다.</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">소유</label>
+                    <select class="form-select" id="cardOwnerEmp">
+                        <option value="">법인</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem">
+                        <input type="checkbox" id="cardDefaultPersonal" style="width:16px;height:16px;accent-color:var(--primary)">
+                        🔘 개인용 카드 (모든 거래 기본 "개인사용"으로 마킹)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCardModal()">취소</button>
+                <button class="btn btn-primary" onclick="saveCardModal()">저장</button>
+            </div>
+        </div>
+    </div>
     <!-- ── 카테고리 추가/수정 모달 ── -->
     <div class="modal" id="categoryModal" style="display:none">
         <div class="modal-content" style="max-width:440px">
@@ -949,6 +1018,7 @@
     <script src="firebase-config.js"></script>
     <script src="revenue.js"></script>
     <script src="expense-categories.js"></script>
+    <script src="card-statements.js"></script>
     <script src="expense.js"></script>
     <script src="hr-attendance.js"></script>
     <script src="inventory.js"></script>
