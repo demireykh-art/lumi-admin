@@ -401,16 +401,19 @@ function makeRow(opts){
 }
 
 // ───── detectAndParse 위임 진입점 ─────
+// 카드사별 양식 식별 — 가장 고유한 키워드를 기준으로
+//   롯데: 이용총액 + 적립예정 (롯데 전용)
+//   현대: 결제원금 (현대 전용 — 롯데는 "원금" 단독)
+//   삼성: 카드번호 + 승인일자
+//   신한: 거래일 + 카드구분
+// 우선순위: 롯데 → 현대 → 삼성 → 신한 (롯데 컬럼이 현대 키워드와 겹쳐 보일 수 있어 먼저 검사)
 function parseCardStatement(rows, fileName){
     const headerText = rows.slice(0,30).map(r=>(r||[]).join('|')).join('\n');
-    // 현대카드: '결제원금'이 가장 고유한 키워드 (PG 기반 카드사 양식 중 유일)
-    if(/이용가맹점/.test(headerText) && (/결제원금/.test(headerText) || /예상적립/.test(headerText) || /할부.{0,2}회차/.test(headerText))) {
-        return parseHyundaiCard(rows, fileName);
-    }
     if(/이용총액/.test(headerText) && /적립예정/.test(headerText))         return parseLotteCard(rows, fileName);
+    if(/결제원금/.test(headerText))                                         return parseHyundaiCard(rows, fileName);
     if(/카드번호/.test(headerText) && /승인일자/.test(headerText))         return parseSamsungCardV2(rows, fileName);
     if(/거래일/.test(headerText)   && /카드구분/.test(headerText))         return parseShinhanCardV2(rows, fileName);
-    return null;  // 미인식 → 기존 detectAndParse가 다른 파서 시도
+    return null;
 }
 
 // ───── Firestore: 카드 마스터 로드/저장 ─────
