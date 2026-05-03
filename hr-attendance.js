@@ -517,6 +517,8 @@ function openEmployeeModal(id=null){
     document.getElementById('empHourly').value='12000';
     document.getElementById('empBirthday').value='';
     document.getElementById('empStatus').value='active';
+    document.getElementById('empResignDate').value='';
+    toggleResignDateField();
     document.getElementById('empAnnualLeave').value='';
     document.getElementById('empUsedLeave').value='0';
     document.getElementById('autoAnnualLeave').textContent='0';
@@ -549,6 +551,8 @@ function openEmployeeModal(id=null){
             document.getElementById('empHourly').value=emp.hourly||12000;
             document.getElementById('empBirthday').value=emp.birthday||'';
             document.getElementById('empStatus').value=emp.status||'active';
+            document.getElementById('empResignDate').value=emp.resignDate||'';
+            toggleResignDateField();
             document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
             document.getElementById('empMealLimit').value=emp.mealLimit||300000;
@@ -680,6 +684,7 @@ async function saveEmployee(){
         hourly:parseInt(document.getElementById('empHourly').value)||12000,
         birthday:document.getElementById('empBirthday').value,
         status:document.getElementById('empStatus').value,
+        resignDate:document.getElementById('empResignDate').value||'',
         annualLeave:annualLeave,
         usedLeave:usedLeave,
         mealLimit:parseInt(document.getElementById('empMealLimit').value)||300000,
@@ -721,17 +726,69 @@ async function saveEmployee(){
                 console.warn('화이트리스트 자동 추가 실패:',wlErr);
             }
         }
+        // 퇴사 처리: 퇴사일 이후 신청된 연차 정리
+        let leaveCleanupMsg='';
+        if(data.status==='inactive'&&data.resignDate){
+            try{
+                const r=await cleanupFutureLeavesForEmployee(empId,data.resignDate);
+                if(r.deleted+r.trimmed>0){
+                    leaveCleanupMsg=`\n\n📅 연차 정리: 신청 ${r.deleted}건 삭제, ${r.trimmed}건 일부 정리 (총 ${r.removedDays}일)`;
+                }
+            }catch(e){
+                console.warn('연차 정리 실패:',e);
+                leaveCleanupMsg='\n\n⚠ 연차 자동 정리 중 오류가 발생했습니다.';
+            }
+        }
         closeModal('employeeModal');
         await loadEmployees();
+        if(typeof loadLeaveRequests==='function') await loadLeaveRequests();
         renderAll();
         if(!editId&&staffId){
             alert(`직원 정보가 저장되었습니다.\n\n로그인 ID: ${staffId}\n로그인 이메일: ${email}\n초기 비밀번호: ${initialPw}\n\n` +
-                  `직원에게 위 정보를 안내해 주세요. (화이트리스트 자동 등록 완료)`);
+                  `직원에게 위 정보를 안내해 주세요. (화이트리스트 자동 등록 완료)`+leaveCleanupMsg);
         }else{
-            alert('직원 정보가 저장되었습니다.');
+            alert('직원 정보가 저장되었습니다.'+leaveCleanupMsg);
         }
     }catch(e){alert('저장 실패: '+e.message);}
 }
+function toggleResignDateField(){
+    const sel=document.getElementById('empStatus');
+    const row=document.getElementById('empResignDateRow');
+    if(!sel||!row) return;
+    row.style.display=sel.value==='inactive'?'':'none';
+}
+
+// 퇴사일 이후 신청된 연차 일정 정리.
+//   - 모든 dates가 퇴사일 이후 → 신청 doc 삭제
+//   - 일부만 퇴사일 이후 → 해당 dates 항목만 제거하여 update
+//   - 모두 퇴사일 이전이면 변경 없음
+// pending/approved 상태만 대상으로 함 (rejected/canceled는 무시)
+async function cleanupFutureLeavesForEmployee(empId, resignDateStr){
+    if(!empId||!resignDateStr) return {deleted:0,trimmed:0,removedDays:0};
+    const snap=await db.collection('leaveRequests').where('employeeId','==',empId).get();
+    let deleted=0, trimmed=0, removedDays=0;
+    const batch=db.batch();
+    snap.forEach(doc=>{
+        const d=doc.data();
+        if(d.status&&d.status!=='pending'&&d.status!=='approved') return;
+        const dates=Array.isArray(d.dates)?d.dates:[];
+        if(dates.length===0) return;
+        const futureDates=dates.filter(x=>x>resignDateStr);
+        if(futureDates.length===0) return;
+        removedDays+=futureDates.length;
+        if(futureDates.length===dates.length){
+            batch.delete(doc.ref);
+            deleted++;
+        }else{
+            const remaining=dates.filter(x=>x<=resignDateStr);
+            batch.update(doc.ref,{dates:remaining});
+            trimmed++;
+        }
+    });
+    if(deleted+trimmed>0) await batch.commit();
+    return {deleted,trimmed,removedDays};
+}
+
 async function deleteEmployee(id){
     if(!confirm('정말 삭제하시겠습니까?'))return;
     try{
