@@ -63,9 +63,40 @@ function renderExpenses(){
         return `<tr><td>${e.date||'-'}</td><td><strong>${e.name}</strong></td><td>${getCategoryBadge(e.category)}</td><td class="text-right">${formatCurrency(e.amount)}</td><td>${e.transferBank&&e.transferAccount?`<span style="font-size:12px">${e.transferBank} ${e.transferAccount}${e.transferHolder?' ('+e.transferHolder+')':''}</span>`:'<span style="color:#aaa;font-size:12px">미등록</span>'}</td><td>${noteDisplay}</td><td>${e.transferBank&&e.transferAccount?(e.lastTransferYM===getYM()?`<span style="color:#2e7d32;font-size:12px;font-weight:600;cursor:pointer" onclick="doTransfer('${e.id}')" title="클릭하여 재이체">✅ ${e.lastTransferDate?e.lastTransferDate.substring(5):''}</span>`:`<button class="btn btn-sm" style="background:#2e7d32;color:#fff;white-space:nowrap" onclick="doTransfer('${e.id}')">💸 이체</button>`):'<span style="color:#ccc">-</span>'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('fixed','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('fixed','${e.id}')">삭제</button></td></tr>`;
     }).join('')||(searchText||filterCategory?`<tr><td colspan="8" class="text-center">검색 결과 없음 (전체 ${fixedExpenses.length}개 중)</td></tr>`:'<tr><td colspan="8" class="text-center">등록된 고정비 없음</td></tr>');
 
-    // 유동비 (현재 선택 월만)
+    // 유동비 (현재 선택 월만 + 검색/카드/카테고리/개인사용숨김)
     const variableSort=document.getElementById('variableSort')?.value||'date-desc';
-    const variableFiltered=variableExpenses.filter(e=>!e.yearMonth||e.yearMonth===getYM());
+    const vSearch=(document.getElementById('variableSearch')?.value||'').trim().toLowerCase();
+    const vCardFilter=document.getElementById('variableCardFilter')?.value||'';
+    const vCatFilter=document.getElementById('variableCategoryFilter')?.value||'';
+    const vHidePersonal=document.getElementById('variableHidePersonal')?.checked;
+
+    // 카드/카테고리 옵션 자동 채우기 (현재 월 데이터 기준)
+    const monthRows=variableExpenses.filter(e=>!e.yearMonth||e.yearMonth===getYM());
+    const cardSet=new Set(monthRows.map(e=>e.cardLabel||e.card||'').filter(Boolean));
+    const catSet=new Set(monthRows.map(e=>e.category||'').filter(Boolean));
+    const cardFilterEl=document.getElementById('variableCardFilter');
+    const catFilterEl=document.getElementById('variableCategoryFilter');
+    if(cardFilterEl){
+        const cur=cardFilterEl.value;
+        cardFilterEl.innerHTML='<option value="">전체 카드/수단</option>'+[...cardSet].sort().map(c=>`<option value="${c}">${c}</option>`).join('');
+        cardFilterEl.value=cur;
+    }
+    if(catFilterEl){
+        const cur=catFilterEl.value;
+        catFilterEl.innerHTML='<option value="">전체 카테고리</option>'+[...catSet].sort().map(c=>`<option value="${c}">${c}</option>`).join('');
+        catFilterEl.value=cur;
+    }
+
+    const variableFiltered=monthRows.filter(e=>{
+        if(vCardFilter && (e.cardLabel||e.card)!==vCardFilter) return false;
+        if(vCatFilter && e.category!==vCatFilter) return false;
+        if(vHidePersonal && e.isPersonal) return false;
+        if(vSearch){
+            const hay=(e.name+' '+(e.merchant||'')+' '+(e.note||'')+' '+(e.cardLabel||e.card||'')).toLowerCase();
+            if(!hay.includes(vSearch)) return false;
+        }
+        return true;
+    });
     const sortedVariable=sortExpenses(variableFiltered,variableSort);
     const variableTotal=variableFiltered.reduce((sum,e)=>sum+(e.amount||0),0);
     document.getElementById('variableTotal').textContent=formatCurrency(variableTotal);
@@ -74,8 +105,11 @@ function renderExpenses(){
         const merchant=e.merchant||'';
         const note=e.note||'';
         const catBadge=getCategoryBadge(e.category);
-        return `<tr><td>${e.date}</td><td><strong>${e.name}</strong></td><td style="font-size:.85rem;color:#555;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${merchant}">${merchant||'-'}</td><td>${catBadge}</td><td>${e.card||'-'}</td><td class="text-right">${formatCurrency(e.amount)}</td><td style="font-size:.8rem;color:#777;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${note}">${note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`;
-    }).join('')||'<tr><td colspan="8" class="text-center">등록된 유동비 없음</td></tr>';
+        const cardCell=e.cardLabel||e.card||'-';
+        const personalBadge=e.isPersonal?' <span style="font-size:.7rem;background:#fde8e8;color:#9b1c1c;padding:1px 5px;border-radius:3px">개인</span>':'';
+        const rowStyle=e.isPersonal?'background:#fffbeb':'';
+        return `<tr style="${rowStyle}"><td>${e.date}</td><td><strong>${e.name}</strong>${personalBadge}</td><td style="font-size:.85rem;color:#555;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${merchant}">${merchant||'-'}</td><td>${catBadge}</td><td>${cardCell}</td><td class="text-right">${formatCurrency(e.amount)}</td><td style="font-size:.8rem;color:#777;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${note}">${note||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editExpense('variable','${e.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteExpense('variable','${e.id}')">삭제</button></td></tr>`;
+    }).join('')||'<tr><td colspan="8" class="text-center">표시할 유동비 없음</td></tr>';
     
     // 급여 렌더링
     renderPayroll();
