@@ -57,13 +57,38 @@ function getUsedLeave(employeeId){
 }
 
 async function resetPassword(empId,empName){
-    // Firebase Auth 마이그레이션 후: 클라이언트에서는 비밀번호를 초기화할 수 없음.
-    // Firebase Console > Authentication에서 해당 계정의 비밀번호를 재설정해 주세요.
-    alert(`Firebase Auth 마이그레이션 이후, 비밀번호 초기화는 Firebase Console에서 진행해 주세요.\n\n` +
-          `1) Firebase Console → Authentication → 사용자\n` +
-          `2) ${empName}(${empId}) 계정 검색\n` +
-          `3) "비밀번호 재설정" 또는 새 임시 비밀번호 설정\n\n` +
-          `※ 직원 이메일은 일반적으로 <staffId>@lumi.local 형식입니다.`);
+    // Firebase Auth는 Admin SDK 없이는 클라이언트에서 다른 사용자의 비밀번호를 직접 재설정할 수 없음.
+    // 차선책: 1) employees 문서에 mustChangePassword=true 플래그 설정 (다음 로그인 시 변경 강제)
+    //         2) Firebase Console 사용자 페이지를 새 탭으로 열고, 이메일을 클립보드에 복사
+    const emp=employees.find(e=>e.id===empId);
+    const email=emp?.email||'';
+    if(!email){
+        alert(`${empName}님은 아직 로그인 ID(staffId)가 부여되지 않았습니다.\n직원 수정 화면에서 먼저 로그인 ID를 부여해 주세요.`);
+        return;
+    }
+    if(!confirm(`${empName}(${email})님의 비밀번호를 초기화합니다.\n\n` +
+                `절차:\n` +
+                `1) 다음 안내에 따라 Firebase Console에서 새 임시 비밀번호 설정\n` +
+                `2) 본인에게 임시 비밀번호 전달\n` +
+                `3) 본인이 첫 로그인 시 자동으로 비밀번호 변경 안내됨\n\n계속하시겠습니까?`)) return;
+    try{
+        await db.collection('employees').doc(empId).update({mustChangePassword:true});
+    }catch(e){
+        console.warn('mustChangePassword 플래그 설정 실패:',e);
+    }
+    try{
+        if(navigator.clipboard&&navigator.clipboard.writeText){
+            await navigator.clipboard.writeText(email);
+        }
+    }catch(_){}
+    const consoleUrl='https://console.firebase.google.com/project/lumiclinic-c1a95/authentication/users';
+    window.open(consoleUrl,'_blank');
+    alert(`✅ "다음 로그인 시 변경" 플래그가 설정되었습니다.\n` +
+          `📋 이메일이 클립보드에 복사되었습니다: ${email}\n\n` +
+          `방금 열린 Firebase Console 탭에서:\n` +
+          `1) 사용자 검색 칸에 이메일 붙여넣기 (Ctrl+V)\n` +
+          `2) 우측 ⋮ 버튼 → "비밀번호 재설정"\n` +
+          `3) 새 임시 비밀번호 설정 후 본인에게 전달`);
 }
 
 // ───── Firebase Auth 계정 자동 생성 (보조 앱 사용) ─────
@@ -526,10 +551,11 @@ function openEmployeeModal(id=null){
     document.getElementById('empMealLimit').value='300000';
     document.getElementById('empLocationExempt').checked=false;
     // Firebase Auth 관련 입력 초기화
+    // 신규: 입력 가능. 수정: staffId 이미 있으면 비활성화, 없으면 입력 가능 (기존 직원 마이그레이션)
     const sidEl=document.getElementById('empStaffId');
     const initPwEl=document.getElementById('empInitPw');
-    if(sidEl){sidEl.value='';sidEl.disabled=!!id;}
-    if(initPwEl){initPwEl.value='';initPwEl.disabled=!!id;}
+    if(sidEl){sidEl.value='';sidEl.disabled=false;}
+    if(initPwEl){initPwEl.value='';initPwEl.disabled=false;}
     // 인센티브 설정 초기화
     document.getElementById('empIncType').value='none';
     document.getElementById('empIncPercent').value='0';
@@ -543,7 +569,16 @@ function openEmployeeModal(id=null){
         const emp=employees.find(e=>e.id===id);
         if(emp){
             const sid2=document.getElementById('empStaffId');
-            if(sid2) sid2.value=emp.staffId||(emp.email?String(emp.email).split('@')[0]:'');
+            const initPw2=document.getElementById('empInitPw');
+            if(sid2){
+                sid2.value=emp.staffId||(emp.email?String(emp.email).split('@')[0]:'');
+                // 이미 등록된 staffId가 있으면 비활성화 (변경 불가)
+                sid2.disabled=!!sid2.value;
+            }
+            if(initPw2){
+                // staffId 이미 있으면 초기비번 입력 불필요
+                initPw2.disabled=!!(emp.staffId||emp.email);
+            }
             document.getElementById('empName').value=emp.name||'';
             document.getElementById('empMatchName').value=emp.matchName||'';
             document.getElementById('empRole').value=emp.role||'staff';
@@ -645,16 +680,23 @@ async function saveEmployee(){
             alert('이미 등록된 이름입니다: '+name);
             return;
         }
-        if(staffId){
-            // staffId 중복 체크
-            try{
-                const dup=await db.collection('employees').where('staffId','==',staffId).limit(1).get();
-                if(!dup.empty){ alert('이미 사용 중인 로그인 ID입니다: '+staffId); return; }
-            }catch(_){}
-            if(!initialPw||initialPw.length<6){
-                alert('초기 비밀번호는 6자 이상이어야 합니다 (Firebase Auth 요구사항).');
+    }
+
+    // staffId가 새로 입력되는 경우(신규 등록 or 기존 직원 마이그레이션) Auth 계정 생성 필요
+    const existingEmp=editId?employees.find(e=>e.id===editId):null;
+    const isNewStaffId=!!staffId&&!(existingEmp&&existingEmp.staffId);
+    if(isNewStaffId){
+        // staffId 중복 체크 (본인 제외)
+        try{
+            const dup=await db.collection('employees').where('staffId','==',staffId).limit(1).get();
+            if(!dup.empty&&dup.docs[0].id!==empId){
+                alert('이미 사용 중인 로그인 ID입니다: '+staffId);
                 return;
             }
+        }catch(_){}
+        if(!initialPw||initialPw.length<6){
+            alert('초기 비밀번호는 6자 이상이어야 합니다 (Firebase Auth 요구사항).');
+            return;
         }
     }
     
@@ -700,10 +742,12 @@ async function saveEmployee(){
         visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
     };
     if(staffId){ data.staffId=staffId; data.email=email; }
+    // 새 staffId가 부여되는 경우 → 첫 로그인 시 비밀번호 변경 강제 플래그 설정
+    if(isNewStaffId){ data.mustChangePassword=true; }
 
     try{
-        // 신규 등록 + staffId 입력 시: Firebase Auth 계정 먼저 생성
-        if(!editId&&staffId){
+        // 신규 staffId 부여 시 Firebase Auth 계정 생성 (신규 등록 + 기존 직원 마이그레이션 모두)
+        if(isNewStaffId){
             try{
                 await createAuthAccountForEmployee(email,initialPw);
             }catch(authErr){
@@ -718,8 +762,8 @@ async function saveEmployee(){
             }
         }
         await db.collection('employees').doc(empId).set(data,{merge:true});
-        // 신규 등록 + email 있는 경우: settings/employees.emails 화이트리스트에 자동 추가
-        if(!editId&&email){
+        // 새 staffId 부여 시: settings/employees.emails 화이트리스트에 자동 추가
+        if(isNewStaffId&&email){
             try{
                 await db.collection('settings').doc('employees').set(
                     {emails:firebase.firestore.FieldValue.arrayUnion(email)},
@@ -746,9 +790,10 @@ async function saveEmployee(){
         await loadEmployees();
         if(typeof loadLeaveRequests==='function') await loadLeaveRequests();
         renderAll();
-        if(!editId&&staffId){
-            alert(`직원 정보가 저장되었습니다.\n\n로그인 ID: ${staffId}\n로그인 이메일: ${email}\n초기 비밀번호: ${initialPw}\n\n` +
-                  `직원에게 위 정보를 안내해 주세요. (화이트리스트 자동 등록 완료)`+leaveCleanupMsg);
+        if(isNewStaffId){
+            const titlePrefix=editId?'기존 직원에게 로그인 정보가 부여되었습니다.':'직원 정보가 저장되었습니다.';
+            alert(`${titlePrefix}\n\n로그인 ID: ${staffId}\n로그인 이메일: ${email}\n초기 비밀번호: ${initialPw}\n\n` +
+                  `직원에게 위 정보를 안내해 주세요.\n첫 로그인 시 비밀번호를 본인이 직접 변경하도록 자동 안내됩니다. (화이트리스트 자동 등록 완료)`+leaveCleanupMsg);
         }else{
             alert('직원 정보가 저장되었습니다.'+leaveCleanupMsg);
         }

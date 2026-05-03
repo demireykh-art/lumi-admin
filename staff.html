@@ -415,6 +415,11 @@
                     <div class="info-row"><span class="info-label">근속기간</span><span class="info-value" id="infoTenure">-</span></div>
                 </div>
                 <div class="card">
+                    <div class="card-title">🔑 비밀번호 변경</div>
+                    <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem">본인 비밀번호를 직접 변경합니다.</p>
+                    <button class="btn btn-primary" onclick="openChangePassword()">비밀번호 변경</button>
+                </div>
+                <div class="card">
                     <div class="card-title">🔐 생체인식 로그인</div>
                     <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem">Face ID 또는 지문으로 빠르게 로그인하세요.</p>
                     <button class="btn btn-gold" onclick="registerBiometric()" id="biometricRegisterBtn">생체인식 등록</button>
@@ -1362,12 +1367,36 @@
             try{
                 if(!auth.currentUser) throw new Error('인증 세션이 없습니다.');
                 await auth.currentUser.updatePassword(pw1);
+                // mustChangePassword 플래그 해제 (개인 계정만)
+                if(currentUser&&currentUser.role==='employee'&&currentUser.id){
+                    try{
+                        await db.collection('employees').doc(currentUser.id).update({mustChangePassword:false});
+                        currentUser.mustChangePassword=false;
+                        localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                    }catch(_){}
+                }
                 document.getElementById('pwSetup').classList.remove('active');
-                await showApp();
+                document.getElementById('newPw1').value='';
+                document.getElementById('newPw2').value='';
+                if(!_staffAppInitialized){
+                    _staffAppInitialized=true;
+                    await showApp();
+                }
             }catch(e){
                 console.error('비밀번호 변경 오류:',e);
-                document.getElementById('pwError').textContent='저장 실패: '+(e.message||e.code);
+                if(e.code==='auth/requires-recent-login'){
+                    document.getElementById('pwError').textContent='보안을 위해 다시 로그인 후 변경해 주세요.';
+                }else{
+                    document.getElementById('pwError').textContent='저장 실패: '+(e.message||e.code);
+                }
             }
+        }
+
+        // 본인 비밀번호 변경 (내정보 탭에서 호출)
+        function openChangePassword(){
+            if(!auth.currentUser){alert('로그인 정보가 없습니다.');return;}
+            document.getElementById('pwError').textContent='';
+            document.getElementById('pwSetup').classList.add('active');
         }
 
         async function showApp(){
@@ -1477,6 +1506,12 @@
                 }
                 localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
                 if(_staffAppInitialized) return;
+                // 첫 로그인(또는 admin 초기화) 시 비밀번호 변경 강제
+                if(role==='employee'&&currentUser.mustChangePassword===true){
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('pwSetup').classList.add('active');
+                    return;
+                }
                 _staffAppInitialized=true;
                 await showApp();
             });
