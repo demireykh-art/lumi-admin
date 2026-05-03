@@ -524,6 +524,7 @@ function openEmployeeModal(id=null){
     document.getElementById('autoAnnualLeave').textContent='0';
     document.getElementById('empId').value='';
     document.getElementById('empMealLimit').value='300000';
+    document.getElementById('empLocationExempt').checked=false;
     // Firebase Auth 관련 입력 초기화
     const sidEl=document.getElementById('empStaffId');
     const initPwEl=document.getElementById('empInitPw');
@@ -556,6 +557,7 @@ function openEmployeeModal(id=null){
             document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
             document.getElementById('empMealLimit').value=emp.mealLimit||300000;
+            document.getElementById('empLocationExempt').checked=!!emp.locationExempt;
             // 인센티브 설정 복원
             document.getElementById('empIncType').value=emp.incType||'none';
             document.getElementById('empIncPercent').value=emp.incPercent||0;
@@ -688,6 +690,7 @@ async function saveEmployee(){
         annualLeave:annualLeave,
         usedLeave:usedLeave,
         mealLimit:parseInt(document.getElementById('empMealLimit').value)||300000,
+        locationExempt:document.getElementById('empLocationExempt').checked,
         incType:document.getElementById('empIncType').value||'none',
         incPercent:parseFloat(document.getElementById('empIncPercent').value)||0,
         incRounding:parseInt(document.getElementById('empIncRounding').value)||0,
