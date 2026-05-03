@@ -1010,7 +1010,7 @@ function normalizeAmount(raw){
 
 function detectAndParse(rows,fileName){
     const fn=(fileName||'').toLowerCase();
-    const headerText=rows.slice(0,15).map(r=>r.join(',')).join('\n').toLowerCase();
+    const headerText=rows.slice(0,30).map(r=>r.join(',')).join('\n').toLowerCase();
 
     // 1) card-statements.js의 4사 파서 (현대/롯데/삼성/신한) 우선 시도
     if(typeof parseCardStatement==='function'){
@@ -1198,21 +1198,43 @@ async function handleExpenseFiles(files){
 }
 
 // CSV/XLS/XLSX → 2차원 배열로 통합 변환
+// 카드사가 .xls 확장자로 HTML/XHTML 표를 내려주는 경우가 많아 별도 분기 처리.
 function readFileAsRows(file){
     return new Promise((resolve,reject)=>{
         const ext=(file.name||'').split('.').pop().toLowerCase();
-        
+
         if(ext==='xls'||ext==='xlsx'){
-            // 엑셀: SheetJS(XLSX)로 파싱
             const reader=new FileReader();
             reader.onload=function(e){
                 try{
-                    const data=new Uint8Array(e.target.result);
-                    const wb=XLSX.read(data,{type:'array',cellDates:false,raw:false});
-                    // 첫 번째 시트 사용
-                    const ws=wb.Sheets[wb.SheetNames[0]];
-                    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
-                    resolve(rows.map(r=>r.map(c=>String(c||''))));
+                    const buffer=e.target.result;
+                    const data=new Uint8Array(buffer);
+                    // HTML/XHTML 감지: 앞부분에 <html, <!doctype, <table 이 있는지
+                    const headLen=Math.min(data.length,500);
+                    let head='';
+                    for(let i=0;i<headLen;i++) head+=String.fromCharCode(data[i]);
+                    const isHtml=/<\!doctype|<html|<table/i.test(head);
+                    let wb;
+                    if(isHtml){
+                        // SheetJS는 type:'string'으로 HTML 표 파싱 지원
+                        const text=new TextDecoder('utf-8').decode(data);
+                        wb=XLSX.read(text,{type:'string',cellDates:false,raw:false});
+                    }else{
+                        wb=XLSX.read(data,{type:'array',cellDates:false,raw:false});
+                    }
+                    // 데이터가 가장 많은 시트를 자동 선택 (안내/공백 시트 회피)
+                    let bestRows=[],bestName='';
+                    for(const name of wb.SheetNames){
+                        const ws=wb.Sheets[name];
+                        const r=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+                        const nonEmptyCount=(r||[]).filter(row=>row && row.some(c=>String(c||'').trim()!=='')).length;
+                        if(nonEmptyCount>bestRows.length){bestRows=r;bestName=name;}
+                    }
+                    if(!bestRows.length){
+                        const ws=wb.Sheets[wb.SheetNames[0]];
+                        bestRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+                    }
+                    resolve(bestRows.map(r=>r.map(c=>String(c||''))));
                 }catch(err){reject(new Error('엑셀 파싱 실패: '+err.message));}
             };
             reader.onerror=()=>reject(new Error('파일 읽기 실패'));
@@ -1222,7 +1244,6 @@ function readFileAsRows(file){
             const reader=new FileReader();
             reader.onload=function(){
                 let text=reader.result;
-                // EUC-KR 디코딩 확인 (한글 깨짐 감지)
                 if(text.includes('�')){
                     const reader2=new FileReader();
                     reader2.onload=()=>resolve(parseCSVRows(reader2.result));
