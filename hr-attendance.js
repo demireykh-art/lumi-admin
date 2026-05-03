@@ -662,8 +662,8 @@ async function saveEmployee(){
     const initialPw=(document.getElementById('empInitPw')?.value||'').trim();
     let staffId='', email='';
     if(staffIdRaw){
-        if(!/^[a-z0-9._-]{3,}$/.test(staffIdRaw)){
-            alert('로그인 ID는 3자 이상의 영문/숫자/._- 만 허용됩니다.');
+        if(!/^[a-z0-9._-]{2,}$/.test(staffIdRaw)){
+            alert('로그인 ID는 2자 이상의 영문/숫자/._- 만 허용됩니다.');
             return;
         }
         staffId=staffIdRaw;
