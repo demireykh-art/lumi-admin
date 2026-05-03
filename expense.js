@@ -1303,6 +1303,21 @@ function htmlToRows(htmlString){
     }
 }
 
+// 모든 카테고리(고정/유동/인건/세금)를 그룹별 optgroup으로 묶은 <option>들 반환
+function buildAllCategoryOptions(selectedValue){
+    const groupLabels={fixed:'🔵 고정비', variable:'🟠 유동비', payroll:'🟢 인건비', tax:'🟡 세금'};
+    const groups=['fixed','variable','payroll','tax'];
+    if(typeof expenseCategories==='undefined' || !expenseCategories.length){
+        const fb=['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'];
+        return fb.map(v=>`<option value="${v}"${selectedValue===v?' selected':''}>${v}</option>`).join('');
+    }
+    return groups.map(g=>{
+        const items=expenseCategories.filter(c=>c.group===g);
+        if(!items.length) return '';
+        return `<optgroup label="${groupLabels[g]||g}">${items.map(c=>`<option value="${c.id}"${selectedValue===c.id?' selected':''}>${c.name}</option>`).join('')}</optgroup>`;
+    }).join('');
+}
+
 // ===== 미리보기 렌더링 =====
 function renderExpUploadPreview(){
     const container=document.getElementById('expUploadPreview');
@@ -1336,7 +1351,7 @@ function renderExpUploadPreview(){
             <td>${d.date}</td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.merchantRaw||d.name}">${d.name}${d.isCancel?' <span style="color:#dc2626;font-size:.7rem">[취소]</span>':''}</td>
             <td><select onchange="applyMerchantCategory('${d.name.replace(/'/g,"\\'")}',this.value)" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px">
-                ${(typeof variableCategories!=='undefined'?variableCategories:['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>({value:c,label:c}))).map(c=>{const v=c.value||c;const l=c.label||c;return `<option value="${v}"${d.category===v?' selected':''}>${l}</option>`;}).join('')}
+                ${buildAllCategoryOptions(d.category)}
             </select> ${catBadge}</td>
             <td class="text-right" style="font-weight:600">${formatCurrency(d.amount)}</td>
             <td style="font-size:.8rem;color:#777;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noteText}">${d.note||'-'}</td>
@@ -1404,7 +1419,7 @@ function renderMerchantGroupPanel(){
                         <span style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</span>
                         <span style="color:#999;font-size:.7rem">${g.count}건</span>
                         <select onchange="applyMerchantCategory('${escapedName}',this.value)" style="font-size:.78rem;padding:1px 3px;border:1px solid #ddd;border-radius:3px">
-                            ${(typeof variableCategories!=='undefined'?variableCategories:['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>({value:c,label:c}))).map(c=>{const v=c.value||c;const l=c.label||c;return `<option value="${v}"${g.category===v?' selected':''}>${l}</option>`;}).join('')}
+                            ${buildAllCategoryOptions(g.category)}
                         </select>
                         ${badge}
                     </div>`;
