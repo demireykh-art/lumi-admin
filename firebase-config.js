@@ -525,6 +525,7 @@ async function initApp(){
     if(typeof loadStaffSettings==='function')loadStaffSettings();
     if(typeof loadConfigForSettings==='function')loadConfigForSettings();
     if(typeof loadAdminAccounts==='function')loadAdminAccounts();
+    if(typeof initCardStatements==='function')initCardStatements();
     if(typeof initDefaultLocations==='function')await initDefaultLocations();
     if(typeof loadLocations==='function')await loadLocations();
     updateAdminUI();

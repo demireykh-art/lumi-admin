@@ -1010,21 +1010,24 @@ function normalizeAmount(raw){
 
 function detectAndParse(rows,fileName){
     const fn=(fileName||'').toLowerCase();
-    const headerText=rows.slice(0,8).map(r=>r.join(',')).join('\n').toLowerCase();
-    
-    // 삼성카드: '승인일자' 헤더 존재
+    const headerText=rows.slice(0,15).map(r=>r.join(',')).join('\n').toLowerCase();
+
+    // 1) card-statements.js의 4사 파서 (현대/롯데/삼성/신한) 우선 시도
+    if(typeof parseCardStatement==='function'){
+        const parsed=parseCardStatement(rows,fileName);
+        if(parsed && parsed.length) return parsed;
+    }
+
+    // 2) 기존 파서 fallback
     if(headerText.includes('승인일자')&&(headerText.includes('승인금액')||fn.includes('삼성'))){
         return parseSamsungCard(rows,fileName);
     }
-    // 신한카드(사업자): '거래일' + '이용금액' 존재 (상단 4행 skip)
     if((headerText.includes('이용금액')||fn.includes('신한카드'))&&headerText.includes('거래일')){
         return parseShinhanCard(rows,fileName);
     }
-    // 신한은행: '출금' 컬럼 존재 (상단 6행 skip)
     if(headerText.includes('출금')&&(headerText.includes('거래일자')||fn.includes('신한은행')||fn.includes('은행'))){
         return parseShinhanBank(rows,fileName);
     }
-    // 자동 감지 실패 시 헤더 기반 추정
     return parseGenericCSV(rows,fileName);
 }
 
@@ -1259,19 +1262,21 @@ function renderExpUploadPreview(){
     
     tbody.innerHTML=items.map((d,i)=>{
         const realIdx=expUploadParsed.indexOf(d);
-        const rowStyle=d.exclude?'opacity:.5;text-decoration:line-through;':'';
+        const rowStyle=d.exclude?'opacity:.5;text-decoration:line-through;':(d.isPersonal?'background:#fff8e1':'');
         const catBadge=d.exclude?'<span style="font-size:.75rem;color:#999">금융/이체</span>':getCategoryBadge(d.category);
         const noteText=(d.note||'').replace(/"/g,'&quot;');
+        const cardLabel=d.cardLabel?`<div style="font-size:.65rem;color:#888">💳 ${d.cardLabel}</div>`:'';
         return `<tr style="${rowStyle}">
-            <td><span style="font-size:.75rem;background:#f5f5f5;padding:2px 6px;border-radius:3px">${d.source}</span></td>
+            <td><span style="font-size:.75rem;background:#f5f5f5;padding:2px 6px;border-radius:3px">${d.source}</span>${cardLabel}</td>
             <td>${d.date}</td>
-            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name}">${d.name}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.merchantRaw||d.name}">${d.name}${d.isCancel?' <span style="color:#dc2626;font-size:.7rem">[취소]</span>':''}</td>
             <td><select onchange="applyMerchantCategory('${d.name.replace(/'/g,"\\'")}',this.value)" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px">
                 ${(typeof variableCategories!=='undefined'?variableCategories:['소모품비','복리후생비','공과금','세금','리스료','차량유지비','접대비','금융/이체','기타'].map(c=>({value:c,label:c}))).map(c=>{const v=c.value||c;const l=c.label||c;return `<option value="${v}"${d.category===v?' selected':''}>${l}</option>`;}).join('')}
             </select> ${catBadge}</td>
             <td class="text-right" style="font-weight:600">${formatCurrency(d.amount)}</td>
             <td style="font-size:.8rem;color:#777;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${noteText}">${d.note||'-'}</td>
-            <td style="text-align:center"><input type="checkbox" ${d.exclude?'checked':''} onchange="expUploadParsed[${realIdx}].exclude=this.checked;renderExpUploadPreview()"></td>
+            <td style="text-align:center" title="개인사용 (사업비 합산에서 제외)"><input type="checkbox" ${d.isPersonal?'checked':''} onchange="expUploadParsed[${realIdx}].isPersonal=this.checked;renderExpUploadPreview()"></td>
+            <td style="text-align:center" title="제외 (저장 안 함)"><input type="checkbox" ${d.exclude?'checked':''} onchange="expUploadParsed[${realIdx}].exclude=this.checked;renderExpUploadPreview()"></td>
             <td style="text-align:center"><button onclick="expUploadParsed.splice(${realIdx},1);renderExpUploadPreview()" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:1rem">✕</button></td>
         </tr>`;
     }).join('');
@@ -1421,6 +1426,12 @@ async function saveExpensesBulk(){
                         amount:item.amount,
                         category:item.category,
                         card:item.source,
+                        cardId:item.cardId||null,
+                        cardLabel:item.cardLabel||'',
+                        merchantNorm:item.merchantNorm||item.name,
+                        isPersonal: !!item.isPersonal,
+                        isCancel: !!item.isCancel,
+                        isOverseas: !!item.isOverseas,
                         note:item.note||('['+item.source+'] '+item.name),
                         merchant:item.name,
                         yearMonth:item.date.substring(0,7),
@@ -1430,6 +1441,16 @@ async function saveExpensesBulk(){
                 }
                 await batch.commit();
                 savedExpCount+=chunk.length;
+                // ── 룰 학습 ──: 명세서 행은 merchantNorm을 키로 학습
+                if(typeof learnRule==='function'){
+                    const seen=new Set();
+                    for(const item of chunk){
+                        const key=(item.merchantNorm||item.name||'').trim();
+                        if(!key || seen.has(key)) continue;
+                        seen.add(key);
+                        try{ await learnRule(key, item.category, !!item.isPersonal); }catch(_){}
+                    }
+                }
             }
         }
         
