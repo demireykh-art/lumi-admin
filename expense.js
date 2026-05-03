@@ -1028,6 +1028,9 @@ function detectAndParse(rows,fileName){
     if(headerText.includes('출금')&&(headerText.includes('거래일자')||fn.includes('신한은행')||fn.includes('은행'))){
         return parseShinhanBank(rows,fileName);
     }
+    // 3) 미인식 — 디버그 정보 콘솔에 출력
+    console.warn('[Upload] 파서 미인식:', fileName, '→ 첫 5행:');
+    rows.slice(0,5).forEach((r,i)=>console.warn(`  [${i}]`, r));
     return parseGenericCSV(rows,fileName);
 }
 
@@ -1213,25 +1216,35 @@ function readFileAsRows(file){
                     const buffer=e.target.result;
                     const data=new Uint8Array(buffer);
                     // HTML/XHTML 감지: 앞부분에 <html, <!doctype, <table 이 있는지
-                    const headLen=Math.min(data.length,500);
+                    const headLen=Math.min(data.length,1000);
                     let head='';
                     for(let i=0;i<headLen;i++) head+=String.fromCharCode(data[i]);
                     const isHtml=/<\!doctype|<html|<table/i.test(head);
-                    let wb;
                     if(isHtml){
-                        // SheetJS는 type:'string'으로 HTML 표 파싱 지원
+                        // DOMParser로 직접 테이블 추출 (SheetJS의 HTML 파싱보다 안정적, XHTML 호환)
                         const text=new TextDecoder('utf-8').decode(data);
-                        wb=XLSX.read(text,{type:'string',cellDates:false,raw:false});
-                    }else{
-                        wb=XLSX.read(data,{type:'array',cellDates:false,raw:false});
+                        const rows=htmlToRows(text);
+                        if(rows.length>0){console.log('[Upload] HTML 테이블 파싱:', rows.length, '행 (DOMParser)'); resolve(rows); return;}
+                        console.warn('[Upload] DOMParser로 0행 → SheetJS HTML 모드 시도');
+                        try{
+                            const wb=XLSX.read(text,{type:'string',cellDates:false,raw:false});
+                            const ws=wb.Sheets[wb.SheetNames[0]];
+                            const r=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+                            resolve((r||[]).map(row=>row.map(c=>String(c||''))));
+                            return;
+                        }catch(_){
+                            reject(new Error('HTML 파일이지만 테이블을 추출하지 못했습니다.'));
+                            return;
+                        }
                     }
-                    // 데이터가 가장 많은 시트를 자동 선택 (안내/공백 시트 회피)
-                    let bestRows=[],bestName='';
+                    // 정상 binary xlsx/xls
+                    const wb=XLSX.read(data,{type:'array',cellDates:false,raw:false});
+                    let bestRows=[];
                     for(const name of wb.SheetNames){
                         const ws=wb.Sheets[name];
                         const r=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
                         const nonEmptyCount=(r||[]).filter(row=>row && row.some(c=>String(c||'').trim()!=='')).length;
-                        if(nonEmptyCount>bestRows.length){bestRows=r;bestName=name;}
+                        if(nonEmptyCount>bestRows.length) bestRows=r;
                     }
                     if(!bestRows.length){
                         const ws=wb.Sheets[wb.SheetNames[0]];
@@ -1260,6 +1273,34 @@ function readFileAsRows(file){
             reader.readAsText(file,'EUC-KR');
         }
     });
+}
+
+// HTML/XHTML 문서에서 <table> 추출 → 2차원 배열 (DOMParser 사용)
+// 여러 테이블이 있으면 행 수가 가장 많은 것 선택
+function htmlToRows(htmlString){
+    try{
+        const doc=new DOMParser().parseFromString(htmlString,'text/html');
+        const tables=doc.querySelectorAll('table');
+        if(!tables.length) return [];
+        let bestRows=[];
+        for(const table of tables){
+            const rows=[];
+            const trs=table.querySelectorAll('tr');
+            for(const tr of trs){
+                const row=[];
+                const cells=tr.querySelectorAll('th,td');
+                for(const cell of cells){
+                    row.push((cell.textContent||'').trim().replace(/\s+/g,' '));
+                }
+                if(row.length) rows.push(row);
+            }
+            if(rows.length>bestRows.length) bestRows=rows;
+        }
+        return bestRows;
+    }catch(e){
+        console.warn('htmlToRows 실패:', e);
+        return [];
+    }
 }
 
 // ===== 미리보기 렌더링 =====
