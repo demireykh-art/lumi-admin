@@ -395,6 +395,7 @@ function changeMonth(delta){
         loadExpenses(),
         loadAttendance(),
         loadLunchOT(),
+        typeof loadMonthlyIncentiveInput==='function'?loadMonthlyIncentiveInput():Promise.resolve(),
     ]).then(()=>{
         if(typeof loadPayrollData==='function') loadPayrollData();
         renderAll();
