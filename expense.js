@@ -932,6 +932,24 @@ function classifyExpense(name, date, amount){
         if(day===25&&(amount===3612100||amount===2661300)) return {category:'리스료',exclude:false};
     }
 
+    // 등록된 카드 별칭/카드사 키워드와 매칭되는 행은 카드대금 결제로 간주 → 제외
+    // (은행 명세서에서 카드사 결제 합계가 카드 명세서 개별 거래와 중복되지 않도록)
+    if(typeof cards !== 'undefined' && Array.isArray(cards) && cards.length){
+        const lowerName=(name||'').toLowerCase().replace(/\s/g,'');
+        const issuerKeywords={
+            hyundai:['현대카드','hyundaicard'], lotte:['롯데카드','lottecard'],
+            samsung:['삼성카드','samsungcard'], shinhan:['신한카드','shinhancard'],
+            kb:['kb카드','국민카드','kbcard'], bc:['bc카드','bccard'],
+            woori:['우리카드','wooricard'], hana:['하나카드','hanacard']
+        };
+        for(const c of cards){
+            const issuerKws=issuerKeywords[c.issuer]||[];
+            for(const kw of issuerKws){
+                if(lowerName.includes(kw.replace(/\s/g,''))) return {category:'금융/이체',exclude:true};
+            }
+        }
+    }
+
     // 기존 키워드 규칙 (변경 없음)
     const n=(name||'').toLowerCase().replace(/\s/g,'');
     for(const rule of EXP_CATEGORY_RULES){
@@ -1474,12 +1492,27 @@ async function saveExpensesBulk(){
     if(!items.length){alert('저장할 항목이 없습니다.');return;}
 
     // 카테고리 그룹별 분리
+    // - fixed → fixedExpenses
+    // - variable/payroll/tax → variableExpenses (세금은 컬렉션이 부가세/종소세/원천세로 나뉘어
+    //   클라이언트에서 자동 분기하면 누락 위험 → 일단 유동비에 보관 후 사용자가 세금 탭에서 직접 입력)
     const fixedItems = items.filter(d => getCategoryGroupSafe(d.category) === 'fixed');
-    const taxItems   = items.filter(d => getCategoryGroupSafe(d.category) === 'tax');
     const expItems   = items.filter(d => {
         const g = getCategoryGroupSafe(d.category);
-        return g === 'variable' || g === 'payroll';  // 인건비도 우선 유동비로 (별도 흐름은 향후 확장)
+        return g === 'variable' || g === 'payroll' || g === 'tax';
     });
+
+    // ── 사전 중복 검사 (DB에 이미 존재하는 행 카운트) ──
+    const existingVarKeys = new Set(variableExpenses.map(e=>`${e.date}|${e.name}|${e.amount}`));
+    const existingFixKeys = new Set((typeof allFixedExpenses!=='undefined'?allFixedExpenses:fixedExpenses||[]).map(e=>`${e.date||e.yearMonth}|${e.name}|${e.amount}`));
+    const dupExpCount = expItems.filter(d=>existingVarKeys.has(`${d.date}|${d.name}|${d.amount}`)).length;
+    const dupFixCount = fixedItems.filter(d=>existingFixKeys.has(`${d.date}|${d.name}|${d.amount}`)).length;
+    const totalDupCount = dupExpCount + dupFixCount;
+    const newCount = items.length - totalDupCount;
+
+    if(newCount <= 0){
+        alert(`⛔ 저장 차단\n\n선택된 ${items.length}건이 모두 이미 저장된 항목입니다.\n같은 파일을 다시 업로드하셨거나 동일한 거래입니다.\n\n새로 저장할 항목이 없으므로 작업을 취소합니다.`);
+        return;
+    }
 
     // 카테고리별 합계 계산 (그룹 표시 추가)
     const byCat={};
@@ -1499,18 +1532,24 @@ async function saveExpensesBulk(){
     const personalCount = items.filter(d=>d.isPersonal).length;
     const routeNote =
         (fixedItems.length?`\n  • 고정비 ${fixedItems.length}건 → fixedExpenses`:'') +
-        (expItems.length?`\n  • 유동비/인건비 ${expItems.length}건 → variableExpenses`:'') +
-        (taxItems.length?`\n  • 세금 ${taxItems.length}건 → 원천세 (withholdingTaxes)`:'');
+        (expItems.length?`\n  • 유동비/인건비/세금 ${expItems.length}건 → variableExpenses`:'');
+    const dupNote = totalDupCount>0
+        ? `\n\n⚠ 중복 ${totalDupCount}건은 이미 저장되어 자동으로 건너뜁니다 (date+name+amount 기준).`
+        : '';
+    const dupRatio = totalDupCount/items.length;
+    const heavyDupWarning = dupRatio>=0.5
+        ? `\n\n🚨 절반 이상이 중복입니다 (${totalDupCount}/${items.length}). 같은 파일을 다시 업로드한 것이 아닌지 확인하세요.`
+        : '';
     const personalNote = personalCount?`\n\n🔘 개인사용 표시 ${personalCount}건 (저장은 되되 사업비 합산에서 제외)`:'';
 
-    if(!confirm(`📊 저장 전 요약\n━━━━━━━━━━━━━━━━━━\n\n[저장 위치]${routeNote}\n\n[카테고리별 합계]\n${catSummary}\n\n[월별 합계]\n${monthSummary}\n\n━━━━━━━━━━━━━━━━━━\n총 ${items.length}건 / ${formatCurrency(total)}${personalNote}\n\n저장하시겠습니까?`))return;
+    if(!confirm(`📊 저장 전 요약\n━━━━━━━━━━━━━━━━━━\n\n신규 저장: ${newCount}건${dupNote}${heavyDupWarning}\n\n[저장 위치]${routeNote}\n\n[카테고리별 합계]\n${catSummary}\n\n[월별 합계]\n${monthSummary}\n\n━━━━━━━━━━━━━━━━━━\n총 ${items.length}건 / ${formatCurrency(total)}${personalNote}\n\n저장하시겠습니까?`))return;
 
     const btn=document.getElementById('expBulkSaveBtn');
     btn.disabled=true;btn.textContent='저장 중...';
 
     try{
         const batchSize=450;
-        let savedFixedCount=0, savedExpCount=0, savedTaxCount=0, skipCount=0;
+        let savedFixedCount=0, savedExpCount=0, skipCount=0;
 
         // ── 고정비 저장 ──
         if(fixedItems.length){
@@ -1599,38 +1638,9 @@ async function saveExpensesBulk(){
             }
         }
         
-        // ── 세금 저장 (withholdingTaxes) ──
-        if(taxItems.length){
-            const existingTaxKeys=new Set(withholdingTaxes.map(t=>`${t.date}|${t.note}|${(t.incomeTax||0)+(t.localTax||0)}`));
-            const newTax=taxItems.filter(d=>!existingTaxKeys.has(`${d.date}|${d.note}|${d.amount}`));
-            skipCount+=taxItems.length-newTax.length;
-            
-            for(let i=0;i<newTax.length;i+=batchSize){
-                const chunk=newTax.slice(i,i+batchSize);
-                const batch=db.batch();
-                for(const item of chunk){
-                    // 지방세인지 소득세인지 추정
-                    const isLocal=(item.name||'').includes('지방');
-                    const ref=db.collection('withholdingTaxes').doc();
-                    batch.set(ref,{
-                        date:item.date,
-                        attributeMonth:item.date.substring(0,7),
-                        incomeTax:isLocal?0:item.amount,
-                        localTax:isLocal?item.amount:0,
-                        note:item.note||('['+item.source+'] '+item.name),
-                        createdAt:new Date().toISOString(),
-                        uploadBatch:true
-                    });
-                }
-                await batch.commit();
-                savedTaxCount+=chunk.length;
-            }
-        }
-        
         let msg=[];
         if(savedFixedCount) msg.push(`고정비 ${savedFixedCount}건`);
-        if(savedExpCount) msg.push(`유동비 ${savedExpCount}건`);
-        if(savedTaxCount) msg.push(`세금 ${savedTaxCount}건`);
+        if(savedExpCount) msg.push(`유동비/세금 ${savedExpCount}건`);
         let result=`✅ 저장 완료! (${msg.join(' + ')||'0건'})`;
         if(skipCount>0) result+=`\n🔄 ${skipCount}건은 이미 존재하여 건너뜀`;
         alert(result);
