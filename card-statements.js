@@ -134,7 +134,7 @@ function findCol(header, ...keywords){
 }
 
 function findHeaderRow(rows, key){
-    for(let i=0;i<Math.min(rows.length,15);i++){
+    for(let i=0;i<Math.min(rows.length,30);i++){
         if(rows[i] && rows[i].some(c => (c||'').replace(/\s/g,'').includes(key.replace(/\s/g,'')))){
             return i;
         }
@@ -302,7 +302,7 @@ function parseSamsungCardV2(rows, fileName){
 function parseShinhanCardV2(rows, fileName){
     // 신한카드 (개인/사업자 모두): 거래일 + 카드구분 + 가맹점명
     const hi = (function(){
-        for(let i=0;i<Math.min(rows.length,15);i++){
+        for(let i=0;i<Math.min(rows.length,30);i++){
             const r = rows[i] || [];
             const has거래일 = r.some(c => (c||'').replace(/\s/g,'').includes('거래일'));
             const has카드구분 = r.some(c => (c||'').replace(/\s/g,'').includes('카드구분'));
@@ -402,7 +402,7 @@ function makeRow(opts){
 
 // ───── detectAndParse 위임 진입점 ─────
 function parseCardStatement(rows, fileName){
-    const headerText = rows.slice(0,15).map(r=>(r||[]).join(',')).join('\n');
+    const headerText = rows.slice(0,30).map(r=>(r||[]).join(',')).join('\n');
     if(/이용가맹점/.test(headerText) && /할부\/회차/.test(headerText))    return parseHyundaiCard(rows, fileName);
     if(/이용총액/.test(headerText) && /적립예정/.test(headerText))         return parseLotteCard(rows, fileName);
     if(/카드번호/.test(headerText) && /승인일자/.test(headerText))         return parseSamsungCardV2(rows, fileName);
