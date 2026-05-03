@@ -268,11 +268,20 @@ async function loadMonthlyIncentiveInput(){
     renderIncInputForm();
 }
 
+// 일본인 내원 환자수: 항상 매출 업로드 데이터(revenueData)에서 자동 산출
+function getAutoJapanVisitors(){
+    try{
+        const ym=getYM();
+        return (typeof revenueData!=='undefined'&&revenueData[ym]?.japanVisitors)||0;
+    }catch(_){return 0;}
+}
+
 function renderIncInputForm(){
-    // 총매출 + 일본인 입력 복원
+    // 총매출은 수동 복원
     document.getElementById('incTotalRevenue').value=monthlyIncInput.totalRevenue||'';
-    document.getElementById('incJapanVisitors').value=monthlyIncInput.japanVisitors||'';
-    
+    // 일본인 내원 환자수는 매출 업로드 자동값으로 갱신
+    document.getElementById('incJapanVisitors').value=getAutoJapanVisitors()||'';
+
     // 개인매출 입력 — incType=personal인 직원만
     const personalEmps=employees.filter(e=>e.status==='active' && e.incType==='personal');
     const container=document.getElementById('incStaffRevenueInputs');
@@ -308,8 +317,9 @@ function renderIncInputForm(){
 async function saveMonthlyIncentiveInput(){
     const ym=getYM();
     const totalRevenue=parseInt(document.getElementById('incTotalRevenue').value)||0;
-    const japanVisitors=parseInt(document.getElementById('incJapanVisitors').value)||0;
-    
+    // 일본인 내원 환자수는 매출 업로드 자동값 사용 (수동 입력 미사용)
+    const japanVisitors=getAutoJapanVisitors();
+
     // 수동 입력 직원만 staffRevenue에 저장 (자동 소스는 매월 입력 불필요)
     const staffRevenue={};
     employees.filter(e=>e.status==='active'&&e.incType==='personal'&&(e.personalSalesSource||'manual')==='manual').forEach(emp=>{
@@ -349,7 +359,8 @@ function getEmpPersonalRevenue(emp){
 
 function calculateIncentiveForEmp(emp){
     const totalRevenue=monthlyIncInput.totalRevenue||0;
-    const japanVisitors=monthlyIncInput.japanVisitors||0;
+    // 일본인 인센티브 계산 시 매출 업로드 자동값을 항상 사용 (저장값 무시 → 최신 업로드 반영)
+    const japanVisitors=getAutoJapanVisitors()||monthlyIncInput.japanVisitors||0;
     const percent=(emp.incPercent||0)/100;
     const rounding=emp.incRounding||0; // 0=1원올림, -1=10원올림, -2=100원올림
 
@@ -385,7 +396,7 @@ function roundUp(value, digits){
 function previewIncentive(){
     // 임시로 입력값 반영 (수동 소스만 staffRevenue에 반영, 자동 소스는 calculateIncentiveForEmp가 직접 산출)
     const totalRevenue=parseInt(document.getElementById('incTotalRevenue').value)||0;
-    const japanVisitors=parseInt(document.getElementById('incJapanVisitors').value)||0;
+    const japanVisitors=getAutoJapanVisitors();
     const staffRevenue={};
     employees.filter(e=>e.status==='active'&&e.incType==='personal'&&(e.personalSalesSource||'manual')==='manual').forEach(emp=>{
         const el=document.getElementById('incStaff_'+emp.id);
