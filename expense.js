@@ -1560,6 +1560,84 @@ function renderExpUploadSummary(){
     `;
 }
 
+// ===== 업로드된 지출 데이터 일괄 삭제 =====
+// uploadBatch:true 필드가 있는 행만 대상 (수동 추가한 고정비/유동비는 보호)
+async function deleteAllUploadedExpenses(){
+    const btn=document.getElementById('expBulkDeleteBtn');
+
+    // 1차: 카운트 미리 조회
+    let varSnap, fixSnap;
+    try{
+        if(btn){btn.disabled=true;btn.textContent='조회 중...';}
+        [varSnap, fixSnap]=await Promise.all([
+            db.collection('variableExpenses').where('uploadBatch','==',true).get(),
+            db.collection('fixedExpenses').where('uploadBatch','==',true).get(),
+        ]);
+    }catch(e){
+        alert('조회 실패: '+e.message);
+        if(btn){btn.disabled=false;btn.textContent='🗑 업로드 데이터 일괄 삭제';}
+        return;
+    }finally{
+        if(btn){btn.disabled=false;btn.textContent='🗑 업로드 데이터 일괄 삭제';}
+    }
+
+    const totalCount=varSnap.size+fixSnap.size;
+    if(totalCount===0){
+        alert('삭제할 업로드 데이터가 없습니다.');
+        return;
+    }
+    const varSum=varSnap.docs.reduce((s,d)=>s+(d.data().amount||0),0);
+    const fixSum=fixSnap.docs.reduce((s,d)=>s+(d.data().amount||0),0);
+
+    // 2차 확인 (다이얼로그)
+    if(!confirm(`⚠ 업로드 데이터 일괄 삭제\n━━━━━━━━━━━━━━━━━━\n\n` +
+                `유동비 (uploadBatch): ${varSnap.size}건 / ${formatCurrency(varSum)}\n` +
+                `고정비 (uploadBatch): ${fixSnap.size}건 / ${formatCurrency(fixSum)}\n\n` +
+                `총 ${totalCount}건 / ${formatCurrency(varSum+fixSum)}\n\n` +
+                `※ 데이터 업로드 sub-tab에서 일괄 저장한 내역만 삭제됩니다.\n` +
+                `※ 수동 추가한 고정비/유동비는 영향 없음.\n` +
+                `※ 되돌릴 수 없습니다.\n\n계속하시겠습니까?`)){
+        return;
+    }
+
+    // 3차 확인 (텍스트 입력)
+    const confirmText=prompt(`최종 확인 — '삭제' 라고 입력해주세요.\n\n총 ${totalCount}건이 영구 삭제됩니다.`);
+    if(confirmText!=='삭제'){
+        alert('취소되었습니다.');
+        return;
+    }
+
+    if(btn){btn.disabled=true;btn.textContent='삭제 중...';}
+    try{
+        const batchSize=450;
+        let deletedVar=0, deletedFix=0;
+        // variableExpenses 배치 삭제
+        for(let i=0;i<varSnap.docs.length;i+=batchSize){
+            const chunk=varSnap.docs.slice(i,i+batchSize);
+            const batch=db.batch();
+            for(const doc of chunk) batch.delete(doc.ref);
+            await batch.commit();
+            deletedVar+=chunk.length;
+        }
+        // fixedExpenses 배치 삭제
+        for(let i=0;i<fixSnap.docs.length;i+=batchSize){
+            const chunk=fixSnap.docs.slice(i,i+batchSize);
+            const batch=db.batch();
+            for(const doc of chunk) batch.delete(doc.ref);
+            await batch.commit();
+            deletedFix+=chunk.length;
+        }
+        alert(`✅ 삭제 완료\n유동비 ${deletedVar}건 + 고정비 ${deletedFix}건 (총 ${deletedVar+deletedFix}건)`);
+        await loadExpenses();
+        renderExpenses();
+        renderExpenseAnalysis();
+    }catch(e){
+        alert('삭제 중 오류: '+e.message);
+    }finally{
+        if(btn){btn.disabled=false;btn.textContent='🗑 업로드 데이터 일괄 삭제';}
+    }
+}
+
 // ===== 일괄 저장 =====
 // 카테고리 그룹(고정/유동/인건/세금)에 따라 자동 분기 저장
 function getCategoryGroupSafe(catId){
