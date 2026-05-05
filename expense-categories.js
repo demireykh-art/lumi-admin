@@ -15,6 +15,7 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   { id:'통신_인터넷',  name:'인터넷',                 group:'fixed' },
   { id:'통신_전화',    name:'전화',                   group:'fixed' },
   { id:'세무노무',     name:'세무/노무',               group:'fixed' },
+  { id:'4대보험',      name:'4대보험 (국민연금/건강/고용/산재)', group:'fixed' },
   { id:'보험료',       name:'보험료',                 group:'fixed' },
   { id:'청소비',       name:'청소비',                 group:'fixed' },
   { id:'수탁_폐기물',  name:'수탁-폐기물',            group:'fixed' },
@@ -57,6 +58,8 @@ async function loadExpenseCategories() {
     const doc = await db.collection('config').doc('expenseCategories').get();
     if (doc.exists && doc.data().items && doc.data().items.length > 0) {
       expenseCategories = doc.data().items;
+      // 신규 기본 카테고리(예: 4대보험) 자동 마이그레이션
+      await ensureDefaultCategoriesPresent();
     } else {
       // 최초 실행: 기본값 저장
       await db.collection('config').doc('expenseCategories').set({ items: DEFAULT_EXPENSE_CATEGORIES });
@@ -68,6 +71,20 @@ async function loadExpenseCategories() {
   }
   // hr-attendance.js 전역 배열 동기화 (기존 코드 호환)
   syncLegacyCategoryArrays();
+}
+
+// DEFAULT_EXPENSE_CATEGORIES 중 Firestore에 누락된 항목을 자동 보강
+async function ensureDefaultCategoriesPresent() {
+  const existingIds = new Set(expenseCategories.map(c => c.id));
+  const missing = DEFAULT_EXPENSE_CATEGORIES.filter(c => !existingIds.has(c.id));
+  if (missing.length === 0) return;
+  expenseCategories.push(...missing);
+  try {
+    await db.collection('config').doc('expenseCategories').set({ items: expenseCategories });
+    console.log('[카테고리] 누락된 기본 카테고리 자동 추가:', missing.map(c => c.id).join(', '));
+  } catch (e) {
+    console.warn('카테고리 자동 보강 실패:', e);
+  }
 }
 
 // ── 기존 전역 배열 동기화 (expense.js 호환) ──────────────
