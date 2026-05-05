@@ -181,7 +181,10 @@
                     <div class="table-container"><table><thead><tr><th>납부일</th><th>귀속연도</th><th>구분</th><th class="text-right">납부세액</th><th>비고</th><th>관리</th></tr></thead><tbody id="incomeTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-expense-upload">
-                    <div class="section-header"><div class="section-title">📤 카드/은행 명세 통합 업로드</div></div>
+                    <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
+                        <div class="section-title">📤 카드/은행 명세 통합 업로드</div>
+                        <button class="btn" id="expBulkDeleteBtn" onclick="deleteAllUploadedExpenses()" style="background:var(--red,#dc2626);color:#fff;font-size:.85rem" title="업로드된 지출(uploadBatch) 일괄 삭제 — 수동 추가 항목은 보호">🗑 업로드 데이터 일괄 삭제</button>
+                    </div>
                     <div id="expUploadZone" style="border:2px dashed var(--border);border-radius:12px;padding:2.5rem;text-align:center;cursor:pointer;background:var(--bg-card);transition:all .2s;margin-bottom:1.5rem" ondragover="event.preventDefault();this.style.borderColor='var(--accent-gold)';this.style.background='#faf6ee'" ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg-card)'" ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--bg-card)';handleExpenseFiles(event.dataTransfer.files)" onclick="document.getElementById('expUploadInput').click()">
                         <div style="font-size:2.5rem;margin-bottom:.5rem">📎</div>
                         <div style="font-weight:700;font-size:1.05rem;margin-bottom:.3rem">CSV / 엑셀 파일을 드래그하거나 클릭하세요</div>
