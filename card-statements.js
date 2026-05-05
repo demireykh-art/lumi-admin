@@ -143,13 +143,17 @@ function findHeaderRow(rows, key){
 }
 
 function parseHyundaiCard(rows, fileName){
-    const hi = findHeaderRow(rows, '이용가맹점');
+    // 신·구 양식 모두 지원
+    //  - 신양식: 이용일/이용카드/이용가맹점/이용금액/할부/회차/결제원금
+    //  - 구양식: 결제일/이용일/입금경로/상품명/이용하신곳/이용금액/원금/수수료/연체료
+    const hi = findHeaderRow(rows, '이용일');
     if(hi < 0) return [];
     const header = rows[hi];
     const iDate = findCol(header, '이용일');
-    const iCard = findCol(header, '이용카드');
-    const iName = findCol(header, '이용가맹점','가맹점명');
-    const iAmt  = findCol(header, '결제원금','이용금액');  // 결제원금 우선
+    const iCard = findCol(header, '이용카드');                       // 구양식엔 없음 (-1)
+    const iName = findCol(header, '이용가맹점','이용하신곳','가맹점명');
+    // 결제원금(신) / 원금(구) / 이용금액(공통) — 우선순위는 가장 정확한 결제 금액부터
+    const iAmt  = findCol(header, '결제원금','원금','이용금액');
     const iInst = findCol(header, '할부','회차');
     if(iDate<0 || iName<0 || iAmt<0) return [];
 
@@ -164,10 +168,10 @@ function parseHyundaiCard(rows, fileName){
         if(!date) continue;
         const amount = cardNormalizeAmount(r[iAmt]);
         if(amount === 0) continue;
-        const cardRaw = (r[iCard]||'').trim();
+        const cardRaw = iCard>=0 ? (r[iCard]||'').trim() : '';
         const merchantRaw = (r[iName]||'').trim();
         const norm = normalizeMerchant(merchantRaw);
-        const installment = (r[iInst]||'').trim();
+        const installment = iInst>=0 ? (r[iInst]||'').trim() : '';
         const card = findCardByAlias(cardRaw);
         results.push(makeRow({
             source:'현대카드', issuer:'hyundai',
@@ -402,15 +406,16 @@ function makeRow(opts){
 
 // ───── detectAndParse 위임 진입점 ─────
 // 카드사별 양식 식별 — 가장 고유한 키워드를 기준으로
-//   롯데: 이용총액 + 적립예정 (롯데 전용)
-//   현대: 결제원금 (현대 전용 — 롯데는 "원금" 단독)
+//   롯데: 이용총액 + 적립예정
+//   현대 신양식: 결제원금
+//   현대 구양식: 입금경로 + 이용하신곳 (3개월 초과 명세에서만 등장)
 //   삼성: 카드번호 + 승인일자
 //   신한: 거래일 + 카드구분
-// 우선순위: 롯데 → 현대 → 삼성 → 신한 (롯데 컬럼이 현대 키워드와 겹쳐 보일 수 있어 먼저 검사)
 function parseCardStatement(rows, fileName){
     const headerText = rows.slice(0,30).map(r=>(r||[]).join('|')).join('\n');
     if(/이용총액/.test(headerText) && /적립예정/.test(headerText))         return parseLotteCard(rows, fileName);
     if(/결제원금/.test(headerText))                                         return parseHyundaiCard(rows, fileName);
+    if(/입금경로/.test(headerText) && /이용하신곳/.test(headerText))       return parseHyundaiCard(rows, fileName);  // 현대 구양식
     if(/카드번호/.test(headerText) && /승인일자/.test(headerText))         return parseSamsungCardV2(rows, fileName);
     if(/거래일/.test(headerText)   && /카드구분/.test(headerText))         return parseShinhanCardV2(rows, fileName);
     return null;
