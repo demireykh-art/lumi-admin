@@ -188,6 +188,58 @@ function parseHyundaiCard(rows, fileName){
     return results;
 }
 
+function parseLotteCardV2(rows, fileName){
+    // 롯데 신양식 (다운로드 기본): 이용일자/이용시간/이용카드/이용가맹점/업종/이용금액/
+    //   이용구분/할부개월/승인번호/취소여부/취소일자/취소금액/포인트사용/누리상품권사용금/매입여부
+    const hi = findHeaderRow(rows, '이용일자');
+    if(hi < 0) return [];
+    const header = rows[hi];
+    const iDate   = findCol(header, '이용일자');
+    const iCard   = findCol(header, '이용카드');
+    const iName   = findCol(header, '이용가맹점','가맹점명');
+    const iAmt    = findCol(header, '이용금액','승인금액');
+    const iInst   = findCol(header, '이용구분');
+    const iCancel = findCol(header, '취소여부');
+    const iCancelAmt = findCol(header, '취소금액');
+    const iAcq    = findCol(header, '매입여부');
+    if(iDate<0 || iName<0 || iAmt<0) return [];
+
+    const results = [];
+    for(let i=hi+1;i<rows.length;i++){
+        const r = rows[i];
+        if(!r || !r.length) continue;
+        const joined = r.map(x=>String(x||'')).join(' ').trim();
+        if(!joined) continue;
+        if(isSummaryRow(joined)) continue;
+        const date = cardNormalizeDate(r[iDate]);
+        if(!date) continue;
+        let amount = cardNormalizeAmount(r[iAmt]);
+        if(amount === 0) continue;
+        const cancelFlag = iCancel>=0 ? String(r[iCancel]||'').trim().toUpperCase() : '';
+        const cancelAmt  = iCancelAmt>=0 ? cardNormalizeAmount(r[iCancelAmt]) : 0;
+        const acqFlag    = iAcq>=0 ? String(r[iAcq]||'').trim().toUpperCase() : 'Y';
+        const isCancel   = (cancelFlag === 'Y') || cancelAmt > 0 || amount < 0 || acqFlag === 'N';
+        if(isCancel && amount > 0) amount = -amount;
+        const cardRaw = iCard>=0 ? String(r[iCard]||'').trim() : '';
+        const merchantRaw = (r[iName]||'').trim();
+        const norm = normalizeMerchant(merchantRaw);
+        const installment = iInst>=0 ? String(r[iInst]||'').trim() : '';
+        const card = findCardByAlias(cardRaw);
+        results.push(makeRow({
+            source:'롯데카드', issuer:'lotte',
+            date, amount,
+            cardRaw, cardId: card?.id || null,
+            cardLabel: card?.alias || cardRaw,
+            defaultPersonal: !!card?.defaultPersonal,
+            merchantRaw, merchantNorm: norm.merchantNorm,
+            isOverseas: norm.isOverseas, fxAmount: norm.fxAmount,
+            installment, isCancel,
+            fileName,
+        }));
+    }
+    return results;
+}
+
 function parseLotteCard(rows, fileName){
     // 롯데카드는 헤더가 2줄(병합) — '이용일' 행을 헤더로, 다음 행에 서브헤더
     const hi = findHeaderRow(rows, '이용일');
@@ -406,16 +458,18 @@ function makeRow(opts){
 
 // ───── detectAndParse 위임 진입점 ─────
 // 카드사별 양식 식별 — 가장 고유한 키워드를 기준으로
-//   롯데: 이용총액 + 적립예정
-//   현대 신양식: 결제원금
-//   현대 구양식: 입금경로 + 이용하신곳 (3개월 초과 명세에서만 등장)
+//   롯데 신: 누리상품권사용금 (롯데 다운로드 기본 양식)
+//   롯데 구: 이용총액 + 적립예정 (구 양식)
+//   현대 신: 결제원금
+//   현대 구: 입금경로 + 이용하신곳
 //   삼성: 카드번호 + 승인일자
 //   신한: 거래일 + 카드구분
 function parseCardStatement(rows, fileName){
     const headerText = rows.slice(0,30).map(r=>(r||[]).join('|')).join('\n');
+    if(/누리상품권사용금/.test(headerText))                                return parseLotteCardV2(rows, fileName);
     if(/이용총액/.test(headerText) && /적립예정/.test(headerText))         return parseLotteCard(rows, fileName);
     if(/결제원금/.test(headerText))                                         return parseHyundaiCard(rows, fileName);
-    if(/입금경로/.test(headerText) && /이용하신곳/.test(headerText))       return parseHyundaiCard(rows, fileName);  // 현대 구양식
+    if(/입금경로/.test(headerText) && /이용하신곳/.test(headerText))       return parseHyundaiCard(rows, fileName);
     if(/카드번호/.test(headerText) && /승인일자/.test(headerText))         return parseSamsungCardV2(rows, fileName);
     if(/거래일/.test(headerText)   && /카드구분/.test(headerText))         return parseShinhanCardV2(rows, fileName);
     return null;
