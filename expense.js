@@ -1254,11 +1254,31 @@ async function handleExpenseFiles(files){
     // 세션 내 수동 오버라이드 (같은 세션에서 일괄 적용)
     Object.assign(exactMap, expMerchantOverrides);
 
+    // ── DB 중복 검사 (이미 저장된 행 자동 제외 + 시각 표시) ──
+    // 키: 날짜|이름|금액 (이름까지 포함하여 우연한 동일 금액 거래 보호)
+    const dbKeySet = new Set();
+    variableExpenses.forEach(e=>{ dbKeySet.add(`${e.date}|${e.name||e.merchant}|${e.amount}`); });
+    if(typeof allFixedExpenses!=='undefined'){
+        allFixedExpenses.forEach(e=>{ dbKeySet.add(`${e.date||e.yearMonth}|${e.name}|${e.amount}`); });
+    }
+    let alreadySavedCount = 0;
+    deduped.forEach(d=>{
+        const k = `${d.date}|${d.name}|${d.amount}`;
+        if(dbKeySet.has(k)){
+            d.alreadySaved = true;
+            d.exclude = true;  // 자동 제외 (저장 시 추가 안 됨)
+            alreadySavedCount++;
+        }
+    });
+    if(alreadySavedCount > 0){
+        statusEl.innerHTML += `<br>💾 이미 저장된 ${alreadySavedCount}건 자동 제외 (같은 파일 재업로드 방지)`;
+    }
+
     let reClassified=0;
     allParsed.forEach(d=>{
+        if(d.alreadySaved) return;  // 이미 저장된 건은 분류 학습 대상 아님
         const key=`${d.name}|${d.amount}`;
         if(exactMap[key] && exactMap[key]!==d.category){
-            // 정확 일치 학습 항목
             d.category=exactMap[key];
             d.exclude=d.category==='금융/이체';
             reClassified++;
@@ -1266,7 +1286,6 @@ async function handleExpenseFiles(files){
         }
         const cats=nameCatMap[d.name];
         if(cats && cats.size===1){
-            // 같은 이름이 단일 카테고리 이력 → 적용
             const only=[...cats][0];
             if(only!==d.category){
                 d.category=only;
@@ -1274,7 +1293,6 @@ async function handleExpenseFiles(files){
                 reClassified++;
             }
         }
-        // 같은 이름인데 카테고리가 여러 개면 자동 분류 결과 유지 (사용자 수동 분류 필요)
     });
     if(reClassified>0) statusEl.innerHTML+=`<br>📚 이전 분류 이력으로 ${reClassified}건 자동 재분류 (금액별 정밀)`;
     if(prevCount>0) statusEl.innerHTML+=`<br>📦 누적: 총 ${deduped.length}건 (이전 ${prevCount} + 신규 ${deduped.length-prevCount})`;
@@ -1422,14 +1440,18 @@ function renderExpUploadPreview(){
     
     tbody.innerHTML=items.map((d,i)=>{
         const realIdx=expUploadParsed.indexOf(d);
-        const rowStyle=d.exclude?'opacity:.5;text-decoration:line-through;':(d.isPersonal?'background:#fff8e1':'');
-        const catBadge=d.exclude?'<span style="font-size:.75rem;color:#999">금융/이체</span>':getCategoryBadge(d.category);
+        let rowStyle='';
+        if(d.alreadySaved) rowStyle='opacity:.55;background:#f3f4f6;text-decoration:line-through;';
+        else if(d.exclude) rowStyle='opacity:.5;text-decoration:line-through;';
+        else if(d.isPersonal) rowStyle='background:#fff8e1';
+        const catBadge=d.alreadySaved?'<span style="font-size:.75rem;color:#777">중복</span>':(d.exclude?'<span style="font-size:.75rem;color:#999">금융/이체</span>':getCategoryBadge(d.category));
         const noteText=(d.note||'').replace(/"/g,'&quot;');
         const cardLabel=d.cardLabel?`<div style="font-size:.65rem;color:#888">💳 ${d.cardLabel}</div>`:'';
+        const dupBadge=d.alreadySaved?' <span style="font-size:.7rem;background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:3px">💾 이미 저장됨</span>':'';
         return `<tr style="${rowStyle}">
             <td><span style="font-size:.75rem;background:#f5f5f5;padding:2px 6px;border-radius:3px">${d.source}</span>${cardLabel}</td>
             <td>${d.date}</td>
-            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.merchantRaw||d.name}">${d.name}${d.isCancel?' <span style="color:#dc2626;font-size:.7rem">[취소]</span>':''}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.merchantRaw||d.name}">${d.name}${dupBadge}${d.isCancel?' <span style="color:#dc2626;font-size:.7rem">[취소]</span>':''}</td>
             <td><select onchange="applyMerchantCategory('${d.name.replace(/'/g,"\\'")}',this.value)" style="font-size:.8rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px">
                 ${buildAllCategoryOptions(d.category)}
             </select> ${catBadge}</td>
