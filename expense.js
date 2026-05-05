@@ -1238,22 +1238,45 @@ async function handleExpenseFiles(files){
     if(excludeCount>0) statusEl.innerHTML+=`<br>🏦 카드대금/이체 ${excludeCount}건 자동 제외 표시`;
 
     // ── DB 이력 기반 자동 재분류 ──
-    const learnedMap={};
+    // 같은 가맹점이 금액별로 다른 카테고리(예: 롯데카드(주) — 리스료 vs 카드 결제)인 경우
+    //   1) (이름, 금액) 정확 일치하는 학습 항목 → 그것을 우선 적용
+    //   2) 같은 이름의 카테고리가 단 하나뿐이면 이름만으로 매칭
+    //   3) 같은 이름인데 카테고리가 여러 개면 이름-only fallback 금지 (자동 분류 룰 결과 유지)
+    const exactMap={};         // 'name|amount' → category
+    const nameCatMap={};       // name → Set(category)
     variableExpenses.forEach(e=>{
-        if(e.merchant&&e.category) learnedMap[e.merchant]=e.category;
-        if(e.name&&e.category) learnedMap[e.name]=e.category;
+        const n=e.merchant||e.name;
+        if(!n||!e.category) return;
+        exactMap[`${n}|${e.amount}`]=e.category;
+        if(!nameCatMap[n]) nameCatMap[n]=new Set();
+        nameCatMap[n].add(e.category);
     });
-    Object.assign(learnedMap,expMerchantOverrides);
+    // 세션 내 수동 오버라이드 (같은 세션에서 일괄 적용)
+    Object.assign(exactMap, expMerchantOverrides);
 
     let reClassified=0;
     allParsed.forEach(d=>{
-        if(learnedMap[d.name]&&learnedMap[d.name]!==d.category){
-            d.category=learnedMap[d.name];
+        const key=`${d.name}|${d.amount}`;
+        if(exactMap[key] && exactMap[key]!==d.category){
+            // 정확 일치 학습 항목
+            d.category=exactMap[key];
             d.exclude=d.category==='금융/이체';
             reClassified++;
+            return;
         }
+        const cats=nameCatMap[d.name];
+        if(cats && cats.size===1){
+            // 같은 이름이 단일 카테고리 이력 → 적용
+            const only=[...cats][0];
+            if(only!==d.category){
+                d.category=only;
+                d.exclude=d.category==='금융/이체';
+                reClassified++;
+            }
+        }
+        // 같은 이름인데 카테고리가 여러 개면 자동 분류 결과 유지 (사용자 수동 분류 필요)
     });
-    if(reClassified>0) statusEl.innerHTML+=`<br>📚 이전 분류 이력으로 ${reClassified}건 자동 재분류`;
+    if(reClassified>0) statusEl.innerHTML+=`<br>📚 이전 분류 이력으로 ${reClassified}건 자동 재분류 (금액별 정밀)`;
     if(prevCount>0) statusEl.innerHTML+=`<br>📦 누적: 총 ${deduped.length}건 (이전 ${prevCount} + 신규 ${deduped.length-prevCount})`;
 
     expUploadParsed=deduped;
