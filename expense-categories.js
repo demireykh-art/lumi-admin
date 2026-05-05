@@ -154,19 +154,31 @@ async function deleteExpenseCategory(id) {
   renderCategorySettings();
 }
 
-// ── 순서 이동 ─────────────────────────────────────────────
+// ── 순서 이동 (같은 그룹 내에서만 swap) ─────────────────
 async function moveCategoryUp(id) {
-  const idx = expenseCategories.findIndex(c => c.id === id);
-  if (idx <= 0) return;
-  [expenseCategories[idx - 1], expenseCategories[idx]] = [expenseCategories[idx], expenseCategories[idx - 1]];
+  const cat = expenseCategories.find(c => c.id === id);
+  if (!cat) return;
+  const groupItems = expenseCategories.filter(c => c.group === cat.group);
+  const groupIdx = groupItems.findIndex(c => c.id === id);
+  if (groupIdx <= 0) return;
+  const prevId = groupItems[groupIdx - 1].id;
+  const idxA = expenseCategories.findIndex(c => c.id === id);
+  const idxB = expenseCategories.findIndex(c => c.id === prevId);
+  [expenseCategories[idxA], expenseCategories[idxB]] = [expenseCategories[idxB], expenseCategories[idxA]];
   await saveExpenseCategories();
   renderCategorySettings();
 }
 
 async function moveCategoryDown(id) {
-  const idx = expenseCategories.findIndex(c => c.id === id);
-  if (idx < 0 || idx >= expenseCategories.length - 1) return;
-  [expenseCategories[idx], expenseCategories[idx + 1]] = [expenseCategories[idx + 1], expenseCategories[idx]];
+  const cat = expenseCategories.find(c => c.id === id);
+  if (!cat) return;
+  const groupItems = expenseCategories.filter(c => c.group === cat.group);
+  const groupIdx = groupItems.findIndex(c => c.id === id);
+  if (groupIdx < 0 || groupIdx >= groupItems.length - 1) return;
+  const nextId = groupItems[groupIdx + 1].id;
+  const idxA = expenseCategories.findIndex(c => c.id === id);
+  const idxB = expenseCategories.findIndex(c => c.id === nextId);
+  [expenseCategories[idxA], expenseCategories[idxB]] = [expenseCategories[idxB], expenseCategories[idxA]];
   await saveExpenseCategories();
   renderCategorySettings();
 }
