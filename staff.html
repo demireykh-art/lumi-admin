@@ -1367,13 +1367,17 @@
             try{
                 if(!auth.currentUser) throw new Error('인증 세션이 없습니다.');
                 await auth.currentUser.updatePassword(pw1);
-                // mustChangePassword 플래그 해제 (개인 계정만)
-                if(currentUser&&currentUser.role==='employee'&&currentUser.id){
+                // mustChangePassword 플래그 해제 (공용계정 제외, 개인 계정만)
+                // ※ currentUser.role은 직원 doc의 직급(doctor/nurse 등)이라 'employee'와 매칭되지 않음
+                //   → 공용계정인지 여부로 분기 (id로 판별)
+                if(currentUser && currentUser.id && currentUser.id !== SHARED_ACCOUNT_ID){
                     try{
                         await db.collection('employees').doc(currentUser.id).update({mustChangePassword:false});
                         currentUser.mustChangePassword=false;
                         localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
-                    }catch(_){}
+                    }catch(flagErr){
+                        console.error('mustChangePassword 해제 실패:', flagErr);
+                    }
                 }
                 document.getElementById('pwSetup').classList.remove('active');
                 document.getElementById('newPw1').value='';
