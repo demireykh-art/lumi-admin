@@ -57,38 +57,39 @@ function getUsedLeave(employeeId){
 }
 
 async function resetPassword(empId,empName){
-    // Firebase Auth는 Admin SDK 없이는 클라이언트에서 다른 사용자의 비밀번호를 직접 재설정할 수 없음.
-    // 차선책: 1) employees 문서에 mustChangePassword=true 플래그 설정 (다음 로그인 시 변경 강제)
-    //         2) Firebase Console 사용자 페이지를 새 탭으로 열고, 이메일을 클립보드에 복사
+    // Cloud Function(resetUserPassword) 호출로 직접 비밀번호 재설정
+    // 함수 측에서 호출자가 settings/bizAdmins.emails 화이트리스트인지 검증
     const emp=employees.find(e=>e.id===empId);
     const email=emp?.email||'';
     if(!email){
         alert(`${empName}님은 아직 로그인 ID(staffId)가 부여되지 않았습니다.\n직원 수정 화면에서 먼저 로그인 ID를 부여해 주세요.`);
         return;
     }
-    if(!confirm(`${empName}(${email})님의 비밀번호를 초기화합니다.\n\n` +
-                `절차:\n` +
-                `1) 다음 안내에 따라 Firebase Console에서 새 임시 비밀번호 설정\n` +
-                `2) 본인에게 임시 비밀번호 전달\n` +
-                `3) 본인이 첫 로그인 시 자동으로 비밀번호 변경 안내됨\n\n계속하시겠습니까?`)) return;
-    try{
-        await db.collection('employees').doc(empId).update({mustChangePassword:true});
-    }catch(e){
-        console.warn('mustChangePassword 플래그 설정 실패:',e);
+    if(typeof functions==='undefined' || !functions){
+        alert('Cloud Functions 모듈이 로드되지 않았습니다. 페이지를 새로고침한 뒤 다시 시도하세요.');
+        return;
     }
+    const newPw=prompt(`${empName}(${email})님의 새 임시 비밀번호 (6자 이상):`);
+    if(newPw===null) return;
+    if(newPw.length<6){alert('비밀번호는 6자 이상이어야 합니다.');return;}
+    if(!confirm(`${empName}(${email})님의 비밀번호를 즉시 재설정합니다.\n\n새 임시 비밀번호: ${newPw}\n\n` +
+                `직원이 첫 로그인 시 본인이 새 비밀번호로 변경하도록 자동 안내됩니다.\n계속하시겠습니까?`)) return;
     try{
-        if(navigator.clipboard&&navigator.clipboard.writeText){
-            await navigator.clipboard.writeText(email);
-        }
-    }catch(_){}
-    const consoleUrl='https://console.firebase.google.com/project/lumiclinic-c1a95/authentication/users';
-    window.open(consoleUrl,'_blank');
-    alert(`✅ "다음 로그인 시 변경" 플래그가 설정되었습니다.\n` +
-          `📋 이메일이 클립보드에 복사되었습니다: ${email}\n\n` +
-          `방금 열린 Firebase Console 탭에서:\n` +
-          `1) 사용자 검색 칸에 이메일 붙여넣기 (Ctrl+V)\n` +
-          `2) 우측 ⋮ 버튼 → "비밀번호 재설정"\n` +
-          `3) 새 임시 비밀번호 설정 후 본인에게 전달`);
+        const fn=functions.httpsCallable('resetUserPassword');
+        const res=await fn({email, newPassword: newPw});
+        const data=res?.data||{};
+        alert(`✅ 비밀번호 재설정 완료\n\n대상: ${data.email||email}\n새 임시 비번: ${newPw}\n` +
+              `${data.mustChangePasswordSet?'첫 로그인 시 강제 변경 자동 안내됨.':''}\n\n직원에게 임시 비번을 전달해 주세요.`);
+    }catch(e){
+        console.error('비번 재설정 실패:', e);
+        const code=e?.code||'';
+        const msg=e?.message||code||'알 수 없는 오류';
+        alert(`재설정 실패: ${msg}\n\n` +
+              `점검:\n` +
+              `1) Cloud Function이 배포되었는지 (firebase deploy --only functions)\n` +
+              `2) 본인 이메일이 settings/bizAdmins.emails에 있는지\n` +
+              `3) 대상 이메일이 Firebase Auth에 등록되어 있는지`);
+    }
 }
 
 // ───── Firebase Auth 계정 자동 생성 (보조 앱 사용) ─────

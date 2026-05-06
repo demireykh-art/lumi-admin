@@ -6,6 +6,8 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 const auth=firebase.auth();
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+// Cloud Functions (asia-northeast3) — admin 비번 재설정 등 서버 권한 작업용
+const functions = (typeof firebase.functions === 'function') ? firebase.app().functions('asia-northeast3') : null;
 
 // ===== Global State =====
 let currentYear=new Date().getFullYear();
