@@ -338,7 +338,7 @@ async function saveConfigPasswords(){
     }catch(e){msg.innerHTML='<span style="color:var(--red)">저장 실패: '+e.message+'</span>';}
 }
 async function saveStaffSettings(){
-    const val=parseInt(document.getElementById('cfgAutoLogout')?.value)||10;
+    const val=parseInt(document.getElementById('cfgAutoLogout')?.value)||720;
     try{
         await db.collection('settings').doc('staff').set({autoLogoutMinutes:val},{merge:true});
         alert('✅ Staff 설정 저장 완료');

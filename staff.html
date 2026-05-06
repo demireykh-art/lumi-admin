@@ -1152,8 +1152,9 @@
         firebase.initializeApp(firebaseConfig);
         const db=firebase.firestore();
         const auth=firebase.auth();
-        // 공용 단말 가능성 → SESSION (브라우저 탭 닫으면 만료)
-        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(()=>{});
+        // 직원 편의: 브라우저 탭/창을 닫아도 로그인 유지 (LOCAL)
+        // 보안: 미활동 12시간 후 자동 로그아웃 (autoLogoutMinutes로 admin이 조정 가능)
+        auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
 
         // 입력 ID → 이메일 변환 (@lumi.local 자동 부착)
         function toAuthEmail(input){
@@ -1216,7 +1217,7 @@
         let selectedLeaveDates=[];
         let userLocation=null;
         let autoLogoutTimer=null;
-        let autoLogoutMinutes=10; // 기본 10분, admin에서 설정 가능
+        let autoLogoutMinutes=720; // 기본 12시간 (admin에서 settings/staff.autoLogoutMinutes로 조정)
         
         const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
         
@@ -1528,7 +1529,7 @@
                 const doc=await db.collection('settings').doc('staff').get();
                 if(doc.exists){
                     const data=doc.data();
-                    autoLogoutMinutes=data.autoLogoutMinutes||10;
+                    autoLogoutMinutes=data.autoLogoutMinutes||720;
                 }
             }catch(e){console.error('설정 로드 오류:',e);}
         }
