@@ -1072,7 +1072,7 @@ async function loadStaffSettings(){
         const doc=await db.collection('settings').doc('staff').get();
         if(doc.exists){
             const data=doc.data();
-            const v=data.autoLogoutMinutes||10;
+            const v=data.autoLogoutMinutes||720;
             ['autoLogoutMinutes','cfgAutoLogout'].forEach(id=>{
                 const el=document.getElementById(id);
                 if(el) el.value=v;
@@ -1085,7 +1085,7 @@ async function loadStaffSettings(){
 async function saveStaffSettings(){
     // cfgAutoLogout (Staff App 설정 카드) 또는 autoLogoutMinutes (기존) 둘 다 지원
     const cfgEl=document.getElementById('cfgAutoLogout')||document.getElementById('autoLogoutMinutes');
-    const autoLogoutMinutes=parseInt(cfgEl?.value)||10;
+    const autoLogoutMinutes=parseInt(cfgEl?.value)||720;
     // 두 필드 동기화
     ['cfgAutoLogout','autoLogoutMinutes'].forEach(id=>{
         const el=document.getElementById(id);

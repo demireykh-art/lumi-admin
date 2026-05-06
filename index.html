@@ -302,8 +302,8 @@
                         <div class="card-title">🔧 직원앱 설정</div>
                         <div class="form-group">
                             <label class="form-label">자동 로그아웃 시간 (분)</label>
-                            <input type="number" class="form-input" id="autoLogoutMinutes" value="10" min="0" max="60">
-                            <p style="font-size:.8rem;color:var(--text-muted);margin-top:.5rem">0으로 설정하면 자동 로그아웃 비활성화</p>
+                            <input type="number" class="form-input" id="autoLogoutMinutes" value="720" min="0" max="1440">
+                            <p style="font-size:.8rem;color:var(--text-muted);margin-top:.5rem">0=비활성화, 720=12시간(권장), 1440=24시간</p>
                         </div>
                         <button class="btn btn-primary" onclick="saveStaffSettings()">설정 저장</button>
                     </div>
@@ -510,7 +510,7 @@
                     <div class="card-label" style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">📱 Staff App 설정</div>
                     <div class="form-group">
                         <label class="form-label">자동 로그아웃 (분)</label>
-                        <input type="number" class="form-input" id="cfgAutoLogout" value="10" min="1" max="120" style="width:120px">
+                        <input type="number" class="form-input" id="cfgAutoLogout" value="720" min="1" max="1440" style="width:120px">
                     </div>
                     <button class="btn btn-outline" onclick="saveStaffSettings()" style="margin-top:.5rem">저장</button>
                 </div>
