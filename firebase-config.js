@@ -337,6 +337,52 @@ async function saveConfigPasswords(){
         setTimeout(()=>{msg.innerHTML='';},2000);
     }catch(e){msg.innerHTML='<span style="color:var(--red)">저장 실패: '+e.message+'</span>';}
 }
+// ===== 공용 staff 계정 비밀번호 재설정 =====
+// settings/staff.emails 목록을 가져와 각 이메일에 대해 비번 재설정 버튼 렌더링
+async function loadSharedStaffAccounts(){
+    const container=document.getElementById('sharedStaffList');
+    if(!container) return;
+    try{
+        const doc=await db.collection('settings').doc('staff').get();
+        const emails=(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[])
+            .map(e=>String(e).trim()).filter(Boolean);
+        if(!emails.length){
+            container.innerHTML='<div style="color:#888;font-size:.85rem">settings/staff.emails 배열에 등록된 이메일이 없습니다.</div>';
+            return;
+        }
+        container.innerHTML=emails.map(email=>{
+            const safe=email.replace(/'/g,"\\'");
+            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;border:1px solid var(--border);border-radius:6px;background:#fafafa">
+                <code style="font-size:.85rem">${email}</code>
+                <button class="btn btn-sm" style="background:var(--accent-color,#7a5b2e);color:#fff;font-size:.8rem" onclick="resetSharedStaffPassword('${safe}')">🔑 비번 재설정</button>
+            </div>`;
+        }).join('');
+    }catch(e){
+        console.error('shared staff 로드 실패:',e);
+        container.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+e.message+'</div>';
+    }
+}
+
+async function resetSharedStaffPassword(email){
+    if(typeof functions==='undefined'||!functions){
+        alert('Cloud Functions 모듈이 로드되지 않았습니다. 페이지 새로고침 후 다시 시도하세요.');
+        return;
+    }
+    const newPw=prompt(`공용 staff 계정 [${email}]의 새 비밀번호 (6자 이상):`);
+    if(newPw===null) return;
+    if(newPw.length<6){alert('비밀번호는 6자 이상이어야 합니다.');return;}
+    if(!confirm(`${email}의 비밀번호를 즉시 재설정합니다.\n\n새 비밀번호: ${newPw}\n\n` +
+                `공용 단말 사용자들에게 새 비번을 안내해 주세요.\n계속하시겠습니까?`)) return;
+    try{
+        const fn=functions.httpsCallable('resetUserPassword');
+        await fn({email, newPassword: newPw});
+        alert(`✅ ${email} 비밀번호 재설정 완료\n\n새 비번: ${newPw}\n공용 단말 사용자에게 전달해 주세요.`);
+    }catch(e){
+        console.error('공용 계정 비번 재설정 실패:',e);
+        alert(`재설정 실패: ${e?.message||e?.code||'알 수 없는 오류'}`);
+    }
+}
+
 async function saveStaffSettings(){
     const val=parseInt(document.getElementById('cfgAutoLogout')?.value)||720;
     try{
@@ -527,6 +573,7 @@ async function initApp(){
     if(typeof loadStaffSettings==='function')loadStaffSettings();
     if(typeof loadConfigForSettings==='function')loadConfigForSettings();
     if(typeof loadAdminAccounts==='function')loadAdminAccounts();
+    if(typeof loadSharedStaffAccounts==='function')loadSharedStaffAccounts();
     if(typeof initCardStatements==='function')initCardStatements();
     if(typeof initDefaultLocations==='function')await initDefaultLocations();
     if(typeof loadLocations==='function')await loadLocations();
