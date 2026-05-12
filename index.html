@@ -317,8 +317,17 @@
                         <button class="btn btn-primary" onclick="saveAdminAutoLogout()">설정 저장</button>
                         <div id="adminLogoutStatus" style="font-size:.8rem;color:var(--text-muted);margin-top:.5rem"></div>
                     </div>
+                    <div class="card" style="max-width:500px;margin-top:1rem">
+                        <div class="card-title">🔑 공용 staff 계정 관리</div>
+                        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem">
+                            재고/입고 등 공용 단말에서 쓰는 staff 계정의 비밀번호를 재설정합니다.
+                            <br>대상 이메일은 <code>settings/staff.emails</code>에 등록된 것만 표시됩니다.
+                        </p>
+                        <div id="sharedStaffList" style="display:flex;flex-direction:column;gap:.5rem">
+                            <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="sub-content" id="sub-attendance">
                     <div class="cards-grid" style="grid-template-columns:1fr">
                         <div class="card"><div class="card-label">이번 달 근무일</div><div class="card-value" id="workDays">0일</div></div>
                     </div>
