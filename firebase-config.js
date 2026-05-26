@@ -97,16 +97,49 @@ async function handleAdminLogin(){
             : [];
         if(!allowed.includes(userEmail)){
             await auth.signOut();
-            errEl.textContent='경영관리 권한이 없습니다.';
+            errEl.textContent='경영관리 권한이 없습니다. (settings/bizAdmins 목록에 없는 계정입니다)';
             return;
         }
         // onAuthStateChanged가 후속 처리(initApp)를 담당
     }catch(e){
         console.error('로그인 오류:',e);
-        const msg=(e&&e.code==='auth/wrong-password')||(e&&e.code==='auth/user-not-found')||(e&&e.code==='auth/invalid-credential')
-            ? '이메일 또는 비밀번호가 올바르지 않습니다.'
-            : '로그인 실패: '+(e.message||e);
-        errEl.textContent=msg;
+        errEl.textContent = await describeAdminLoginError(e, email);
+    }
+}
+
+// 로그인 실패 원인을 사용자에게 정확히 안내
+async function describeAdminLoginError(e, email){
+    const code = e && e.code;
+    switch(code){
+        case 'auth/too-many-requests':
+            return '로그인 시도가 많아 일시적으로 차단되었습니다. 30분~1시간 후 다시 시도하거나 비밀번호를 재설정하세요.';
+        case 'auth/user-disabled':
+            return '비활성화된 계정입니다. 최고관리자에게 문의하세요.';
+        case 'auth/invalid-email':
+            return '이메일 형식이 올바르지 않습니다.';
+        case 'auth/network-request-failed':
+            return '네트워크 오류입니다. 인터넷 연결을 확인 후 다시 시도하세요.';
+        case 'auth/wrong-password':
+            return '비밀번호가 올바르지 않습니다.';
+        case 'auth/user-not-found':
+            return '등록되지 않은 계정입니다. Firebase 인증에 이 이메일 계정이 없습니다. 최고관리자에게 계정 생성을 요청하세요.';
+        case 'auth/invalid-credential':
+            // 보안상(이메일 보호) 계정없음/비번오류가 같은 코드로 옵니다.
+            // 가능하면 가입 방식을 조회해 Google 등 소셜 전용 계정인지 안내.
+            try{
+                const methods = await auth.fetchSignInMethodsForEmail(email);
+                if(methods && methods.length && !methods.includes('password')){
+                    const map={'google.com':'Google','facebook.com':'Facebook','apple.com':'Apple'};
+                    const providers = methods.map(m=>map[m]||m).join(', ');
+                    return `이 이메일은 ${providers} 로그인 전용 계정이라 비밀번호 로그인을 할 수 없습니다. 최고관리자에게 비밀번호 계정 설정을 요청하세요.`;
+                }
+                if(methods && methods.length===0){
+                    return '이메일 또는 비밀번호가 올바르지 않습니다. (Firebase 인증에 이 이메일 계정이 없을 수 있습니다)';
+                }
+            }catch(_){}
+            return '이메일 또는 비밀번호가 올바르지 않습니다.';
+        default:
+            return '로그인 실패: '+((e&&e.message)||e);
     }
 }
 
