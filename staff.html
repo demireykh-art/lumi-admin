@@ -1099,6 +1099,14 @@
                     </div>
                 </div>
                 
+                <!-- 중복 장소 통합 -->
+                <div id="dupLocationsBox" style="display:none;background:#FFF4E5;border:2px solid #FFB85C;padding:1rem 1.25rem;border-radius:8px;margin-bottom:1.5rem">
+                    <div style="font-weight:700;font-size:.95rem;margin-bottom:.5rem;color:#A05A00">⚠️ 중복 장소 발견</div>
+                    <div id="dupLocationsList" style="font-size:.85rem;color:#7a4500;margin-bottom:.75rem;line-height:1.6"></div>
+                    <div style="font-size:.75rem;color:#7a4500;margin-bottom:.75rem">실사된 재고 수량은 손실 없이 합산되며, 가장 먼저 생성된 장소를 유지합니다.</div>
+                    <button class="btn btn-primary" onclick="mergeDuplicateLocations()" style="padding:.6rem 1.25rem;font-size:.9rem;font-weight:700;background:#E07B00;border-color:#E07B00">🔧 중복 통합 실행</button>
+                </div>
+
                 <!-- 기존 장소 목록 -->
                 <div style="font-weight:700;font-size:1rem;margin-bottom:1rem;color:var(--text)">📋 기존 장소 목록</div>
                 <div id="locationsList" style="max-height:400px;overflow-y:auto"></div>
@@ -3024,7 +3032,145 @@
         // ===== 장소 관리 =====
         async function openLocationManageModal(){
             await loadLocationsList();
+            await detectAndShowDuplicateLocations();
             openModal('locationManageModal');
+        }
+
+        // 중복 장소 감지: name(trim 후) 같은 문서들을 그룹화
+        async function detectDuplicateLocations(){
+            const snap=await db.collection('locations').get();
+            const all=snap.docs.map(d=>({id:d.id,...d.data()}));
+            const groups={};
+            all.forEach(loc=>{
+                const key=String(loc.name||'').trim();
+                if(!key) return;
+                if(!groups[key]) groups[key]=[];
+                groups[key].push(loc);
+            });
+            return Object.entries(groups).filter(([,list])=>list.length>1);
+        }
+
+        async function detectAndShowDuplicateLocations(){
+            const box=document.getElementById('dupLocationsBox');
+            const listEl=document.getElementById('dupLocationsList');
+            if(!box||!listEl) return;
+            try{
+                const dups=await detectDuplicateLocations();
+                if(dups.length===0){ box.style.display='none'; return; }
+                listEl.innerHTML=dups.map(([name,list])=>
+                    `• <strong>${name}</strong> — ${list.length}개 중복`
+                ).join('<br>');
+                box.style.display='block';
+            }catch(e){
+                console.error('중복 감지 실패:',e);
+                box.style.display='none';
+            }
+        }
+
+        // 가능한 모든 key 형태 수집: name, ${floor}-${name}, id, 그리고 trim 변형
+        function _collectLocationKeyVariants(loc){
+            const variants=new Set();
+            const name=String(loc.name||'').trim();
+            const floor=String(loc.floor||'').trim();
+            if(name){
+                variants.add(name);
+                if(floor) variants.add(`${floor}-${name}`);
+                // name 자체가 이미 "5층-xxx" 형태일 수 있음 → 그대로 포함됨
+            }
+            if(loc.id) variants.add(loc.id);
+            return variants;
+        }
+
+        async function mergeDuplicateLocations(){
+            const dups=await detectDuplicateLocations();
+            if(dups.length===0){ alert('통합할 중복 장소가 없습니다.'); return; }
+
+            const summary=dups.map(([name,list])=>`• ${name} (${list.length}개)`).join('\n');
+            if(!confirm(`다음 중복 장소를 통합합니다:\n\n${summary}\n\n각 그룹에서 가장 먼저 생성된(또는 order가 작은) 장소를 남기고 나머지는 삭제합니다.\n실사된 재고 수량은 손실 없이 합산됩니다.\n\n계속하시겠습니까?`)) return;
+
+            let report=[];
+            try{
+                for(const [name,group] of dups){
+                    // canonical 선정: order 작은 것 → createdAt 빠른 것
+                    group.sort((a,b)=>{
+                        const oa=a.order!=null?a.order:Infinity;
+                        const ob=b.order!=null?b.order:Infinity;
+                        if(oa!==ob) return oa-ob;
+                        return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
+                    });
+                    const canonical=group[0];
+                    const dupesToRemove=group.slice(1);
+
+                    // canonical이 사용할 최종 key (드롭다운에 보이는 형태와 일치)
+                    const canonicalKey=String(canonical.name||'').trim();
+
+                    // 모든 변형 key 수집 (중복 doc들 + canonical 자체의 alt 형태)
+                    const allVariants=new Set();
+                    group.forEach(loc=>{
+                        _collectLocationKeyVariants(loc).forEach(v=>allVariants.add(v));
+                    });
+                    // canonicalKey는 합칠 대상에서 제외 (자기 자신)
+                    allVariants.delete(canonicalKey);
+
+                    // inventory 컬렉션 순회하여 키 통합
+                    const invSnap=await db.collection('inventory').get();
+                    let itemsUpdated=0;
+
+                    // batch는 500 op 제한 → chunk
+                    let batch=db.batch();
+                    let opCount=0;
+                    const flush=async()=>{
+                        if(opCount>0){ await batch.commit(); batch=db.batch(); opCount=0; }
+                    };
+
+                    for(const doc of invSnap.docs){
+                        const data=doc.data();
+                        if(!data.locations||typeof data.locations!=='object') continue;
+                        let changed=false;
+                        const newLocs={...data.locations};
+
+                        for(const variant of allVariants){
+                            if(newLocs[variant]!=null){
+                                const qty=Number(newLocs[variant])||0;
+                                if(qty>0){
+                                    newLocs[canonicalKey]=(Number(newLocs[canonicalKey])||0)+qty;
+                                }
+                                delete newLocs[variant];
+                                changed=true;
+                            }
+                        }
+
+                        if(changed){
+                            const newTotal=Object.values(newLocs).reduce((s,q)=>s+(Number(q)||0),0);
+                            batch.update(doc.ref,{
+                                locations:newLocs,
+                                currentStock:newTotal,
+                                totalStock:newTotal,
+                                updatedAt:new Date().toISOString()
+                            });
+                            opCount++; itemsUpdated++;
+                            if(opCount>=450) await flush();
+                        }
+                    }
+
+                    // 중복 location 문서 삭제
+                    for(const loc of dupesToRemove){
+                        batch.delete(db.collection('locations').doc(loc.id));
+                        opCount++;
+                        if(opCount>=450) await flush();
+                    }
+
+                    await flush();
+
+                    report.push(`• ${name}: ${dupesToRemove.length}개 삭제, 품목 ${itemsUpdated}개 통합`);
+                }
+
+                alert(`✅ 통합 완료\n\n${report.join('\n')}\n\n페이지를 새로고침합니다.`);
+                location.reload();
+            }catch(e){
+                console.error('통합 실패:',e);
+                alert('통합 실패: '+(e.message||e));
+            }
         }
         
         async function loadLocationsList(){
