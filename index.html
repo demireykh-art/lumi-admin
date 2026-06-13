@@ -391,6 +391,7 @@
                                 <option value="5층">5층 전체</option>
                                 <option value="6층">6층 전체</option>
                             </select>
+                            <button class="btn btn-secondary" onclick="exportInventoryPriceList()" title="제품명 / 단위 / 용량 / 단가 엑셀로 내려받기">📊 단가표 내보내기</button>
                             <button class="btn btn-primary" onclick="openInventoryModal()">+ 소모품 추가</button>
                         </div>
                     </div>
@@ -956,8 +957,15 @@
                     </select></div>
                     <div class="form-group"><label class="form-label">단위</label><input type="text" class="form-input" id="invUnit" placeholder="개, ml, ea" value="개"></div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group"><label class="form-label">현재고</label><input type="number" class="form-input" id="invCurrentStock" step="0.01" min="0"></div>
+                <div class="form-group">
+                    <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+                        <span>장소별 재고 *</span>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="addAdminInvLocationRow()" style="font-size:.75rem;padding:.3rem .6rem">+ 장소 추가</button>
+                    </label>
+                    <div id="adminInvLocationsList" style="margin-top:.4rem"></div>
+                    <div style="text-align:right;font-size:.85rem;color:var(--text-secondary);margin-top:.4rem">
+                        총 현재고: <strong id="adminInvTotalStock" style="color:var(--primary)">0</strong>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">안전재고</label><input type="number" class="form-input" id="invSafetyStock" step="0.01" min="0"></div>
@@ -1037,7 +1045,7 @@
     <script src="card-statements.js"></script>
     <script src="expense.js"></script>
     <script src="hr-attendance.js"></script>
-    <script src="inventory.js"></script>
+    <script src="inventory.js?v=20260613b"></script>
     <script src="finance.js"></script>
 </body>
 </html>
