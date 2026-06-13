@@ -153,7 +153,6 @@ function openInventoryModal(id=null){
             document.getElementById('invType').value=item.type||'disposable';
             document.getElementById('invCategory').value=item.category||'common';
             document.getElementById('invUnit').value=item.unit||'개';
-            document.getElementById('invCurrentStock').value=item.currentStock||0;
             document.getElementById('invSafetyStock').value=item.safetyStock||0;
             document.getElementById('invPurchasePrice').value=item.purchasePrice||0;
             document.getElementById('invPurchaseQty').value=item.purchaseQty||1;
@@ -161,23 +160,118 @@ function openInventoryModal(id=null){
             document.getElementById('invExpiryDate').value=item.expiryDate||'';
             document.getElementById('invNote').value=item.note||'';
             document.getElementById('invPurchaseLink').value=item.purchaseLink||'';
+            // 장소별 재고 행 복원
+            const locsObj=item.locations&&typeof item.locations==='object'?item.locations:{};
+            const entries=Object.entries(locsObj).filter(([,q])=>(Number(q)||0)>0);
+            renderAdminInvLocationRows(entries);
+            // 구형: locations 없고 currentStock 만 있는 경우 → 빈 행 + 옛 총량 미리 채움
+            if(entries.length===0&&Number(item.currentStock)>0){
+                renderAdminInvLocationRows([[ '', Number(item.currentStock) ]]);
+            }
         }
     }else{
-        ['invName','invUnit','invCurrentStock','invSafetyStock','invPurchasePrice','invPurchaseUnit','invExpiryDate','invNote','invPurchaseLink'].forEach(x=>document.getElementById(x).value='');
+        ['invName','invUnit','invSafetyStock','invPurchasePrice','invPurchaseUnit','invExpiryDate','invNote','invPurchaseLink'].forEach(x=>document.getElementById(x).value='');
         document.getElementById('invType').value='disposable';
         document.getElementById('invCategory').value='common';
         document.getElementById('invPurchaseQty').value='1';
+        renderAdminInvLocationRows([]);
+        addAdminInvLocationRow();
     }
     openModal('inventoryModal');
 }
+
+// === admin 인벤토리 모달 - 장소별 재고 입력 ===
+function _getAdminLocationOptionsHtml(selected){
+    // updateLocationFilters 가 만든 dropdown 과 동일한 'floor-name' 형태 사용
+    const opts=(locations||[]).slice().sort((a,b)=>{
+        const fa=a.floor||'',fb=b.floor||'';
+        if(fa!==fb) return fa.localeCompare(fb,'ko');
+        return (a.order||0)-(b.order||0);
+    });
+    const sel=String(selected||'');
+    return '<option value="">장소 선택</option>'+opts.map(loc=>{
+        const v=`${loc.floor||''}-${loc.name||''}`;
+        // 기존 키가 'floor-name' 또는 그냥 'name' 일 수 있으므로 양쪽 매칭
+        const isSel=(v===sel)||((loc.name||'')===sel);
+        return `<option value="${v}" ${isSel?'selected':''}>${v}</option>`;
+    }).join('');
+}
+
+function renderAdminInvLocationRows(entries){
+    const container=document.getElementById('adminInvLocationsList');
+    if(!container) return;
+    container.innerHTML='';
+    (entries||[]).forEach(([loc,qty])=>{
+        addAdminInvLocationRow(loc,Number(qty)||0);
+    });
+    updateAdminInvTotal();
+}
+
+function addAdminInvLocationRow(presetLoc='',presetQty=0){
+    const container=document.getElementById('adminInvLocationsList');
+    if(!container) return;
+    const rowId='adminInvLoc_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+    const row=document.createElement('div');
+    row.id=rowId;
+    row.className='admin-inv-loc-row';
+    row.style.cssText='display:flex;gap:.4rem;align-items:center;margin-bottom:.4rem';
+    row.innerHTML=`
+        <select class="form-select admin-inv-loc-sel" style="flex:2;min-width:0;padding:.45rem .6rem;font-size:.85rem">
+            ${_getAdminLocationOptionsHtml(presetLoc)}
+        </select>
+        <input type="number" class="form-input admin-inv-loc-qty" step="0.01" min="0"
+            value="${presetQty>0?presetQty:''}" placeholder="수량"
+            style="flex:1;min-width:0;padding:.45rem .6rem;font-size:.85rem;text-align:right"
+            oninput="updateAdminInvTotal()">
+        <button type="button" class="btn btn-sm btn-danger" onclick="removeAdminInvLocationRow('${rowId}')" style="padding:.3rem .55rem">×</button>
+    `;
+    container.appendChild(row);
+    row.querySelector('.admin-inv-loc-qty').addEventListener('change',updateAdminInvTotal);
+    updateAdminInvTotal();
+}
+
+function removeAdminInvLocationRow(rowId){
+    const row=document.getElementById(rowId);
+    if(row) row.remove();
+    updateAdminInvTotal();
+}
+
+function updateAdminInvTotal(){
+    const container=document.getElementById('adminInvLocationsList');
+    const totalEl=document.getElementById('adminInvTotalStock');
+    if(!container||!totalEl) return;
+    const qtys=container.querySelectorAll('.admin-inv-loc-qty');
+    let total=0;
+    qtys.forEach(q=>{ total+=parseFloat(q.value)||0; });
+    totalEl.textContent=formatNumber(total);
+}
+
+function collectAdminInvLocations(){
+    const container=document.getElementById('adminInvLocationsList');
+    const out={};
+    let total=0;
+    if(!container) return {locations:out,total:0};
+    container.querySelectorAll('.admin-inv-loc-row').forEach(row=>{
+        const loc=row.querySelector('.admin-inv-loc-sel')?.value?.trim();
+        const qty=parseFloat(row.querySelector('.admin-inv-loc-qty')?.value)||0;
+        if(loc&&qty>0){
+            out[loc]=(out[loc]||0)+qty;
+            total+=qty;
+        }
+    });
+    return {locations:out,total};
+}
 async function saveInventoryItem(){
     const id=document.getElementById('invEditId').value;
+    const {locations:locMap,total:locTotal}=collectAdminInvLocations();
     const data={
         name:document.getElementById('invName').value.trim(),
         type:document.getElementById('invType').value,
         category:document.getElementById('invCategory').value,
         unit:document.getElementById('invUnit').value.trim()||'개',
-        currentStock:parseFloat(document.getElementById('invCurrentStock').value)||0,
+        locations:locMap,
+        currentStock:locTotal,
+        totalStock:locTotal,
         safetyStock:parseFloat(document.getElementById('invSafetyStock').value)||0,
         purchasePrice:parseFloat(document.getElementById('invPurchasePrice').value)||0,
         purchaseQty:parseFloat(document.getElementById('invPurchaseQty').value)||1,

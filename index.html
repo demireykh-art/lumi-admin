@@ -957,8 +957,15 @@
                     </select></div>
                     <div class="form-group"><label class="form-label">단위</label><input type="text" class="form-input" id="invUnit" placeholder="개, ml, ea" value="개"></div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group"><label class="form-label">현재고</label><input type="number" class="form-input" id="invCurrentStock" step="0.01" min="0"></div>
+                <div class="form-group">
+                    <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+                        <span>장소별 재고 *</span>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="addAdminInvLocationRow()" style="font-size:.75rem;padding:.3rem .6rem">+ 장소 추가</button>
+                    </label>
+                    <div id="adminInvLocationsList" style="margin-top:.4rem"></div>
+                    <div style="text-align:right;font-size:.85rem;color:var(--text-secondary);margin-top:.4rem">
+                        총 현재고: <strong id="adminInvTotalStock" style="color:var(--primary)">0</strong>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">안전재고</label><input type="number" class="form-input" id="invSafetyStock" step="0.01" min="0"></div>
@@ -1038,7 +1045,7 @@
     <script src="card-statements.js"></script>
     <script src="expense.js"></script>
     <script src="hr-attendance.js"></script>
-    <script src="inventory.js?v=20260613a"></script>
+    <script src="inventory.js?v=20260613b"></script>
     <script src="finance.js"></script>
 </body>
 </html>
