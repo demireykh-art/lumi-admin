@@ -80,7 +80,15 @@ function renderInventory(){
     updateInvSortIcons();
 
     if(!items.length){
-        tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);padding:2rem">조건에 맞는 소모품이 없습니다.</td></tr>';
+        // 장소 필터가 켜져 있는데 결과 없으면 안내 메시지
+        const noLocItems=locFilter?inventoryItems.filter(i=>{
+            const hasLocations=i.locations&&typeof i.locations==='object'&&Object.values(i.locations).some(q=>(Number(q)||0)>0);
+            return !hasLocations&&!i.location;
+        }).length:0;
+        const hint=locFilter&&noLocItems>0
+            ? `<div style="font-size:.8rem;color:var(--warning);margin-top:.5rem">※ 장소 정보가 없는 품목 ${noLocItems}개는 표시되지 않습니다. (수정 → 장소 지정 필요)</div>`
+            : '';
+        tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);padding:2rem">조건에 맞는 소모품이 없습니다.${hint}</td></tr>`;
     }else{
         tbody.innerHTML=items.map(item=>{
             const catLabel=INV_CATEGORIES[item.category]||'-';
