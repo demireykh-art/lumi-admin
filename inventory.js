@@ -504,3 +504,90 @@ async function initDefaultLocations(){
     console.log('기본 장소 데이터 생성 완료');
 }
 
+// ===== 단가표 내보내기 (제품명/단위/용량(cc)/단가) =====
+// 단위 정규화 규칙
+//   cc, ml, ㎖              → "cc"
+//   앰플, 바이알, vial, 병, A/v(숫자 직후) → "vial"
+//   syringe, 시린지         → "syringe"
+// vial/syringe 항목은 이름·단위에서 cc 용량을 추출해 별도 컬럼에 표기.
+function normalizeUnitAndVolume(name, rawUnit){
+    const text=`${name||''} ${rawUnit||''}`;
+    const lower=text.toLowerCase();
+
+    let volumeCc=null;
+    const volMatch=lower.match(/([0-9]+(?:\.[0-9]+)?)\s*(cc|ml|㎖)/);
+    if(volMatch) volumeCc=parseFloat(volMatch[1]);
+
+    let unit;
+    const isSyringe=/syringe|시린지/i.test(lower);
+    const hasAmpVial=/앰플|바이알|vial|병/.test(text)
+                     || /\d+\s*[av]\b/i.test(text);
+    if(isSyringe){
+        unit='syringe';
+    }else if(hasAmpVial){
+        unit='vial';
+    }else if(volumeCc!=null){
+        unit='cc';
+    }else{
+        const raw=String(rawUnit||'').trim();
+        unit=raw||'개';
+    }
+    return {unit, volumeCc};
+}
+
+async function exportInventoryPriceList(){
+    try{
+        let items=Array.isArray(inventoryItems)&&inventoryItems.length>0
+            ? inventoryItems
+            : null;
+        if(!items){
+            const snap=await db.collection('inventory').orderBy('name').get();
+            items=snap.docs.map(d=>({id:d.id,...d.data()}));
+        }
+        if(!items.length){ alert('재고에 등록된 품목이 없습니다.'); return; }
+
+        const rows=items
+            .slice()
+            .sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'))
+            .map(item=>{
+                const name=item.name||'';
+                const {unit,volumeCc}=normalizeUnitAndVolume(name,item.unit);
+                const qty=Number(item.purchaseQty)||0;
+                const price=Number(item.purchasePrice)||0;
+                const unitCost=qty>0?Math.round(price/qty):0;
+                const showVolume=(unit==='vial'||unit==='syringe'||unit==='cc')&&volumeCc!=null
+                    ? volumeCc : '';
+                return {
+                    '제품명':name,
+                    '단위':unit,
+                    '용량(cc)':showVolume,
+                    '단가(원)':unitCost
+                };
+            });
+
+        if(typeof XLSX==='undefined'){
+            alert('XLSX 라이브러리 로딩 실패. 페이지를 새로고침 후 다시 시도해주세요.');
+            return;
+        }
+        const ws=XLSX.utils.json_to_sheet(rows,{
+            header:['제품명','단위','용량(cc)','단가(원)']
+        });
+        ws['!cols']=[{wch:30},{wch:10},{wch:10},{wch:12}];
+        const range=XLSX.utils.decode_range(ws['!ref']);
+        for(let R=range.s.r+1;R<=range.e.r;R++){
+            const cellAddr=XLSX.utils.encode_cell({c:3,r:R});
+            if(ws[cellAddr]&&typeof ws[cellAddr].v==='number'){
+                ws[cellAddr].z='#,##0';
+            }
+        }
+        const wb=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb,ws,'단가표');
+
+        const today=new Date();
+        const stamp=`${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+        XLSX.writeFile(wb,`재고_단가표_${stamp}.xlsx`);
+    }catch(e){
+        console.error('단가표 내보내기 실패:',e);
+        alert('단가표 내보내기 실패: '+(e.message||e));
+    }
+}
