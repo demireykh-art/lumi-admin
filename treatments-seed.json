@@ -4,6 +4,8 @@
     "source": "원장 전달 정가표 2026-06-21",
     "priceUnit": "만원 (예: 4 = 40,000원)",
     "vat": "별도",
+    "isNonInsurance": true,
+    "insuranceNote": "전 시술 비보험 항목만 운영 (보험 항목 없음)",
     "note": "price 는 만원 단위 숫자. variant 1건 = 결제 1단위. sessions=회/세트 묶음, size=mm/cm 구간, product=약제, dose=용량, qty=개수. reviewNeeded:true 는 원본 표기가 모호해 원장 확인 필요.",
     "linkToRecipe": "각 treatment 의 recipeId 는 추후 재고(recipes)와 매핑하여 원가 자동산출"
   },
@@ -305,15 +307,14 @@
         },
         {
           "name": "돌출점",
-          "reviewNeeded": true,
-          "note": "원본에 크기 구간이 2세트로 표기됨 — 확인 필요",
+          "note": "크기 구간 2종(소/대 스케줄) 모두 운영",
           "variants": [
-            { "size": "~2mm", "price": 5 },
-            { "size": "~5mm", "price": 7 },
-            { "size": "5mm 이상", "price": 10 },
-            { "size": "~5mm (2)", "price": 10 },
-            { "size": "~10mm", "price": 15 },
-            { "size": "10mm 이상", "price": 20 }
+            { "label": "구간A", "size": "~2mm", "price": 5 },
+            { "label": "구간A", "size": "~5mm", "price": 7 },
+            { "label": "구간A", "size": "5mm 이상", "price": 10 },
+            { "label": "구간B", "size": "~5mm", "price": 10 },
+            { "label": "구간B", "size": "~10mm", "price": 15 },
+            { "label": "구간B", "size": "10mm 이상", "price": 20 }
           ]
         },
         {
