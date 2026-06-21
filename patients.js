@@ -1,0 +1,483 @@
+/* ===== patients.js - LUMI ERP - 환자 CRM / 방문기록 / 시술 정가표 / 마케팅 채널 ===== */
+/* Phase 1: 환자 등록 + 방문(시술) 기록 입력 + 정가표 조회 + 유입경로 채널 관리 */
+
+// ===== Global State =====
+let patients = [];          // {id, name, rrnFront, rrnGender, phone, channel, isJapanese, memo, status, firstVisitAt, createdAt}
+let visits = [];            // {id, patientId, patientName, date, doctorId, assistantId, consultantId, ordererId, items[], discount, total, payMethod, isNonInsurance, consultOnly, nextReservation, memo, createdAt}
+let treatmentCategories = []; // [{id, name, note, treatments:[{name, note, variants:[]}]}]
+let channels = [];          // {id(name), type, monthlyCost:{ 'YYYY-MM': 원 }}
+
+// 유입경로 기본 선택지 (정가표 확정 시점 기준)
+const CHANNEL_OPTIONS = ['홈페이지', '블로그', '소개', 'SNS', '간판', '국적'];
+const PAY_METHODS = ['카드', '현금', '계좌이체', '현금영수증', '기타'];
+
+// ===== Data Loading =====
+// 시술 마스터: Firestore(treatments) 우선, 없으면 로컬 시드(treatments-seed.json) 사용
+async function loadTreatmentsMaster() {
+    try {
+        const snap = await db.collection('treatments').get();
+        if (!snap.empty) {
+            // Firestore 문서를 카테고리별로 그룹화
+            const byCat = {};
+            snap.docs.forEach(d => {
+                const t = d.data();
+                const cid = t.categoryId || 'etc';
+                if (!byCat[cid]) byCat[cid] = { id: cid, name: t.categoryName || cid, treatments: [] };
+                byCat[cid].treatments.push({ docId: d.id, name: t.name, note: t.note, variants: t.variants || [] });
+            });
+            treatmentCategories = Object.values(byCat);
+            return;
+        }
+    } catch (e) { console.warn('treatments 컬렉션 로드 실패, 시드 사용:', e); }
+    // 폴백: 로컬 시드 JSON
+    try {
+        const res = await fetch('treatments-seed.json?v=' + Date.now());
+        const data = await res.json();
+        treatmentCategories = (data.categories || []).map(c => ({
+            id: c.id, name: c.name, note: c.note,
+            treatments: (c.treatments || []).map(t => ({ name: t.name, note: t.note, variants: t.variants || [] }))
+        }));
+    } catch (e) { console.error('정가표 시드 로드 실패:', e); treatmentCategories = []; }
+}
+
+async function loadPatients() {
+    try { const s = await db.collection('patients').get(); patients = s.docs.map(d => ({ id: d.id, ...d.data() })); }
+    catch (e) { console.error('Load patients:', e); }
+}
+async function loadVisits() {
+    try { const s = await db.collection('visits').get(); visits = s.docs.map(d => ({ id: d.id, ...d.data() })); }
+    catch (e) { console.error('Load visits:', e); }
+}
+async function loadChannels() {
+    try { const s = await db.collection('channels').get(); channels = s.docs.map(d => ({ id: d.id, ...d.data() })); }
+    catch (e) { console.error('Load channels:', e); }
+}
+
+// 기본 채널 시드 (최초 1회) — 일본마케팅(국적) 월 500만원, 나머지 organic 0원
+async function initDefaultChannels() {
+    try {
+        const snap = await db.collection('channels').limit(1).get();
+        if (!snap.empty) return;
+        const ym = getYM();
+        const defaults = [
+            { id: '홈페이지', type: 'organic' },
+            { id: '블로그', type: 'organic' },
+            { id: '소개', type: 'organic' },
+            { id: 'SNS', type: 'organic' },
+            { id: '간판', type: 'organic' },
+            { id: '국적', type: 'paid', monthlyCost: { [ym]: 5000000 } } // 일본마케팅
+        ];
+        const batch = db.batch();
+        defaults.forEach(c => {
+            const { id, ...rest } = c;
+            batch.set(db.collection('channels').doc(id), { type: rest.type, monthlyCost: rest.monthlyCost || {}, createdAt: new Date().toISOString() });
+        });
+        await batch.commit();
+        await loadChannels();
+        if (document.getElementById('channelTable')) renderChannels();
+    } catch (e) { console.warn('기본 채널 시드 실패:', e); }
+}
+
+// ===== Helpers =====
+function maskRRN(front, gender) {
+    if (!front) return '-';
+    return `${front}-${gender || '*'}******`;
+}
+// 주민번호 앞6+성별1 → 나이/성별 파생
+function deriveFromRRN(front, gender) {
+    if (!front || front.length < 6) return { age: '-', sex: '-' };
+    const g = parseInt(gender);
+    let century = 1900;
+    if (g === 1 || g === 2 || g === 5 || g === 6) century = 1900;
+    else if (g === 3 || g === 4 || g === 7 || g === 8) century = 2000;
+    const sex = (g % 2 === 1) ? '남' : '여';
+    const yy = parseInt(front.slice(0, 2)), mm = parseInt(front.slice(2, 4)), dd = parseInt(front.slice(4, 6));
+    const birth = new Date(century + yy, mm - 1, dd);
+    let age = new Date().getFullYear() - birth.getFullYear();
+    const m = new Date().getMonth() - (mm - 1);
+    if (m < 0 || (m === 0 && new Date().getDate() < dd)) age--;
+    return { age: isNaN(age) ? '-' : age + '세', sex };
+}
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function variantDesc(v) {
+    return [v.product, v.dose, v.sessions, v.size, v.qty, v.region, v.label].filter(Boolean).join(' · ') || '기본';
+}
+function manToWon(man) { return Math.round((Number(man) || 0) * 10000); }
+function empName(id) { const e = employees.find(x => x.id === id); return e ? e.name : '-'; }
+function staffOptions(selected) {
+    return '<option value="">선택</option>' + employees
+        .slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        .map(e => `<option value="${e.id}" ${e.id === selected ? 'selected' : ''}>${escapeHtml(e.name)}${e.role ? ' (' + (roleLabels[e.role] || e.role) + ')' : ''}</option>`).join('');
+}
+// 환자별 방문 통계
+function patientStats(pid) {
+    const vs = visits.filter(v => v.patientId === pid);
+    const total = vs.reduce((s, v) => s + (v.total || 0), 0);
+    const dates = vs.map(v => v.date).filter(Boolean).sort();
+    return { count: vs.length, total, last: dates.length ? dates[dates.length - 1] : null };
+}
+
+// ============================================================
+//  환자 목록 (sub-crm-patients)
+// ============================================================
+function renderPatients() {
+    const tbody = document.getElementById('patientTable');
+    if (!tbody) return;
+    const q = (document.getElementById('patientSearch')?.value || '').trim().toLowerCase();
+    const chFilter = document.getElementById('patientChannelFilter')?.value || '';
+    let list = patients.slice();
+    if (q) list = list.filter(p => (p.name || '').toLowerCase().includes(q) || (p.phone || '').includes(q));
+    if (chFilter) list = list.filter(p => p.channel === chFilter);
+    list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+    // 상단 요약 카드
+    const cards = document.getElementById('patientCards');
+    if (cards) {
+        const newThisMonth = patients.filter(p => (p.firstVisitAt || p.createdAt || '').startsWith(getYM())).length;
+        const jp = patients.filter(p => p.isJapanese).length;
+        cards.innerHTML = `
+            <div class="card"><div class="card-label">총 환자</div><div class="card-value">${formatNumber(patients.length)}명</div></div>
+            <div class="card"><div class="card-label">이번달 신환</div><div class="card-value">${formatNumber(newThisMonth)}명</div></div>
+            <div class="card"><div class="card-label">일본인 환자</div><div class="card-value">${formatNumber(jp)}명</div></div>
+            <div class="card"><div class="card-label">누적 방문건수</div><div class="card-value">${formatNumber(visits.length)}건</div></div>`;
+    }
+
+    if (!list.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);padding:2rem">등록된 환자가 없습니다.</td></tr>'; return; }
+    tbody.innerHTML = list.map(p => {
+        const d = deriveFromRRN(p.rrnFront, p.rrnGender);
+        const st = patientStats(p.id);
+        return `<tr>
+            <td><strong>${escapeHtml(p.name)}</strong>${p.isJapanese ? ' <span style="font-size:.7rem;background:rgba(25,118,210,.1);color:#1976d2;padding:1px 6px;border-radius:8px">JP</span>' : ''}<div style="font-size:.7rem;color:var(--text-muted)">${maskRRN(p.rrnFront, p.rrnGender)}</div></td>
+            <td>${d.sex} / ${d.age}</td>
+            <td>${escapeHtml(p.phone || '-')}</td>
+            <td>${escapeHtml(p.channel || '-')}</td>
+            <td class="text-right">${formatNumber(st.count)}</td>
+            <td class="text-right">${formatCurrency(st.total)}</td>
+            <td>${st.last || '-'}</td>
+            <td><div class="btn-group">
+                <button class="btn btn-sm btn-primary" onclick="openPatientDetail('${p.id}')">상세</button>
+                <button class="btn btn-sm btn-outline" onclick="openPatientModal('${p.id}')">수정</button>
+                <button class="btn btn-sm btn-danger" onclick="deletePatient('${p.id}')">삭제</button>
+            </div></td>
+        </tr>`;
+    }).join('');
+}
+
+// ===== 환자 등록/수정 모달 =====
+function openPatientModal(id = null) {
+    document.getElementById('patientModalTitle').textContent = id ? '환자 수정' : '환자 등록';
+    document.getElementById('patientEditId').value = id || '';
+    const chSel = document.getElementById('patChannel');
+    chSel.innerHTML = '<option value="">선택</option>' + CHANNEL_OPTIONS.map(c => `<option value="${c}">${c}</option>`).join('');
+    const p = id ? patients.find(x => x.id === id) : null;
+    document.getElementById('patName').value = p?.name || '';
+    document.getElementById('patRrnFront').value = p?.rrnFront || '';
+    document.getElementById('patRrnGender').value = p?.rrnGender || '';
+    document.getElementById('patPhone').value = p?.phone || '';
+    document.getElementById('patChannel').value = p?.channel || '';
+    document.getElementById('patIsJapanese').checked = !!p?.isJapanese;
+    document.getElementById('patMemo').value = p?.memo || '';
+    openModal('patientModal');
+}
+async function savePatient() {
+    const id = document.getElementById('patientEditId').value;
+    const name = document.getElementById('patName').value.trim();
+    if (!name) { alert('이름을 입력하세요.'); return; }
+    const rrnFront = document.getElementById('patRrnFront').value.trim();
+    if (rrnFront && !/^\d{6}$/.test(rrnFront)) { alert('주민번호 앞자리는 숫자 6자리여야 합니다.'); return; }
+    const rrnGender = document.getElementById('patRrnGender').value.trim();
+    if (rrnGender && !/^\d$/.test(rrnGender)) { alert('주민번호 뒷 1자리는 숫자 1자리여야 합니다.'); return; }
+    const data = {
+        name,
+        rrnFront,
+        rrnGender,
+        phone: document.getElementById('patPhone').value.trim(),
+        channel: document.getElementById('patChannel').value,
+        isJapanese: document.getElementById('patIsJapanese').checked,
+        memo: document.getElementById('patMemo').value.trim()
+    };
+    try {
+        if (id) { await db.collection('patients').doc(id).update(data); }
+        else {
+            data.createdAt = new Date().toISOString();
+            data.firstVisitAt = data.createdAt;
+            data.status = 'active';
+            await db.collection('patients').add(data);
+        }
+        closeModal('patientModal');
+        await loadPatients();
+        renderPatients();
+    } catch (e) { alert('저장 실패: ' + e.message); }
+}
+async function deletePatient(id) {
+    const vs = visits.filter(v => v.patientId === id);
+    if (!confirm(`이 환자를 삭제하시겠습니까?${vs.length ? '\n방문기록 ' + vs.length + '건도 함께 삭제됩니다.' : ''}`)) return;
+    try {
+        const batch = db.batch();
+        batch.delete(db.collection('patients').doc(id));
+        vs.forEach(v => batch.delete(db.collection('visits').doc(v.id)));
+        await batch.commit();
+        await Promise.all([loadPatients(), loadVisits()]);
+        renderPatients();
+    } catch (e) { alert('삭제 실패: ' + e.message); }
+}
+
+// ============================================================
+//  환자 상세 + 방문기록 (patientDetailModal)
+// ============================================================
+let _detailPatientId = null;
+function openPatientDetail(pid) {
+    _detailPatientId = pid;
+    const p = patients.find(x => x.id === pid);
+    if (!p) return;
+    const d = deriveFromRRN(p.rrnFront, p.rrnGender);
+    const st = patientStats(pid);
+    document.getElementById('detailTitle').textContent = `${p.name} 님`;
+    document.getElementById('detailInfo').innerHTML = `
+        <div class="cards-grid">
+            <div class="card"><div class="card-label">성별/나이</div><div class="card-value" style="font-size:1.1rem">${d.sex} / ${d.age}</div></div>
+            <div class="card"><div class="card-label">연락처</div><div class="card-value" style="font-size:1.1rem">${escapeHtml(p.phone || '-')}</div></div>
+            <div class="card"><div class="card-label">유입경로</div><div class="card-value" style="font-size:1.1rem">${escapeHtml(p.channel || '-')}</div></div>
+            <div class="card"><div class="card-label">총 방문 / 매출</div><div class="card-value" style="font-size:1.1rem">${st.count}건 · ${formatCurrency(st.total)}</div></div>
+        </div>
+        ${p.memo ? `<div style="margin-top:.5rem;font-size:.85rem;color:var(--text-secondary)">메모: ${escapeHtml(p.memo)}</div>` : ''}`;
+    renderPatientVisits();
+    openModal('patientDetailModal');
+}
+function renderPatientVisits() {
+    const tbody = document.getElementById('detailVisitTable');
+    if (!tbody) return;
+    const vs = visits.filter(v => v.patientId === _detailPatientId).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (!vs.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:1.5rem">방문기록이 없습니다.</td></tr>'; return; }
+    tbody.innerHTML = vs.map(v => {
+        const items = (v.items || []).map(it => `${escapeHtml(it.treatmentName)}${it.variant ? ' (' + escapeHtml(it.variant) + ')' : ''} ×${it.qty || 1}`).join(', ');
+        const staff = [v.doctorId && '진료:' + empName(v.doctorId), v.consultantId && '상담:' + empName(v.consultantId)].filter(Boolean).join(' / ');
+        return `<tr>
+            <td>${v.date || '-'}${v.consultOnly ? ' <span style="font-size:.7rem;color:#f57f17">상담만</span>' : ''}</td>
+            <td style="font-size:.85rem;max-width:280px">${items || '-'}</td>
+            <td style="font-size:.8rem;color:var(--text-secondary)">${staff || '-'}</td>
+            <td class="text-right">${formatCurrency(v.total || 0)}</td>
+            <td style="font-size:.8rem">${escapeHtml(v.payMethod || '-')}</td>
+            <td><div class="btn-group">
+                <button class="btn btn-sm btn-outline" onclick="openVisitModal('${_detailPatientId}','${v.id}')">수정</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteVisit('${v.id}')">삭제</button>
+            </div></td>
+        </tr>`;
+    }).join('');
+}
+
+// ============================================================
+//  방문(시술) 기록 입력 모달 (visitModal)
+// ============================================================
+let _visitItems = []; // 임시 시술 항목 [{treatmentName, variant, unitPrice(원), qty, lineTotal}]
+function openVisitModal(pid, vid = null) {
+    const p = patients.find(x => x.id === pid);
+    if (!p) return;
+    document.getElementById('visitPatientId').value = pid;
+    document.getElementById('visitEditId').value = vid || '';
+    document.getElementById('visitModalTitle').textContent = `${p.name} 님 · ${vid ? '방문기록 수정' : '방문기록 입력'}`;
+
+    // 담당자 select 채우기
+    ['visitDoctor', 'visitAssistant', 'visitConsultant', 'visitOrderer'].forEach(elId => {
+        document.getElementById(elId).innerHTML = staffOptions('');
+    });
+    // 시술 카테고리 select
+    const catSel = document.getElementById('visitCatSel');
+    catSel.innerHTML = '<option value="">카테고리 선택</option>' + treatmentCategories.map((c, i) => `<option value="${i}">${escapeHtml(c.name)}</option>`).join('');
+    document.getElementById('visitTreatSel').innerHTML = '<option value="">시술 선택</option>';
+    document.getElementById('visitVarSel').innerHTML = '<option value="">옵션 선택</option>';
+
+    // 결제수단
+    document.getElementById('visitPayMethod').innerHTML = PAY_METHODS.map(m => `<option value="${m}">${m}</option>`).join('');
+
+    const v = vid ? visits.find(x => x.id === vid) : null;
+    document.getElementById('visitDate').value = v?.date || new Date().toISOString().slice(0, 10);
+    document.getElementById('visitDoctor').value = v?.doctorId || '';
+    document.getElementById('visitAssistant').value = v?.assistantId || '';
+    document.getElementById('visitConsultant').value = v?.consultantId || '';
+    document.getElementById('visitOrderer').value = v?.ordererId || '';
+    document.getElementById('visitPayMethod').value = v?.payMethod || '카드';
+    document.getElementById('visitDiscount').value = v?.discount ? v.discount / 10000 : '';
+    document.getElementById('visitConsultOnly').checked = !!v?.consultOnly;
+    document.getElementById('visitNextRsv').value = v?.nextReservation || '';
+    document.getElementById('visitMemo').value = v?.memo || '';
+    _visitItems = v ? JSON.parse(JSON.stringify(v.items || [])) : [];
+    renderVisitItems();
+    openModal('visitModal');
+}
+// 카테고리 → 시술 → 옵션 캐스케이드
+function onVisitCatChange() {
+    const ci = document.getElementById('visitCatSel').value;
+    const tSel = document.getElementById('visitTreatSel');
+    const vSel = document.getElementById('visitVarSel');
+    vSel.innerHTML = '<option value="">옵션 선택</option>';
+    if (ci === '') { tSel.innerHTML = '<option value="">시술 선택</option>'; return; }
+    const cat = treatmentCategories[ci];
+    tSel.innerHTML = '<option value="">시술 선택</option>' + cat.treatments.map((t, i) => `<option value="${i}">${escapeHtml(t.name)}</option>`).join('');
+}
+function onVisitTreatChange() {
+    const ci = document.getElementById('visitCatSel').value;
+    const ti = document.getElementById('visitTreatSel').value;
+    const vSel = document.getElementById('visitVarSel');
+    if (ci === '' || ti === '') { vSel.innerHTML = '<option value="">옵션 선택</option>'; return; }
+    const t = treatmentCategories[ci].treatments[ti];
+    vSel.innerHTML = '<option value="">옵션 선택</option>' + (t.variants || []).map((v, i) => `<option value="${i}">${escapeHtml(variantDesc(v))} — ${v.price}만원</option>`).join('');
+}
+function addVisitItem() {
+    const ci = document.getElementById('visitCatSel').value;
+    const ti = document.getElementById('visitTreatSel').value;
+    const vi = document.getElementById('visitVarSel').value;
+    const qty = parseInt(document.getElementById('visitQty').value) || 1;
+    if (ci === '' || ti === '' || vi === '') { alert('카테고리 · 시술 · 옵션을 모두 선택하세요.'); return; }
+    const t = treatmentCategories[ci].treatments[ti];
+    const v = t.variants[vi];
+    const unitPrice = manToWon(v.price);
+    _visitItems.push({ treatmentName: t.name, variant: variantDesc(v), unitPrice, qty, lineTotal: unitPrice * qty });
+    document.getElementById('visitQty').value = 1;
+    renderVisitItems();
+}
+function removeVisitItem(idx) { _visitItems.splice(idx, 1); renderVisitItems(); }
+function renderVisitItems() {
+    const tbody = document.getElementById('visitItemTable');
+    if (!tbody) return;
+    if (!_visitItems.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:1rem">추가된 시술이 없습니다.</td></tr>';
+    } else {
+        tbody.innerHTML = _visitItems.map((it, i) => `<tr>
+            <td>${escapeHtml(it.treatmentName)}</td>
+            <td style="font-size:.8rem;color:var(--text-secondary)">${escapeHtml(it.variant || '')}</td>
+            <td class="text-right">${formatCurrency(it.unitPrice)}</td>
+            <td class="text-right">${it.qty}</td>
+            <td class="text-right">${formatCurrency(it.lineTotal)} <button class="btn btn-sm btn-danger" style="margin-left:.25rem" onclick="removeVisitItem(${i})">×</button></td>
+        </tr>`).join('');
+    }
+    updateVisitTotal();
+}
+function updateVisitTotal() {
+    const sum = _visitItems.reduce((s, it) => s + (it.lineTotal || 0), 0);
+    const disc = manToWon(document.getElementById('visitDiscount')?.value || 0);
+    const total = Math.max(0, sum - disc);
+    const el = document.getElementById('visitTotalDisplay');
+    if (el) el.textContent = `합계 ${formatCurrency(sum)} − 할인 ${formatCurrency(disc)} = ${formatCurrency(total)} (VAT 별도)`;
+}
+async function saveVisit() {
+    const pid = document.getElementById('visitPatientId').value;
+    const vid = document.getElementById('visitEditId').value;
+    const consultOnly = document.getElementById('visitConsultOnly').checked;
+    if (!_visitItems.length && !consultOnly) { alert('시술 항목을 추가하거나 "상담만"을 체크하세요.'); return; }
+    const p = patients.find(x => x.id === pid);
+    const sum = _visitItems.reduce((s, it) => s + (it.lineTotal || 0), 0);
+    const discount = manToWon(document.getElementById('visitDiscount').value || 0);
+    const data = {
+        patientId: pid,
+        patientName: p?.name || '',
+        date: document.getElementById('visitDate').value,
+        doctorId: document.getElementById('visitDoctor').value,
+        assistantId: document.getElementById('visitAssistant').value,
+        consultantId: document.getElementById('visitConsultant').value,
+        ordererId: document.getElementById('visitOrderer').value,
+        items: _visitItems,
+        discount,
+        total: Math.max(0, sum - discount),
+        payMethod: document.getElementById('visitPayMethod').value,
+        isNonInsurance: true,
+        consultOnly,
+        nextReservation: document.getElementById('visitNextRsv').value,
+        memo: document.getElementById('visitMemo').value.trim()
+    };
+    if (!data.date) { alert('방문일을 선택하세요.'); return; }
+    try {
+        if (vid) { await db.collection('visits').doc(vid).update(data); }
+        else { data.createdAt = new Date().toISOString(); await db.collection('visits').add(data); }
+        closeModal('visitModal');
+        await loadVisits();
+        renderPatients();
+        if (_detailPatientId) { openPatientDetail(_detailPatientId); }
+    } catch (e) { alert('저장 실패: ' + e.message); }
+}
+async function deleteVisit(id) {
+    if (!confirm('이 방문기록을 삭제하시겠습니까?')) return;
+    try {
+        await db.collection('visits').doc(id).delete();
+        await loadVisits();
+        renderPatients();
+        if (_detailPatientId) renderPatientVisits();
+    } catch (e) { alert('삭제 실패: ' + e.message); }
+}
+
+// ============================================================
+//  시술 정가표 조회 (sub-crm-pricelist)
+// ============================================================
+function renderPriceList() {
+    const wrap = document.getElementById('priceListWrap');
+    if (!wrap) return;
+    if (!treatmentCategories.length) { wrap.innerHTML = '<div style="color:var(--text-secondary);padding:2rem;text-align:center">정가표를 불러오지 못했습니다.</div>'; return; }
+    const q = (document.getElementById('priceSearch')?.value || '').trim().toLowerCase();
+    wrap.innerHTML = treatmentCategories.map(c => {
+        const rows = c.treatments.filter(t => !q || t.name.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)).map(t => {
+            const vrows = (t.variants || []).map(v => `<tr>
+                <td style="padding-left:1.5rem;color:var(--text-secondary);font-size:.85rem">${escapeHtml(variantDesc(v))}</td>
+                <td class="text-right">${v.price}만원</td>
+                <td class="text-right" style="color:var(--text-muted);font-size:.8rem">${formatCurrency(manToWon(v.price))}</td>
+            </tr>`).join('');
+            return `<tr><td colspan="3" style="font-weight:700;background:var(--bg,#fafafa);padding-top:.6rem">${escapeHtml(t.name)}${t.note ? ` <span style="font-weight:400;font-size:.75rem;color:var(--text-muted)">(${escapeHtml(t.note)})</span>` : ''}</td></tr>${vrows}`;
+        }).join('');
+        if (!rows) return '';
+        return `<div class="section" style="margin-bottom:1.25rem">
+            <div class="section-header"><div class="section-title">${escapeHtml(c.name)}${c.note ? ` <span style="font-size:.75rem;font-weight:400;color:var(--text-muted)">${escapeHtml(c.note)}</span>` : ''}</div></div>
+            <div class="table-container"><table><thead><tr><th>시술 / 옵션</th><th class="text-right">정가(만원)</th><th class="text-right">원(₩)</th></tr></thead><tbody>${rows}</tbody></table></div>
+        </div>`;
+    }).join('');
+}
+
+// ============================================================
+//  마케팅 채널 (sub-crm-channels)
+// ============================================================
+function renderChannels() {
+    const tbody = document.getElementById('channelTable');
+    if (!tbody) return;
+    const ym = getYM();
+    // 채널별 이번달 신규 유입 + 매출(유입경로 기준)
+    const byChannel = {};
+    CHANNEL_OPTIONS.forEach(c => byChannel[c] = { newPatients: 0, revenue: 0 });
+    patients.forEach(p => {
+        if (!p.channel || !(p.channel in byChannel)) return;
+        if ((p.firstVisitAt || p.createdAt || '').startsWith(ym)) byChannel[p.channel].newPatients++;
+    });
+    visits.forEach(v => {
+        if (!(v.date || '').startsWith(ym)) return;
+        const p = patients.find(x => x.id === v.patientId);
+        if (p && p.channel in byChannel) byChannel[p.channel].revenue += (v.total || 0);
+    });
+    tbody.innerHTML = CHANNEL_OPTIONS.map(name => {
+        const ch = channels.find(c => c.id === name) || { type: 'organic', monthlyCost: {} };
+        const cost = (ch.monthlyCost && ch.monthlyCost[ym]) || 0;
+        const stat = byChannel[name];
+        const cac = stat.newPatients ? Math.round(cost / stat.newPatients) : 0;
+        const roas = cost ? (stat.revenue / cost) : 0;
+        return `<tr>
+            <td><strong>${name}</strong> <span style="font-size:.7rem;padding:1px 6px;border-radius:8px;background:${ch.type === 'paid' ? 'rgba(245,127,23,.12);color:#f57f17' : 'rgba(46,125,50,.1);color:#2e7d32'}">${ch.type === 'paid' ? '유료' : '무료'}</span></td>
+            <td class="text-right"><input type="number" class="form-input" style="width:120px;text-align:right" value="${cost}" onchange="saveChannelCost('${name}',this.value)"> 원</td>
+            <td class="text-right">${formatNumber(stat.newPatients)}명</td>
+            <td class="text-right">${cost && stat.newPatients ? formatCurrency(cac) : '-'}</td>
+            <td class="text-right">${formatCurrency(stat.revenue)}</td>
+            <td class="text-right">${cost ? roas.toFixed(1) + 'x' : '-'}</td>
+        </tr>`;
+    }).join('');
+}
+async function saveChannelCost(name, val) {
+    const ym = getYM();
+    const cost = parseInt(val) || 0;
+    try {
+        await db.collection('channels').doc(name).set({ monthlyCost: { [ym]: cost }, type: name === '국적' ? 'paid' : 'organic' }, { merge: true });
+        await loadChannels();
+        renderChannels();
+    } catch (e) { alert('저장 실패: ' + e.message); }
+}
+
+// ===== CRM 통합 렌더 (renderAll에서 호출) =====
+function renderCRM() {
+    renderPatients();
+    renderPriceList();
+    renderChannels();
+}

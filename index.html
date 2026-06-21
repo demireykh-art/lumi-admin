@@ -49,6 +49,7 @@
         </header>
         <nav class="nav-tabs">
             <div class="nav-tab active" data-tab="revenue">매출</div>
+            <div class="nav-tab" data-tab="crm">🧑‍⚕️ 환자(CRM)</div>
             <div class="nav-tab" data-tab="expense">지출</div>
             <div class="nav-tab" data-tab="employee">직원관리</div>
             <div class="nav-tab" data-tab="inventory">재고관리</div>
@@ -103,6 +104,54 @@
                     <div class="section"><div class="section-header"><div class="section-title">업로드 이력</div></div>
                         <div class="table-container"><table><thead><tr><th>연월</th><th class="text-right">총매출</th><th class="text-right">건수</th><th>업로드일</th><th>관리</th></tr></thead><tbody id="uploadHistory"></tbody></table></div>
                     </div>
+                </div>
+            </div>
+            <!-- ===== 환자(CRM) ===== -->
+            <div class="tab-content" id="tab-crm">
+                <div class="sub-tabs">
+                    <div class="sub-tab active" data-sub="crm-patients">환자 목록</div>
+                    <div class="sub-tab" data-sub="crm-pricelist">시술 정가표</div>
+                    <div class="sub-tab" data-sub="crm-channels">마케팅 채널</div>
+                </div>
+                <!-- 환자 목록 -->
+                <div class="sub-content active" id="sub-crm-patients">
+                    <div class="cards-grid" id="patientCards"></div>
+                    <div class="section-header">
+                        <div class="section-title">환자 목록</div>
+                        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                            <input type="text" class="form-input" id="patientSearch" placeholder="이름/전화 검색..." style="width:160px" oninput="renderPatients()">
+                            <select class="form-select" id="patientChannelFilter" onchange="renderPatients()" style="width:auto">
+                                <option value="">전체 유입경로</option>
+                                <option value="홈페이지">홈페이지</option>
+                                <option value="블로그">블로그</option>
+                                <option value="소개">소개</option>
+                                <option value="SNS">SNS</option>
+                                <option value="간판">간판</option>
+                                <option value="국적">국적</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="openPatientModal()">+ 환자 등록</button>
+                        </div>
+                    </div>
+                    <div class="table-container"><table><thead><tr>
+                        <th>이름</th><th>성별/나이</th><th>연락처</th><th>유입경로</th>
+                        <th class="text-right">방문</th><th class="text-right">누적매출</th><th>최근방문</th><th>관리</th>
+                    </tr></thead><tbody id="patientTable"></tbody></table></div>
+                </div>
+                <!-- 시술 정가표 -->
+                <div class="sub-content" id="sub-crm-pricelist">
+                    <div class="section-header">
+                        <div class="section-title">시술 정가표 <span style="font-size:.75rem;font-weight:400;color:var(--text-muted)">(단위: 만원 / VAT 별도 / 전 시술 비보험)</span></div>
+                        <input type="text" class="form-input" id="priceSearch" placeholder="시술 검색..." style="width:200px" oninput="renderPriceList()">
+                    </div>
+                    <div id="priceListWrap"></div>
+                </div>
+                <!-- 마케팅 채널 -->
+                <div class="sub-content" id="sub-crm-channels">
+                    <div class="section-header"><div class="section-title">마케팅 채널 (이번달 기준)</div></div>
+                    <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem">유입경로별 광고비·신환·매출로 CAC/ROAS를 계산합니다. 광고비를 입력하면 자동 반영됩니다. (일본마케팅 = 국적)</p>
+                    <div class="table-container"><table><thead><tr>
+                        <th>채널</th><th class="text-right">월 광고비</th><th class="text-right">신환</th><th class="text-right">CAC</th><th class="text-right">매출</th><th class="text-right">ROAS</th>
+                    </tr></thead><tbody id="channelTable"></tbody></table></div>
                 </div>
             </div>
             <div class="tab-content" id="tab-expense">
@@ -574,6 +623,87 @@
     </div>
 
     <!-- Modals -->
+    <!-- 환자 등록/수정 -->
+    <div class="modal" id="patientModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title" id="patientModalTitle">환자 등록</div><button class="modal-close" onclick="closeModal('patientModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="patientEditId">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">이름 *</label><input type="text" class="form-input" id="patName" required></div>
+                    <div class="form-group"><label class="form-label">전화번호</label><input type="tel" class="form-input" id="patPhone" placeholder="010-0000-0000"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">주민번호 앞 6자리</label><input type="text" class="form-input" id="patRrnFront" maxlength="6" inputmode="numeric" placeholder="900101"></div>
+                    <div class="form-group"><label class="form-label">뒤 1자리 (성별)</label><input type="text" class="form-input" id="patRrnGender" maxlength="1" inputmode="numeric" placeholder="1" style="max-width:80px"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">유입경로</label><select class="form-select" id="patChannel"></select></div>
+                    <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem"><input type="checkbox" id="patIsJapanese"> 일본인 환자</label></div>
+                </div>
+                <div class="form-group"><label class="form-label">메모</label><textarea class="form-textarea" id="patMemo" rows="2" placeholder="피부타입·특이사항 등"></textarea></div>
+                <p style="font-size:.72rem;color:var(--text-muted)">⚠ 주민번호는 민감정보입니다. 화면에는 마스킹되어 표시되며, 나이·성별 파생에만 사용됩니다.</p>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('patientModal')">취소</button><button class="btn btn-primary" onclick="savePatient()">저장</button></div>
+        </div>
+    </div>
+    <!-- 환자 상세 + 방문기록 -->
+    <div class="modal" id="patientDetailModal">
+        <div class="modal-content" style="max-width:860px">
+            <div class="modal-header"><div class="modal-title" id="detailTitle">환자 상세</div><button class="modal-close" onclick="closeModal('patientDetailModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="detailInfo"></div>
+                <div class="section-header" style="margin-top:1rem">
+                    <div class="section-title">방문 / 시술 기록</div>
+                    <button class="btn btn-primary btn-sm" onclick="openVisitModal(_detailPatientId)">+ 방문기록 입력</button>
+                </div>
+                <div class="table-container"><table><thead><tr><th>방문일</th><th>시술</th><th>담당</th><th class="text-right">금액</th><th>결제</th><th>관리</th></tr></thead><tbody id="detailVisitTable"></tbody></table></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('patientDetailModal')">닫기</button></div>
+        </div>
+    </div>
+    <!-- 방문(시술) 기록 입력 -->
+    <div class="modal" id="visitModal">
+        <div class="modal-content" style="max-width:820px">
+            <div class="modal-header"><div class="modal-title" id="visitModalTitle">방문기록 입력</div><button class="modal-close" onclick="closeModal('visitModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="visitPatientId"><input type="hidden" id="visitEditId">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">방문일 *</label><input type="date" class="form-input" id="visitDate"></div>
+                    <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem"><input type="checkbox" id="visitConsultOnly"> 상담만 (시술 없음)</label></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">진료</label><select class="form-select" id="visitDoctor"></select></div>
+                    <div class="form-group"><label class="form-label">어시스트</label><select class="form-select" id="visitAssistant"></select></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">상담</label><select class="form-select" id="visitConsultant"></select></div>
+                    <div class="form-group"><label class="form-label">오더</label><select class="form-select" id="visitOrderer"></select></div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin:.5rem 0">
+                    <label class="form-label">시술 추가 (정가표 연동)</label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr 70px auto;gap:.4rem;align-items:end">
+                        <select class="form-select" id="visitCatSel" onchange="onVisitCatChange()"></select>
+                        <select class="form-select" id="visitTreatSel" onchange="onVisitTreatChange()"></select>
+                        <select class="form-select" id="visitVarSel"></select>
+                        <input type="number" class="form-input" id="visitQty" value="1" min="1" title="수량">
+                        <button class="btn btn-secondary" onclick="addVisitItem()">추가</button>
+                    </div>
+                    <div class="table-container" style="margin-top:.5rem"><table><thead><tr><th>시술</th><th>옵션</th><th class="text-right">단가</th><th class="text-right">수량</th><th class="text-right">금액</th></tr></thead><tbody id="visitItemTable"></tbody></table></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">할인 (만원)</label><input type="number" class="form-input" id="visitDiscount" placeholder="0" oninput="updateVisitTotal()"></div>
+                    <div class="form-group"><label class="form-label">결제수단</label><select class="form-select" id="visitPayMethod"></select></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">다음 예약일</label><input type="date" class="form-input" id="visitNextRsv"></div>
+                    <div class="form-group"><label class="form-label">메모</label><input type="text" class="form-input" id="visitMemo"></div>
+                </div>
+                <div id="visitTotalDisplay" style="text-align:right;font-weight:700;font-size:1rem;margin-top:.5rem"></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('visitModal')">취소</button><button class="btn btn-primary" onclick="saveVisit()">저장</button></div>
+        </div>
+    </div>
     <div class="modal" id="employeeModal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="employeeModalTitle">직원 등록</div><button class="modal-close" onclick="closeModal('employeeModal')">&times;</button></div>
@@ -1047,5 +1177,6 @@
     <script src="hr-attendance.js"></script>
     <script src="inventory.js?v=20260613b"></script>
     <script src="finance.js"></script>
+    <script src="patients.js?v=20260621"></script>
 </body>
 </html>
