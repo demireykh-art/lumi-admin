@@ -53,6 +53,29 @@ async function loadChannels() {
     catch (e) { console.error('Load channels:', e); }
 }
 
+// 오더 준비물품 연동: admin 레시피(recipes) + 재고(inventory) 읽기 전용 로드
+let recipes = [];
+let inventoryItems = [];
+async function loadRecipesAndInventory() {
+    try { const s = await db.collection('recipes').get(); recipes = s.docs.map(d => ({ id: d.id, ...d.data() })); }
+    catch (e) { console.warn('Load recipes:', e); recipes = []; }
+    try { const s = await db.collection('inventory').get(); inventoryItems = s.docs.map(d => ({ id: d.id, ...d.data() })); }
+    catch (e) { console.warn('Load inventory:', e); inventoryItems = []; }
+}
+// 시술명 → 레시피의 준비물품 목록 [{name, amount, unit}]
+function suppliesForTreatment(name) {
+    const r = recipes.find(x => x.treatmentName === name);
+    if (!r || !Array.isArray(r.ingredients)) return [];
+    return r.ingredients.map(ing => {
+        const it = inventoryItems.find(i => i.id === ing.itemId);
+        return { name: it ? it.name : '(미등록 품목)', amount: ing.amount, unit: (it && it.unit) || '' };
+    });
+}
+function suppliesText(supplies) {
+    if (!Array.isArray(supplies) || !supplies.length) return '';
+    return supplies.map(s => `${escapeHtml(s.name)}${s.amount ? ' ×' + s.amount + (s.unit || '') : ''}`).join(', ');
+}
+
 // 기본 채널 시드 (최초 1회) — 일본마케팅(국적) 월 500만원, 나머지 organic 0원
 async function initDefaultChannels() {
     try {
@@ -415,11 +438,12 @@ function renderPatientVisits() {
     const vs = visits.filter(v => v.patientId === _detailPatientId).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     if (!vs.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:1.5rem">방문기록이 없습니다.</td></tr>'; return; }
     tbody.innerHTML = vs.map(v => {
-        const items = (v.items || []).map(it => `${escapeHtml(it.treatmentName)}${it.variant ? ' (' + escapeHtml(it.variant) + ')' : ''} ×${it.qty || 1}`).join(', ');
-        const staff = [v.doctorId && '진료:' + empName(v.doctorId), v.consultantId && '상담:' + empName(v.consultantId), v.chartedByName && '기록:' + v.chartedByName].filter(Boolean).join(' / ');
+        const items = (v.items || []).map(it => `${escapeHtml(it.treatmentName)}${it.variant ? ' (' + escapeHtml(it.variant) + ')' : ''} ×${it.qty || 1}${it.staffName ? ' <span style="color:var(--text-muted);font-size:.72rem">[' + escapeHtml(it.staffName) + ']</span>' : ''}`).join('<br>');
+        const staff = [v.doctorId && '의료:' + empName(v.doctorId), v.consultantId && '상담:' + empName(v.consultantId), v.assistantId && '스탭:' + empName(v.assistantId), v.chartedByName && '기록:' + v.chartedByName].filter(Boolean).join(' / ');
+        const notes = [v.doctorNote && '🩺 ' + v.doctorNote, v.consultNote && '💬 ' + v.consultNote, v.staffNote && '🧑‍⚕️ ' + v.staffNote].filter(Boolean).map(escapeHtml).join(' · ');
         return `<tr>
             <td>${v.date || '-'}${v.consultOnly ? ' <span style="font-size:.7rem;color:#f57f17">상담만</span>' : ''}</td>
-            <td style="font-size:.85rem;max-width:280px">${items || '-'}</td>
+            <td style="font-size:.85rem;max-width:280px">${items || '-'}${notes ? `<div style="font-size:.72rem;color:var(--text-secondary);margin-top:.25rem">${notes}</div>` : ''}</td>
             <td style="font-size:.8rem;color:var(--text-secondary)">${staff || '-'}</td>
             <td class="text-right">${formatCurrency(v.total || 0)}</td>
             <td style="font-size:.8rem">${escapeHtml(v.payMethod || '-')}</td>
@@ -442,9 +466,10 @@ function openVisitModal(pid, vid = null) {
     document.getElementById('visitEditId').value = vid || '';
     document.getElementById('visitModalTitle').textContent = `${p.name} 님 · ${vid ? '방문기록 수정' : '방문기록 입력'}`;
 
-    // 담당자 select 채우기
-    ['visitDoctor', 'visitAssistant', 'visitConsultant', 'visitOrderer'].forEach(elId => {
-        document.getElementById(elId).innerHTML = staffOptions('');
+    // 역할별 담당자 select 채우기 (의료진/상담/스탭 + 오더 라인별 담당자)
+    ['visitDoctor', 'visitAssistant', 'visitConsultant', 'visitItemStaff'].forEach(elId => {
+        const el = document.getElementById(elId);
+        if (el) el.innerHTML = staffOptions('');
     });
     // 시술 카테고리 select
     const catSel = document.getElementById('visitCatSel');
@@ -475,7 +500,11 @@ function openVisitModal(pid, vid = null) {
     document.getElementById('visitDoctor').value = v?.doctorId || '';
     document.getElementById('visitAssistant').value = v?.assistantId || '';
     document.getElementById('visitConsultant').value = v?.consultantId || '';
-    document.getElementById('visitOrderer').value = v?.ordererId || '';
+    // 역할별 차팅 메모
+    const setNote = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val || ''; };
+    setNote('visitDoctorNote', v?.doctorNote);
+    setNote('visitConsultNote', v?.consultNote);
+    setNote('visitStaffNote', v?.staffNote);
     document.getElementById('visitPayMethod').value = v?.payMethod || '카드';
     document.getElementById('visitDiscount').value = v?.discount ? v.discount / 10000 : '';
     document.getElementById('visitConsultOnly').checked = !!v?.consultOnly;
@@ -512,7 +541,12 @@ function addVisitItem() {
     const t = treatmentCategories[ci].treatments[ti];
     const v = t.variants[vi];
     const unitPrice = manToWon(v.price);
-    _visitItems.push({ treatmentName: t.name, variant: variantDesc(v), unitPrice, qty, lineTotal: unitPrice * qty });
+    const staffId = document.getElementById('visitItemStaff')?.value || '';
+    const supplies = suppliesForTreatment(t.name); // admin 레시피 준비물품 스냅샷
+    _visitItems.push({
+        treatmentName: t.name, variant: variantDesc(v), unitPrice, qty, lineTotal: unitPrice * qty,
+        staffId, staffName: staffId ? empName(staffId) : '', supplies
+    });
     document.getElementById('visitQty').value = 1;
     renderVisitItems();
 }
@@ -521,15 +555,20 @@ function renderVisitItems() {
     const tbody = document.getElementById('visitItemTable');
     if (!tbody) return;
     if (!_visitItems.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:1rem">추가된 시술이 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:1rem">추가된 오더가 없습니다.</td></tr>';
     } else {
-        tbody.innerHTML = _visitItems.map((it, i) => `<tr>
-            <td>${escapeHtml(it.treatmentName)}</td>
-            <td style="font-size:.8rem;color:var(--text-secondary)">${escapeHtml(it.variant || '')}</td>
+        tbody.innerHTML = _visitItems.map((it, i) => {
+            const sup = suppliesText(it.supplies);
+            return `<tr>
+            <td>${escapeHtml(it.treatmentName)}<div style="font-size:.72rem;color:var(--text-secondary)">${escapeHtml(it.variant || '')}</div></td>
+            <td style="font-size:.8rem">${it.staffName ? escapeHtml(it.staffName) : '<span style="color:var(--text-muted)">미지정</span>'}</td>
+            <td style="font-size:.72rem;color:#1976d2;max-width:200px">${sup || '<span style="color:var(--text-muted)">레시피 없음</span>'}</td>
             <td class="text-right">${formatCurrency(it.unitPrice)}</td>
             <td class="text-right">${it.qty}</td>
-            <td class="text-right">${formatCurrency(it.lineTotal)} <button class="btn btn-sm btn-danger" style="margin-left:.25rem" onclick="removeVisitItem(${i})">×</button></td>
-        </tr>`).join('');
+            <td class="text-right">${formatCurrency(it.lineTotal)}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="removeVisitItem(${i})">×</button></td>
+        </tr>`;
+        }).join('');
     }
     updateVisitTotal();
 }
@@ -555,7 +594,9 @@ async function saveVisit() {
         doctorId: document.getElementById('visitDoctor').value,
         assistantId: document.getElementById('visitAssistant').value,
         consultantId: document.getElementById('visitConsultant').value,
-        ordererId: document.getElementById('visitOrderer').value,
+        doctorNote: (document.getElementById('visitDoctorNote')?.value || '').trim(),
+        consultNote: (document.getElementById('visitConsultNote')?.value || '').trim(),
+        staffNote: (document.getElementById('visitStaffNote')?.value || '').trim(),
         items: _visitItems,
         discount,
         total: Math.max(0, sum - discount),

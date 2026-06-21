@@ -154,24 +154,47 @@
                     <div class="form-group"><label class="form-label">방문일 *</label><input type="date" class="form-input" id="visitDate"></div>
                     <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem"><input type="checkbox" id="visitConsultOnly"> 상담만 (시술 없음)</label></div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group"><label class="form-label">진료</label><select class="form-select" id="visitDoctor"></select></div>
-                    <div class="form-group"><label class="form-label">어시스트</label><select class="form-select" id="visitAssistant"></select></div>
+
+                <!-- 🩺 의료진 차팅 -->
+                <div class="chart-sec" style="border:1px solid var(--border,#e0e0e0);border-left:3px solid #1976d2;border-radius:8px;padding:.75rem;margin:.5rem 0">
+                    <div style="font-weight:700;font-size:.9rem;margin-bottom:.5rem">🩺 의료진 차팅</div>
+                    <div class="form-row">
+                        <div class="form-group" style="max-width:240px"><label class="form-label">진료의</label><select class="form-select" id="visitDoctor"></select></div>
+                        <div class="form-group"><label class="form-label">진료/처방 메모</label><input type="text" class="form-input" id="visitDoctorNote" placeholder="진단·처방·주의사항"></div>
+                    </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group"><label class="form-label">상담</label><select class="form-select" id="visitConsultant"></select></div>
-                    <div class="form-group"><label class="form-label">오더</label><select class="form-select" id="visitOrderer"></select></div>
+
+                <!-- 💬 상담 차팅 -->
+                <div class="chart-sec" style="border:1px solid var(--border,#e0e0e0);border-left:3px solid #7b1fa2;border-radius:8px;padding:.75rem;margin:.5rem 0">
+                    <div style="font-weight:700;font-size:.9rem;margin-bottom:.5rem">💬 상담 차팅</div>
+                    <div class="form-row">
+                        <div class="form-group" style="max-width:240px"><label class="form-label">상담자</label><select class="form-select" id="visitConsultant"></select></div>
+                        <div class="form-group"><label class="form-label">상담 내용</label><input type="text" class="form-input" id="visitConsultNote" placeholder="상담 내용·동의 여부 등"></div>
+                    </div>
                 </div>
-                <div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin:.5rem 0">
-                    <label class="form-label">시술 추가 (정가표 연동)</label>
-                    <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr 70px auto;gap:.4rem;align-items:end">
+
+                <!-- 🧑‍⚕️ 스탭 차팅 -->
+                <div class="chart-sec" style="border:1px solid var(--border,#e0e0e0);border-left:3px solid #2e7d32;border-radius:8px;padding:.75rem;margin:.5rem 0">
+                    <div style="font-weight:700;font-size:.9rem;margin-bottom:.5rem">🧑‍⚕️ 스탭 차팅</div>
+                    <div class="form-row">
+                        <div class="form-group" style="max-width:240px"><label class="form-label">담당 스탭</label><select class="form-select" id="visitAssistant"></select></div>
+                        <div class="form-group"><label class="form-label">처치/특이사항</label><input type="text" class="form-input" id="visitStaffNote" placeholder="처치 내용·특이사항"></div>
+                    </div>
+                </div>
+
+                <!-- 📋 오더 (시술 + 준비물품 + 담당자 + 가격) -->
+                <div class="chart-sec" style="border:1px solid var(--border,#e0e0e0);border-left:3px solid #f57f17;border-radius:8px;padding:.75rem;margin:.5rem 0">
+                    <div style="font-weight:700;font-size:.9rem;margin-bottom:.5rem">📋 오더 <span style="font-weight:400;font-size:.75rem;color:var(--text-muted)">(정가표·레시피 연동)</span></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr 60px 1fr auto;gap:.4rem;align-items:end">
                         <select class="form-select" id="visitCatSel" onchange="onVisitCatChange()"></select>
                         <select class="form-select" id="visitTreatSel" onchange="onVisitTreatChange()"></select>
                         <select class="form-select" id="visitVarSel"></select>
-                        <input type="number" class="form-input" id="visitQty" value="1" min="1" title="수량">
+                        <input type="number" class="form-input" id="visitQty" value="1" min="1" title="수량" placeholder="수량">
+                        <select class="form-select" id="visitItemStaff" title="오더 담당자"></select>
                         <button class="btn btn-secondary" onclick="addVisitItem()">추가</button>
                     </div>
-                    <div class="table-container" style="margin-top:.5rem"><table><thead><tr><th>시술</th><th>옵션</th><th class="text-right">단가</th><th class="text-right">수량</th><th class="text-right">금액</th></tr></thead><tbody id="visitItemTable"></tbody></table></div>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">시술 선택 후 담당자를 고르고 [추가] — 준비물품은 admin 레시피에서 자동 표시됩니다.</div>
+                    <div class="table-container" style="margin-top:.5rem"><table><thead><tr><th>시술/옵션</th><th>담당자</th><th>준비물품</th><th class="text-right">단가</th><th class="text-right">수량</th><th class="text-right">금액</th><th></th></tr></thead><tbody id="visitItemTable"></tbody></table></div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">할인 (만원)</label><input type="number" class="form-input" id="visitDiscount" placeholder="0" oninput="updateVisitTotal()"></div>
@@ -300,12 +323,12 @@
         // 데이터 로드 + 렌더 (patients.js 함수 사용)
         async function initCRM(){
             await Promise.all([
-                loadTreatmentsMaster(), loadPatients(), loadVisits(), loadChannels()
+                loadTreatmentsMaster(), loadPatients(), loadVisits(), loadChannels(), loadRecipesAndInventory()
             ]);
             if(typeof initDefaultChannels==='function'){ try{ await initDefaultChannels(); }catch(_){ } }
             renderCRM();
         }
     </script>
-    <script src="patients.js?v=20260621b"></script>
+    <script src="patients.js?v=20260621c"></script>
 </body>
 </html>
