@@ -614,6 +614,7 @@ async function initApp(){
     if(typeof loadConfigForSettings==='function')loadConfigForSettings();
     if(typeof loadAdminAccounts==='function')loadAdminAccounts();
     if(typeof loadSharedStaffAccounts==='function')loadSharedStaffAccounts();
+    if(typeof loadCrmAccess==='function')loadCrmAccess();
     if(typeof initCardStatements==='function')initCardStatements();
     if(typeof initDefaultLocations==='function')await initDefaultLocations();
     if(typeof loadLocations==='function')await loadLocations();

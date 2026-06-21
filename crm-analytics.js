@@ -231,10 +231,54 @@ function renderPriceList() {
     }).join('');
 }
 
+// ===== 환자 CRM 접근 권한 관리 (관리자 설정 탭) =====
+let crmAccess = { mode: 'all', employeeIds: [] };
+async function loadCrmAccess() {
+    try {
+        const doc = await db.collection('settings').doc('crmAccess').get();
+        if (doc.exists) crmAccess = Object.assign({ mode: 'all', employeeIds: [] }, doc.data());
+    } catch (e) { console.warn('crmAccess 로드 실패:', e); }
+    renderCrmAccess();
+}
+function onCrmAccessModeChange() {
+    const mode = document.getElementById('crmAccessMode')?.value;
+    const box = document.getElementById('crmAccessEmpList');
+    if (box) box.style.display = (mode === 'selected') ? 'block' : 'none';
+}
+function renderCrmAccess() {
+    const sel = document.getElementById('crmAccessMode');
+    if (!sel) return;
+    sel.value = crmAccess.mode || 'all';
+    const box = document.getElementById('crmAccessEmpList');
+    if (box) {
+        const active = employees.filter(e => e.status !== 'inactive').slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        box.innerHTML = active.length ? active.map(e => {
+            const checked = (crmAccess.employeeIds || []).includes(e.id) ? 'checked' : '';
+            const noLogin = !e.staffId && !e.email;
+            return `<label style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;font-size:.88rem">
+                <input type="checkbox" class="crmAccessChk" value="${e.id}" ${checked}>
+                ${_esc(e.name)} <span style="font-size:.75rem;color:var(--text-muted)">${e.role ? '(' + (roleLabels[e.role] || e.role) + ')' : ''} ${e.staffId ? '· ID:' + _esc(e.staffId) : (noLogin ? '· ⚠ 로그인ID 없음' : '')}</span>
+            </label>`;
+        }).join('') : '<div style="color:var(--text-muted);font-size:.85rem">등록된 직원이 없습니다.</div>';
+    }
+    onCrmAccessModeChange();
+}
+async function saveCrmAccess() {
+    const mode = document.getElementById('crmAccessMode').value;
+    const ids = Array.from(document.querySelectorAll('.crmAccessChk:checked')).map(c => c.value);
+    const msg = document.getElementById('crmAccessMsg');
+    try {
+        await db.collection('settings').doc('crmAccess').set({ mode, employeeIds: ids, updatedAt: new Date().toISOString() }, { merge: true });
+        crmAccess = { mode, employeeIds: ids };
+        if (msg) { msg.textContent = '✅ 저장 완료'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 2000); }
+    } catch (e) { if (msg) { msg.textContent = '저장 실패: ' + e.message; msg.style.color = 'var(--red)'; } }
+}
+
 // ===== 통합 렌더 (firebase-config.js renderAll 에서 호출) =====
 function renderCRM() {
     renderPatients();
     renderCrmSales();
     renderChannels();
     renderPriceList();
+    renderCrmAccess();
 }

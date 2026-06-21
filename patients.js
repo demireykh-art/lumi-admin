@@ -197,11 +197,16 @@ async function savePatient() {
         memo: document.getElementById('patMemo').value.trim()
     };
     try {
-        if (id) { await db.collection('patients').doc(id).update(data); }
+        const me = (typeof currentCrmUser !== 'undefined' && currentCrmUser) ? currentCrmUser : null;
+        if (id) {
+            if (me) data.updatedBy = me.id;
+            await db.collection('patients').doc(id).update(data);
+        }
         else {
             data.createdAt = new Date().toISOString();
             data.firstVisitAt = data.createdAt;
             data.status = 'active';
+            if (me) { data.createdBy = me.id; data.createdByName = me.name; }
             await db.collection('patients').add(data);
         }
         closeModal('patientModal');
@@ -251,7 +256,7 @@ function renderPatientVisits() {
     if (!vs.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:1.5rem">방문기록이 없습니다.</td></tr>'; return; }
     tbody.innerHTML = vs.map(v => {
         const items = (v.items || []).map(it => `${escapeHtml(it.treatmentName)}${it.variant ? ' (' + escapeHtml(it.variant) + ')' : ''} ×${it.qty || 1}`).join(', ');
-        const staff = [v.doctorId && '진료:' + empName(v.doctorId), v.consultantId && '상담:' + empName(v.consultantId)].filter(Boolean).join(' / ');
+        const staff = [v.doctorId && '진료:' + empName(v.doctorId), v.consultantId && '상담:' + empName(v.consultantId), v.chartedByName && '기록:' + v.chartedByName].filter(Boolean).join(' / ');
         return `<tr>
             <td>${v.date || '-'}${v.consultOnly ? ' <span style="font-size:.7rem;color:#f57f17">상담만</span>' : ''}</td>
             <td style="font-size:.85rem;max-width:280px">${items || '-'}</td>
@@ -386,9 +391,17 @@ async function saveVisit() {
         memo: document.getElementById('visitMemo').value.trim()
     };
     if (!data.date) { alert('방문일을 선택하세요.'); return; }
+    const me = (typeof currentCrmUser !== 'undefined' && currentCrmUser) ? currentCrmUser : null;
     try {
-        if (vid) { await db.collection('visits').doc(vid).update(data); }
-        else { data.createdAt = new Date().toISOString(); await db.collection('visits').add(data); }
+        if (vid) {
+            if (me) data.updatedBy = me.id;
+            await db.collection('visits').doc(vid).update(data);
+        }
+        else {
+            data.createdAt = new Date().toISOString();
+            if (me) { data.chartedBy = me.id; data.chartedByName = me.name; }
+            await db.collection('visits').add(data);
+        }
         closeModal('visitModal');
         await loadVisits();
         renderPatients();

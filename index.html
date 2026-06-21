@@ -546,6 +546,25 @@
                 <div class="section-header">
                     <div class="section-title">⚙ 시스템 설정</div>
                 </div>
+                <!-- 환자 CRM 접근 권한 -->
+                <div class="card" style="max-width:600px;margin-bottom:1rem">
+                    <div class="card-label" style="font-size:1.1rem;font-weight:700;margin-bottom:.5rem">🧑‍⚕️ 환자 CRM(crm.html) 접근 권한</div>
+                    <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:1rem">
+                        직원이 <code>crm.html</code>에서 환자 차팅(등록·방문기록)을 하려면 접근 권한이 필요합니다.
+                        로그인한 직원이 차팅 작성자로 기록됩니다.<br>
+                        ※ 로그인 계정은 <b>직원관리 탭</b>에서 직원 등록 시 <b>로그인 ID</b>를 부여하면 생성됩니다. (대표원장도 직원으로 등록 후 권한 부여)
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">접근 범위</label>
+                        <select class="form-select" id="crmAccessMode" onchange="onCrmAccessModeChange()" style="max-width:240px">
+                            <option value="all">전 직원 허용</option>
+                            <option value="selected">선택한 직원만 허용</option>
+                        </select>
+                    </div>
+                    <div id="crmAccessEmpList" style="display:none;border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-top:.5rem;max-height:280px;overflow:auto"></div>
+                    <button class="btn btn-primary" onclick="saveCrmAccess()" style="margin-top:1rem">접근 권한 저장</button>
+                    <span id="crmAccessMsg" style="font-size:.85rem;margin-left:.75rem"></span>
+                </div>
                 <div class="card" style="max-width:500px">
                     <div class="card-label" style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">🔐 비밀번호 관리</div>
                     <div class="form-group">

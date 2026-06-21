@@ -198,18 +198,41 @@
         }
         async function crmLogout(){ try{await auth.signOut();}catch(e){} location.reload(); }
 
-        // 접근 허용: 인증된 직원(employees 매칭) 또는 settings/staff.emails 화이트리스트
+        // 현재 로그인 직원(=차팅 작성자). patients.js 가 createdBy/chartedBy 로 기록.
+        let currentCrmUser=null;
+
+        // 접근 허용: 관리자(index.html)의 settings/crmAccess 설정을 따름
+        //  - mode 'all'      : 등록 직원 전원 허용
+        //  - mode 'selected' : 선택된 직원만 허용
+        //  - bizAdmins(관리자/대표원장)는 항상 허용
         async function _isAllowed(user){
             const email=(user.email||'').toLowerCase();
             const local=email.split('@')[0];
-            try{
-                const staffDoc=await db.collection('settings').doc('staff').get();
-                const staffEmails=(staffDoc.exists&&Array.isArray(staffDoc.data().emails)?staffDoc.data().emails:[]).map(e=>String(e).toLowerCase());
-                if(staffEmails.includes(email)) return true;
-            }catch(_){}
-            // employees 매칭
             const emp=employees.find(e=>(e.email||'').toLowerCase()===email||e.staffId===local||e.id===local);
-            return !!emp;
+
+            // bizAdmins 항상 허용
+            let isBizAdmin=false;
+            try{
+                const biz=await db.collection('settings').doc('bizAdmins').get();
+                const list=(biz.exists&&Array.isArray(biz.data().emails)?biz.data().emails:[]).map(e=>String(e).toLowerCase());
+                isBizAdmin=list.includes(email);
+            }catch(_){}
+
+            // 접근 정책
+            let acc={mode:'all',employeeIds:[]};
+            try{ const d=await db.collection('settings').doc('crmAccess').get(); if(d.exists) acc=Object.assign(acc,d.data()); }catch(_){}
+
+            let allowed=false;
+            if(isBizAdmin) allowed=true;
+            else if(acc.mode==='selected') allowed=!!(emp&&Array.isArray(acc.employeeIds)&&acc.employeeIds.includes(emp.id));
+            else allowed=!!emp; // 'all'
+
+            if(allowed){
+                currentCrmUser=emp
+                    ? {id:emp.id,name:emp.name||local,email,isEmployee:true}
+                    : {id:local,name:(user.displayName||email),email,isEmployee:false};
+            }
+            return allowed;
         }
 
         let _crmInited=false;
