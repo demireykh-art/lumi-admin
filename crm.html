@@ -46,6 +46,7 @@
         </div>
         <div class="crm-nav">
             <div class="nav-tab active" data-page="patients">환자</div>
+            <div class="nav-tab" data-page="recall">📞 리콜·생일</div>
             <div class="nav-tab" data-page="pricelist">시술 정가표</div>
         </div>
         <div class="crm-content">
@@ -69,6 +70,18 @@
                     <th>이름</th><th>성별/나이</th><th>연락처</th><th>유입경로</th>
                     <th class="text-right">방문</th><th class="text-right">누적매출</th><th>최근방문</th><th>관리</th>
                 </tr></thead><tbody id="patientTable"></tbody></table></div>
+            </div>
+            <!-- 리콜·생일 -->
+            <div class="crm-page" id="page-recall">
+                <div class="cards-grid" id="recallCards"></div>
+                <div class="section-header"><div class="section-title">📅 곧 예약 (앞으로 7일내)</div></div>
+                <div class="table-container"><table><thead><tr><th>이름</th><th>연락처</th><th>예약일</th><th>관리</th></tr></thead><tbody id="recallSoon"></tbody></table></div>
+                <div class="section-header" style="margin-top:1.25rem"><div class="section-title" style="color:#d32f2f">⚠️ 예약일 지남 · 미방문</div></div>
+                <div class="table-container"><table><thead><tr><th>이름</th><th>연락처</th><th>지난 예약일</th><th>관리</th></tr></thead><tbody id="recallMissed"></tbody></table></div>
+                <div class="section-header" style="margin-top:1.25rem"><div class="section-title" style="color:#f57f17">💤 휴면 고객 (90일+ 미방문)</div></div>
+                <div class="table-container"><table><thead><tr><th>이름</th><th>연락처</th><th>최근 방문</th><th>관리</th></tr></thead><tbody id="recallDormant"></tbody></table></div>
+                <div class="section-header" style="margin-top:1.25rem"><div class="section-title">🎂 이번 달 생일 고객 <span id="birthdayCount" style="font-size:.75rem;font-weight:400;color:var(--text-muted)"></span></div></div>
+                <div class="table-container"><table><thead><tr><th>이름</th><th>생일</th><th>성별/나이</th><th>연락처</th></tr></thead><tbody id="birthdayTable"></tbody></table></div>
             </div>
             <!-- 정가표 -->
             <div class="crm-page" id="page-pricelist">
@@ -99,7 +112,20 @@
                     <div class="form-group"><label class="form-label">유입경로</label><select class="form-select" id="patChannel"></select></div>
                     <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem"><input type="checkbox" id="patIsJapanese"> 일본인 환자</label></div>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">태그 <span style="font-weight:400;color:var(--text-muted);font-size:.75rem">(쉼표로 구분 · 예: VIP, 주의, 알러지)</span></label>
+                    <input type="text" class="form-input" id="patTags" placeholder="VIP, 주의, 알러지">
+                </div>
                 <div class="form-group"><label class="form-label">메모</label><textarea class="form-textarea" id="patMemo" rows="2" placeholder="피부타입·특이사항 등"></textarea></div>
+                <div style="border:1px solid var(--border,#e0e0e0);border-radius:8px;padding:.75rem;margin:.25rem 0">
+                    <label class="form-label">회원권 / 선불 패키지</label>
+                    <div style="display:grid;grid-template-columns:1fr 90px auto;gap:.4rem;align-items:end">
+                        <input type="text" class="form-input" id="patPkgName" placeholder="예: 보톡스 10회권">
+                        <input type="number" class="form-input" id="patPkgTotal" placeholder="총횟수" min="1">
+                        <button type="button" class="btn btn-secondary" onclick="addPatPackage()">추가</button>
+                    </div>
+                    <div id="patPkgList" style="margin-top:.5rem"></div>
+                </div>
                 <p style="font-size:.72rem;color:var(--text-muted)">⚠ 주민번호는 민감정보입니다. 화면에는 마스킹되어 표시되며, 나이·성별 파생에만 사용됩니다.</p>
             </div>
             <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('patientModal')">취소</button><button class="btn btn-primary" onclick="savePatient()">저장</button></div>
@@ -154,6 +180,10 @@
                 <div class="form-row">
                     <div class="form-group"><label class="form-label">다음 예약일</label><input type="date" class="form-input" id="visitNextRsv"></div>
                     <div class="form-group"><label class="form-label">메모</label><input type="text" class="form-input" id="visitMemo"></div>
+                </div>
+                <div class="form-row" id="visitPkgRow" style="display:none">
+                    <div class="form-group"><label class="form-label">회원권 차감 <span style="font-weight:400;color:var(--text-muted);font-size:.75rem">(이번 방문에서 1회 차감)</span></label><select class="form-select" id="visitPkgSel"></select></div>
+                    <div class="form-group"></div>
                 </div>
                 <div id="visitTotalDisplay" style="text-align:right;font-weight:700;font-size:1rem;margin-top:.5rem"></div>
             </div>
@@ -276,6 +306,6 @@
             renderCRM();
         }
     </script>
-    <script src="patients.js?v=20260621"></script>
+    <script src="patients.js?v=20260621b"></script>
 </body>
 </html>

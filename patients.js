@@ -2,7 +2,7 @@
 /* Phase 1: 환자 등록 + 방문(시술) 기록 입력 + 정가표 조회 + 유입경로 채널 관리 */
 
 // ===== Global State =====
-let patients = [];          // {id, name, rrnFront, rrnGender, phone, channel, isJapanese, memo, status, firstVisitAt, createdAt}
+let patients = [];          // {id, name, rrnFront, rrnGender, phone, channel, isJapanese, memo, tags[], packages[], status, firstVisitAt, createdAt}
 let visits = [];            // {id, patientId, patientName, date, doctorId, assistantId, consultantId, ordererId, items[], discount, total, payMethod, isNonInsurance, consultOnly, nextReservation, memo, createdAt}
 let treatmentCategories = []; // [{id, name, note, treatments:[{name, note, variants:[]}]}]
 let channels = [];          // {id(name), type, monthlyCost:{ 'YYYY-MM': 원 }}
@@ -116,6 +116,133 @@ function patientStats(pid) {
     const dates = vs.map(v => v.date).filter(Boolean).sort();
     return { count: vs.length, total, last: dates.length ? dates[dates.length - 1] : null };
 }
+// 가장 최근 방문에 기록된 "다음 예약일"
+function patientNextRsv(pid) {
+    const vs = visits.filter(v => v.patientId === pid && v.nextReservation)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    return vs.length ? vs[0].nextReservation : null;
+}
+
+// ===== 날짜/태그 유틸 =====
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function daysBetween(from, to) { return Math.round((new Date(to) - new Date(from)) / 86400000); }
+function tagColor(t) {
+    if (/VIP/i.test(t)) return '#f57f17';
+    if (t.includes('주의') || t.includes('알러지') || t.includes('알레르기') || /allergy/i.test(t)) return '#d32f2f';
+    return '#1976d2';
+}
+function tagChips(tags) {
+    if (!Array.isArray(tags) || !tags.length) return '';
+    return ' ' + tags.map(t => {
+        const c = tagColor(t);
+        return `<span style="font-size:.68rem;background:${c}22;color:${c};padding:1px 7px;border-radius:8px;margin-left:3px;white-space:nowrap">${escapeHtml(t)}</span>`;
+    }).join('');
+}
+function parseTags(str) {
+    return String(str || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 8);
+}
+// 주민번호 → 생일(월/일)
+function birthMonth(front) { return (front && front.length >= 6) ? parseInt(front.slice(2, 4)) : null; }
+function birthDay(front) { return (front && front.length >= 6) ? front.slice(4, 6) : null; }
+
+// ============================================================
+//  리콜 대시보드 (page-recall) — 곧 예약 / 예약지남·미방문 / 휴면 / 생일
+// ============================================================
+const RECALL_DORMANT_DAYS = 90;   // 휴면 기준(일)
+const RECALL_SOON_DAYS = 7;       // "곧 예약" 기준(일)
+
+function computeRecall() {
+    const today = todayStr();
+    const soon = [], missed = [], dormant = [];
+    patients.forEach(p => {
+        const st = patientStats(p.id);
+        const nextRsv = patientNextRsv(p.id);
+        if (nextRsv) {
+            if (nextRsv >= today) {
+                const dleft = daysBetween(today, nextRsv);
+                if (dleft <= RECALL_SOON_DAYS) soon.push({ p, st, nextRsv, dleft });
+            } else {
+                // 예약일이 지났는데 그 이후 방문 기록이 없으면 = 미방문(노쇼 의심)
+                if (!st.last || st.last < nextRsv) missed.push({ p, st, nextRsv, dover: daysBetween(nextRsv, today) });
+                else if (st.last && daysBetween(st.last, today) >= RECALL_DORMANT_DAYS) dormant.push({ p, st });
+            }
+        } else if (st.last && daysBetween(st.last, today) >= RECALL_DORMANT_DAYS) {
+            dormant.push({ p, st });
+        }
+    });
+    soon.sort((a, b) => a.nextRsv.localeCompare(b.nextRsv));
+    missed.sort((a, b) => b.dover - a.dover);
+    dormant.sort((a, b) => (a.st.last || '').localeCompare(b.st.last || ''));
+    return { soon, missed, dormant };
+}
+function _recallActionCell(pid) {
+    return `<td><button class="btn btn-sm btn-primary" onclick="openPatientDetail('${pid}')">상세</button></td>`;
+}
+function renderRecall() {
+    const cards = document.getElementById('recallCards');
+    if (!cards) return; // 리콜 페이지가 없는 화면이면 skip
+    const { soon, missed, dormant } = computeRecall();
+    cards.innerHTML = `
+        <div class="card"><div class="card-label">곧 예약 (${RECALL_SOON_DAYS}일내)</div><div class="card-value">${soon.length}명</div></div>
+        <div class="card"><div class="card-label">예약지남·미방문</div><div class="card-value" style="color:#d32f2f">${missed.length}명</div></div>
+        <div class="card"><div class="card-label">휴면 (${RECALL_DORMANT_DAYS}일+ 미방문)</div><div class="card-value" style="color:#f57f17">${dormant.length}명</div></div>`;
+
+    const empty = (cols, msg) => `<tr><td colspan="${cols}" style="text-align:center;color:var(--text-secondary);padding:1.25rem">${msg}</td></tr>`;
+
+    const tSoon = document.getElementById('recallSoon');
+    if (tSoon) tSoon.innerHTML = soon.length ? soon.map(it => `<tr>
+        <td><strong>${escapeHtml(it.p.name)}</strong>${tagChips(it.p.tags)}</td>
+        <td>${escapeHtml(it.p.phone || '-')}</td>
+        <td>${it.nextRsv} <span style="font-size:.72rem;color:#2e7d32">${it.dleft === 0 ? '오늘' : 'D-' + it.dleft}</span></td>
+        ${_recallActionCell(it.p.id)}</tr>`).join('') : empty(4, '곧 예약된 환자가 없습니다.');
+
+    const tMissed = document.getElementById('recallMissed');
+    if (tMissed) tMissed.innerHTML = missed.length ? missed.map(it => `<tr>
+        <td><strong>${escapeHtml(it.p.name)}</strong>${tagChips(it.p.tags)}</td>
+        <td>${escapeHtml(it.p.phone || '-')}</td>
+        <td>${it.nextRsv} <span style="font-size:.72rem;color:#d32f2f">${it.dover}일 지남</span></td>
+        ${_recallActionCell(it.p.id)}</tr>`).join('') : empty(4, '예약일이 지난 미방문 환자가 없습니다.');
+
+    const tDormant = document.getElementById('recallDormant');
+    if (tDormant) tDormant.innerHTML = dormant.length ? dormant.map(it => `<tr>
+        <td><strong>${escapeHtml(it.p.name)}</strong>${tagChips(it.p.tags)}</td>
+        <td>${escapeHtml(it.p.phone || '-')}</td>
+        <td>${it.st.last || '-'} <span style="font-size:.72rem;color:#f57f17">${it.st.last ? daysBetween(it.st.last, todayStr()) + '일 전' : ''}</span></td>
+        ${_recallActionCell(it.p.id)}</tr>`).join('') : empty(4, '휴면 환자가 없습니다.');
+}
+// 이번 달 생일 고객
+function renderBirthdays() {
+    const tbody = document.getElementById('birthdayTable');
+    if (!tbody) return;
+    const m = new Date().getMonth() + 1;
+    const cnt = document.getElementById('birthdayCount');
+    const list = patients.filter(p => birthMonth(p.rrnFront) === m)
+        .sort((a, b) => (birthDay(a.rrnFront) || '').localeCompare(birthDay(b.rrnFront) || ''));
+    if (cnt) cnt.textContent = `${m}월 · ${list.length}명`;
+    if (!list.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-secondary);padding:1.25rem">이번 달 생일 고객이 없습니다.</td></tr>'; return; }
+    tbody.innerHTML = list.map(p => {
+        const d = deriveFromRRN(p.rrnFront, p.rrnGender);
+        const mmdd = `${String(birthMonth(p.rrnFront)).padStart(2, '0')}-${birthDay(p.rrnFront)}`;
+        return `<tr>
+            <td><strong>${escapeHtml(p.name)}</strong>${tagChips(p.tags)}</td>
+            <td>🎂 ${mmdd}</td>
+            <td>${d.sex} / ${d.age}</td>
+            <td>${escapeHtml(p.phone || '-')} <button class="btn btn-sm btn-outline" style="margin-left:.25rem" onclick="openPatientDetail('${p.id}')">상세</button></td>
+        </tr>`;
+    }).join('');
+}
+
+// 회원권 차감/복원 (방문 저장/삭제 시 호출)
+async function _adjustPackage(pid, pkgId, delta) {
+    if (!pid || !pkgId) return;
+    const p = patients.find(x => x.id === pid);
+    if (!p || !Array.isArray(p.packages)) return;
+    const pk = p.packages.find(k => k.id === pkgId);
+    if (!pk) return;
+    pk.used = Math.max(0, (pk.used || 0) + delta);
+    try { await db.collection('patients').doc(pid).update({ packages: p.packages }); await loadPatients(); }
+    catch (e) { console.warn('회원권 갱신 실패:', e); }
+}
 
 // ============================================================
 //  환자 목록 (sub-crm-patients)
@@ -147,7 +274,7 @@ function renderPatients() {
         const d = deriveFromRRN(p.rrnFront, p.rrnGender);
         const st = patientStats(p.id);
         return `<tr>
-            <td><strong>${escapeHtml(p.name)}</strong>${p.isJapanese ? ' <span style="font-size:.7rem;background:rgba(25,118,210,.1);color:#1976d2;padding:1px 6px;border-radius:8px">JP</span>' : ''}<div style="font-size:.7rem;color:var(--text-muted)">${maskRRN(p.rrnFront, p.rrnGender)}</div></td>
+            <td><strong>${escapeHtml(p.name)}</strong>${p.isJapanese ? ' <span style="font-size:.7rem;background:rgba(25,118,210,.1);color:#1976d2;padding:1px 6px;border-radius:8px">JP</span>' : ''}${tagChips(p.tags)}<div style="font-size:.7rem;color:var(--text-muted)">${maskRRN(p.rrnFront, p.rrnGender)}</div></td>
             <td>${d.sex} / ${d.age}</td>
             <td>${escapeHtml(p.phone || '-')}</td>
             <td>${escapeHtml(p.channel || '-')}</td>
@@ -177,7 +304,36 @@ function openPatientModal(id = null) {
     document.getElementById('patChannel').value = p?.channel || '';
     document.getElementById('patIsJapanese').checked = !!p?.isJapanese;
     document.getElementById('patMemo').value = p?.memo || '';
+    const tagsEl = document.getElementById('patTags');
+    if (tagsEl) tagsEl.value = (p?.tags || []).join(', ');
+    _patPackages = p?.packages ? JSON.parse(JSON.stringify(p.packages)) : [];
+    renderPatPackages();
     openModal('patientModal');
+}
+// ===== 회원권/선불 패키지 편집 (환자 모달) =====
+let _patPackages = [];
+function addPatPackage() {
+    const nameEl = document.getElementById('patPkgName');
+    const totalEl = document.getElementById('patPkgTotal');
+    const name = nameEl.value.trim();
+    const total = parseInt(totalEl.value) || 0;
+    if (!name || total <= 0) { alert('회원권 이름과 총 횟수를 입력하세요.'); return; }
+    _patPackages.push({ id: 'pkg' + Date.now(), name, total, used: 0 });
+    nameEl.value = ''; totalEl.value = '';
+    renderPatPackages();
+}
+function removePatPackage(idx) { _patPackages.splice(idx, 1); renderPatPackages(); }
+function renderPatPackages() {
+    const wrap = document.getElementById('patPkgList');
+    if (!wrap) return;
+    if (!_patPackages.length) { wrap.innerHTML = '<div style="font-size:.8rem;color:var(--text-muted)">등록된 회원권이 없습니다.</div>'; return; }
+    wrap.innerHTML = _patPackages.map((pk, i) => {
+        const rem = (pk.total - (pk.used || 0));
+        return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;padding:.25rem 0;border-bottom:1px dashed var(--border,#eee)">
+            <span style="flex:1">${escapeHtml(pk.name)} — <strong style="color:${rem > 0 ? '#2e7d32' : '#d32f2f'}">${rem}/${pk.total}회</strong> 남음</span>
+            <button class="btn btn-sm btn-danger" onclick="removePatPackage(${i})">삭제</button>
+        </div>`;
+    }).join('');
 }
 async function savePatient() {
     const id = document.getElementById('patientEditId').value;
@@ -194,7 +350,9 @@ async function savePatient() {
         phone: document.getElementById('patPhone').value.trim(),
         channel: document.getElementById('patChannel').value,
         isJapanese: document.getElementById('patIsJapanese').checked,
-        memo: document.getElementById('patMemo').value.trim()
+        memo: document.getElementById('patMemo').value.trim(),
+        tags: parseTags(document.getElementById('patTags')?.value),
+        packages: _patPackages
     };
     try {
         const me = (typeof currentCrmUser !== 'undefined' && currentCrmUser) ? currentCrmUser : null;
@@ -211,7 +369,7 @@ async function savePatient() {
         }
         closeModal('patientModal');
         await loadPatients();
-        renderPatients();
+        renderPatients(); renderRecall(); renderBirthdays();
     } catch (e) { alert('저장 실패: ' + e.message); }
 }
 async function deletePatient(id) {
@@ -223,7 +381,7 @@ async function deletePatient(id) {
         vs.forEach(v => batch.delete(db.collection('visits').doc(v.id)));
         await batch.commit();
         await Promise.all([loadPatients(), loadVisits()]);
-        renderPatients();
+        renderPatients(); renderRecall(); renderBirthdays();
     } catch (e) { alert('삭제 실패: ' + e.message); }
 }
 
@@ -245,6 +403,8 @@ function openPatientDetail(pid) {
             <div class="card"><div class="card-label">유입경로</div><div class="card-value" style="font-size:1.1rem">${escapeHtml(p.channel || '-')}</div></div>
             <div class="card"><div class="card-label">총 방문 / 매출</div><div class="card-value" style="font-size:1.1rem">${st.count}건 · ${formatCurrency(st.total)}</div></div>
         </div>
+        ${(Array.isArray(p.tags) && p.tags.length) ? `<div style="margin-top:.5rem">${tagChips(p.tags)}</div>` : ''}
+        ${(Array.isArray(p.packages) && p.packages.length) ? `<div style="margin-top:.5rem;font-size:.85rem"><strong>회원권</strong> ${p.packages.map(pk => { const rem = pk.total - (pk.used || 0); return `<span style="margin-left:.5rem;background:${rem > 0 ? 'rgba(46,125,50,.1)' : 'rgba(211,47,47,.1)'};color:${rem > 0 ? '#2e7d32' : '#d32f2f'};padding:1px 8px;border-radius:8px">${escapeHtml(pk.name)} ${rem}/${pk.total}회</span>`; }).join('')}</div>` : ''}
         ${p.memo ? `<div style="margin-top:.5rem;font-size:.85rem;color:var(--text-secondary)">메모: ${escapeHtml(p.memo)}</div>` : ''}`;
     renderPatientVisits();
     openModal('patientDetailModal');
@@ -294,6 +454,21 @@ function openVisitModal(pid, vid = null) {
 
     // 결제수단
     document.getElementById('visitPayMethod').innerHTML = PAY_METHODS.map(m => `<option value="${m}">${m}</option>`).join('');
+
+    // 회원권 차감 select (신규 방문에서만, 잔여>0 인 것만)
+    const pkgRow = document.getElementById('visitPkgRow');
+    const pkgSel = document.getElementById('visitPkgSel');
+    if (pkgRow && pkgSel) {
+        const avail = (p.packages || []).filter(pk => (pk.total - (pk.used || 0)) > 0);
+        if (!vid && avail.length) {
+            pkgRow.style.display = '';
+            pkgSel.innerHTML = '<option value="">회원권 차감 안 함</option>' +
+                avail.map(pk => `<option value="${pk.id}">${escapeHtml(pk.name)} (${pk.total - (pk.used || 0)}회 남음)</option>`).join('');
+        } else {
+            pkgRow.style.display = 'none';
+            pkgSel.innerHTML = '';
+        }
+    }
 
     const v = vid ? visits.find(x => x.id === vid) : null;
     document.getElementById('visitDate').value = v?.date || new Date().toISOString().slice(0, 10);
@@ -391,6 +566,9 @@ async function saveVisit() {
         memo: document.getElementById('visitMemo').value.trim()
     };
     if (!data.date) { alert('방문일을 선택하세요.'); return; }
+    // 회원권 차감은 신규 방문에서만
+    const pkgId = (!vid && document.getElementById('visitPkgSel')) ? document.getElementById('visitPkgSel').value : '';
+    if (pkgId) data.packageId = pkgId;
     const me = (typeof currentCrmUser !== 'undefined' && currentCrmUser) ? currentCrmUser : null;
     try {
         if (vid) {
@@ -401,19 +579,22 @@ async function saveVisit() {
             data.createdAt = new Date().toISOString();
             if (me) { data.chartedBy = me.id; data.chartedByName = me.name; }
             await db.collection('visits').add(data);
+            if (pkgId) await _adjustPackage(pid, pkgId, +1);
         }
         closeModal('visitModal');
         await loadVisits();
-        renderPatients();
+        renderPatients(); renderRecall(); renderBirthdays();
         if (_detailPatientId) { openPatientDetail(_detailPatientId); }
     } catch (e) { alert('저장 실패: ' + e.message); }
 }
 async function deleteVisit(id) {
     if (!confirm('이 방문기록을 삭제하시겠습니까?')) return;
+    const v = visits.find(x => x.id === id);
     try {
         await db.collection('visits').doc(id).delete();
+        if (v && v.packageId) await _adjustPackage(v.patientId, v.packageId, -1); // 차감 복원
         await loadVisits();
-        renderPatients();
+        renderPatients(); renderRecall(); renderBirthdays();
         if (_detailPatientId) renderPatientVisits();
     } catch (e) { alert('삭제 실패: ' + e.message); }
 }
@@ -491,6 +672,8 @@ async function saveChannelCost(name, val) {
 // ===== CRM 통합 렌더 (renderAll에서 호출) =====
 function renderCRM() {
     renderPatients();
+    renderRecall();
+    renderBirthdays();
     renderPriceList();
     renderChannels();
 }
