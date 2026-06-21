@@ -420,6 +420,13 @@ function openPatientDetail(pid) {
     const st = patientStats(pid);
     document.getElementById('detailTitle').textContent = `${p.name} 님`;
     document.getElementById('detailInfo').innerHTML = `
+        <div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;font-size:.85rem;color:var(--text-secondary);padding:.5rem .75rem;background:#f5f7fa;border-radius:8px;margin-bottom:.6rem">
+            <span><strong style="color:var(--text-primary)">No.</strong> ${escapeHtml(p.id.slice(-6))}</span>
+            <span>${maskRRN(p.rrnFront, p.rrnGender)}</span>
+            <span>📞 ${escapeHtml(p.phone || '-')}</span>
+            <span>${d.sex} / ${d.age}</span>
+            ${p.isJapanese ? '<span style="background:rgba(25,118,210,.1);color:#1976d2;padding:1px 7px;border-radius:8px;font-size:.72rem">일본인</span>' : ''}
+        </div>
         <div class="cards-grid">
             <div class="card"><div class="card-label">성별/나이</div><div class="card-value" style="font-size:1.1rem">${d.sex} / ${d.age}</div></div>
             <div class="card"><div class="card-label">연락처</div><div class="card-value" style="font-size:1.1rem">${escapeHtml(p.phone || '-')}</div></div>
@@ -505,6 +512,10 @@ function openVisitModal(pid, vid = null) {
     setNote('visitDoctorNote', v?.doctorNote);
     setNote('visitConsultNote', v?.consultNote);
     setNote('visitStaffNote', v?.staffNote);
+    setNote('visitDiagnosis', v?.diagnosis);
+    const setSearch = document.getElementById('visitSetSearch');
+    if (setSearch) setSearch.value = '';
+    renderVisitSets();
     document.getElementById('visitPayMethod').value = v?.payMethod || '카드';
     document.getElementById('visitDiscount').value = v?.discount ? v.discount / 10000 : '';
     document.getElementById('visitConsultOnly').checked = !!v?.consultOnly;
@@ -551,6 +562,36 @@ function addVisitItem() {
     renderVisitItems();
 }
 function removeVisitItem(idx) { _visitItems.splice(idx, 1); renderVisitItems(); }
+// 오른쪽 "시술 세트" 빠른추가 패널 (베가스 세트 미리보기 형태)
+function renderVisitSets() {
+    const wrap = document.getElementById('visitSetList');
+    if (!wrap) return;
+    const q = (document.getElementById('visitSetSearch')?.value || '').trim().toLowerCase();
+    let html = '';
+    treatmentCategories.forEach((c, ci) => {
+        const matched = c.treatments.map((t, ti) => ({ t, ti })).filter(({ t }) => !q || t.name.toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q));
+        if (!matched.length) return;
+        html += `<div class="set-cat">${escapeHtml(c.name)}</div>`;
+        matched.forEach(({ t, ti }) => {
+            (t.variants || []).forEach((v, vi) => {
+                html += `<div class="set-item" onclick="quickAddItem(${ci},${ti},${vi})" title="클릭하면 오더에 추가">
+                    <span>${escapeHtml(t.name)} <span style="color:var(--text-muted)">${escapeHtml(variantDesc(v))}</span></span>
+                    <span style="color:#1976d2;white-space:nowrap">${v.price}만</span></div>`;
+            });
+        });
+    });
+    wrap.innerHTML = html || '<div style="font-size:.8rem;color:var(--text-muted);padding:1rem 0">검색 결과 없음</div>';
+}
+function quickAddItem(ci, ti, vi) {
+    const t = treatmentCategories[ci]?.treatments[ti];
+    const v = t?.variants[vi];
+    if (!v) return;
+    const unitPrice = manToWon(v.price);
+    const staffId = document.getElementById('visitItemStaff')?.value || '';
+    const supplies = suppliesForTreatment(t.name);
+    _visitItems.push({ treatmentName: t.name, variant: variantDesc(v), unitPrice, qty: 1, lineTotal: unitPrice, staffId, staffName: staffId ? empName(staffId) : '', supplies });
+    renderVisitItems();
+}
 function renderVisitItems() {
     const tbody = document.getElementById('visitItemTable');
     if (!tbody) return;
@@ -597,6 +638,7 @@ async function saveVisit() {
         doctorNote: (document.getElementById('visitDoctorNote')?.value || '').trim(),
         consultNote: (document.getElementById('visitConsultNote')?.value || '').trim(),
         staffNote: (document.getElementById('visitStaffNote')?.value || '').trim(),
+        diagnosis: (document.getElementById('visitDiagnosis')?.value || '').trim(),
         items: _visitItems,
         discount,
         total: Math.max(0, sum - discount),
