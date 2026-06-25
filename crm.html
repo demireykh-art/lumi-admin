@@ -68,6 +68,14 @@
         .login-box{border-radius:18px}
         .lumi-logo{display:inline-flex;width:30px;height:30px;border-radius:9px;background:#4F46E5;align-items:center;justify-content:center;vertical-align:middle}
         .set-item:hover{background:#EEF0FE}
+        /* 환자상세 4열 (시안 ②) */
+        .detail-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1.25fr;gap:.6rem;margin-top:.6rem}
+        .dcol{border:1px solid #E9EAF0;border-radius:10px;padding:.6rem;background:#fafbfc;display:flex;flex-direction:column;min-height:300px}
+        .dcol-h{font-weight:700;font-size:.85rem;margin-bottom:.45rem;color:#1F2533}
+        .dcol textarea{flex:1;resize:vertical;min-height:120px}
+        .dcol-pn{background:#fff}
+        .pn-list{overflow:auto;max-height:46vh}
+        @media(max-width:900px){.detail-grid{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
@@ -177,17 +185,24 @@
         </div>
     </div>
     <div class="modal" id="patientDetailModal">
-        <div class="modal-content" style="max-width:860px">
+        <div class="modal-content" style="max-width:1180px;width:96vw">
             <div class="modal-header"><div class="modal-title" id="detailTitle">환자 상세</div><button class="modal-close" onclick="closeModal('patientDetailModal')">&times;</button></div>
             <div class="modal-body">
                 <div id="detailInfo"></div>
-                <div class="section-header" style="margin-top:1rem">
-                    <div class="section-title">방문 / 시술 기록</div>
-                    <button class="btn btn-primary btn-sm" onclick="openVisitModal(_detailPatientId)">+ 방문기록 입력</button>
+                <div class="detail-grid">
+                    <div class="dcol"><div class="dcol-h">📌 주소증</div><textarea class="form-textarea" id="detailComplaint" placeholder="주소증 입력 (주요 호소·과거력 등)"></textarea></div>
+                    <div class="dcol"><div class="dcol-h">📝 메모</div><textarea class="form-textarea" id="detailMemo" placeholder="메모 입력 (피부타입·특이사항 등)"></textarea></div>
+                    <div class="dcol"><div class="dcol-h">🗂 기타</div><textarea class="form-textarea" id="detailEtc" placeholder="기타메모 입력"></textarea></div>
+                    <div class="dcol dcol-pn">
+                        <div class="dcol-h" style="color:#4F46E5;display:flex;justify-content:space-between;align-items:center">Progress Note <button class="btn btn-primary btn-sm" onclick="openVisitModal(_detailPatientId)">+ 차팅</button></div>
+                        <div class="pn-list" id="detailVisitList"></div>
+                    </div>
                 </div>
-                <div class="table-container"><table><thead><tr><th>방문일</th><th>시술</th><th>담당</th><th class="text-right">금액</th><th>결제</th><th>관리</th></tr></thead><tbody id="detailVisitTable"></tbody></table></div>
             </div>
-            <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('patientDetailModal')">닫기</button></div>
+            <div class="modal-footer" style="justify-content:space-between;align-items:center">
+                <span id="detailSaveMsg" style="font-size:.78rem;color:var(--text-muted)">주소증·메모·기타는 [메모 저장]으로 반영됩니다</span>
+                <div><button class="btn btn-outline" onclick="closeModal('patientDetailModal')">닫기</button> <button class="btn btn-primary" onclick="saveDetailNotes()">메모 저장</button></div>
+            </div>
         </div>
     </div>
     <div class="modal" id="visitModal">
@@ -376,6 +391,6 @@
             renderCRM();
         }
     </script>
-    <script src="patients.js?v=20260622"></script>
+    <script src="patients.js?v=20260625"></script>
 </body>
 </html>

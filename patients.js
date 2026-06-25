@@ -435,30 +435,52 @@ function openPatientDetail(pid) {
         </div>
         ${(Array.isArray(p.tags) && p.tags.length) ? `<div style="margin-top:.5rem">${tagChips(p.tags)}</div>` : ''}
         ${(Array.isArray(p.packages) && p.packages.length) ? `<div style="margin-top:.5rem;font-size:.85rem"><strong>회원권</strong> ${p.packages.map(pk => { const rem = pk.total - (pk.used || 0); return `<span style="margin-left:.5rem;background:${rem > 0 ? 'rgba(46,125,50,.1)' : 'rgba(211,47,47,.1)'};color:${rem > 0 ? '#2e7d32' : '#d32f2f'};padding:1px 8px;border-radius:8px">${escapeHtml(pk.name)} ${rem}/${pk.total}회</span>`; }).join('')}</div>` : ''}
-        ${p.memo ? `<div style="margin-top:.5rem;font-size:.85rem;color:var(--text-secondary)">메모: ${escapeHtml(p.memo)}</div>` : ''}`;
+        `;
+    const setv = (id, val) => { const e = document.getElementById(id); if (e) e.value = val || ''; };
+    setv('detailComplaint', p.chiefComplaint);
+    setv('detailMemo', p.memo);
+    setv('detailEtc', p.etcMemo);
+    const msg = document.getElementById('detailSaveMsg'); if (msg) { msg.textContent = '주소증·메모·기타는 [메모 저장]으로 반영됩니다'; msg.style.color = 'var(--text-muted)'; }
     renderPatientVisits();
     openModal('patientDetailModal');
 }
+// 주소증/메모/기타 저장
+async function saveDetailNotes() {
+    if (!_detailPatientId) return;
+    const data = {
+        chiefComplaint: (document.getElementById('detailComplaint')?.value || '').trim(),
+        memo: (document.getElementById('detailMemo')?.value || '').trim(),
+        etcMemo: (document.getElementById('detailEtc')?.value || '').trim()
+    };
+    try {
+        await db.collection('patients').doc(_detailPatientId).update(data);
+        await loadPatients();
+        renderPatients(); renderRecall(); renderBirthdays();
+        const msg = document.getElementById('detailSaveMsg'); if (msg) { msg.textContent = '✓ 저장되었습니다'; msg.style.color = '#16A34A'; }
+    } catch (e) { alert('저장 실패: ' + e.message); }
+}
 function renderPatientVisits() {
-    const tbody = document.getElementById('detailVisitTable');
-    if (!tbody) return;
+    const wrap = document.getElementById('detailVisitList');
+    if (!wrap) return;
     const vs = visits.filter(v => v.patientId === _detailPatientId).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-    if (!vs.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:1.5rem">방문기록이 없습니다.</td></tr>'; return; }
-    tbody.innerHTML = vs.map(v => {
+    if (!vs.length) { wrap.innerHTML = '<div style="font-size:.82rem;color:var(--text-muted);padding:1rem 0;text-align:center">차팅 기록이 없습니다.</div>'; return; }
+    wrap.innerHTML = vs.map(v => {
         const items = (v.items || []).map(it => `${escapeHtml(it.treatmentName)}${it.variant ? ' (' + escapeHtml(it.variant) + ')' : ''} ×${it.qty || 1}${it.staffName ? ' <span style="color:var(--text-muted);font-size:.72rem">[' + escapeHtml(it.staffName) + ']</span>' : ''}`).join('<br>');
-        const staff = [v.doctorId && '의료:' + empName(v.doctorId), v.consultantId && '상담:' + empName(v.consultantId), v.assistantId && '스탭:' + empName(v.assistantId), v.chartedByName && '기록:' + v.chartedByName].filter(Boolean).join(' / ');
-        const notes = [v.doctorNote && '🩺 ' + v.doctorNote, v.consultNote && '💬 ' + v.consultNote, v.staffNote && '🧑‍⚕️ ' + v.staffNote].filter(Boolean).map(escapeHtml).join(' · ');
-        return `<tr>
-            <td>${v.date || '-'}${v.consultOnly ? ' <span style="font-size:.7rem;color:#f57f17">상담만</span>' : ''}</td>
-            <td style="font-size:.85rem;max-width:280px">${items || '-'}${notes ? `<div style="font-size:.72rem;color:var(--text-secondary);margin-top:.25rem">${notes}</div>` : ''}</td>
-            <td style="font-size:.8rem;color:var(--text-secondary)">${staff || '-'}</td>
-            <td class="text-right">${formatCurrency(v.total || 0)}</td>
-            <td style="font-size:.8rem">${escapeHtml(v.payMethod || '-')}</td>
-            <td><div class="btn-group">
-                <button class="btn btn-sm btn-outline" onclick="openVisitModal('${_detailPatientId}','${v.id}')">수정</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteVisit('${v.id}')">삭제</button>
-            </div></td>
-        </tr>`;
+        const doc = v.doctorId ? empName(v.doctorId) : '';
+        const notes = [v.doctorNote && '🩺 ' + v.doctorNote, v.consultNote && '💬 ' + v.consultNote, v.staffNote && '🧑‍⚕️ ' + v.staffNote].filter(Boolean).map(escapeHtml).join('<br>');
+        return `<div style="border:1px solid #E9EAF0;border-radius:9px;padding:.55rem .6rem;margin-bottom:.5rem;background:#fff">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <strong style="font-size:.82rem">${v.date || '-'}</strong>
+                <span style="font-size:.74rem;color:var(--text-muted)">${escapeHtml(doc)}${v.consultOnly ? ' · 상담만' : ''}</span>
+            </div>
+            ${v.diagnosis ? `<div style="font-size:.76rem;color:#16A34A;margin-top:.2rem">🩺 ${escapeHtml(v.diagnosis)}</div>` : ''}
+            <div style="font-size:.78rem;margin-top:.25rem;line-height:1.5">${items || '<span style="color:var(--text-muted)">시술 없음</span>'}</div>
+            ${notes ? `<div style="font-size:.72rem;color:var(--text-secondary);margin-top:.25rem;line-height:1.5">${notes}</div>` : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.4rem">
+                <span style="font-weight:700;font-size:.82rem;color:#4F46E5">${formatCurrency(v.total || 0)} <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">${escapeHtml(v.payMethod || '')}</span></span>
+                <span><button class="btn btn-sm btn-outline" onclick="openVisitModal('${_detailPatientId}','${v.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteVisit('${v.id}')">삭제</button></span>
+            </div>
+        </div>`;
     }).join('');
 }
 
