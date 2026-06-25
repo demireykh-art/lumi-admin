@@ -76,6 +76,16 @@
         .dcol-pn{background:#fff}
         .pn-list{overflow:auto;max-height:46vh}
         @media(max-width:900px){.detail-grid{grid-template-columns:1fr}}
+        /* 전체화면 통합 차팅 워크스페이스 (베가스식) */
+        .modal.fullscreen{padding:0}
+        .modal.fullscreen .modal-content{max-width:none;width:100vw;height:100vh;max-height:100vh;border-radius:0;display:flex;flex-direction:column}
+        .ws-grid{flex:1;display:grid;grid-template-columns:290px 290px 1fr 230px;overflow:hidden;min-height:0}
+        .ws-col{padding:.85rem;overflow:auto;border-right:1px solid #E9EAF0;min-height:0}
+        .ws-col:last-child{border-right:none}
+        .ws-set{background:#fafafa}
+        .ws-entry .chart-sec{margin-bottom:.55rem}
+        @media(max-width:1100px){.ws-grid{grid-template-columns:1fr 1fr;overflow:auto}.ws-col{max-height:none;overflow:visible}}
+        @media(max-width:680px){.ws-grid{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
@@ -184,66 +194,65 @@
             <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('patientModal')">취소</button><button class="btn btn-primary" onclick="savePatient()">저장</button></div>
         </div>
     </div>
-    <div class="modal" id="patientDetailModal">
-        <div class="modal-content" style="max-width:1180px;width:96vw">
-            <div class="modal-header"><div class="modal-title" id="detailTitle">환자 상세</div><button class="modal-close" onclick="closeModal('patientDetailModal')">&times;</button></div>
-            <div class="modal-body">
-                <div id="detailInfo"></div>
-                <div class="detail-grid">
-                    <div class="dcol"><div class="dcol-h">📌 주소증</div><textarea class="form-textarea" id="detailComplaint" placeholder="주소증 입력 (주요 호소·과거력 등)"></textarea></div>
-                    <div class="dcol"><div class="dcol-h">📝 메모</div><textarea class="form-textarea" id="detailMemo" placeholder="메모 입력 (피부타입·특이사항 등)"></textarea></div>
-                    <div class="dcol"><div class="dcol-h">🗂 기타</div><textarea class="form-textarea" id="detailEtc" placeholder="기타메모 입력"></textarea></div>
-                    <div class="dcol dcol-pn">
-                        <div class="dcol-h" style="color:#4F46E5;display:flex;justify-content:space-between;align-items:center">Progress Note <button class="btn btn-primary btn-sm" onclick="openVisitModal(_detailPatientId)">+ 차팅</button></div>
-                        <div class="pn-list" id="detailVisitList"></div>
+    <!-- 전체화면 통합 차팅 워크스페이스: 메모 + Progress Note + 차팅입력 + 세트 (한 화면) -->
+    <div class="modal fullscreen" id="patientDetailModal">
+        <div class="modal-content">
+            <div class="modal-header" style="gap:1rem">
+                <div class="modal-title" id="detailTitle">환자 상세</div>
+                <div id="detailHeaderInfo" style="flex:1;min-width:0;font-size:.82rem;color:var(--text-secondary);display:flex;gap:.9rem;flex-wrap:wrap;align-items:center"></div>
+                <button class="modal-close" onclick="closeModal('patientDetailModal')">&times;</button>
+            </div>
+            <div class="ws-grid">
+                <!-- ① 환자 메모: 주소증 / 메모 / 기타 -->
+                <div class="ws-col">
+                    <div class="dcol-h">📌 주소증</div>
+                    <textarea class="form-textarea" id="detailComplaint" rows="3" placeholder="주요 호소·과거력 등"></textarea>
+                    <div class="dcol-h" style="margin-top:.55rem">📝 메모</div>
+                    <textarea class="form-textarea" id="detailMemo" rows="3" placeholder="피부타입·특이사항 등"></textarea>
+                    <div class="dcol-h" style="margin-top:.55rem">🗂 기타</div>
+                    <textarea class="form-textarea" id="detailEtc" rows="2" placeholder="기타메모"></textarea>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.55rem">
+                        <span id="detailSaveMsg" style="font-size:.72rem;color:var(--text-muted)"></span>
+                        <button class="btn btn-primary btn-sm" onclick="saveDetailNotes()">메모 저장</button>
                     </div>
                 </div>
-            </div>
-            <div class="modal-footer" style="justify-content:space-between;align-items:center">
-                <span id="detailSaveMsg" style="font-size:.78rem;color:var(--text-muted)">주소증·메모·기타는 [메모 저장]으로 반영됩니다</span>
-                <div><button class="btn btn-outline" onclick="closeModal('patientDetailModal')">닫기</button> <button class="btn btn-primary" onclick="saveDetailNotes()">메모 저장</button></div>
-            </div>
-        </div>
-    </div>
-    <div class="modal" id="visitModal">
-        <div class="modal-content" style="max-width:1260px;width:96vw">
-            <div class="modal-header"><div class="modal-title" id="visitModalTitle">차팅 입력</div><button class="modal-close" onclick="closeModal('visitModal')">&times;</button></div>
-            <div class="modal-body" style="padding:0">
-                <input type="hidden" id="visitPatientId"><input type="hidden" id="visitEditId">
-                <div class="chart-grid">
-                    <!-- ◀ 왼쪽: 진료정보 + 역할별 차팅 -->
-                    <div class="chart-col-l">
-                        <div class="form-row" style="margin-bottom:.5rem">
-                            <div class="form-group"><label class="form-label">방문일 *</label><input type="date" class="form-input" id="visitDate"></div>
-                            <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem"><input type="checkbox" id="visitConsultOnly"> 상담만</label></div>
-                        </div>
-                        <div class="chart-sec" style="border-left:3px solid #1976d2">
-                            <div class="sec-h">🩺 의료진 차팅</div>
-                            <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitDoctor"></select></div>
-                            <input type="text" class="form-input" id="visitDoctorNote" placeholder="진료/처방 메모">
-                            <input type="text" class="form-input" id="visitDiagnosis" placeholder="상병명(진단)" style="margin-top:.4rem">
-                        </div>
-                        <div class="chart-sec" style="border-left:3px solid #7b1fa2">
-                            <div class="sec-h">💬 상담 차팅</div>
-                            <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitConsultant"></select></div>
-                            <input type="text" class="form-input" id="visitConsultNote" placeholder="상담 내용·동의 여부 등">
-                        </div>
-                        <div class="chart-sec" style="border-left:3px solid #2e7d32">
-                            <div class="sec-h">🧑‍⚕️ 스탭 차팅</div>
-                            <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitAssistant"></select></div>
-                            <input type="text" class="form-input" id="visitStaffNote" placeholder="처치 내용·특이사항">
-                        </div>
+                <!-- ② Progress Note: 과거 차팅 -->
+                <div class="ws-col">
+                    <div class="dcol-h" style="color:#4F46E5;display:flex;justify-content:space-between;align-items:center">Progress Note <button class="btn btn-outline btn-sm" onclick="resetChartEntry()">+ 새 차팅</button></div>
+                    <div class="pn-list" id="detailVisitList"></div>
+                </div>
+                <!-- ③ 차팅 입력 (오더) -->
+                <div class="ws-col ws-entry">
+                    <input type="hidden" id="visitPatientId"><input type="hidden" id="visitEditId">
+                    <div class="dcol-h" id="visitModalTitle" style="color:#4F46E5">✍ 차팅 입력</div>
+                    <div class="form-row" style="margin-bottom:.4rem">
+                        <div class="form-group"><label class="form-label">방문일 *</label><input type="date" class="form-input" id="visitDate"></div>
+                        <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem"><input type="checkbox" id="visitConsultOnly"> 상담만</label></div>
                     </div>
-
-                    <!-- ● 가운데: 오더 -->
-                    <div>
-                        <div class="sec-h" style="font-weight:700;font-size:.85rem;margin-bottom:.5rem">📋 오더 <span style="font-weight:400;font-size:.75rem;color:var(--text-muted)">(정가표·레시피 연동 · 오른쪽 세트 클릭으로 빠른 추가)</span></div>
+                    <div class="chart-sec" style="border-left:3px solid #1976d2">
+                        <div class="sec-h">🩺 의료진 차팅</div>
+                        <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitDoctor"></select></div>
+                        <input type="text" class="form-input" id="visitDoctorNote" placeholder="진료/처방 메모">
+                        <input type="text" class="form-input" id="visitDiagnosis" placeholder="상병명(진단)" style="margin-top:.4rem">
+                    </div>
+                    <div class="chart-sec" style="border-left:3px solid #7b1fa2">
+                        <div class="sec-h">💬 상담 차팅</div>
+                        <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitConsultant"></select></div>
+                        <input type="text" class="form-input" id="visitConsultNote" placeholder="상담 내용·동의 여부 등">
+                    </div>
+                    <div class="chart-sec" style="border-left:3px solid #2e7d32">
+                        <div class="sec-h">🧑‍⚕️ 스탭 차팅</div>
+                        <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitAssistant"></select></div>
+                        <input type="text" class="form-input" id="visitStaffNote" placeholder="처치 내용·특이사항">
+                    </div>
+                    <div class="chart-sec" style="border-left:3px solid #f57f17">
+                        <div class="sec-h">📋 오더 <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">(오른쪽 세트 클릭으로 빠른추가)</span></div>
                         <div style="display:flex;flex-wrap:wrap;gap:.4rem;align-items:end">
-                            <select class="form-select" id="visitCatSel" onchange="onVisitCatChange()" style="flex:1;min-width:110px"></select>
-                            <select class="form-select" id="visitTreatSel" onchange="onVisitTreatChange()" style="flex:1;min-width:110px"></select>
-                            <select class="form-select" id="visitVarSel" style="flex:1.3;min-width:130px"></select>
-                            <input type="number" class="form-input" id="visitQty" value="1" min="1" title="수량" style="width:58px">
-                            <select class="form-select" id="visitItemStaff" title="오더 담당자" style="flex:1;min-width:100px"></select>
+                            <select class="form-select" id="visitCatSel" onchange="onVisitCatChange()" style="flex:1;min-width:100px"></select>
+                            <select class="form-select" id="visitTreatSel" onchange="onVisitTreatChange()" style="flex:1;min-width:100px"></select>
+                            <select class="form-select" id="visitVarSel" style="flex:1.3;min-width:120px"></select>
+                            <input type="number" class="form-input" id="visitQty" value="1" min="1" title="수량" style="width:54px">
+                            <select class="form-select" id="visitItemStaff" title="오더 담당자" style="flex:1;min-width:90px"></select>
                             <button class="btn btn-secondary" onclick="addVisitItem()">추가</button>
                         </div>
                         <div class="table-container" style="margin-top:.5rem"><table><thead><tr><th>시술/옵션</th><th>담당자</th><th>준비물품</th><th class="text-right">단가</th><th class="text-right">수량</th><th class="text-right">금액</th><th></th></tr></thead><tbody id="visitItemTable"></tbody></table></div>
@@ -256,22 +265,21 @@
                             <div class="form-group"><label class="form-label">메모</label><input type="text" class="form-input" id="visitMemo"></div>
                         </div>
                         <div class="form-row" id="visitPkgRow" style="display:none">
-                            <div class="form-group"><label class="form-label">회원권 차감 <span style="font-weight:400;color:var(--text-muted);font-size:.75rem">(1회 차감)</span></label><select class="form-select" id="visitPkgSel"></select></div>
+                            <div class="form-group"><label class="form-label">회원권 차감 <span style="font-weight:400;color:var(--text-muted);font-size:.72rem">(1회 차감)</span></label><select class="form-select" id="visitPkgSel"></select></div>
                             <div class="form-group"></div>
                         </div>
                     </div>
-
-                    <!-- ▶ 오른쪽: 시술 세트 빠른추가 -->
-                    <div class="chart-col-r">
-                        <div class="sec-h" style="font-weight:700;font-size:.85rem;margin-bottom:.4rem">⚡ 시술 세트</div>
-                        <input type="text" class="form-input" id="visitSetSearch" placeholder="시술 검색..." oninput="renderVisitSets()" style="font-size:.8rem">
-                        <div id="visitSetList" style="margin-top:.4rem"></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #E9EAF0;padding-top:.5rem;position:sticky;bottom:0;background:#fff">
+                        <div id="visitTotalDisplay" style="font-weight:700;font-size:.9rem"></div>
+                        <button class="btn btn-primary" onclick="saveVisit()">💾 차팅 저장</button>
                     </div>
                 </div>
-            </div>
-            <div class="modal-footer" style="justify-content:space-between;align-items:center">
-                <div id="visitTotalDisplay" style="font-weight:700;font-size:.95rem"></div>
-                <div><button class="btn btn-outline" onclick="closeModal('visitModal')">취소</button> <button class="btn btn-primary" onclick="saveVisit()">저장</button></div>
+                <!-- ④ 시술 세트 빠른추가 -->
+                <div class="ws-col ws-set">
+                    <div class="dcol-h">⚡ 시술 세트</div>
+                    <input type="text" class="form-input" id="visitSetSearch" placeholder="시술 검색..." oninput="renderVisitSets()" style="font-size:.8rem">
+                    <div id="visitSetList" style="margin-top:.4rem"></div>
+                </div>
             </div>
         </div>
     </div>

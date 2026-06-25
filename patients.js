@@ -419,31 +419,35 @@ function openPatientDetail(pid) {
     const d = deriveFromRRN(p.rrnFront, p.rrnGender);
     const st = patientStats(pid);
     document.getElementById('detailTitle').textContent = `${p.name} 님`;
-    document.getElementById('detailInfo').innerHTML = `
-        <div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;font-size:.85rem;color:var(--text-secondary);padding:.5rem .75rem;background:#f5f7fa;border-radius:8px;margin-bottom:.6rem">
-            <span><strong style="color:var(--text-primary)">No.</strong> ${escapeHtml(p.id.slice(-6))}</span>
-            <span>${maskRRN(p.rrnFront, p.rrnGender)}</span>
-            <span>📞 ${escapeHtml(p.phone || '-')}</span>
-            <span>${d.sex} / ${d.age}</span>
-            ${p.isJapanese ? '<span style="background:rgba(25,118,210,.1);color:#1976d2;padding:1px 7px;border-radius:8px;font-size:.72rem">일본인</span>' : ''}
-        </div>
-        <div class="cards-grid">
-            <div class="card"><div class="card-label">성별/나이</div><div class="card-value" style="font-size:1.1rem">${d.sex} / ${d.age}</div></div>
-            <div class="card"><div class="card-label">연락처</div><div class="card-value" style="font-size:1.1rem">${escapeHtml(p.phone || '-')}</div></div>
-            <div class="card"><div class="card-label">유입경로</div><div class="card-value" style="font-size:1.1rem">${escapeHtml(p.channel || '-')}</div></div>
-            <div class="card"><div class="card-label">총 방문 / 매출</div><div class="card-value" style="font-size:1.1rem">${st.count}건 · ${formatCurrency(st.total)}</div></div>
-        </div>
-        ${(Array.isArray(p.tags) && p.tags.length) ? `<div style="margin-top:.5rem">${tagChips(p.tags)}</div>` : ''}
-        ${(Array.isArray(p.packages) && p.packages.length) ? `<div style="margin-top:.5rem;font-size:.85rem"><strong>회원권</strong> ${p.packages.map(pk => { const rem = pk.total - (pk.used || 0); return `<span style="margin-left:.5rem;background:${rem > 0 ? 'rgba(46,125,50,.1)' : 'rgba(211,47,47,.1)'};color:${rem > 0 ? '#2e7d32' : '#d32f2f'};padding:1px 8px;border-radius:8px">${escapeHtml(pk.name)} ${rem}/${pk.total}회</span>`; }).join('')}</div>` : ''}
-        `;
+    renderDetailHeader();
     const setv = (id, val) => { const e = document.getElementById(id); if (e) e.value = val || ''; };
     setv('detailComplaint', p.chiefComplaint);
     setv('detailMemo', p.memo);
     setv('detailEtc', p.etcMemo);
-    const msg = document.getElementById('detailSaveMsg'); if (msg) { msg.textContent = '주소증·메모·기타는 [메모 저장]으로 반영됩니다'; msg.style.color = 'var(--text-muted)'; }
+    const msg = document.getElementById('detailSaveMsg'); if (msg) msg.textContent = '';
     renderPatientVisits();
+    openVisitModal(pid, null);          // 차팅 입력폼 초기화(새 차팅)
     openModal('patientDetailModal');
 }
+// 워크스페이스 상단 환자정보 바
+function renderDetailHeader() {
+    const hdr = document.getElementById('detailHeaderInfo');
+    const p = patients.find(x => x.id === _detailPatientId);
+    if (!hdr || !p) return;
+    const d = deriveFromRRN(p.rrnFront, p.rrnGender);
+    const st = patientStats(p.id);
+    const pkgs = (Array.isArray(p.packages) ? p.packages : []).map(pk => { const rem = pk.total - (pk.used || 0); return `<span style="background:${rem > 0 ? 'rgba(46,125,50,.1)' : 'rgba(211,47,47,.1)'};color:${rem > 0 ? '#2e7d32' : '#d32f2f'};padding:1px 8px;border-radius:8px;font-size:.72rem">${escapeHtml(pk.name)} ${rem}/${pk.total}회</span>`; }).join('');
+    hdr.innerHTML = `
+        <span><strong style="color:#1F2533">No.</strong> ${escapeHtml(p.id.slice(-6))}</span>
+        <span>${maskRRN(p.rrnFront, p.rrnGender)}</span>
+        <span>📞 ${escapeHtml(p.phone || '-')}</span>
+        <span>${d.sex} / ${d.age}</span>
+        <span>방문 ${st.count}건 · ${formatCurrency(st.total)}</span>
+        ${p.isJapanese ? '<span style="background:rgba(25,118,210,.1);color:#1976d2;padding:1px 7px;border-radius:8px;font-size:.72rem">일본인</span>' : ''}
+        ${tagChips(p.tags)}${pkgs}`;
+}
+// 차팅 입력폼을 새 차팅 상태로 초기화 (워크스페이스 유지)
+function resetChartEntry() { if (_detailPatientId) openVisitModal(_detailPatientId, null); }
 // 주소증/메모/기타 저장
 async function saveDetailNotes() {
     if (!_detailPatientId) return;
@@ -545,7 +549,6 @@ function openVisitModal(pid, vid = null) {
     document.getElementById('visitMemo').value = v?.memo || '';
     _visitItems = v ? JSON.parse(JSON.stringify(v.items || [])) : [];
     renderVisitItems();
-    openModal('visitModal');
 }
 // 카테고리 → 시술 → 옵션 캐스케이드
 function onVisitCatChange() {
@@ -686,10 +689,12 @@ async function saveVisit() {
             await db.collection('visits').add(data);
             if (pkgId) await _adjustPackage(pid, pkgId, +1);
         }
-        closeModal('visitModal');
         await loadVisits();
         renderPatients(); renderRecall(); renderBirthdays();
-        if (_detailPatientId) { openPatientDetail(_detailPatientId); }
+        renderPatientVisits();      // Progress Note 갱신
+        renderDetailHeader();       // 방문/매출 헤더 갱신
+        resetChartEntry();          // 입력폼을 새 차팅으로 비움(워크스페이스 유지)
+        alert('차팅이 저장되었습니다.');
     } catch (e) { alert('저장 실패: ' + e.message); }
 }
 async function deleteVisit(id) {
@@ -700,7 +705,7 @@ async function deleteVisit(id) {
         if (v && v.packageId) await _adjustPackage(v.patientId, v.packageId, -1); // 차감 복원
         await loadVisits();
         renderPatients(); renderRecall(); renderBirthdays();
-        if (_detailPatientId) renderPatientVisits();
+        if (_detailPatientId) { renderPatientVisits(); renderDetailHeader(); }
     } catch (e) { alert('삭제 실패: ' + e.message); }
 }
 
