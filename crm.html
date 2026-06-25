@@ -34,14 +34,48 @@
         .set-item{cursor:pointer;font-size:.76rem;padding:.28rem .4rem;border-radius:6px;display:flex;justify-content:space-between;gap:.4rem}
         .set-item:hover{background:#e8eefc}
         @media(max-width:900px){.chart-grid{grid-template-columns:1fr}.chart-col-l{border-right:none;border-bottom:1px solid var(--border,#e0e0e0)}.chart-col-r{border-left:none;border-top:1px solid var(--border,#e0e0e0)}.chart-grid > div{max-height:none}}
+
+        /* ===== LUMI 브랜드 / 디자인 토큰 (시안 ⑤) ===== */
+        :root{
+            --lumi-primary:#4F46E5; --lumi-primary-soft:#EEF0FE; --lumi-primary-dark:#3F38C7;
+            --lumi-green:#16A34A; --lumi-green-soft:#E7F6EC;
+            --lumi-amber:#F59E0B; --lumi-amber-soft:#FFF4E5;
+            --lumi-pink:#DB2777; --lumi-pink-soft:#FCE7F0;
+            /* 공용 styles.css 변수 덮어쓰기 (이 페이지 한정) */
+            --accent-color:#4F46E5; --accent-gold:#4F46E5; --dark:#4F46E5;
+            --bg:#F5F6FA; --bg-secondary:#EEF0FE; --card:#fff;
+            --text:#1F2533; --text-primary:#1F2533; --text-secondary:#6B7280; --text-muted:#9AA1AD;
+            --border:#E5E7EB; --border-color:#E5E7EB;
+        }
+        body{background:#F5F6FA;color:#1F2533}
+        .btn{border-radius:8px}
+        .btn-primary{background:#4F46E5;color:#fff;border:none}
+        .btn-primary:hover{background:#3F38C7}
+        .btn-secondary{background:#EEF0FE;color:#4F46E5;border:1px solid #DDDBF7}
+        .btn-secondary:hover{background:#E0E2FB}
+        .btn-outline{border:1px solid #D7DAE0;color:#4F46E5}
+        .btn-outline:hover{border-color:#4F46E5;color:#3F38C7}
+        .form-input,.form-select,.form-textarea{border:1px solid #E5E7EB;border-radius:8px}
+        .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:#4F46E5;box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+        .card,.table-container{border:1px solid #E9EAF0;border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+        .card-value{color:#4F46E5}
+        .modal-content{border-radius:16px;box-shadow:0 20px 60px rgba(16,24,40,.18)}
+        .crm-header{box-shadow:0 1px 0 rgba(16,24,40,.04)}
+        .crm-nav .nav-tab{color:#6B7280;border-radius:10px}
+        .crm-nav .nav-tab:hover{background:#EEF0FE;color:#4F46E5}
+        .crm-nav .nav-tab.active{background:#4F46E5;color:#fff}
+        thead th{background:#F7F8FB;color:#6B7280;font-weight:600}
+        .login-box{border-radius:18px}
+        .lumi-logo{display:inline-flex;width:30px;height:30px;border-radius:9px;background:#4F46E5;align-items:center;justify-content:center;vertical-align:middle}
+        .set-item:hover{background:#EEF0FE}
     </style>
 </head>
 <body>
     <!-- 로그인 -->
     <div class="login-screen" id="loginScreen">
         <div class="login-box">
-            <h1>🧑‍⚕️ 환자 CRM</h1>
-            <p>THE CLINIC LUMI · 직원 로그인</p>
+            <h1><span class="lumi-logo" style="width:34px;height:34px"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span><br>루미의원 <span style="color:#6B7280;font-weight:500">CRM</span></h1>
+            <p>LUMI CLINIC · 직원 로그인</p>
             <input type="text" class="form-input" id="crmId" placeholder="아이디" autocomplete="username">
             <input type="password" class="form-input" id="crmPw" placeholder="비밀번호" autocomplete="current-password">
             <button class="btn btn-primary" style="width:100%;margin-top:.5rem" onclick="crmLogin()">로그인</button>
@@ -52,7 +86,7 @@
     <!-- 앱 -->
     <div id="crmApp" class="hidden">
         <div class="crm-header">
-            <div class="title">🧑‍⚕️ 환자 CRM <span id="crmUserName" style="font-size:.8rem;color:var(--text-muted);font-weight:400"></span></div>
+            <div class="title" style="display:flex;align-items:center;gap:.5rem"><span class="lumi-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>루미의원 <span style="color:#6B7280;font-weight:500">CRM</span> <span id="crmUserName" style="font-size:.8rem;color:var(--text-muted);font-weight:400"></span></div>
             <button class="btn btn-outline btn-sm" onclick="crmLogout()">로그아웃</button>
         </div>
         <div class="crm-nav">
