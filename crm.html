@@ -86,6 +86,7 @@
         .ws-entry .chart-sec{margin-bottom:.55rem}
         @media(max-width:1100px){.ws-grid{grid-template-columns:1fr 1fr;overflow:auto}.ws-col{max-height:none;overflow:visible}}
         @media(max-width:680px){.ws-grid{grid-template-columns:1fr}}
+        .auto-grow{resize:none;overflow:hidden;min-height:40px;line-height:1.55}
     </style>
 </head>
 <body>
@@ -230,20 +231,22 @@
                         <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem"><input type="checkbox" id="visitConsultOnly"> 상담만</label></div>
                     </div>
                     <div class="chart-sec" style="border-left:3px solid #1976d2">
-                        <div class="sec-h">🩺 의료진 차팅</div>
-                        <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitDoctor"></select></div>
-                        <input type="text" class="form-input" id="visitDoctorNote" placeholder="진료/처방 메모">
-                        <input type="text" class="form-input" id="visitDiagnosis" placeholder="상병명(진단)" style="margin-top:.4rem">
+                        <div class="sec-h" style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+                            <span>🩺 의료진 차팅</span>
+                            <select class="form-select" id="visitDoctor" style="width:auto;min-width:100px;max-width:55%;font-size:.8rem;padding:.4rem"></select>
+                        </div>
+                        <textarea class="form-textarea auto-grow" id="visitDiagnosis" rows="1" placeholder="주고민" oninput="autoGrow(this)" style="margin-top:.45rem"></textarea>
+                        <textarea class="form-textarea auto-grow" id="visitDoctorNote" rows="1" placeholder="치료계획" oninput="autoGrow(this)" style="margin-top:.4rem"></textarea>
                     </div>
                     <div class="chart-sec" style="border-left:3px solid #7b1fa2">
                         <div class="sec-h">💬 상담 차팅</div>
                         <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitConsultant"></select></div>
-                        <input type="text" class="form-input" id="visitConsultNote" placeholder="상담 내용·동의 여부 등">
+                        <textarea class="form-textarea auto-grow" id="visitConsultNote" rows="1" placeholder="상담 내용·동의 여부 등" oninput="autoGrow(this)"></textarea>
                     </div>
                     <div class="chart-sec" style="border-left:3px solid #2e7d32">
                         <div class="sec-h">🧑‍⚕️ 스탭 차팅</div>
                         <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitAssistant"></select></div>
-                        <input type="text" class="form-input" id="visitStaffNote" placeholder="처치 내용·특이사항">
+                        <textarea class="form-textarea auto-grow" id="visitStaffNote" rows="1" placeholder="처치 내용·특이사항" oninput="autoGrow(this)"></textarea>
                     </div>
                     <div class="chart-sec" style="border-left:3px solid #f57f17">
                         <div class="sec-h">📋 오더 <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">(오른쪽 세트 클릭으로 빠른추가)</span></div>
@@ -262,7 +265,7 @@
                         </div>
                         <div class="form-row">
                             <div class="form-group"><label class="form-label">다음 예약일</label><input type="date" class="form-input" id="visitNextRsv"></div>
-                            <div class="form-group"><label class="form-label">메모</label><input type="text" class="form-input" id="visitMemo"></div>
+                            <div class="form-group"><label class="form-label">메모</label><textarea class="form-textarea auto-grow" id="visitMemo" rows="1" placeholder="오더 메모" oninput="autoGrow(this)"></textarea></div>
                         </div>
                         <div class="form-row" id="visitPkgRow" style="display:none">
                             <div class="form-group"><label class="form-label">회원권 차감 <span style="font-weight:400;color:var(--text-muted);font-size:.72rem">(1회 차감)</span></label><select class="form-select" id="visitPkgSel"></select></div>
@@ -399,6 +402,6 @@
             renderCRM();
         }
     </script>
-    <script src="patients.js?v=20260625"></script>
+    <script src="patients.js?v=20260625b"></script>
 </body>
 </html>

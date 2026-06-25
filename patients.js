@@ -428,6 +428,7 @@ function openPatientDetail(pid) {
     renderPatientVisits();
     openVisitModal(pid, null);          // 차팅 입력폼 초기화(새 차팅)
     openModal('patientDetailModal');
+    autoGrowAll();                      // 모달 표시 후 textarea 높이 보정
 }
 // 워크스페이스 상단 환자정보 바
 function renderDetailHeader() {
@@ -530,7 +531,8 @@ function openVisitModal(pid, vid = null) {
 
     const v = vid ? visits.find(x => x.id === vid) : null;
     document.getElementById('visitDate').value = v?.date || new Date().toISOString().slice(0, 10);
-    document.getElementById('visitDoctor').value = v?.doctorId || '';
+    // 의료진: 기존 차팅이면 그 값, 새 차팅이면 로그인 계정으로 기본 선택
+    document.getElementById('visitDoctor').value = v?.doctorId || ((typeof currentCrmUser !== 'undefined' && currentCrmUser) ? currentCrmUser.id : '');
     document.getElementById('visitAssistant').value = v?.assistantId || '';
     document.getElementById('visitConsultant').value = v?.consultantId || '';
     // 역할별 차팅 메모
@@ -549,7 +551,11 @@ function openVisitModal(pid, vid = null) {
     document.getElementById('visitMemo').value = v?.memo || '';
     _visitItems = v ? JSON.parse(JSON.stringify(v.items || [])) : [];
     renderVisitItems();
+    autoGrowAll();
 }
+// 차팅 textarea 줄바꿈 + 글자에 맞춰 자동 확장
+function autoGrow(el) { if (!el) return; el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+function autoGrowAll() { document.querySelectorAll('#patientDetailModal textarea.auto-grow').forEach(autoGrow); }
 // 카테고리 → 시술 → 옵션 캐스케이드
 function onVisitCatChange() {
     const ci = document.getElementById('visitCatSel').value;
