@@ -582,7 +582,8 @@ function addVisitItem() {
     if (ci === '' || ti === '' || vi === '') { alert('카테고리 · 시술 · 옵션을 모두 선택하세요.'); return; }
     const t = treatmentCategories[ci].treatments[ti];
     const v = t.variants[vi];
-    const unitPrice = manToWon(v.price);
+    let unitPrice = manToWon(v.price);
+    if (typeof feeOverridePrice === 'function') { const o = feeOverridePrice(treatmentCategories[ci].id, t.name, variantDesc(v)); if (o != null) unitPrice = o; }
     const staffId = document.getElementById('visitItemStaff')?.value || '';
     const supplies = suppliesForTreatment(t.name); // admin 레시피 준비물품 스냅샷
     _visitItems.push({
@@ -617,7 +618,8 @@ function quickAddItem(ci, ti, vi) {
     const t = treatmentCategories[ci]?.treatments[ti];
     const v = t?.variants[vi];
     if (!v) return;
-    const unitPrice = manToWon(v.price);
+    let unitPrice = manToWon(v.price);
+    if (typeof feeOverridePrice === 'function') { const o = feeOverridePrice(treatmentCategories[ci].id, t.name, variantDesc(v)); if (o != null) unitPrice = o; }
     const staffId = document.getElementById('visitItemStaff')?.value || '';
     const supplies = suppliesForTreatment(t.name);
     _visitItems.push({ treatmentName: t.name, variant: variantDesc(v), unitPrice, qty: 1, lineTotal: unitPrice, staffId, staffName: staffId ? empName(staffId) : '', supplies });

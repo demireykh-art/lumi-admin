@@ -111,7 +111,7 @@
         <div class="crm-nav">
             <div class="nav-tab active" data-page="patients">환자</div>
             <div class="nav-tab" data-page="recall">📞 리콜·생일</div>
-            <div class="nav-tab" data-page="pricelist">시술 정가표</div>
+            <div class="nav-tab" data-page="pricelist">💰 시술 수가표</div>
         </div>
         <div class="crm-content">
             <!-- 환자 -->
@@ -147,13 +147,14 @@
                 <div class="section-header" style="margin-top:1.25rem"><div class="section-title">🎂 이번 달 생일 고객 <span id="birthdayCount" style="font-size:.75rem;font-weight:400;color:var(--text-muted)"></span></div></div>
                 <div class="table-container"><table><thead><tr><th>이름</th><th>생일</th><th>성별/나이</th><th>연락처</th></tr></thead><tbody id="birthdayTable"></tbody></table></div>
             </div>
-            <!-- 정가표 -->
+            <!-- 시술 수가표 (admin/실장 편집) -->
             <div class="crm-page" id="page-pricelist">
                 <div class="section-header">
-                    <div class="section-title">시술 정가표 <span style="font-size:.75rem;font-weight:400;color:var(--text-muted)">(단위: 만원 / VAT 별도 / 전 시술 비보험)</span></div>
-                    <input type="text" class="form-input" id="priceSearch" placeholder="시술 검색..." style="width:200px" oninput="renderPriceList()">
+                    <div class="section-title">시술 수가표 <span id="feeEditBadge" style="font-size:.72rem;font-weight:500"></span></div>
+                    <input type="text" class="form-input" id="feeSearch" placeholder="시술 검색..." style="width:200px" oninput="renderFeeSchedule()">
                 </div>
-                <div id="priceListWrap"></div>
+                <div style="font-size:.74rem;color:var(--text-muted);margin-bottom:.5rem">정가·원가(만원/₩) · 원가는 [믹스 설정]으로 재고 소모량 입력 시 자동계산 · 마진=실판매가−원가 · 10분당이익=마진÷(소요시간/10)</div>
+                <div id="feeWrap"></div>
             </div>
         </div>
     </div>
@@ -287,6 +288,24 @@
         </div>
     </div>
 
+    <!-- 원가 믹스 설정 모달 (수가표) -->
+    <div class="modal" id="costModal">
+        <div class="modal-content" style="max-width:620px">
+            <div class="modal-header"><div class="modal-title" id="costModalTitle">원가 믹스 설정</div><button class="modal-close" onclick="closeModal('costModal')">&times;</button></div>
+            <div class="modal-body">
+                <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.6rem">사용하는 재고 품목과 사용량(시술 1회 기준)을 입력하세요. 예: 코어톡스 0.3cc, 식염수 0.5cc. 원가는 재고 단가로 자동 계산됩니다.</div>
+                <div id="costRows"></div>
+                <button class="btn btn-secondary btn-sm" onclick="addCostRow()" style="margin-top:.4rem">+ 품목 추가</button>
+                <datalist id="invItemDatalist"></datalist>
+                <div style="margin-top:.8rem;padding:.6rem;background:#F7F8FB;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:.85rem">계산 원가</span>
+                    <strong id="costModalTotal" style="color:#4F46E5;font-size:1.05rem">₩0</strong>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('costModal')">취소</button><button class="btn btn-primary" onclick="saveCost()">저장</button></div>
+        </div>
+    </div>
+
     <!-- ===== Bootstrap (firebase init + patients.js 가 기대하는 전역 정의) ===== -->
     <script>
         // Firebase (index.html 과 동일 프로젝트)
@@ -326,6 +345,7 @@
 
         // 현재 로그인 직원(=차팅 작성자). patients.js 가 createdBy/chartedBy 로 기록.
         let currentCrmUser=null;
+        let currentCrmCanEditFees=false; // 수가표 편집 권한(admin/실장)
 
         // 접근 허용: 관리자(index.html)의 settings/crmAccess 설정을 따름
         //  - mode 'all'      : 등록 직원 전원 허용
@@ -355,8 +375,10 @@
 
             if(allowed){
                 currentCrmUser=emp
-                    ? {id:emp.id,name:emp.name||local,email,isEmployee:true}
-                    : {id:local,name:(user.displayName||email),email,isEmployee:false};
+                    ? {id:emp.id,name:emp.name||local,email,isEmployee:true,role:emp.role||''}
+                    : {id:local,name:(user.displayName||email),email,isEmployee:false,role:''};
+                // 수가표 편집 권한: bizAdmin(관리자) 또는 실장(manager)
+                currentCrmCanEditFees = isBizAdmin || !!(emp && emp.role==='manager');
             }
             return allowed;
         }
@@ -399,9 +421,12 @@
                 loadTreatmentsMaster(), loadPatients(), loadVisits(), loadChannels(), loadRecipesAndInventory()
             ]);
             if(typeof initDefaultChannels==='function'){ try{ await initDefaultChannels(); }catch(_){ } }
+            if(typeof loadFeeSchedule==='function'){ try{ await loadFeeSchedule(); }catch(_){ } }
             renderCRM();
+            if(typeof renderFeeSchedule==='function'){ try{ renderFeeSchedule(); }catch(_){ } }
         }
     </script>
     <script src="patients.js?v=20260625b"></script>
+    <script src="fee-schedule.js?v=20260626"></script>
 </body>
 </html>
