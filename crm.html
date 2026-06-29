@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE CLINIC LUMI - 환자 CRM</title>
+    <link rel="icon" href="favicon.png">
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg,#f5f5f5);z-index:1000}
+        .login-box{background:#fff;border:1px solid var(--border,#e0e0e0);border-radius:14px;padding:2rem;width:340px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+        .login-box h1{font-size:1.2rem;margin:0 0 .25rem;text-align:center}
+        .login-box p{font-size:.8rem;color:var(--text-muted,#888);text-align:center;margin:0 0 1.25rem}
+        .login-box input{width:100%;margin-bottom:.6rem}
+        .hidden{display:none!important}
+        .crm-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;background:#fff;border-bottom:1px solid var(--border,#e0e0e0)}
+        .crm-header .title{font-weight:700}
+        .crm-nav{display:flex;gap:.5rem;padding:.5rem 1.25rem;background:#fff;border-bottom:1px solid var(--border,#e0e0e0)}
+        .crm-nav .nav-tab{padding:.5rem 1rem;border-radius:8px;cursor:pointer;font-size:.9rem}
+        .crm-nav .nav-tab.active{background:var(--accent-color,#7a5b2e);color:#fff}
+        .crm-content{padding:1.25rem;max-width:1100px;margin:0 auto}
+        .crm-page{display:none}.crm-page.active{display:block}
+        /* Vegas식 3분할 차팅 */
+        .chart-grid{display:grid;grid-template-columns:310px 1fr 230px;align-items:stretch}
+        .chart-grid > div{padding:1rem;overflow:auto;max-height:70vh}
+        .chart-col-l{border-right:1px solid var(--border,#e0e0e0)}
+        .chart-col-r{border-left:1px solid var(--border,#e0e0e0);background:#fafafa;padding:.75rem!important}
+        .chart-sec{border:1px solid var(--border,#e0e0e0);border-radius:8px;padding:.6rem;margin-bottom:.6rem}
+        .chart-sec .sec-h{font-weight:700;font-size:.85rem;margin-bottom:.4rem}
+        .set-cat{font-weight:700;font-size:.76rem;color:var(--accent-color,#7a5b2e);margin:.5rem 0 .15rem}
+        .set-item{cursor:pointer;font-size:.76rem;padding:.28rem .4rem;border-radius:6px;display:flex;justify-content:space-between;gap:.4rem}
+        .set-item:hover{background:#e8eefc}
+        @media(max-width:900px){.chart-grid{grid-template-columns:1fr}.chart-col-l{border-right:none;border-bottom:1px solid var(--border,#e0e0e0)}.chart-col-r{border-left:none;border-top:1px solid var(--border,#e0e0e0)}.chart-grid > div{max-height:none}}
+
+        /* ===== LUMI 브랜드 / 디자인 토큰 (시안 ⑤) ===== */
+        :root{
+            --lumi-primary:#4F46E5; --lumi-primary-soft:#EEF0FE; --lumi-primary-dark:#3F38C7;
+            --lumi-green:#16A34A; --lumi-green-soft:#E7F6EC;
+            --lumi-amber:#F59E0B; --lumi-amber-soft:#FFF4E5;
+            --lumi-pink:#DB2777; --lumi-pink-soft:#FCE7F0;
+            /* 공용 styles.css 변수 덮어쓰기 (이 페이지 한정) */
+            --accent-color:#4F46E5; --accent-gold:#4F46E5; --dark:#4F46E5;
+            --bg:#F5F6FA; --bg-secondary:#EEF0FE; --card:#fff;
+            --text:#1F2533; --text-primary:#1F2533; --text-secondary:#6B7280; --text-muted:#9AA1AD;
+            --border:#E5E7EB; --border-color:#E5E7EB;
+        }
+        body{background:#F5F6FA;color:#1F2533}
+        .btn{border-radius:8px}
+        .btn-primary{background:#4F46E5;color:#fff;border:none}
+        .btn-primary:hover{background:#3F38C7}
+        .btn-secondary{background:#EEF0FE;color:#4F46E5;border:1px solid #DDDBF7}
+        .btn-secondary:hover{background:#E0E2FB}
+        .btn-outline{border:1px solid #D7DAE0;color:#4F46E5}
+        .btn-outline:hover{border-color:#4F46E5;color:#3F38C7}
+        .form-input,.form-select,.form-textarea{border:1px solid #E5E7EB;border-radius:8px}
+        .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:#4F46E5;box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+        .card,.table-container{border:1px solid #E9EAF0;border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+        .card-value{color:#4F46E5}
+        .modal-content{border-radius:16px;box-shadow:0 20px 60px rgba(16,24,40,.18)}
+        .crm-header{box-shadow:0 1px 0 rgba(16,24,40,.04)}
+        .crm-nav .nav-tab{color:#6B7280;border-radius:10px}
+        .crm-nav .nav-tab:hover{background:#EEF0FE;color:#4F46E5}
+        .crm-nav .nav-tab.active{background:#4F46E5;color:#fff}
+        thead th{background:#F7F8FB;color:#6B7280;font-weight:600}
+        .login-box{border-radius:18px}
+        .lumi-logo{display:inline-flex;width:30px;height:30px;border-radius:9px;background:#4F46E5;align-items:center;justify-content:center;vertical-align:middle}
+        .set-item:hover{background:#EEF0FE}
+        /* 환자상세 4열 (시안 ②) */
+        .detail-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1.25fr;gap:.6rem;margin-top:.6rem}
+        .dcol{border:1px solid #E9EAF0;border-radius:10px;padding:.6rem;background:#fafbfc;display:flex;flex-direction:column;min-height:300px}
+        .dcol-h{font-weight:700;font-size:.85rem;margin-bottom:.45rem;color:#1F2533}
+        .dcol textarea{flex:1;resize:vertical;min-height:120px}
+        .dcol-pn{background:#fff}
+        .pn-list{overflow:auto;max-height:46vh}
+        @media(max-width:900px){.detail-grid{grid-template-columns:1fr}}
+        /* 전체화면 통합 차팅 워크스페이스 (베가스식) */
+        .modal.fullscreen{padding:0}
+        .modal.fullscreen .modal-content{max-width:none;width:100vw;height:100vh;max-height:100vh;border-radius:0;display:flex;flex-direction:column}
+        .ws-grid{flex:1;display:grid;grid-template-columns:290px 290px 1fr 230px;overflow:hidden;min-height:0}
+        .ws-col{padding:.85rem;overflow:auto;border-right:1px solid #E9EAF0;min-height:0}
+        .ws-col:last-child{border-right:none}
+        .ws-set{background:#fafafa}
+        .ws-entry .chart-sec{margin-bottom:.55rem}
+        @media(max-width:1100px){.ws-grid{grid-template-columns:1fr 1fr;overflow:auto}.ws-col{max-height:none;overflow:visible}}
+        @media(max-width:680px){.ws-grid{grid-template-columns:1fr}}
+        .auto-grow{resize:none;overflow:hidden;min-height:40px;line-height:1.55}
+    </style>
+</head>
+<body>
+    <!-- 로그인 -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-box">
+            <h1><span class="lumi-logo" style="width:34px;height:34px"><svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span><br>루미의원 <span style="color:#6B7280;font-weight:500">CRM</span></h1>
+            <p>LUMI CLINIC · 직원 로그인</p>
+            <input type="text" class="form-input" id="crmId" placeholder="아이디" autocomplete="username">
+            <input type="password" class="form-input" id="crmPw" placeholder="비밀번호" autocomplete="current-password">
+            <button class="btn btn-primary" style="width:100%;margin-top:.5rem" onclick="crmLogin()">로그인</button>
+            <div id="crmLoginError" style="color:var(--red,#d32f2f);font-size:.8rem;text-align:center;margin-top:.5rem"></div>
+        </div>
+    </div>
+
+    <!-- 앱 -->
+    <div id="crmApp" class="hidden">
+        <div class="crm-header">
+            <div class="title" style="display:flex;align-items:center;gap:.5rem"><span class="lumi-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>루미의원 <span style="color:#6B7280;font-weight:500">CRM</span> <span id="crmUserName" style="font-size:.8rem;color:var(--text-muted);font-weight:400"></span></div>
+            <button class="btn btn-outline btn-sm" onclick="crmLogout()">로그아웃</button>
+        </div>
+        <div class="crm-nav">
+            <div class="nav-tab active" data-page="patients">환자</div>
+            <div class="nav-tab" data-page="recall">📞 리콜·생일</div>
+            <div class="nav-tab" data-page="pricelist">💰 시술 수가표</div>
+        </div>
+        <div class="crm-content">
+            <!-- 환자 -->
+            <div class="crm-page active" id="page-patients">
+                <div class="cards-grid" id="patientCards"></div>
+                <div class="section-header">
+                    <div class="section-title">환자 목록</div>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                        <input type="text" class="form-input" id="patientSearch" placeholder="이름/전화 검색..." style="width:160px" oninput="renderPatients()">
+                        <select class="form-select" id="patientChannelFilter" onchange="renderPatients()" style="width:auto">
+                            <option value="">전체 유입경로</option>
+                            <option value="홈페이지">홈페이지</option><option value="블로그">블로그</option>
+                            <option value="소개">소개</option><option value="SNS">SNS</option>
+                            <option value="간판">간판</option><option value="국적">국적</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="openPatientModal()">+ 환자 등록</button>
+                    </div>
+                </div>
+                <div class="table-container"><table><thead><tr>
+                    <th>이름</th><th>성별/나이</th><th>연락처</th><th>유입경로</th>
+                    <th class="text-right">방문</th><th class="text-right">누적매출</th><th>최근방문</th><th>관리</th>
+                </tr></thead><tbody id="patientTable"></tbody></table></div>
+            </div>
+            <!-- 리콜·생일 -->
+            <div class="crm-page" id="page-recall">
+                <div class="cards-grid" id="recallCards"></div>
+                <div class="section-header"><div class="section-title">📅 곧 예약 (앞으로 7일내)</div></div>
+                <div class="table-container"><table><thead><tr><th>이름</th><th>연락처</th><th>예약일</th><th>관리</th></tr></thead><tbody id="recallSoon"></tbody></table></div>
+                <div class="section-header" style="margin-top:1.25rem"><div class="section-title" style="color:#d32f2f">⚠️ 예약일 지남 · 미방문</div></div>
+                <div class="table-container"><table><thead><tr><th>이름</th><th>연락처</th><th>지난 예약일</th><th>관리</th></tr></thead><tbody id="recallMissed"></tbody></table></div>
+                <div class="section-header" style="margin-top:1.25rem"><div class="section-title" style="color:#f57f17">💤 휴면 고객 (90일+ 미방문)</div></div>
+                <div class="table-container"><table><thead><tr><th>이름</th><th>연락처</th><th>최근 방문</th><th>관리</th></tr></thead><tbody id="recallDormant"></tbody></table></div>
+                <div class="section-header" style="margin-top:1.25rem"><div class="section-title">🎂 이번 달 생일 고객 <span id="birthdayCount" style="font-size:.75rem;font-weight:400;color:var(--text-muted)"></span></div></div>
+                <div class="table-container"><table><thead><tr><th>이름</th><th>생일</th><th>성별/나이</th><th>연락처</th></tr></thead><tbody id="birthdayTable"></tbody></table></div>
+            </div>
+            <!-- 시술 수가표 (admin/실장 편집) -->
+            <div class="crm-page" id="page-pricelist">
+                <div class="section-header">
+                    <div class="section-title">시술 수가표 <span id="feeEditBadge" style="font-size:.72rem;font-weight:500"></span></div>
+                    <input type="text" class="form-input" id="feeSearch" placeholder="시술 검색..." style="width:200px" oninput="renderFeeSchedule()">
+                </div>
+                <div style="font-size:.74rem;color:var(--text-muted);margin-bottom:.5rem">정가·원가(만원/₩) · 원가는 [믹스 설정]으로 재고 소모량 입력 시 자동계산 · 마진=실판매가−원가 · 10분당이익=마진÷(소요시간/10)</div>
+                <div id="feeWrap"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Modals (patients.js 와 동일 id) ===== -->
+    <div class="modal" id="patientModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title" id="patientModalTitle">환자 등록</div><button class="modal-close" onclick="closeModal('patientModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="patientEditId">
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">이름 *</label><input type="text" class="form-input" id="patName" required></div>
+                    <div class="form-group"><label class="form-label">전화번호</label><input type="tel" class="form-input" id="patPhone" placeholder="010-0000-0000"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">주민번호 앞 6자리</label><input type="text" class="form-input" id="patRrnFront" maxlength="6" inputmode="numeric" placeholder="900101"></div>
+                    <div class="form-group"><label class="form-label">뒤 1자리 (성별)</label><input type="text" class="form-input" id="patRrnGender" maxlength="1" inputmode="numeric" placeholder="1" style="max-width:80px"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label">유입경로</label><select class="form-select" id="patChannel"></select></div>
+                    <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.9rem"><input type="checkbox" id="patIsJapanese"> 일본인 환자</label></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">태그 <span style="font-weight:400;color:var(--text-muted);font-size:.75rem">(쉼표로 구분 · 예: VIP, 주의, 알러지)</span></label>
+                    <input type="text" class="form-input" id="patTags" placeholder="VIP, 주의, 알러지">
+                </div>
+                <div class="form-group"><label class="form-label">메모</label><textarea class="form-textarea" id="patMemo" rows="2" placeholder="피부타입·특이사항 등"></textarea></div>
+                <div style="border:1px solid var(--border,#e0e0e0);border-radius:8px;padding:.75rem;margin:.25rem 0">
+                    <label class="form-label">회원권 / 선불 패키지</label>
+                    <div style="display:grid;grid-template-columns:1fr 90px auto;gap:.4rem;align-items:end">
+                        <input type="text" class="form-input" id="patPkgName" placeholder="예: 보톡스 10회권">
+                        <input type="number" class="form-input" id="patPkgTotal" placeholder="총횟수" min="1">
+                        <button type="button" class="btn btn-secondary" onclick="addPatPackage()">추가</button>
+                    </div>
+                    <div id="patPkgList" style="margin-top:.5rem"></div>
+                </div>
+                <p style="font-size:.72rem;color:var(--text-muted)">⚠ 주민번호는 민감정보입니다. 화면에는 마스킹되어 표시되며, 나이·성별 파생에만 사용됩니다.</p>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('patientModal')">취소</button><button class="btn btn-primary" onclick="savePatient()">저장</button></div>
+        </div>
+    </div>
+    <!-- 전체화면 통합 차팅 워크스페이스: 메모 + Progress Note + 차팅입력 + 세트 (한 화면) -->
+    <div class="modal fullscreen" id="patientDetailModal">
+        <div class="modal-content">
+            <div class="modal-header" style="gap:1rem">
+                <div class="modal-title" id="detailTitle">환자 상세</div>
+                <div id="detailHeaderInfo" style="flex:1;min-width:0;font-size:.82rem;color:var(--text-secondary);display:flex;gap:.9rem;flex-wrap:wrap;align-items:center"></div>
+                <button class="modal-close" onclick="closeModal('patientDetailModal')">&times;</button>
+            </div>
+            <div class="ws-grid">
+                <!-- ① 환자 메모: 주소증 / 메모 / 기타 -->
+                <div class="ws-col">
+                    <div class="dcol-h">📌 주소증</div>
+                    <textarea class="form-textarea" id="detailComplaint" rows="3" placeholder="주요 호소·과거력 등"></textarea>
+                    <div class="dcol-h" style="margin-top:.55rem">📝 메모</div>
+                    <textarea class="form-textarea" id="detailMemo" rows="3" placeholder="피부타입·특이사항 등"></textarea>
+                    <div class="dcol-h" style="margin-top:.55rem">🗂 기타</div>
+                    <textarea class="form-textarea" id="detailEtc" rows="2" placeholder="기타메모"></textarea>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.55rem">
+                        <span id="detailSaveMsg" style="font-size:.72rem;color:var(--text-muted)"></span>
+                        <button class="btn btn-primary btn-sm" onclick="saveDetailNotes()">메모 저장</button>
+                    </div>
+                </div>
+                <!-- ② Progress Note: 과거 차팅 -->
+                <div class="ws-col">
+                    <div class="dcol-h" style="color:#4F46E5;display:flex;justify-content:space-between;align-items:center">Progress Note <button class="btn btn-outline btn-sm" onclick="resetChartEntry()">+ 새 차팅</button></div>
+                    <div class="pn-list" id="detailVisitList"></div>
+                </div>
+                <!-- ③ 차팅 입력 (오더) -->
+                <div class="ws-col ws-entry">
+                    <input type="hidden" id="visitPatientId"><input type="hidden" id="visitEditId">
+                    <div class="dcol-h" id="visitModalTitle" style="color:#4F46E5">✍ 차팅 입력</div>
+                    <div class="form-row" style="margin-bottom:.4rem">
+                        <div class="form-group"><label class="form-label">방문일 *</label><input type="date" class="form-input" id="visitDate"></div>
+                        <div class="form-group" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem"><input type="checkbox" id="visitConsultOnly"> 상담만</label></div>
+                    </div>
+                    <div class="chart-sec" style="border-left:3px solid #1976d2">
+                        <div class="sec-h" style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+                            <span>🩺 의료진 차팅</span>
+                            <select class="form-select" id="visitDoctor" style="width:auto;min-width:100px;max-width:55%;font-size:.8rem;padding:.4rem"></select>
+                        </div>
+                        <textarea class="form-textarea auto-grow" id="visitDiagnosis" rows="1" placeholder="주고민" oninput="autoGrow(this)" style="margin-top:.45rem"></textarea>
+                        <textarea class="form-textarea auto-grow" id="visitDoctorNote" rows="1" placeholder="치료계획" oninput="autoGrow(this)" style="margin-top:.4rem"></textarea>
+                    </div>
+                    <div class="chart-sec" style="border-left:3px solid #7b1fa2">
+                        <div class="sec-h">💬 상담 차팅</div>
+                        <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitConsultant"></select></div>
+                        <textarea class="form-textarea auto-grow" id="visitConsultNote" rows="1" placeholder="상담 내용·동의 여부 등" oninput="autoGrow(this)"></textarea>
+                    </div>
+                    <div class="chart-sec" style="border-left:3px solid #2e7d32">
+                        <div class="sec-h">🧑‍⚕️ 스탭 차팅</div>
+                        <div class="form-group" style="margin-bottom:.4rem"><select class="form-select" id="visitAssistant"></select></div>
+                        <textarea class="form-textarea auto-grow" id="visitStaffNote" rows="1" placeholder="처치 내용·특이사항" oninput="autoGrow(this)"></textarea>
+                    </div>
+                    <div class="chart-sec" style="border-left:3px solid #f57f17">
+                        <div class="sec-h">📋 오더 <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">(오른쪽 세트 클릭으로 빠른추가)</span></div>
+                        <div style="display:flex;flex-wrap:wrap;gap:.4rem;align-items:end">
+                            <select class="form-select" id="visitCatSel" onchange="onVisitCatChange()" style="flex:1;min-width:100px"></select>
+                            <select class="form-select" id="visitTreatSel" onchange="onVisitTreatChange()" style="flex:1;min-width:100px"></select>
+                            <select class="form-select" id="visitVarSel" style="flex:1.3;min-width:120px"></select>
+                            <input type="number" class="form-input" id="visitQty" value="1" min="1" title="수량" style="width:54px">
+                            <select class="form-select" id="visitItemStaff" title="오더 담당자" style="flex:1;min-width:90px"></select>
+                            <button class="btn btn-secondary" onclick="addVisitItem()">추가</button>
+                        </div>
+                        <div class="table-container" style="margin-top:.5rem"><table><thead><tr><th>시술/옵션</th><th>담당자</th><th>준비물품</th><th class="text-right">단가</th><th class="text-right">수량</th><th class="text-right">금액</th><th></th></tr></thead><tbody id="visitItemTable"></tbody></table></div>
+                        <div class="form-row" style="margin-top:.5rem">
+                            <div class="form-group"><label class="form-label">할인 (만원)</label><input type="number" class="form-input" id="visitDiscount" placeholder="0" oninput="updateVisitTotal()"></div>
+                            <div class="form-group"><label class="form-label">결제수단</label><select class="form-select" id="visitPayMethod"></select></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label class="form-label">다음 예약일</label><input type="date" class="form-input" id="visitNextRsv"></div>
+                            <div class="form-group"><label class="form-label">메모</label><textarea class="form-textarea auto-grow" id="visitMemo" rows="1" placeholder="오더 메모" oninput="autoGrow(this)"></textarea></div>
+                        </div>
+                        <div class="form-row" id="visitPkgRow" style="display:none">
+                            <div class="form-group"><label class="form-label">회원권 차감 <span style="font-weight:400;color:var(--text-muted);font-size:.72rem">(1회 차감)</span></label><select class="form-select" id="visitPkgSel"></select></div>
+                            <div class="form-group"></div>
+                        </div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #E9EAF0;padding-top:.5rem;position:sticky;bottom:0;background:#fff">
+                        <div id="visitTotalDisplay" style="font-weight:700;font-size:.9rem"></div>
+                        <button class="btn btn-primary" onclick="saveVisit()">💾 차팅 저장</button>
+                    </div>
+                </div>
+                <!-- ④ 시술 세트 빠른추가 -->
+                <div class="ws-col ws-set">
+                    <div class="dcol-h">⚡ 시술 세트</div>
+                    <input type="text" class="form-input" id="visitSetSearch" placeholder="시술 검색..." oninput="renderVisitSets()" style="font-size:.8rem">
+                    <div id="visitSetList" style="margin-top:.4rem"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 원가 믹스 설정 모달 (수가표) -->
+    <div class="modal" id="costModal">
+        <div class="modal-content" style="max-width:620px">
+            <div class="modal-header"><div class="modal-title" id="costModalTitle">원가 믹스 설정</div><button class="modal-close" onclick="closeModal('costModal')">&times;</button></div>
+            <div class="modal-body">
+                <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.6rem">사용하는 재고 품목과 사용량(시술 1회 기준)을 입력하세요. 예: 코어톡스 0.3cc, 식염수 0.5cc. 원가는 재고 단가로 자동 계산됩니다.</div>
+                <div id="costRows"></div>
+                <button class="btn btn-secondary btn-sm" onclick="addCostRow()" style="margin-top:.4rem">+ 품목 추가</button>
+                <datalist id="invItemDatalist"></datalist>
+                <div style="margin-top:.8rem;padding:.6rem;background:#F7F8FB;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:.85rem">계산 원가</span>
+                    <strong id="costModalTotal" style="color:#4F46E5;font-size:1.05rem">₩0</strong>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('costModal')">취소</button><button class="btn btn-primary" onclick="saveCost()">저장</button></div>
+        </div>
+    </div>
+
+    <!-- ===== Bootstrap (firebase init + patients.js 가 기대하는 전역 정의) ===== -->
+    <script>
+        // Firebase (index.html 과 동일 프로젝트)
+        const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
+        firebase.initializeApp(firebaseConfig);
+        const db=firebase.firestore();
+        const auth=firebase.auth();
+        auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+
+        // patients.js 가 사용하는 전역 유틸/상태
+        let currentYear=new Date().getFullYear();
+        let currentMonth=new Date().getMonth()+1;
+        let employees=[];
+        const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
+        function formatCurrency(num){return num?'₩'+Math.round(num).toLocaleString():'₩0';}
+        function formatNumber(num){return num?Math.round(num).toLocaleString():'0';}
+        function getYM(){return `${currentYear}-${String(currentMonth).padStart(2,'0')}`;}
+        function openModal(id){document.getElementById(id).classList.add('active');}
+        function closeModal(id){document.getElementById(id).classList.remove('active');}
+
+        // ===== 로그인 =====
+        function _idToEmail(v){v=(v||'').trim();return v.includes('@')?v.toLowerCase():(v+'@lumi.local').toLowerCase();}
+        async function crmLogin(){
+            const id=document.getElementById('crmId').value.trim();
+            const pw=document.getElementById('crmPw').value;
+            const err=document.getElementById('crmLoginError');
+            err.textContent='';
+            if(!id||!pw){err.textContent='아이디와 비밀번호를 입력하세요.';return;}
+            try{ await auth.signInWithEmailAndPassword(_idToEmail(id),pw); }
+            catch(e){
+                const c=e&&e.code;
+                err.textContent=(c==='auth/wrong-password'||c==='auth/user-not-found'||c==='auth/invalid-credential')
+                    ?'아이디 또는 비밀번호가 올바르지 않습니다.':'로그인 실패: '+((e&&e.message)||e);
+            }
+        }
+        async function crmLogout(){ try{await auth.signOut();}catch(e){} location.reload(); }
+
+        // 현재 로그인 직원(=차팅 작성자). patients.js 가 createdBy/chartedBy 로 기록.
+        let currentCrmUser=null;
+        let currentCrmCanEditFees=false; // 수가표 편집 권한(admin/실장)
+
+        // 접근 허용: 관리자(index.html)의 settings/crmAccess 설정을 따름
+        //  - mode 'all'      : 등록 직원 전원 허용
+        //  - mode 'selected' : 선택된 직원만 허용
+        //  - bizAdmins(관리자/대표원장)는 항상 허용
+        async function _isAllowed(user){
+            const email=(user.email||'').toLowerCase();
+            const local=email.split('@')[0];
+            const emp=employees.find(e=>(e.email||'').toLowerCase()===email||e.staffId===local||e.id===local);
+
+            // bizAdmins 항상 허용
+            let isBizAdmin=false;
+            try{
+                const biz=await db.collection('settings').doc('bizAdmins').get();
+                const list=(biz.exists&&Array.isArray(biz.data().emails)?biz.data().emails:[]).map(e=>String(e).toLowerCase());
+                isBizAdmin=list.includes(email);
+            }catch(_){}
+
+            // 접근 정책
+            let acc={mode:'all',employeeIds:[]};
+            try{ const d=await db.collection('settings').doc('crmAccess').get(); if(d.exists) acc=Object.assign(acc,d.data()); }catch(_){}
+
+            let allowed=false;
+            if(isBizAdmin) allowed=true;
+            else if(acc.mode==='selected') allowed=!!(emp&&Array.isArray(acc.employeeIds)&&acc.employeeIds.includes(emp.id));
+            else allowed=!!emp; // 'all'
+
+            if(allowed){
+                currentCrmUser=emp
+                    ? {id:emp.id,name:emp.name||local,email,isEmployee:true,role:emp.role||''}
+                    : {id:local,name:(user.displayName||email),email,isEmployee:false,role:''};
+                // 수가표 편집 권한: bizAdmin(관리자) 또는 실장(manager)
+                currentCrmCanEditFees = isBizAdmin || !!(emp && emp.role==='manager');
+            }
+            return allowed;
+        }
+
+        let _crmInited=false;
+        auth.onAuthStateChanged(async user=>{
+            if(!user){
+                document.getElementById('crmApp').classList.add('hidden');
+                document.getElementById('loginScreen').classList.remove('hidden');
+                _crmInited=false;
+                return;
+            }
+            // employees 먼저 로드(매칭/담당자 select용)
+            try{ const s=await db.collection('employees').get(); employees=s.docs.map(d=>({id:d.id,...d.data()})); }catch(_){employees=[];}
+            const ok=await _isAllowed(user);
+            if(!ok){
+                document.getElementById('crmLoginError').textContent='CRM 접근 권한이 없습니다. 관리자에게 문의하세요.';
+                await auth.signOut();
+                return;
+            }
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('crmApp').classList.remove('hidden');
+            document.getElementById('crmUserName').textContent='· '+(user.displayName||user.email);
+            if(!_crmInited){ _crmInited=true; await initCRM(); }
+        });
+
+        // 네비게이션
+        document.querySelectorAll('.crm-nav .nav-tab').forEach(tab=>{
+            tab.addEventListener('click',()=>{
+                document.querySelectorAll('.crm-nav .nav-tab').forEach(t=>t.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelectorAll('.crm-page').forEach(p=>p.classList.remove('active'));
+                document.getElementById('page-'+tab.dataset.page).classList.add('active');
+            });
+        });
+
+        // 데이터 로드 + 렌더 (patients.js 함수 사용)
+        async function initCRM(){
+            await Promise.all([
+                loadTreatmentsMaster(), loadPatients(), loadVisits(), loadChannels(), loadRecipesAndInventory()
+            ]);
+            if(typeof initDefaultChannels==='function'){ try{ await initDefaultChannels(); }catch(_){ } }
+            if(typeof loadFeeSchedule==='function'){ try{ await loadFeeSchedule(); }catch(_){ } }
+            renderCRM();
+            if(typeof renderFeeSchedule==='function'){ try{ renderFeeSchedule(); }catch(_){ } }
+        }
+    </script>
+    <script src="patients.js?v=20260625b"></script>
+    <script src="fee-schedule.js?v=20260626"></script>
+</body>
+</html>

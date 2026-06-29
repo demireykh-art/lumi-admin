@@ -49,6 +49,7 @@
         </header>
         <nav class="nav-tabs">
             <div class="nav-tab active" data-tab="revenue">매출</div>
+            <div class="nav-tab" data-tab="crm">🧑‍⚕️ 환자(CRM)</div>
             <div class="nav-tab" data-tab="expense">지출</div>
             <div class="nav-tab" data-tab="employee">직원관리</div>
             <div class="nav-tab" data-tab="inventory">재고관리</div>
@@ -103,6 +104,65 @@
                     <div class="section"><div class="section-header"><div class="section-title">업로드 이력</div></div>
                         <div class="table-container"><table><thead><tr><th>연월</th><th class="text-right">총매출</th><th class="text-right">건수</th><th>업로드일</th><th>관리</th></tr></thead><tbody id="uploadHistory"></tbody></table></div>
                     </div>
+                </div>
+            </div>
+            <!-- ===== 환자(CRM) 분석 전용 — 입력은 crm.html(스탭용) ===== -->
+            <div class="tab-content" id="tab-crm">
+                <div class="sub-tabs">
+                    <div class="sub-tab active" data-sub="crm-patients">환자 분석</div>
+                    <div class="sub-tab" data-sub="crm-sales">매출 분석</div>
+                    <div class="sub-tab" data-sub="crm-channels">마케팅 ROI</div>
+                    <div class="sub-tab" data-sub="crm-pricelist">시술 정가표</div>
+                </div>
+                <!-- 환자 분석 (read-only) -->
+                <div class="sub-content active" id="sub-crm-patients">
+                    <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.5rem">📊 분석 전용 화면입니다. 환자 등록·방문기록 입력은 스탭용 CRM(crm.html)에서 합니다.</div>
+                    <div class="cards-grid" id="patientCards"></div>
+                    <div class="section-header">
+                        <div class="section-title">환자 목록 (LTV)</div>
+                        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                            <input type="text" class="form-input" id="patientSearch" placeholder="이름/전화 검색..." style="width:160px" oninput="renderPatients()">
+                            <select class="form-select" id="patientChannelFilter" onchange="renderPatients()" style="width:auto">
+                                <option value="">전체 유입경로</option>
+                                <option value="홈페이지">홈페이지</option>
+                                <option value="블로그">블로그</option>
+                                <option value="소개">소개</option>
+                                <option value="SNS">SNS</option>
+                                <option value="간판">간판</option>
+                                <option value="국적">국적</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-container"><table><thead><tr>
+                        <th>이름</th><th>성별/나이</th><th>연락처</th><th>유입경로</th>
+                        <th class="text-right">방문</th><th class="text-right">누적매출(LTV)</th><th>최근방문</th><th></th>
+                    </tr></thead><tbody id="patientTable"></tbody></table></div>
+                </div>
+                <!-- 매출 분석 -->
+                <div class="sub-content" id="sub-crm-sales">
+                    <div class="cards-grid" id="crmSalesCards"></div>
+                    <div class="section"><div class="section-header"><div class="section-title">시술별 매출 (이번달)</div></div>
+                        <div class="table-container"><table><thead><tr><th>시술</th><th class="text-right">건수</th><th class="text-right">매출</th><th class="text-right">비중</th></tr></thead><tbody id="crmTreatmentTable"></tbody></table></div>
+                    </div>
+                    <div class="section"><div class="section-header"><div class="section-title">담당자별 매출 (진료 기준, 이번달)</div></div>
+                        <div class="table-container"><table><thead><tr><th>진료 담당</th><th class="text-right">환자수</th><th class="text-right">매출</th><th class="text-right">객단가</th></tr></thead><tbody id="crmDoctorTable"></tbody></table></div>
+                    </div>
+                </div>
+                <!-- 마케팅 ROI (광고비 입력은 관리자=재무 권한) -->
+                <div class="sub-content" id="sub-crm-channels">
+                    <div class="section-header"><div class="section-title">마케팅 채널 ROI (이번달 기준)</div></div>
+                    <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem">유입경로별 광고비·신환·매출로 CAC/ROAS를 계산합니다. 광고비 입력은 관리자(재무) 전용입니다. (일본마케팅 = 국적)</p>
+                    <div class="table-container"><table><thead><tr>
+                        <th>채널</th><th class="text-right">월 광고비</th><th class="text-right">신환</th><th class="text-right">CAC</th><th class="text-right">매출</th><th class="text-right">ROAS</th>
+                    </tr></thead><tbody id="channelTable"></tbody></table></div>
+                </div>
+                <!-- 시술 정가표 (조회) -->
+                <div class="sub-content" id="sub-crm-pricelist">
+                    <div class="section-header">
+                        <div class="section-title">시술 정가표 <span style="font-size:.75rem;font-weight:400;color:var(--text-muted)">(단위: 만원 / VAT 별도 / 전 시술 비보험)</span></div>
+                        <input type="text" class="form-input" id="priceSearch" placeholder="시술 검색..." style="width:200px" oninput="renderPriceList()">
+                    </div>
+                    <div id="priceListWrap"></div>
                 </div>
             </div>
             <div class="tab-content" id="tab-expense">
@@ -486,6 +546,25 @@
                 <div class="section-header">
                     <div class="section-title">⚙ 시스템 설정</div>
                 </div>
+                <!-- 환자 CRM 접근 권한 -->
+                <div class="card" style="max-width:600px;margin-bottom:1rem">
+                    <div class="card-label" style="font-size:1.1rem;font-weight:700;margin-bottom:.5rem">🧑‍⚕️ 환자 CRM(crm.html) 접근 권한</div>
+                    <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:1rem">
+                        직원이 <code>crm.html</code>에서 환자 차팅(등록·방문기록)을 하려면 접근 권한이 필요합니다.
+                        로그인한 직원이 차팅 작성자로 기록됩니다.<br>
+                        ※ 로그인 계정은 <b>직원관리 탭</b>에서 직원 등록 시 <b>로그인 ID</b>를 부여하면 생성됩니다. (대표원장도 직원으로 등록 후 권한 부여)
+                    </p>
+                    <div class="form-group">
+                        <label class="form-label">접근 범위</label>
+                        <select class="form-select" id="crmAccessMode" onchange="onCrmAccessModeChange()" style="max-width:240px">
+                            <option value="all">전 직원 허용</option>
+                            <option value="selected">선택한 직원만 허용</option>
+                        </select>
+                    </div>
+                    <div id="crmAccessEmpList" style="display:none;border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-top:.5rem;max-height:280px;overflow:auto"></div>
+                    <button class="btn btn-primary" onclick="saveCrmAccess()" style="margin-top:1rem">접근 권한 저장</button>
+                    <span id="crmAccessMsg" style="font-size:.85rem;margin-left:.75rem"></span>
+                </div>
                 <div class="card" style="max-width:500px">
                     <div class="card-label" style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">🔐 비밀번호 관리</div>
                     <div class="form-group">
@@ -574,6 +653,18 @@
     </div>
 
     <!-- Modals -->
+    <!-- 환자 상세 (분석 read-only) -->
+    <div class="modal" id="patientDetailModal">
+        <div class="modal-content" style="max-width:860px">
+            <div class="modal-header"><div class="modal-title" id="detailTitle">환자 상세</div><button class="modal-close" onclick="closeModal('patientDetailModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="detailInfo"></div>
+                <div class="section-header" style="margin-top:1rem"><div class="section-title">방문 / 시술 기록</div></div>
+                <div class="table-container"><table><thead><tr><th>방문일</th><th>시술</th><th>담당</th><th class="text-right">금액</th><th>결제</th></tr></thead><tbody id="detailVisitTable"></tbody></table></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('patientDetailModal')">닫기</button></div>
+        </div>
+    </div>
     <div class="modal" id="employeeModal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="employeeModalTitle">직원 등록</div><button class="modal-close" onclick="closeModal('employeeModal')">&times;</button></div>
@@ -1047,5 +1138,6 @@
     <script src="hr-attendance.js"></script>
     <script src="inventory.js?v=20260613b"></script>
     <script src="finance.js"></script>
+    <script src="crm-analytics.js?v=20260621"></script>
 </body>
 </html>

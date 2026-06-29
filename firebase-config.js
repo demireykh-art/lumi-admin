@@ -501,9 +501,14 @@ async function loadAllData(){
             typeof loadAuditRecords==='function'?loadAuditRecords():Promise.resolve(),
             typeof loadPurchaseRequests==='function'?loadPurchaseRequests():Promise.resolve(),
             loadMealAllRecords(),
-            typeof loadMonthlyIncentiveInput==='function'?loadMonthlyIncentiveInput():Promise.resolve()
+            typeof loadMonthlyIncentiveInput==='function'?loadMonthlyIncentiveInput():Promise.resolve(),
+            // CRM (환자/방문/채널/정가표)
+            typeof loadTreatmentsMaster==='function'?loadTreatmentsMaster():Promise.resolve(),
+            typeof loadPatients==='function'?loadPatients():Promise.resolve(),
+            typeof loadVisits==='function'?loadVisits():Promise.resolve(),
+            typeof loadChannels==='function'?loadChannels():Promise.resolve()
         ]);
-        
+
         renderAll();
     }catch(e){console.error('Data load error:',e);}
 }
@@ -595,6 +600,8 @@ function renderAll(){
     if(typeof renderPurchaseRequests==='function')renderPurchaseRequests();
     // 손익
     if(typeof renderPLStatement==='function')renderPLStatement();
+    // 환자(CRM)
+    if(typeof renderCRM==='function')renderCRM();
 }
 
 // ===== Init =====
@@ -607,9 +614,11 @@ async function initApp(){
     if(typeof loadConfigForSettings==='function')loadConfigForSettings();
     if(typeof loadAdminAccounts==='function')loadAdminAccounts();
     if(typeof loadSharedStaffAccounts==='function')loadSharedStaffAccounts();
+    if(typeof loadCrmAccess==='function')loadCrmAccess();
     if(typeof initCardStatements==='function')initCardStatements();
     if(typeof initDefaultLocations==='function')await initDefaultLocations();
     if(typeof loadLocations==='function')await loadLocations();
+    if(typeof initDefaultChannels==='function')await initDefaultChannels();
     updateAdminUI();
     initAdminAutoLogout();
 }

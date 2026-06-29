@@ -1,0 +1,766 @@
+{
+  "_meta": {
+    "title": "루미의원 시술 정가표 (treatments master seed)",
+    "source": "원장 전달 정가표 2026-06-21",
+    "priceUnit": "만원 (예: 4 = 40,000원)",
+    "vat": "별도",
+    "isNonInsurance": true,
+    "insuranceNote": "전 시술 비보험 항목만 운영 (보험 항목 없음)",
+    "note": "price 는 만원 단위 숫자. variant 1건 = 결제 1단위. sessions=회/세트 묶음, size=mm/cm 구간, product=약제, dose=용량, qty=개수. reviewNeeded:true 는 원본 표기가 모호해 원장 확인 필요.",
+    "linkToRecipe": "각 treatment 의 recipeId 는 추후 재고(recipes)와 매핑하여 원가 자동산출"
+  },
+  "categories": [
+    {
+      "id": "botox",
+      "name": "보톡스",
+      "treatments": [
+        {
+          "name": "이마/미간/눈가/눈밑/자갈턱/콧등/입꼬리",
+          "note": "시술 10분 미만",
+          "variants": [
+            { "product": "국산(리즈톡스)", "price": 4 },
+            { "product": "코어톡스", "price": 6 },
+            { "product": "제오민", "price": 8 }
+          ]
+        },
+        {
+          "name": "사각턱",
+          "variants": [
+            { "product": "국산(리즈톡스)", "price": 7 },
+            { "product": "코어톡스", "price": 10 },
+            { "product": "제오민", "price": 15 }
+          ]
+        },
+        {
+          "name": "특수부위(침샘/관자부위) 100u",
+          "variants": [
+            { "product": "국산(리즈톡스)", "dose": "100u", "price": 9 },
+            { "product": "코어톡스", "dose": "100u", "price": 12 },
+            { "product": "제오민", "dose": "100u", "price": 20 }
+          ]
+        },
+        {
+          "name": "종아리/승모근/겨드랑이",
+          "variants": [
+            { "product": "국산", "dose": "100u", "price": 12 },
+            { "product": "국산", "dose": "200u", "price": 20 },
+            { "product": "코어톡스", "dose": "100u", "price": 17 },
+            { "product": "코어톡스", "dose": "200u", "price": 30 },
+            { "product": "제오민", "dose": "100u", "price": 30 },
+            { "product": "제오민", "dose": "200u", "price": 50 }
+          ]
+        },
+        {
+          "name": "스킨보톡스(얼굴 전체) 2cc",
+          "variants": [
+            { "product": "국산", "dose": "2cc", "price": 20 },
+            { "product": "코어톡스", "dose": "2cc", "price": 25 },
+            { "product": "제오민", "dose": "2cc", "price": 35 }
+          ]
+        },
+        {
+          "name": "턱라인 리프팅 보톡스",
+          "variants": [
+            { "product": "국산", "price": 20 },
+            { "product": "코어톡스", "price": 25 },
+            { "product": "제오민", "price": 35 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lentigo",
+      "name": "흑자/검버섯",
+      "note": "부위당 10분 내외",
+      "treatments": [
+        {
+          "name": "검버섯",
+          "variants": [
+            { "size": "~2mm", "price": 5 },
+            { "size": "5mm~", "price": 10 }
+          ]
+        },
+        {
+          "name": "흑자",
+          "note": "크기에 따라 추가비용 발생",
+          "variants": [
+            { "size": "5mm 기준", "price": 30 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "skinbooster",
+      "name": "스킨부스터",
+      "treatments": [
+        {
+          "name": "리쥬란HB PLUS",
+          "note": "4cc 10분 내외 / 마취 제외",
+          "variants": [
+            { "dose": "1cc", "price": 19 },
+            { "dose": "6cc", "price": 80 },
+            { "dose": "4cc", "label": "이벤트 1회", "price": 49 }
+          ]
+        },
+        {
+          "name": "리쥬란HB 4cc + 스킨보톡스",
+          "variants": [
+            { "sessions": "1회", "price": 59 }
+          ]
+        },
+        {
+          "name": "콜라겐(울트라콜)",
+          "variants": [
+            { "dose": "1cc", "price": 19 }
+          ]
+        },
+        {
+          "name": "콜라겐 1vial",
+          "variants": [
+            { "dose": "4cc", "price": 50 }
+          ]
+        },
+        {
+          "name": "리쥬네이처",
+          "variants": [
+            { "dose": "5cc", "price": 49 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "filler",
+      "name": "필러",
+      "note": "부위당 최소 20분",
+      "treatments": [
+        {
+          "name": "아말리안 1cc",
+          "variants": [
+            { "dose": "1cc", "price": 32 },
+            { "label": "추가 시", "price": 20 }
+          ]
+        },
+        {
+          "name": "팔자/입술/애교필러 (event)",
+          "variants": [
+            { "label": "이벤트", "price": 25 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lifting",
+      "name": "리프팅 & V라인",
+      "note": "장비 리프팅 1/2/3/6/9/12개월 f/U - 20분",
+      "treatments": [
+        {
+          "name": "BBL HERO 타이트닝",
+          "variants": [
+            { "sessions": "1회", "price": 40 },
+            { "sessions": "3회", "price": 100 }
+          ]
+        },
+        {
+          "name": "BBL HERO 안티에이징 + 타이트닝",
+          "variants": [
+            { "sessions": "1회", "price": 70 },
+            { "sessions": "3회", "price": 180 }
+          ]
+        },
+        {
+          "name": "BBL HERO 눈가/홍조/색소/여드름 추가 (각 모드별)",
+          "variants": [
+            { "sessions": "1회", "price": 10 },
+            { "sessions": "3회", "price": 20 }
+          ]
+        },
+        {
+          "name": "BBL HERO 색소",
+          "variants": [
+            { "sessions": "1회", "price": 30 },
+            { "sessions": "5회", "price": 120 }
+          ]
+        },
+        {
+          "name": "BBL HERO 팔 잡티",
+          "variants": [
+            { "sessions": "1회", "price": 50 }
+          ]
+        },
+        {
+          "name": "파인샷 (파인웨이브)",
+          "variants": [
+            { "sessions": "1회", "price": 40 },
+            { "sessions": "3회", "price": 100 }
+          ]
+        },
+        {
+          "name": "슈링크",
+          "variants": [
+            { "dose": "100샷", "price": 7 },
+            { "dose": "300샷", "price": 15 }
+          ]
+        },
+        {
+          "name": "아이올리지오",
+          "variants": [
+            { "dose": "100샷", "price": 13 },
+            { "dose": "300샷", "price": 30 }
+          ]
+        },
+        {
+          "name": "윤곽주사",
+          "variants": [
+            { "dose": "1cc", "price": 5 }
+          ]
+        },
+        {
+          "name": "브이올렛 (올리핏)",
+          "variants": [
+            { "dose": "1vial", "price": 20 }
+          ]
+        },
+        {
+          "name": "실리프팅 (원더트리플)",
+          "note": "1줄로 3번 실리프팅",
+          "variants": [
+            { "dose": "1줄", "price": 15 }
+          ]
+        },
+        {
+          "name": "코그실",
+          "variants": [
+            { "dose": "1줄", "price": 10 }
+          ]
+        },
+        {
+          "name": "아이오노실",
+          "variants": [
+            { "dose": "1줄", "price": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "toning",
+      "name": "토닝",
+      "treatments": [
+        {
+          "name": "BB 토닝",
+          "variants": [
+            { "sessions": "1회", "price": 30 },
+            { "sessions": "5회", "price": 120 }
+          ]
+        },
+        {
+          "name": "토닝 + 재생관리",
+          "variants": [
+            { "sessions": "1회", "price": 17 },
+            { "sessions": "10회", "price": 130 }
+          ]
+        },
+        {
+          "name": "라라필 + 토닝 + LDM 재생관리 (브라이트닝)",
+          "variants": [
+            { "sessions": "1회", "price": 17 },
+            { "sessions": "10회", "price": 130 }
+          ]
+        },
+        {
+          "name": "토닝 실펌 복합",
+          "variants": [
+            { "sessions": "10회", "price": 180 }
+          ]
+        },
+        {
+          "name": "라비앙 모공레이저",
+          "variants": [
+            { "sessions": "1회", "price": 20 },
+            { "sessions": "3회", "price": 49 }
+          ]
+        },
+        {
+          "name": "스킨부스터 추가 (미백/주름 화이트닝 엑소좀 p198 엑소힐러 / 항염·진정·재생 엑소좀)",
+          "variants": [
+            { "label": "옵션1", "price": 5 },
+            { "label": "옵션2", "price": 10 },
+            { "label": "옵션3", "price": 20 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "co2",
+      "name": "CO2 (점/쥐젖/사마귀 등)",
+      "treatments": [
+        {
+          "name": "붉은점 (혈관종/체리점)",
+          "variants": [
+            { "label": "개당", "price": 1 }
+          ]
+        },
+        {
+          "name": "보통점",
+          "variants": [
+            { "label": "개당", "price": 2 }
+          ]
+        },
+        {
+          "name": "돌출점",
+          "note": "크기 구간 2종(소/대 스케줄) 모두 운영",
+          "variants": [
+            { "label": "구간A", "size": "~2mm", "price": 5 },
+            { "label": "구간A", "size": "~5mm", "price": 7 },
+            { "label": "구간A", "size": "5mm 이상", "price": 10 },
+            { "label": "구간B", "size": "~5mm", "price": 10 },
+            { "label": "구간B", "size": "~10mm", "price": 15 },
+            { "label": "구간B", "size": "10mm 이상", "price": 20 }
+          ]
+        },
+        {
+          "name": "청색점 절개술",
+          "reviewNeeded": true,
+          "note": "원본 표기 혼재 — 구간/부위 확인 필요",
+          "variants": [
+            { "size": "~3mm 1point suture", "price": 40 },
+            { "size": "~5mm 1point suture", "price": 60 },
+            { "label": "5mm~ 1point 추가", "price": 10 },
+            { "region": "얼굴", "price": 2 },
+            { "region": "눈가", "price": 3 },
+            { "size": "~2mm", "price": 2 },
+            { "size": "~5mm", "price": 5 },
+            { "size": "5mm~", "price": 10 }
+          ]
+        },
+        {
+          "name": "쥐젖 목전체",
+          "variants": [ { "label": "목전체", "price": 40 } ]
+        },
+        {
+          "name": "양측 겨드랑이 전체",
+          "variants": [ { "label": "전체", "price": 40 } ]
+        },
+        {
+          "name": "목 + 양측 겨드랑이 전체",
+          "variants": [ { "label": "전체", "price": 70 } ]
+        },
+        {
+          "name": "한관종",
+          "variants": [
+            { "label": "개당", "price": 3 },
+            { "sessions": "1회", "price": 40 },
+            { "sessions": "5회", "price": 120 }
+          ]
+        },
+        {
+          "name": "얼굴 실핏줄",
+          "variants": [
+            { "size": "~5mm", "price": 5 },
+            { "size": "5mm 이상", "price": 10 }
+          ]
+        },
+        {
+          "name": "CO2 사마귀 제거 (얼굴)",
+          "variants": [
+            { "size": "~2mm", "price": 5 },
+            { "size": "~5mm", "price": 7 },
+            { "size": "5mm~", "price": 10 }
+          ]
+        },
+        {
+          "name": "손바닥 편평사마귀 제거 (냉동/CO2)",
+          "variants": [
+            { "label": "개당", "price": 3 },
+            { "qty": "10개 이상", "price": 30 },
+            { "qty": "20개 이상", "price": 50 }
+          ]
+        },
+        {
+          "name": "편평사마귀 - 얼굴&목 (각각)",
+          "note": "부분 10분 미만 / 전체 20분 이상",
+          "variants": [
+            { "qty": "~100개", "price": 29 },
+            { "qty": "추가 ~100개", "price": 19 }
+          ]
+        },
+        {
+          "name": "편평사마귀 - 몸통 앞/뒤 (각각)",
+          "variants": [
+            { "qty": "~100개", "price": 39 },
+            { "qty": "추가 ~100개", "price": 19 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bbl_erbium_scar",
+      "name": "BBL 어븀 흉터",
+      "note": "BBL 색소/여드름/홍조 등 단독시술 시 1회 30 / 5회 120 (10만원 추가 아님)",
+      "treatments": [
+        {
+          "name": "선상흉터 1cm",
+          "variants": [
+            { "size": "1cm", "price": 30 },
+            { "label": "추가 1cm당", "price": 20 }
+          ]
+        },
+        {
+          "name": "섬유 흉터 1곳",
+          "variants": [ { "label": "1곳", "price": 5 } ]
+        },
+        {
+          "name": "섬유 흉터 1x1cm",
+          "variants": [ { "size": "1x1cm", "price": 5 } ]
+        },
+        {
+          "name": "섬유 흉터 1x1cm x6부위 (max)",
+          "variants": [ { "label": "6부위 max", "price": 30 } ]
+        }
+      ]
+    },
+    {
+      "id": "juvgen",
+      "name": "쥬브젠",
+      "note": "부위당 최소 20분",
+      "treatments": [
+        {
+          "name": "꺼진 흉터 1곳 (수두/모공/롤링스카)",
+          "variants": [
+            { "label": "1EA", "price": 20 },
+            { "label": "추가 시", "price": 10 }
+          ]
+        },
+        {
+          "name": "수술 흉터",
+          "variants": [
+            { "size": "1cm", "price": 30 },
+            { "label": "1cm 추가 시", "price": 20 }
+          ]
+        },
+        {
+          "name": "팔자 주름",
+          "variants": [ { "label": "기본", "price": 80 } ]
+        },
+        {
+          "name": "코밑살",
+          "note": "부위 추가당 15",
+          "variants": [
+            { "region": "한쪽", "price": 25 },
+            { "region": "양쪽", "price": 40 }
+          ]
+        },
+        {
+          "name": "목/이마 주름",
+          "variants": [
+            { "label": "최초 1줄", "price": 80 },
+            { "label": "1줄 추가 시", "price": 60 }
+          ]
+        },
+        {
+          "name": "이마/미간/마리오넷/입가/눈가 등 1부위당",
+          "note": "이마주름은 1줄 80 / 1줄 추가 60",
+          "variants": [
+            { "label": "1부위당", "price": 60 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pico",
+      "name": "피코 레이저",
+      "treatments": [
+        {
+          "name": "피코 눈썹문신",
+          "variants": [
+            { "sessions": "1회", "price": 20 },
+            { "sessions": "3회", "price": 40 }
+          ]
+        },
+        {
+          "name": "피코 아이라인문신",
+          "variants": [
+            { "sessions": "1회", "price": 20 },
+            { "sessions": "3회", "price": 40 }
+          ]
+        },
+        {
+          "name": "피코 레터링 (동전)",
+          "variants": [
+            { "sessions": "1회", "price": 7 },
+            { "sessions": "5회", "price": 35 }
+          ]
+        },
+        {
+          "name": "피코 레터링 (반명함)",
+          "variants": [
+            { "sessions": "1회", "price": 15 },
+            { "sessions": "5회", "price": 60 }
+          ]
+        },
+        {
+          "name": "피코 레터링 (명함)",
+          "variants": [
+            { "sessions": "1회", "price": 30 },
+            { "sessions": "5회", "price": 120 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pore",
+      "name": "모공",
+      "treatments": [
+        {
+          "name": "실펌 항염관리",
+          "variants": [ { "sessions": "1회", "price": 30 } ]
+        },
+        {
+          "name": "모공핏 (셀라 블레싱)",
+          "variants": [ { "sessions": "1회", "price": 49 } ]
+        },
+        {
+          "name": "엑소좀 (실펌+부스터추가 / 고우리 or 엑소좀 or 매쿰)",
+          "variants": [
+            { "sessions": "1회", "price": 50 },
+            { "sessions": "3회", "price": 120 }
+          ]
+        },
+        {
+          "name": "레노펌 (실펌+레스노베)",
+          "variants": [
+            { "sessions": "1세트", "price": 80 },
+            { "sessions": "3세트", "price": 200 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "acne",
+      "name": "여드름",
+      "treatments": [
+        {
+          "name": "클리어 밸런스",
+          "variants": [
+            { "sessions": "1세트", "price": 80 },
+            { "sessions": "3세트", "price": 200 }
+          ]
+        },
+        {
+          "name": "실펌+S8plus / BBL+GA필 1세트 (2주간격)",
+          "variants": [
+            { "sessions": "1세트", "price": 80 },
+            { "sessions": "3세트", "price": 200 }
+          ]
+        },
+        {
+          "name": "줄기세포 MCT (클리어 밸런스 한정)",
+          "variants": [
+            { "sessions": "1회", "price": 50 },
+            { "sessions": "3회", "price": 120 }
+          ]
+        },
+        {
+          "name": "압출 + PTT + 네오빔",
+          "variants": [
+            { "sessions": "1회", "price": 30 },
+            { "sessions": "5회", "price": 120 }
+          ]
+        },
+        {
+          "name": "라라필 + 압출 + 네오빔",
+          "variants": [
+            { "sessions": "1회", "price": 19 },
+            { "sessions": "5회", "price": 80 }
+          ]
+        },
+        {
+          "name": "라라필 + 압출관리",
+          "variants": [ { "sessions": "1회", "price": 12 } ]
+        },
+        {
+          "name": "압출관리",
+          "note": "압출관리 소 1회 6",
+          "variants": [
+            { "sessions": "1회", "price": 8 },
+            { "label": "소 1회", "price": 6 }
+          ]
+        },
+        {
+          "name": "GA+압출 / 블랙필+압출",
+          "variants": [ { "sessions": "1회", "price": 12 } ]
+        },
+        {
+          "name": "피부 석회종",
+          "variants": [ { "label": "개당", "price": 3 } ]
+        }
+      ]
+    },
+    {
+      "id": "winner",
+      "name": "위너",
+      "treatments": [
+        {
+          "name": "작은 모공 구멍",
+          "note": "1곳당 20분~",
+          "variants": [ { "label": "기본", "price": 60 } ]
+        },
+        {
+          "name": "큰 모공 구멍",
+          "note": "리메스카(흉터연고) 5만",
+          "variants": [ { "label": "기본", "price": 60 } ]
+        },
+        {
+          "name": "추가 기본 3땀~",
+          "note": "안쪽10, 3땀 이상10",
+          "variants": [ { "label": "추가", "price": 20 } ]
+        },
+        {
+          "name": "송곳흉터",
+          "variants": [ { "label": "기본", "price": 15 } ]
+        },
+        {
+          "name": "박스카 (소)",
+          "variants": [ { "label": "소", "price": 30 } ]
+        },
+        {
+          "name": "박스카 (대)",
+          "variants": [ { "label": "대", "price": 40 } ]
+        }
+      ]
+    },
+    {
+      "id": "fordyce",
+      "name": "포다이스반",
+      "note": "1부위당 10-15분",
+      "treatments": [
+        {
+          "name": "포다이스반",
+          "note": "4부위부터 +19만원/부위",
+          "variants": [
+            { "label": "1부위 1회", "price": 29 },
+            { "label": "3부위 이상 1회", "price": 79 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sebaceous",
+      "name": "피지선증식증",
+      "note": "1곳당 2분~",
+      "treatments": [
+        {
+          "name": "피지선증식증",
+          "note": "최초 1개 10, 2년 개런티(얼굴전체 적용)",
+          "variants": [
+            { "qty": "최초 1개", "price": 10 },
+            { "qty": "~10개", "price": 80 },
+            { "qty": "~20개", "price": 140 },
+            { "qty": "~40개", "price": 250 },
+            { "qty": "~60개", "price": 300 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "regen",
+      "name": "재생",
+      "note": "10+3 이벤트",
+      "treatments": [
+        {
+          "name": "LDM 관리 (트리플)",
+          "variants": [
+            { "label": "12분", "sessions": "1회", "price": 8 },
+            { "label": "12분", "sessions": "10회", "price": 70 },
+            { "label": "20분", "sessions": "1회", "price": 10 },
+            { "label": "20분", "sessions": "10회", "price": 100 },
+            { "label": "라라LDM", "sessions": "1회", "price": 13 },
+            { "label": "라라LDM", "sessions": "5회", "price": 55 },
+            { "label": "라라LDM", "sessions": "10회", "price": 100 }
+          ]
+        },
+        {
+          "name": "라라필 관리",
+          "variants": [
+            { "label": "라라필", "sessions": "1회", "price": 8 },
+            { "label": "라라필", "sessions": "10회", "price": 70 },
+            { "label": "라라LDM", "sessions": "1회", "price": 13 },
+            { "label": "라라LDM", "sessions": "5회", "price": 55 },
+            { "label": "라라LDM", "sessions": "10회", "price": 100 }
+          ]
+        },
+        {
+          "name": "하이드라페이셜",
+          "variants": [
+            { "label": "1/2/3단계 기본관리", "sessions": "1회", "price": 25 },
+            { "label": "필링 또는 보습영양 부스터 추가", "price": 5 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hair_removal",
+      "name": "제모",
+      "note": "기본 노블린",
+      "treatments": [
+        {
+          "name": "여자 인중",
+          "variants": [
+            { "sessions": "1회", "price": 5 },
+            { "sessions": "5회", "price": 20 }
+          ]
+        },
+        {
+          "name": "여자/남자 겨드랑이",
+          "variants": [
+            { "sessions": "1회", "price": 5 },
+            { "sessions": "5회", "price": 10 }
+          ]
+        },
+        {
+          "name": "여자 종아리",
+          "variants": [
+            { "sessions": "1회", "price": 10 },
+            { "sessions": "5회", "price": 40 }
+          ]
+        },
+        {
+          "name": "여자 팔",
+          "variants": [
+            { "sessions": "1회", "price": 10 },
+            { "sessions": "5회", "price": 40 }
+          ]
+        },
+        {
+          "name": "남자 인중/턱",
+          "note": "BBL 제모(턱인중 기준) 1회 19 / 5회 80 → 60 EVENT",
+          "variants": [
+            { "sessions": "1회", "price": 10 },
+            { "sessions": "5회", "price": 40 },
+            { "label": "BBL 1회", "sessions": "1회", "price": 19 },
+            { "label": "BBL 5회", "sessions": "5회", "price": 80 },
+            { "label": "BBL 5회 EVENT", "sessions": "5회", "price": 60 }
+          ]
+        },
+        {
+          "name": "남자 얼굴전체/종아리/허벅지/팔다리/가슴/배 (부위당)",
+          "variants": [
+            { "sessions": "1회", "price": 15 },
+            { "sessions": "5회", "price": 60 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "iv",
+      "name": "수액",
+      "treatments": [
+        { "name": "마이어스", "variants": [ { "label": "1회", "price": 10 } ] },
+        { "name": "백옥 1200mg (글루타치온)", "note": "10+1 이벤트 중", "variants": [ { "label": "1회", "price": 5 } ] },
+        { "name": "신데렐라 (리포톡신/치옥토신)", "note": "10+1 이벤트 중", "variants": [ { "label": "1회", "price": 4 } ] },
+        { "name": "플라몬주", "variants": [ { "label": "1회", "price": 4 } ] },
+        { "name": "피로회복 백신기주", "variants": [ { "label": "1회", "price": 15 } ] },
+        { "name": "태반 고함량", "note": "3ea 주 2회 2주", "variants": [ { "label": "프로그램", "price": 30 } ] }
+      ]
+    }
+  ]
+}
