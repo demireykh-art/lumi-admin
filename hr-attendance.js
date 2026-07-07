@@ -42,18 +42,41 @@ function renderEmployees(){
     }).join('')||'<tr><td colspan="10" class="text-center">등록된 직원 없음</td></tr>';
 }
 
-// 직원의 사용 연차 계산
+// 직원의 사용 연차 계산 (per-date 상태 반영)
 function getUsedLeave(employeeId){
     const year=new Date().getFullYear().toString();
-    const approved=leaveRequests.filter(r=>
-        r.employeeId===employeeId && 
-        r.status==='approved' &&
-        r.dates?.some(d=>d.startsWith(year))
-    );
-    return approved.reduce((sum,r)=>{
-        if(r.type?.includes('반차'))return sum+0.5;
-        return sum+(r.dates?.filter(d=>d.startsWith(year)).length||1);
-    },0);
+    let sum=0;
+    leaveRequests
+        .filter(r=>r.employeeId===employeeId)
+        .forEach(r=>{
+            const isHalfDay=r.type?.includes('반차');
+            (r.dates||[])
+                .filter(d=>d.startsWith(year))
+                .forEach(date=>{
+                    if(getLeaveDateStatus(r,date)==='approved'){
+                        sum+=isHalfDay?0.5:1;
+                    }
+                });
+        });
+    return sum;
+}
+
+// 특정 날짜의 승인 상태 반환 (dateStatuses 우선, 없으면 전체 status)
+function getLeaveDateStatus(request, date){
+    const ds=request?.dateStatuses||{};
+    if(ds[date]?.status) return ds[date].status;
+    return request?.status||'pending';
+}
+
+// 전체 dates 로부터 request 의 overall status 재계산
+function _computeOverallLeaveStatus(dates, dateStatuses, fallback){
+    const perStatuses=(dates||[]).map(d=>dateStatuses?.[d]?.status||fallback||'pending');
+    if(perStatuses.length===0) return fallback||'pending';
+    if(perStatuses.every(s=>s==='approved')) return 'approved';
+    if(perStatuses.every(s=>s==='pending')) return 'pending';
+    if(perStatuses.every(s=>s==='rejected')) return 'rejected';
+    if(perStatuses.every(s=>s==='cancelled')) return 'cancelled';
+    return 'partial';
 }
 
 async function resetPassword(empId,empName){
@@ -1229,35 +1252,51 @@ function renderPendingLeaves(){
     const container = document.getElementById('pendingLeaveTable');
     const countBadge = document.getElementById('pendingLeaveCount');
     if(!container) return;
-    
-    const pending = leaveRequests.filter(r => r.status === 'pending');
-    if(countBadge) countBadge.textContent = pending.length;
-    
-    if(pending.length === 0){
+
+    // (request, date) 쌍으로 확장 — 각 날짜의 상태가 'pending' 인 것만
+    const pendingRows = [];
+    leaveRequests.forEach(r => {
+        (r.dates||[]).forEach(date => {
+            if(getLeaveDateStatus(r, date) === 'pending'){
+                pendingRows.push({req: r, date});
+            }
+        });
+    });
+
+    // 신청일 오름차순 → 그다음 date 오름차순
+    pendingRows.sort((a,b) => {
+        const ca = a.req.createdAt?.toDate ? a.req.createdAt.toDate().getTime() : 0;
+        const cb = b.req.createdAt?.toDate ? b.req.createdAt.toDate().getTime() : 0;
+        if(ca !== cb) return ca - cb;
+        return (a.date||'').localeCompare(b.date||'');
+    });
+
+    if(countBadge) countBadge.textContent = pendingRows.length;
+
+    if(pendingRows.length === 0){
         container.innerHTML = '<tr><td colspan="6" class="text-center" style="color:var(--text-muted)">승인 대기 중인 연차가 없습니다</td></tr>';
         return;
     }
-    
-    container.innerHTML = pending.map(r => {
+
+    container.innerHTML = pendingRows.map(({req: r, date}) => {
         const emp = employees.find(e => e.id === r.employeeId);
-        const dates = r.dates?.join(', ') || '-';
         const createdAt = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('ko-KR') : '-';
-        
-        // 황금연휴 체크
-        const isGoldenPeriod = r.dates?.some(d => {
-            const month = parseInt(d.split('-')[1]);
-            return [2,5,9,10].includes(month); // 설,어린이날,추석,개천절~한글날
-        });
-        
-        return `<tr style="${isGoldenPeriod?'background:#fff9f0':''}">
+        const month = parseInt((date||'').split('-')[1]);
+        const isGolden = [2,5,9,10].includes(month);
+        const totalDates = (r.dates||[]).length;
+        const dateIdx = (r.dates||[]).indexOf(date) + 1;
+        const multiHint = totalDates>1 ? `<span style="font-size:.7rem;color:var(--text-muted);margin-left:4px">(${dateIdx}/${totalDates})</span>` : '';
+        const dateEsc = date.replace(/'/g,"\\'");
+
+        return `<tr style="${isGolden?'background:#fff9f0':''}">
             <td>${createdAt}</td>
             <td><strong>${emp?.name || r.employeeId}</strong></td>
             <td><span class="badge badge-blue">${r.type || '연차'}</span></td>
-            <td>${dates} ${isGoldenPeriod?'<span class="badge badge-gold">황금연휴</span>':''}</td>
+            <td>${date}${multiHint} ${isGolden?'<span class="badge badge-gold">황금연휴</span>':''}</td>
             <td style="font-size:.85rem">${r.reason || '-'}</td>
             <td>
-                <button class="btn btn-sm btn-primary" onclick="approveLeave('${r.id}')">승인</button>
-                <button class="btn btn-sm btn-danger" onclick="rejectLeave('${r.id}')">반려</button>
+                <button class="btn btn-sm btn-primary" onclick="approveLeaveDate('${r.id}','${dateEsc}')">승인</button>
+                <button class="btn btn-sm btn-danger" onclick="rejectLeaveDate('${r.id}','${dateEsc}')">반려</button>
             </td>
         </tr>`;
     }).join('');
@@ -1266,43 +1305,47 @@ function renderPendingLeaves(){
 function renderApprovedLeaves(){
     const container = document.getElementById('approvedLeaveTable');
     if(!container) return;
-    
+
     const year = document.getElementById('leaveYearFilter')?.value || new Date().getFullYear().toString();
     const empFilter = document.getElementById('leaveEmployeeFilter')?.value || 'all';
-    
-    let approved = leaveRequests.filter(r => 
-        r.status === 'approved' && 
-        r.dates?.some(d => d.startsWith(year))
-    );
-    
-    if(empFilter !== 'all'){
-        approved = approved.filter(r => r.employeeId === empFilter);
-    }
-    
-    // 날짜순 정렬
-    approved.sort((a, b) => {
-        const dateA = a.dates?.[0] || '';
-        const dateB = b.dates?.[0] || '';
-        return dateA.localeCompare(dateB);
+
+    // (request, date) 쌍으로 확장 — 해당 연도이고 상태가 approved 인 것
+    const rows = [];
+    leaveRequests.forEach(r => {
+        if(empFilter !== 'all' && r.employeeId !== empFilter) return;
+        (r.dates||[]).forEach(date => {
+            if(!date.startsWith(year)) return;
+            if(getLeaveDateStatus(r, date) !== 'approved') return;
+            rows.push({req: r, date});
+        });
     });
-    
-    if(approved.length === 0){
+
+    rows.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+
+    if(rows.length === 0){
         container.innerHTML = '<tr><td colspan="6" class="text-center" style="color:var(--text-muted)">승인된 연차가 없습니다</td></tr>';
         return;
     }
-    
-    container.innerHTML = approved.map(r => {
+
+    container.innerHTML = rows.map(({req: r, date}) => {
         const emp = employees.find(e => e.id === r.employeeId);
-        const dates = r.dates?.filter(d => d.startsWith(year)).join(', ') || '-';
-        const approvedAt = r.approvedAt?.toDate ? r.approvedAt.toDate().toLocaleDateString('ko-KR') : '-';
-        
+        // per-date actedAt 이 있으면 우선 사용, 없으면 전체 approvedAt
+        const perActedAt = r.dateStatuses?.[date]?.actedAt;
+        const approvedAt = perActedAt
+            ? new Date(perActedAt).toLocaleDateString('ko-KR')
+            : (r.approvedAt?.toDate ? r.approvedAt.toDate().toLocaleDateString('ko-KR') : '-');
+        const totalDates = (r.dates||[]).length;
+        const dateIdx = (r.dates||[]).indexOf(date) + 1;
+        const multiHint = totalDates>1 ? `<span style="font-size:.7rem;color:var(--text-muted);margin-left:4px">(${dateIdx}/${totalDates})</span>` : '';
+        const dateEsc = date.replace(/'/g,"\\'");
+
         return `<tr>
             <td><strong>${emp?.name || r.employeeId}</strong></td>
             <td><span class="badge badge-blue">${r.type || '연차'}</span></td>
-            <td>${dates}</td>
+            <td>${date}${multiHint}</td>
             <td style="font-size:.85rem">${r.reason || '-'}</td>
             <td>${approvedAt}</td>
-            <td><button class="btn btn-sm btn-danger" onclick="cancelLeave('${r.id}')">취소</button></td>
+            <td><button class="btn btn-sm btn-danger" onclick="cancelLeaveDate('${r.id}','${dateEsc}')">취소</button></td>
         </tr>`;
     }).join('');
 }
@@ -1320,6 +1363,61 @@ async function approveLeave(id){
         alert('승인되었습니다.');
     }catch(e){
         alert('승인 실패: ' + e.message);
+    }
+}
+
+// ===== per-date 승인/반려/취소 =====
+async function _updateLeaveDateStatus(reqId, date, newStatus, reason){
+    const ref = db.collection('leaveRequests').doc(reqId);
+    const actedBy = (typeof currentAdmin!=='undefined' && currentAdmin?.id) || 'admin';
+    await db.runTransaction(async tx => {
+        const doc = await tx.get(ref);
+        if(!doc.exists) throw new Error('연차 신청 문서를 찾을 수 없습니다.');
+        const data = doc.data() || {};
+        const dates = data.dates || [];
+        if(!dates.includes(date)) throw new Error('해당 날짜가 이 신청에 포함되어 있지 않습니다.');
+        const ds = {...(data.dateStatuses||{})};
+        const entry = { status: newStatus, actedAt: new Date().toISOString(), actedBy };
+        if(reason) entry.reason = reason;
+        ds[date] = entry;
+        const overall = _computeOverallLeaveStatus(dates, ds, data.status);
+        const update = { dateStatuses: ds, status: overall };
+        // overall 이 approved 로 바뀌었고 approvedAt 이 없으면 서버 타임스탬프 세팅
+        if(overall === 'approved' && !data.approvedAt){
+            update.approvedAt = firebase.firestore.FieldValue.serverTimestamp();
+        }
+        tx.update(ref, update);
+    });
+    await loadLeaveRequests();
+    renderLeaveManagement();
+    if(typeof renderEmployees === 'function') renderEmployees();
+}
+
+async function approveLeaveDate(reqId, date){
+    if(!confirm(`${date} 연차를 승인하시겠습니까?`)) return;
+    try{
+        await _updateLeaveDateStatus(reqId, date, 'approved', null);
+    }catch(e){
+        alert('승인 실패: ' + (e.message||e));
+    }
+}
+
+async function rejectLeaveDate(reqId, date){
+    const reason = prompt(`${date} 연차 반려 사유를 입력하세요:`);
+    if(reason === null) return;
+    try{
+        await _updateLeaveDateStatus(reqId, date, 'rejected', reason);
+    }catch(e){
+        alert('반려 실패: ' + (e.message||e));
+    }
+}
+
+async function cancelLeaveDate(reqId, date){
+    if(!confirm(`${date} 연차를 취소하시겠습니까?`)) return;
+    try{
+        await _updateLeaveDateStatus(reqId, date, 'cancelled', null);
+    }catch(e){
+        alert('취소 실패: ' + (e.message||e));
     }
 }
 
