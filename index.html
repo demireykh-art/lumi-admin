@@ -416,6 +416,13 @@
                     <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
                         층별·장소별로 재고를 관리합니다. 장소를 추가/수정/삭제하고 순서를 조정할 수 있습니다.
                     </div>
+                    <!-- 중복 장소 통합 안내 -->
+                    <div id="adminDupLocBox" style="display:none;background:#FFF4E5;border:2px solid #FFB85C;padding:1rem 1.25rem;border-radius:8px;margin-bottom:1.5rem">
+                        <div style="font-weight:700;font-size:.95rem;margin-bottom:.5rem;color:#A05A00">⚠️ 중복 장소 발견</div>
+                        <div id="adminDupLocList" style="font-size:.85rem;color:#7a4500;margin-bottom:.75rem;line-height:1.6"></div>
+                        <div style="font-size:.75rem;color:#7a4500;margin-bottom:.75rem">실사된 재고 수량은 손실 없이 합산되며, 가장 먼저 생성된(order 작은) 장소를 유지합니다.</div>
+                        <button class="btn btn-primary" onclick="adminMergeDuplicateLocations()" style="padding:.6rem 1.25rem;font-size:.9rem;font-weight:700;background:#E07B00;border-color:#E07B00">🔧 중복 통합 실행</button>
+                    </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
                         <div class="card">
                             <div class="card-title" style="display:flex;align-items:center;gap:.5rem">
@@ -1044,8 +1051,8 @@
     <script src="expense-categories.js"></script>
     <script src="card-statements.js"></script>
     <script src="expense.js"></script>
-    <script src="hr-attendance.js"></script>
-    <script src="inventory.js?v=20260613b"></script>
+    <script src="hr-attendance.js?v=20260613a"></script>
+    <script src="inventory.js?v=20260613c"></script>
     <script src="finance.js"></script>
 </body>
 </html>

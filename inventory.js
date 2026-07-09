@@ -565,6 +565,125 @@ async function loadLocations(){
     }
     renderLocations();
     updateLocationFilters();
+    showAdminDuplicateLocationBanner();
+}
+
+// ===== 중복 장소 통합 (admin 측) =====
+function _adminGroupDuplicateLocations(){
+    const groups={};
+    locations.forEach(loc=>{
+        const key=String(loc.name||'').trim();
+        if(!key) return;
+        if(!groups[key]) groups[key]=[];
+        groups[key].push(loc);
+    });
+    return Object.entries(groups).filter(([,list])=>list.length>1);
+}
+
+function showAdminDuplicateLocationBanner(){
+    const box=document.getElementById('adminDupLocBox');
+    const listEl=document.getElementById('adminDupLocList');
+    if(!box||!listEl) return;
+    const dups=_adminGroupDuplicateLocations();
+    if(dups.length===0){ box.style.display='none'; return; }
+    listEl.innerHTML=dups.map(([name,list])=>{
+        const floors=Array.from(new Set(list.map(l=>l.floor||'?'))).join(', ');
+        return `• <strong>${name}</strong> — ${list.length}개 중복 (${floors})`;
+    }).join('<br>');
+    box.style.display='block';
+}
+
+function _collectLocVariants(loc){
+    const variants=new Set();
+    const name=String(loc.name||'').trim();
+    const floor=String(loc.floor||'').trim();
+    if(name){
+        variants.add(name);
+        if(floor) variants.add(`${floor}-${name}`);
+    }
+    if(loc.id) variants.add(loc.id);
+    return variants;
+}
+
+async function adminMergeDuplicateLocations(){
+    const dups=_adminGroupDuplicateLocations();
+    if(dups.length===0){ alert('통합할 중복 장소가 없습니다.'); return; }
+
+    const summary=dups.map(([name,list])=>`• ${name} (${list.length}개)`).join('\n');
+    if(!confirm(`다음 중복 장소를 통합합니다:\n\n${summary}\n\n각 그룹에서 가장 먼저 생성된(또는 order 작은) 장소를 남기고 나머지는 삭제합니다.\n실사된 재고 수량은 손실 없이 합산됩니다.\n\n계속하시겠습니까?`)) return;
+
+    let report=[];
+    try{
+        for(const [name,group] of dups){
+            group.sort((a,b)=>{
+                const oa=a.order!=null?a.order:Infinity;
+                const ob=b.order!=null?b.order:Infinity;
+                if(oa!==ob) return oa-ob;
+                return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
+            });
+            const canonical=group[0];
+            const dupesToRemove=group.slice(1);
+            const canonicalKey=String(canonical.name||'').trim();
+
+            const allVariants=new Set();
+            group.forEach(loc=>{
+                _collectLocVariants(loc).forEach(v=>allVariants.add(v));
+            });
+            allVariants.delete(canonicalKey);
+
+            const invSnap=await db.collection('inventory').get();
+            let itemsUpdated=0;
+            let batch=db.batch();
+            let opCount=0;
+            const flush=async()=>{
+                if(opCount>0){ await batch.commit(); batch=db.batch(); opCount=0; }
+            };
+
+            for(const doc of invSnap.docs){
+                const data=doc.data();
+                if(!data.locations||typeof data.locations!=='object') continue;
+                let changed=false;
+                const newLocs={...data.locations};
+                for(const variant of allVariants){
+                    if(newLocs[variant]!=null){
+                        const qty=Number(newLocs[variant])||0;
+                        if(qty>0){
+                            newLocs[canonicalKey]=(Number(newLocs[canonicalKey])||0)+qty;
+                        }
+                        delete newLocs[variant];
+                        changed=true;
+                    }
+                }
+                if(changed){
+                    const newTotal=Object.values(newLocs).reduce((s,q)=>s+(Number(q)||0),0);
+                    batch.update(doc.ref,{
+                        locations:newLocs,
+                        currentStock:newTotal,
+                        totalStock:newTotal,
+                        updatedAt:new Date().toISOString()
+                    });
+                    opCount++; itemsUpdated++;
+                    if(opCount>=450) await flush();
+                }
+            }
+            for(const loc of dupesToRemove){
+                batch.delete(db.collection('locations').doc(loc.id));
+                opCount++;
+                if(opCount>=450) await flush();
+            }
+            await flush();
+            report.push(`• ${name}: ${dupesToRemove.length}개 삭제, 품목 ${itemsUpdated}개 통합`);
+        }
+
+        alert(`✅ 통합 완료\n\n${report.join('\n')}\n\n장소 목록과 재고를 다시 불러옵니다.`);
+        // 재로드
+        await loadLocations();
+        if(typeof loadInventory==='function') await loadInventory();
+        if(typeof renderInventory==='function') renderInventory();
+    }catch(e){
+        console.error('통합 실패:',e);
+        alert('통합 실패: '+(e.message||e));
+    }
 }
 
 function renderLocations(){
