@@ -1072,6 +1072,47 @@
         </div>
     </div>
 
+    <!-- 재고 장소 이동 모달 -->
+    <div class="modal" id="moveStockModal">
+        <div class="modal-content" style="max-width:440px">
+            <div class="modal-header">
+                <div class="modal-title">🔄 재고 장소 이동</div>
+                <button class="modal-close" onclick="closeModal('moveStockModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="moveStockItemId">
+                <div class="form-group">
+                    <label class="form-label">품목명</label>
+                    <input type="text" class="form-input" id="moveStockItemName" disabled style="background:#f5f5f5;font-weight:600">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">출발 장소 <span style="color:var(--red)">*</span></label>
+                    <select class="form-select" id="moveStockFromLoc" onchange="onMoveStockFromChange()">
+                        <option value="">장소 선택</option>
+                    </select>
+                    <div style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem" id="moveStockFromInfo">-</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">이동 수량 <span style="color:var(--red)">*</span></label>
+                    <input type="number" class="form-input" id="moveStockQty" step="0.01" min="0" placeholder="이동할 수량">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">도착 장소 <span style="color:var(--red)">*</span></label>
+                    <select class="form-select" id="moveStockToLoc">
+                        <option value="">장소 선택</option>
+                    </select>
+                </div>
+                <div style="background:var(--bg);padding:.6rem;border-radius:6px;font-size:.8rem;color:var(--text-secondary)">
+                    ℹ️ 이동은 총 재고량에 영향을 주지 않으며, 장소별 수량만 재배치됩니다.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('moveStockModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" onclick="saveMoveStock()" style="flex:2;background:#3b82f6">🔄 이동 실행</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 장소 관리 모달 -->
     <div class="modal" id="locationManageModal">
         <div class="modal-content" style="max-width:500px">
@@ -3478,6 +3519,7 @@
                                 ${lastQty!=null?`<span>지난실사: ${lastQty} (${lastDate})</span>`:''}
                                 ${item.lastReceiveDate?`<span style="color:var(--green)">최근입고: ${item.lastReceiveDate}</span>`:''}
                                 <button onclick="openReceiveItemModal('${item.id}')" style="background:none;border:1px solid var(--green);color:var(--green);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">📥 입고</button>
+                                <button onclick="openMoveStockModal('${item.id}')" style="background:none;border:1px solid #3b82f6;color:#3b82f6;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🔄 이동</button>
                                 <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">✏️ 수정</button>
                                 <button onclick="deleteInventoryItem('${item.id}','${item.name.replace(/'/g,"\\'")}' )" style="background:none;border:1px solid var(--red);color:var(--red);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🗑️ 삭제</button>
                             </div>
@@ -3978,6 +4020,98 @@
                 renderInvAuditList();
                 renderLowStockAlert();
             }catch(e){ alert('입고 실패: ' + e.message); }
+        }
+
+        // ===== 🔄 재고 장소 이동 =====
+        function openMoveStockModal(itemId){
+            const item=invItems.find(i=>i.id===itemId);
+            if(!item){ alert('품목을 찾을 수 없습니다.'); return; }
+            document.getElementById('moveStockItemId').value=itemId;
+            document.getElementById('moveStockItemName').value=item.name||'';
+            document.getElementById('moveStockQty').value='';
+            document.getElementById('moveStockFromInfo').textContent='-';
+
+            // 출발 장소: 현재 재고가 있는 장소만
+            const fromSel=document.getElementById('moveStockFromLoc');
+            const locs=item.locations&&typeof item.locations==='object'?item.locations:{};
+            const withStock=Object.entries(locs).filter(([,q])=>(Number(q)||0)>0);
+            fromSel.innerHTML='<option value="">장소 선택</option>'+
+                withStock.map(([loc,qty])=>`<option value="${loc}">${loc} (현재 ${qty}${item.unit||'개'})</option>`).join('');
+
+            // 도착 장소: 등록된 모든 장소
+            const toSel=document.getElementById('moveStockToLoc');
+            toSel.innerHTML='<option value="">장소 선택</option>'+
+                (receivingLocations||[]).map(loc=>{
+                    const v=`${loc.floor}-${loc.name}`;
+                    return `<option value="${v}">${v}</option>`;
+                }).join('');
+
+            openModal('moveStockModal');
+        }
+
+        function onMoveStockFromChange(){
+            const itemId=document.getElementById('moveStockItemId').value;
+            const loc=document.getElementById('moveStockFromLoc').value;
+            const item=invItems.find(i=>i.id===itemId);
+            const info=document.getElementById('moveStockFromInfo');
+            if(!item||!loc){ info.textContent='-'; return; }
+            const qty=Number(item.locations?.[loc])||0;
+            info.textContent=`현재 재고: ${qty}${item.unit||'개'}`;
+            document.getElementById('moveStockQty').max=qty;
+        }
+
+        async function saveMoveStock(){
+            const itemId=document.getElementById('moveStockItemId').value;
+            const fromLoc=document.getElementById('moveStockFromLoc').value;
+            const toLoc=document.getElementById('moveStockToLoc').value;
+            const qty=parseFloat(document.getElementById('moveStockQty').value)||0;
+            if(!fromLoc){ alert('출발 장소를 선택하세요.'); return; }
+            if(!toLoc){ alert('도착 장소를 선택하세요.'); return; }
+            if(fromLoc===toLoc){ alert('출발지와 도착지가 동일합니다.'); return; }
+            if(qty<=0){ alert('이동 수량을 입력하세요.'); return; }
+
+            const staffName=currentUser?.name||currentUser?.id||'staff';
+            try{
+                const ref=db.collection('inventory').doc(itemId);
+                await db.runTransaction(async tx=>{
+                    const doc=await tx.get(ref);
+                    if(!doc.exists) throw new Error('품목을 찾을 수 없습니다.');
+                    const data=doc.data()||{};
+                    const locs={...(data.locations||{})};
+                    const fromQty=Number(locs[fromLoc])||0;
+                    if(fromQty<qty) throw new Error(`출발 장소의 재고(${fromQty})가 이동 수량(${qty})보다 적습니다.`);
+                    // 이동 반영
+                    const newFrom=fromQty-qty;
+                    if(newFrom>0) locs[fromLoc]=newFrom; else delete locs[fromLoc];
+                    locs[toLoc]=(Number(locs[toLoc])||0)+qty;
+                    const newTotal=Object.values(locs).reduce((s,q)=>s+(Number(q)||0),0);
+                    tx.update(ref,{
+                        locations:locs,
+                        currentStock:newTotal,
+                        totalStock:newTotal,
+                        updatedAt:new Date().toISOString()
+                    });
+                    // 이동 로그
+                    const logRef=db.collection('inventoryLogs').doc();
+                    tx.set(logRef,{
+                        itemId,
+                        itemName:data.name||'',
+                        type:'move',
+                        fromLocation:fromLoc,
+                        toLocation:toLoc,
+                        qty,
+                        staffName,
+                        createdAt:new Date().toISOString()
+                    });
+                });
+                closeModal('moveStockModal');
+                alert(`✅ ${fromLoc} → ${toLoc} 로 ${qty} 이동 완료`);
+                await loadInventoryForStaff();
+                renderInvAuditList();
+            }catch(e){
+                console.error('이동 실패:',e);
+                alert('이동 실패: '+(e.message||e));
+            }
         }
 
         function openEditItemModal(itemId){
