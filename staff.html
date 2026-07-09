@@ -468,6 +468,7 @@
                         </label>
                         <div style="display:flex;gap:.5rem">
                             <select id="invSortBy" class="form-select" onchange="filterInventoryItems()" style="flex:1;padding:.5rem;border:1px solid var(--border);border-radius:6px;font-size:.85rem">
+                                <option value="recent">최근 등록 순서</option>
                                 <option value="name">이름순 (가나다)</option>
                                 <option value="location">장소순</option>
                                 <option value="stock-low">재고 적은순</option>
@@ -900,8 +901,8 @@
                     <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">유통기한</label>
-                    <input type="date" class="form-input" id="newItemExpiry">
+                    <label class="form-label">유통기한 <span style="color:var(--red)">*</span></label>
+                    <input type="date" class="form-input" id="newItemExpiry" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">🔗 구매 링크</label>
@@ -911,8 +912,8 @@
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보</div>
                     <div style="display:flex;gap:.5rem">
                         <div class="form-group" style="flex:1">
-                            <label class="form-label" style="font-size:.75rem">구매 총액 (원)</label>
-                            <input type="number" class="form-input" id="newItemTotalPrice" min="0" placeholder="500000" oninput="calcNewItemUnit()">
+                            <label class="form-label" style="font-size:.75rem">구매 총액 (원) <span style="color:var(--red)">*</span></label>
+                            <input type="number" class="form-input" id="newItemTotalPrice" min="1" placeholder="500000" oninput="calcNewItemUnit()" required>
                         </div>
                         <div class="form-group" style="flex:1">
                             <label class="form-label" style="font-size:.75rem">박스 수</label>
@@ -957,8 +958,8 @@
                         <input type="date" class="form-input" id="receiveDate">
                     </div>
                     <div class="form-group" style="flex:1;margin-bottom:0">
-                        <label class="form-label">유통기한</label>
-                        <input type="date" class="form-input" id="receiveExpiry">
+                        <label class="form-label">유통기한 <span style="color:var(--red)">*</span></label>
+                        <input type="date" class="form-input" id="receiveExpiry" required>
                     </div>
                 </div>
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:.75rem">
@@ -976,8 +977,8 @@
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보 (선택)</div>
                     <div style="display:flex;gap:.5rem">
                         <div class="form-group" style="flex:1;margin-bottom:0">
-                            <label class="form-label" style="font-size:.75rem">구매 총액 (원)</label>
-                            <input type="number" class="form-input" id="receivePrice" min="0" placeholder="0" oninput="calcReceiveUnit()">
+                            <label class="form-label" style="font-size:.75rem">구매 총액 (원) <span style="color:var(--red)">*</span></label>
+                            <input type="number" class="form-input" id="receivePrice" min="1" placeholder="0" oninput="calcReceiveUnit()" required>
                         </div>
                         <div class="form-group" style="flex:1;margin-bottom:0">
                             <label class="form-label" style="font-size:.75rem">박스 수</label>
@@ -3372,8 +3373,18 @@
             }
             
             // 정렬
-            const sortBy = document.getElementById('invSortBy')?.value || 'name';
-            if(sortBy === 'name'){
+            const sortBy = document.getElementById('invSortBy')?.value || 'recent';
+            if(sortBy === 'recent'){
+                // 최근 등록순: createdAt 내림차순 (없으면 id 를 tiebreaker 로)
+                items.sort((a,b)=>{
+                    const ta=a.createdAt?String(a.createdAt):'';
+                    const tb=b.createdAt?String(b.createdAt):'';
+                    if(ta&&tb) return tb.localeCompare(ta);
+                    if(ta) return -1;
+                    if(tb) return 1;
+                    return String(b.id||'').localeCompare(String(a.id||''));
+                });
+            }else if(sortBy === 'name'){
                 items.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
             }else if(sortBy === 'location'){
                 items.sort((a,b)=>{
@@ -3592,16 +3603,30 @@
             }catch(e){console.error('실사 저장 오류:',e);}
         }
 
+        let _submitInProgress=false;
         async function submitInventoryAudit(){
+            if(_submitInProgress) return; // 중복 클릭 방지
             const filledItems=Object.keys(auditInputs).length;
             const totalLocEntries=Object.values(auditInputs).reduce((s,locs)=>s+Object.keys(locs).length,0);
             if(!totalLocEntries){alert('입력된 실사 데이터가 없습니다.');return;}
-            alert(`✅ ${filledItems}개 품목 / ${totalLocEntries}개 장소 실사 완료!\n\n각 항목은 입력 즉시 시스템에 반영되었습니다.`);
-            auditInputs={};
-            await loadInventoryForStaff();
-            await loadLastWeekAudits();
-            renderInvAuditList();
-            renderLowStockAlert();
+            _submitInProgress=true;
+            const btn=document.getElementById('invSubmitBtn');
+            const originalText=btn?btn.textContent:'';
+            if(btn){ btn.textContent='제출 중...'; btn.classList.add('disabled'); btn.classList.remove('ready'); }
+            try{
+                alert(`✅ ${filledItems}개 품목 / ${totalLocEntries}개 장소 실사 완료!\n\n각 항목은 입력 즉시 시스템에 반영되었습니다.`);
+                auditInputs={};
+                await loadInventoryForStaff();
+                await loadLastWeekAudits();
+                renderInvAuditList();
+                renderLowStockAlert();
+            }finally{
+                _submitInProgress=false;
+                // 명시적 리셋: 입력 없는 상태로 버튼 초기화
+                if(btn){ btn.textContent='실사 결과 제출'; btn.classList.add('disabled'); btn.classList.remove('ready'); }
+                // 이후 재입력이 들어오면 updateInvProgress 가 다시 활성화
+                updateInvProgress();
+            }
         }
 
         async function initInventoryTab(){
@@ -3719,25 +3744,31 @@
         async function saveNewItem(){
             const name=document.getElementById('newItemName').value.trim();
             if(!name){alert('품목명을 입력하세요.');return;}
-            
+
+            // 필수: 유통기한 + 구매가격
+            const expiry=document.getElementById('newItemExpiry').value;
+            const totalPriceCheck=parseFloat(document.getElementById('newItemTotalPrice').value)||0;
+            if(!expiry){alert('유통기한을 입력하세요.');document.getElementById('newItemExpiry').focus();return;}
+            if(totalPriceCheck<=0){alert('구매 총 금액을 입력하세요.');document.getElementById('newItemTotalPrice').focus();return;}
+
             // 장소별 재고 수집
             const container = document.getElementById('newLocationsList');
             const rows = container.querySelectorAll('div[id^="newLoc_"]');
             const locations = {};
             let totalStock = 0;
-            
+
             rows.forEach(row => {
                 const locSelect = row.querySelector('select');
                 const qtyInput = row.querySelector('input[type="number"]');
                 const loc = locSelect?.value;
                 const qty = parseFloat(qtyInput?.value || 0);
-                
+
                 if(loc && qty > 0){
                     locations[loc] = qty;
                     totalStock += qty;
                 }
             });
-            
+
             const totalPrice=parseFloat(document.getElementById('newItemTotalPrice').value)||0;
             const boxes=parseFloat(document.getElementById('newItemBoxes').value)||1;
             const perBox=parseFloat(document.getElementById('newItemPerBox').value)||1;
@@ -3871,7 +3902,10 @@
             const id = document.getElementById('receiveItemId').value;
             const receiveDate = document.getElementById('receiveDate').value;
             const receiveExpiry = document.getElementById('receiveExpiry').value;
+            const receivePriceCheck = parseFloat(document.getElementById('receivePrice').value)||0;
             if(!id || !receiveDate){ alert('입고일을 입력해주세요.'); return; }
+            if(!receiveExpiry){ alert('유통기한은 필수 입력입니다.'); document.getElementById('receiveExpiry').focus(); return; }
+            if(receivePriceCheck<=0){ alert('구매 총 금액을 입력하세요.'); document.getElementById('receivePrice').focus(); return; }
 
             const container = document.getElementById('receiveLocationsList');
             const rows = container.querySelectorAll('div[id^="recvLoc_"]');
