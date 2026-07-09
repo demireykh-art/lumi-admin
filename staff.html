@@ -480,6 +480,11 @@
                     
                     <div id="invLowStockAlert" style="display:none;background:rgba(168,90,90,.08);border:1px solid rgba(168,90,90,.2);padding:.6rem .8rem;border-radius:6px;margin-bottom:.5rem;font-size:.85rem;color:var(--red)"></div>
                     <div class="inv-cat-filters" id="invCatButtons"></div>
+                    <!-- 상위 품목(카테고리) 필터 칩 -->
+                    <div style="margin-bottom:.5rem">
+                        <div style="font-size:.75rem;color:var(--text-secondary);margin-bottom:.3rem">📂 상위 품목 그룹 필터</div>
+                        <div id="invParentButtons" style="display:flex;flex-wrap:wrap;gap:.3rem"></div>
+                    </div>
                     <div class="inv-progress" id="invProgress">
                         <span>진행률</span>
                         <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
@@ -3054,6 +3059,7 @@
         let auditInputs={}; // {itemId: {locId: qty, ...}} - 장소별 실사값
         let lastWeekAudits={}; // {itemId: lastAuditData}
         let currentInvCat=''; // '' = 전체
+        let currentInvParent=''; // '' = 전체 (상위 품목 필터)
         let currentAuditLocation=''; // '' = 전체 장소
 
         async function loadInventoryForStaff(){
@@ -3069,14 +3075,18 @@
             if(!select)return;
             try{
                 const snapshot=await db.collection('locations').orderBy('order').get();
-                const locationList=snapshot.docs.map(d=>({id:d.id,name:d.data().name}));
+                const locationList=snapshot.docs.map(d=>({id:d.id,name:d.data().name,floor:d.data().floor||''}));
                 locationList.sort((a,b)=>{
-                    const floorA=a.name.startsWith('5층')?0:1;
-                    const floorB=b.name.startsWith('5층')?0:1;
+                    const floorA=(a.floor||a.name||'').startsWith('5층')?0:1;
+                    const floorB=(b.floor||b.name||'').startsWith('5층')?0:1;
                     if(floorA!==floorB)return floorA-floorB;
                     return a.name.localeCompare(b.name,'ko');
                 });
-                select.innerHTML='<option value="">전체 장소 (모든 품목)</option>'+
+                // 층별 옵션 (전체 5층/6층) + 개별 장소
+                select.innerHTML=
+                    '<option value="">전체 장소 (모든 품목)</option>'+
+                    '<option value="__floor__5층">🏢 5층 전체</option>'+
+                    '<option value="__floor__6층">🏢 6층 전체</option>'+
                     locationList.map(loc=>`<option value="${loc.id}">${loc.name}</option>`).join('');
             }catch(e){console.error('장소 로드:',e);}
         }
@@ -3382,11 +3392,45 @@
                     <span class="cat-icon">${c.icon}</span>${c.label}<span class="cat-count">${count}개</span>
                 </div>`;
             }).join('');
+            // 상위 품목 칩도 같이 갱신 (현재 카테고리 필터에 따라 pool 변경됨)
+            if(typeof renderInvParentButtons==='function') renderInvParentButtons();
         }
 
         function setInvCat(cat){
             currentInvCat=cat;
             renderInvCatButtons();
+            renderInvParentButtons();
+            renderInvAuditList();
+        }
+
+        // ===== 상위 품목(카테고리) 칩 필터 =====
+        function renderInvParentButtons(){
+            const container=document.getElementById('invParentButtons');
+            if(!container) return;
+            // 현재 카테고리(currentInvCat) 필터 아래에서만 존재하는 parentName 을 집계
+            const pool=currentInvCat?invItems.filter(i=>i.category===currentInvCat):invItems;
+            const counts=new Map();
+            pool.forEach(i=>{
+                const p=String(i.parentName||'').trim();
+                if(!p) return;
+                counts.set(p,(counts.get(p)||0)+1);
+            });
+            if(counts.size===0){
+                container.innerHTML='<span style="font-size:.72rem;color:var(--text-muted)">상위 품목이 지정된 재고가 없습니다.</span>';
+                return;
+            }
+            const groups=Array.from(counts.entries())
+                .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ko'));
+            const chipStyle=(active)=>`display:inline-flex;align-items:center;gap:4px;padding:.28rem .55rem;font-size:.74rem;font-weight:600;border-radius:14px;cursor:pointer;user-select:none;border:1px solid ${active?'#4338ca':'#d1d5db'};background:${active?'#4338ca':'#fff'};color:${active?'#fff':'#374151'}`;
+            const allChip=`<span style="${chipStyle(!currentInvParent)}" onclick="setInvParent('')">전체 <span style="opacity:.7">${pool.length}</span></span>`;
+            container.innerHTML=allChip+groups.map(([name,cnt])=>
+                `<span style="${chipStyle(currentInvParent===name)}" onclick="setInvParent('${name.replace(/'/g,"\\'")}')">📂 ${name} <span style="opacity:.7">${cnt}</span></span>`
+            ).join('');
+        }
+
+        function setInvParent(parent){
+            currentInvParent=(currentInvParent===parent)?'':parent; // 재클릭 시 해제
+            renderInvParentButtons();
             renderInvAuditList();
         }
 
@@ -3410,20 +3454,37 @@
                 items=items.filter(i=>i.category===currentInvCat);
             }
             
-            // 장소 필터
+            // 장소 필터 (층 전체 옵션 포함)
             if(currentAuditLocation){
-                items=items.filter(i=>{
-                    // locations 객체 확인
-                    if(i.locations){
-                        const qty=i.locations[currentAuditLocation];
-                        return qty&&qty>0;
-                    }
-                    // 구 형식 location 필드 확인
-                    if(i.location === currentAuditLocation){
-                        return true;
-                    }
-                    return false;
-                });
+                const floorMatch=/^__floor__(.+)$/.exec(currentAuditLocation);
+                if(floorMatch){
+                    const floor=floorMatch[1]; // '5층' or '6층'
+                    items=items.filter(i=>{
+                        const locs=i.locations&&typeof i.locations==='object'?i.locations:{};
+                        // 키가 층으로 시작 (예: '5층-처치실') 하는 값이 있고 재고 > 0
+                        const hasFloorStock=Object.entries(locs).some(([k,q])=>
+                            (String(k)||'').startsWith(floor)&&(Number(q)||0)>0);
+                        if(hasFloorStock) return true;
+                        // 구 형식 fallback
+                        return (i.location||'').startsWith(floor);
+                    });
+                }else{
+                    items=items.filter(i=>{
+                        if(i.locations){
+                            const qty=i.locations[currentAuditLocation];
+                            return qty&&qty>0;
+                        }
+                        if(i.location === currentAuditLocation){
+                            return true;
+                        }
+                        return false;
+                    });
+                }
+            }
+
+            // 상위 품목(카테고리) 필터
+            if(currentInvParent){
+                items=items.filter(i=>(i.parentName||'')===currentInvParent);
             }
             
             // 정렬
@@ -3718,6 +3779,7 @@
             }catch(_){}
 
             renderInvCatButtons();
+            renderInvParentButtons();
             renderInvAuditList();
             renderLowStockAlert();
         }
