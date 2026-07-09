@@ -469,6 +469,7 @@
                         <div style="display:flex;gap:.5rem">
                             <select id="invSortBy" class="form-select" onchange="filterInventoryItems()" style="flex:1;padding:.5rem;border:1px solid var(--border);border-radius:6px;font-size:.85rem">
                                 <option value="recent">최근 등록 순서</option>
+                                <option value="parent">상위 품목 그룹순</option>
                                 <option value="name">이름순 (가나다)</option>
                                 <option value="location">장소순</option>
                                 <option value="stock-low">재고 적은순</option>
@@ -862,7 +863,12 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">품목명 *</label>
-                    <input type="text" class="form-input" id="newItemName" placeholder="예: 멸균장갑(M)">
+                    <input type="text" class="form-input" id="newItemName" placeholder="예: 리도카인크림 (하위 품목명)">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(선택 · 예: 마취크림)</span></label>
+                    <input type="text" class="form-input" id="newItemParent" list="parentItemDatalist" placeholder="🔍 상위 품목명 입력 or 검색">
+                    <datalist id="parentItemDatalist"></datalist>
                 </div>
                 <div style="display:flex;gap:.5rem">
                     <div class="form-group" style="flex:1">
@@ -1011,6 +1017,10 @@
                 <div class="form-group">
                     <label class="form-label">품목명</label>
                     <input type="text" class="form-input" id="editItemName" disabled style="background:#f5f5f5">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(선택 · 하위 품목 그룹핑용)</span></label>
+                    <input type="text" class="form-input" id="editItemParent" list="parentItemDatalist" placeholder="상위 품목명">
                 </div>
                 <div class="form-group">
                     <label class="form-label">카테고리</label>
@@ -3389,7 +3399,10 @@
             // 검색 필터
             const searchTerm = document.getElementById('invSearchInput')?.value?.trim().toLowerCase();
             if(searchTerm){
-                items = items.filter(i => (i.name || '').toLowerCase().includes(searchTerm));
+                items = items.filter(i =>
+                    (i.name || '').toLowerCase().includes(searchTerm) ||
+                    (i.parentName || '').toLowerCase().includes(searchTerm)
+                );
             }
             
             // 카테고리 필터
@@ -3424,6 +3437,15 @@
                     if(ta) return -1;
                     if(tb) return 1;
                     return String(b.id||'').localeCompare(String(a.id||''));
+                });
+            }else if(sortBy === 'parent'){
+                // 상위 품목 그룹순: 상위품목명(없으면 자기 이름) → 이름순
+                items.sort((a,b)=>{
+                    const pa=(a.parentName||a.name||'').trim();
+                    const pb=(b.parentName||b.name||'').trim();
+                    const cmp=pa.localeCompare(pb,'ko');
+                    if(cmp!==0) return cmp;
+                    return (a.name||'').localeCompare(b.name||'','ko');
                 });
             }else if(sortBy === 'name'){
                 items.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
@@ -3511,7 +3533,7 @@
                 return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
                     <div class="inv-item-row-header">
                         <div class="inv-item-info">
-                            <div class="inv-item-name">${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':'' }</div>
+                            <div class="inv-item-name">${item.parentName?`<span style="display:inline-block;background:#eef2ff;color:#4338ca;font-size:.6rem;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-right:4px">📂 ${item.parentName}</span>`:''}${item.name}${buyLink}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':'' }</div>
                             <div class="inv-item-meta">
                                 <span>${catLabel}</span>
                                 <span>총 재고: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
@@ -3705,8 +3727,21 @@
         }
 
         // ===== 신규 품목 등록 =====
+        function _refreshParentItemDatalist(){
+            const dl=document.getElementById('parentItemDatalist');
+            if(!dl) return;
+            // 기존 parentName / 자기 자신 이름 후보로 등록
+            const set=new Set();
+            (invItems||[]).forEach(i=>{
+                if(i.parentName) set.add(String(i.parentName).trim());
+                if(i.name) set.add(String(i.name).trim());
+            });
+            dl.innerHTML=Array.from(set).sort((a,b)=>a.localeCompare(b,'ko'))
+                .map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+        }
         function openNewItemModal(){
-            ['newItemName','newItemTotalPrice','newItemExpiry','newItemPurchaseLink'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+            _refreshParentItemDatalist();
+            ['newItemName','newItemTotalPrice','newItemExpiry','newItemPurchaseLink','newItemParent'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
             document.getElementById('newItemType').value='disposable';
             document.getElementById('newItemCategory').value='common';
             document.getElementById('newItemSafety').value='';
@@ -3819,6 +3854,7 @@
             
             const data={
                 name:name,
+                parentName:(document.getElementById('newItemParent')?.value||'').trim(),
                 type:document.getElementById('newItemType').value,
                 category:document.getElementById('newItemCategory').value,
                 unit:'개',
@@ -4122,8 +4158,11 @@
             console.log('📍 locations 객체:', item.locations);
             console.log('📍 단일 location:', item.location);
             
+            _refreshParentItemDatalist();
             document.getElementById('editItemId').value=itemId;
             document.getElementById('editItemName').value=item.name||'';
+            const parentInp=document.getElementById('editItemParent');
+            if(parentInp) parentInp.value=item.parentName||'';
             document.getElementById('editItemCategory').value=item.category||'common';
             document.getElementById('editItemSafety').value=item.safetyStock||0;
             document.getElementById('editItemExpiry').value=item.expiryDate||'';
@@ -4255,6 +4294,7 @@
             const totalQty=boxes*perBox;
             
             const data={
+                parentName:(document.getElementById('editItemParent')?.value||'').trim(),
                 category:document.getElementById('editItemCategory').value,
                 locations:locations, // 다중 장소
                 currentStock:totalStock, // 총 재고
