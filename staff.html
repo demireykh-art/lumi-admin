@@ -3708,6 +3708,15 @@
                 });
             }
             
+            // 파트별 계정 자동 카테고리 필터
+            //   nurse@... / desk@... / skin@...  → 로그인 시 해당 카테고리 자동 선택
+            try{
+                const email=(auth?.currentUser?.email||'').toLowerCase();
+                const local=email.split('@')[0];
+                const map={nurse:'nursing',desk:'desk',skin:'skin'};
+                if(map[local]){ currentInvCat=map[local]; }
+            }catch(_){}
+
             renderInvCatButtons();
             renderInvAuditList();
             renderLowStockAlert();
