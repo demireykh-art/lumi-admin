@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>THE CLINIC LUMI - Staff</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="apple-touch-icon" href="/favicon.png">
@@ -482,7 +485,10 @@
                     <div class="inv-cat-filters" id="invCatButtons"></div>
                     <!-- 상위 품목(카테고리) 필터 칩 -->
                     <div style="margin-bottom:.5rem">
-                        <div style="font-size:.75rem;color:var(--text-secondary);margin-bottom:.3rem">📂 상위 품목 그룹 필터</div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+                            <span style="font-size:.75rem;color:var(--text-secondary)">📂 상위 품목 그룹 필터</span>
+                            <button id="invUnusedToggle" onclick="toggleInvUnused()" style="border:1px solid #d1d5db;background:#fff;color:#374151;font-size:.72rem;font-weight:600;padding:.28rem .6rem;border-radius:14px;cursor:pointer">😴 30일+ 미사용 <span id="invUnusedCount" style="opacity:.7">0</span></button>
+                        </div>
                         <div id="invParentButtons" style="display:flex;flex-wrap:wrap;gap:.3rem"></div>
                     </div>
                     <div class="inv-progress" id="invProgress">
@@ -3060,6 +3066,7 @@
         let lastWeekAudits={}; // {itemId: lastAuditData}
         let currentInvCat=''; // '' = 전체
         let currentInvParent=''; // '' = 전체 (상위 품목 필터)
+        let showInvUnusedOnly=false; // 30일+ 미사용 토글
         let currentAuditLocation=''; // '' = 전체 장소
 
         async function loadInventoryForStaff(){
@@ -3394,6 +3401,7 @@
             }).join('');
             // 상위 품목 칩도 같이 갱신 (현재 카테고리 필터에 따라 pool 변경됨)
             if(typeof renderInvParentButtons==='function') renderInvParentButtons();
+            if(typeof _updateInvUnusedCount==='function') _updateInvUnusedCount();
         }
 
         function setInvCat(cat){
@@ -3432,6 +3440,36 @@
             currentInvParent=(currentInvParent===parent)?'':parent; // 재클릭 시 해제
             renderInvParentButtons();
             renderInvAuditList();
+        }
+
+        // ===== 30일+ 미사용 품목 =====
+        // "최근 사용" 기준: lastAuditAt > updatedAt > createdAt 순으로 마지막 활동 시각
+        function _getInvLastUsedTs(item){
+            const cand=[item?.lastAuditAt,item?.updatedAt,item?.createdAt];
+            for(const c of cand){
+                if(!c) continue;
+                const t=(typeof c==='string'?new Date(c).getTime():(c?.toDate?c.toDate().getTime():0));
+                if(t) return t;
+            }
+            return 0; // 정보 없음 → 무한히 오래된 것으로 취급
+        }
+        function toggleInvUnused(){
+            showInvUnusedOnly=!showInvUnusedOnly;
+            const btn=document.getElementById('invUnusedToggle');
+            if(btn){
+                if(showInvUnusedOnly){
+                    btn.style.background='#7c3aed'; btn.style.color='#fff'; btn.style.borderColor='#7c3aed';
+                }else{
+                    btn.style.background='#fff'; btn.style.color='#374151'; btn.style.borderColor='#d1d5db';
+                }
+            }
+            renderInvAuditList();
+        }
+        function _updateInvUnusedCount(){
+            const cutoff=Date.now()-30*24*60*60*1000;
+            const cnt=(invItems||[]).filter(i=>_getInvLastUsedTs(i)<cutoff).length;
+            const el=document.getElementById('invUnusedCount');
+            if(el) el.textContent=cnt;
         }
 
         function renderInvAuditList(){
@@ -3485,6 +3523,15 @@
             // 상위 품목(카테고리) 필터
             if(currentInvParent){
                 items=items.filter(i=>(i.parentName||'')===currentInvParent);
+            }
+
+            // 30일+ 미사용 필터
+            if(showInvUnusedOnly){
+                const cutoff=Date.now()-30*24*60*60*1000;
+                items=items.filter(i=>{
+                    const t=_getInvLastUsedTs(i);
+                    return t<cutoff;
+                });
             }
             
             // 정렬
@@ -5013,5 +5060,6 @@
         // Init
         checkAuth();
     </script>
+    <script src="version-check.js"></script>
 </body>
 </html>
