@@ -1139,5 +1139,33 @@
     <script src="inventory.js?v=20260613b"></script>
     <script src="finance.js"></script>
     <script src="crm-analytics.js?v=20260621"></script>
+    <script>
+    // ===== 자동 업데이트: 새 배포 감지 시 자동 새로고침 =====
+    (function(){
+        let baseTag=null, pending=false;
+        async function tag(){
+            try{ const r=await fetch(location.pathname,{method:'HEAD',cache:'no-store'});
+                return r.headers.get('etag')||r.headers.get('last-modified'); }catch(_){ return null; }
+        }
+        function anyModalOpen(){ return !!document.querySelector('.modal.active,.modal.show'); }
+        function showBanner(){
+            if(document.getElementById('updBanner'))return;
+            const b=document.createElement('div'); b.id='updBanner';
+            b.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#4F46E5;color:#fff;padding:.6rem 1.1rem;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:.85rem;z-index:4000;cursor:pointer';
+            b.textContent='🔄 새 버전 적용됨 — 눌러서 새로고침';
+            b.onclick=function(){ location.reload(); };
+            document.body.appendChild(b);
+        }
+        async function check(){
+            const t=await tag(); if(!t) return;
+            if(baseTag===null){ baseTag=t; return; }
+            if(t!==baseTag){ pending=true; showBanner(); if(!anyModalOpen()) location.reload(); }
+        }
+        function tick(){ if(pending){ if(!anyModalOpen()) location.reload(); } else check(); }
+        check();
+        setInterval(tick, 60000);
+        window.addEventListener('focus', tick);
+    })();
+    </script>
 </body>
 </html>
