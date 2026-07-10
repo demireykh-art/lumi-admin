@@ -3067,6 +3067,20 @@
         let currentInvCat=''; // '' = 전체
         let currentInvParent=''; // '' = 전체 (상위 품목 필터)
         let showInvUnusedOnly=false; // 30일+ 미사용 토글
+
+        // 장소 문서 → 화면·저장에 쓰는 canonical key 정규화.
+        // 관리자 초기 데이터: {floor:'5층', name:'처치실'} → '5층-처치실'
+        // staff addLocation: {floor:'5층', name:'5층-처치실'} → '5층-처치실' (중복 접두 방지)
+        function locDisplayName(loc){
+            if(!loc) return '';
+            const name=String(loc.name||'').trim();
+            const floor=String(loc.floor||'').trim();
+            if(!name) return floor;
+            if(!floor) return name;
+            // 이미 층 접두어를 포함하면 그대로 반환
+            if(name===floor || name.startsWith(floor+'-') || name.startsWith(floor+' ')) return name;
+            return `${floor}-${name}`;
+        }
         let currentAuditLocation=''; // '' = 전체 장소
 
         async function loadInventoryForStaff(){
@@ -3810,8 +3824,9 @@
                 locFilter.innerHTML = '<option value="">전체 장소 (모든 품목)</option>';
                 receivingLocations.forEach(loc => {
                     const opt = document.createElement('option');
-                    opt.value = `${loc.floor}-${loc.name}`;
-                    opt.textContent = `${loc.floor}-${loc.name}`;
+                    const v=locDisplayName(loc);
+                    opt.value = v;
+                    opt.textContent = v;
                     locFilter.appendChild(opt);
                 });
             }
@@ -3886,11 +3901,12 @@
             row.innerHTML = `
                 <select class="form-select" style="width:45%;padding:1.1rem;font-size:1.1rem;font-weight:600;flex-shrink:0" onchange="calcNewTotalStock()">
                     <option value="">장소 선택</option>
-                    ${receivingLocations.map(loc => 
-                        `<option value="${loc.floor}-${loc.name}">${loc.floor}-${loc.name}</option>`
-                    ).join('')}
+                    ${receivingLocations.map(loc => {
+                        const v=locDisplayName(loc);
+                        return `<option value="${v}">${v}</option>`;
+                    }).join('')}
                 </select>
-                <input type="number" class="form-input" placeholder="수량" min="0" step="1" 
+                <input type="number" class="form-input" placeholder="수량" min="0" step="1"
                     style="width:35%;padding:1.1rem;font-size:1.4rem;font-weight:700;text-align:center;flex-shrink:0" oninput="calcNewTotalStock()">
                 <button type="button" class="btn btn-secondary" onclick="removeNewLocationRow('${rowId}')" 
                     style="width:15%;padding:.5rem;font-size:.75rem;white-space:nowrap;flex-shrink:0">삭제</button>
@@ -4058,7 +4074,7 @@
                 <select class="form-select" style="width:45%;padding:1.1rem;font-size:1rem;font-weight:600;flex-shrink:0" onchange="calcReceiveTotal()">
                     <option value="">장소 선택</option>
                     ${receivingLocations.map(loc => {
-                        const v = loc.floor + '-' + loc.name;
+                        const v = locDisplayName(loc);
                         return '<option value="' + v + '"' + (v === location ? ' selected' : '') + '>' + v + '</option>';
                     }).join('')}
                 </select>
@@ -4196,7 +4212,7 @@
             const toSel=document.getElementById('moveStockToLoc');
             toSel.innerHTML='<option value="">장소 선택</option>'+
                 (receivingLocations||[]).map(loc=>{
-                    const v=`${loc.floor}-${loc.name}`;
+                    const v=locDisplayName(loc);
                     return `<option value="${v}">${v}</option>`;
                 }).join('');
 
@@ -4329,19 +4345,23 @@
             const row = document.createElement('div');
             row.id = rowId;
             row.style.cssText = 'display:flex;gap:.5rem;margin-bottom:.5rem;align-items:stretch;width:100%';
+            // 드롭다운에 없는 legacy 키(예: '수술실', '5층-5층-처치실')도 유실되지 않게
+            // 임시 옵션으로 보존해 사용자가 그대로 저장/변경할 수 있게 한다.
+            const dropdownValues=receivingLocations.map(loc=>locDisplayName(loc));
+            const hasCustom=location && !dropdownValues.includes(location);
             row.innerHTML = `
                 <select class="form-select" style="width:45%;padding:1.1rem;font-size:1.1rem;font-weight:600;flex-shrink:0" onchange="calcEditTotalStock()">
                     <option value="">장소 선택</option>
+                    ${hasCustom?`<option value="${location}" selected>${location} (기존)</option>`:''}
                     ${receivingLocations.map(loc => {
-                        const locValue = `${loc.floor}-${loc.name}`;
+                        const locValue = locDisplayName(loc);
                         const selected = locValue === location ? 'selected' : '';
-                        console.log('🔍 비교:', locValue, '===', location, '→', selected);
                         return `<option value="${locValue}" ${selected}>${locValue}</option>`;
                     }).join('')}
                 </select>
-                <input type="number" class="form-input" placeholder="수량" min="0" step="1" value="${quantity}" 
+                <input type="number" class="form-input" placeholder="수량" min="0" step="1" value="${quantity}"
                     style="width:35%;padding:1.1rem;font-size:1.4rem;font-weight:700;text-align:center;flex-shrink:0" oninput="calcEditTotalStock()">
-                <button type="button" class="btn btn-secondary" onclick="removeEditLocationRow('${rowId}')" 
+                <button type="button" class="btn btn-secondary" onclick="removeEditLocationRow('${rowId}')"
                     style="width:15%;padding:.5rem;font-size:.75rem;white-space:nowrap;flex-shrink:0">삭제</button>
             `;
             container.appendChild(row);
@@ -4554,8 +4574,9 @@
             if(receivingLocations.length>0){
                 receivingLocations.forEach(loc=>{
                     const opt=document.createElement('option');
-                    opt.value=`${loc.floor}-${loc.name}`;
-                    opt.textContent=`${loc.floor}-${loc.name}`;
+                    const v=locDisplayName(loc);
+                    opt.value=v;
+                    opt.textContent=v;
                     sel.appendChild(opt);
                 });
             }else{
@@ -4586,7 +4607,7 @@
             if (receivingLocations.length > 0) {
                 receivingLocations.forEach(loc => {
                     const opt = document.createElement('option');
-                    const locationValue = `${loc.floor}-${loc.name}`;
+                    const locationValue = locDisplayName(loc);
                     opt.value = locationValue;
                     opt.textContent = locationValue;
                     if (locationValue === currentValue) {
