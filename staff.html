@@ -3740,6 +3740,15 @@
                 const catLabel=INV_CATEGORIES[item.category]||'';
                 const isLow=item.safetyStock&&item.currentStock<item.safetyStock;
                 const sysStock=item.currentStock||0;
+                // 낱개당 단가: unitPrice 저장값 우선, 없으면 purchasePrice / purchaseQty
+                const _pQty=Number(item.purchaseQty)||0;
+                const _pPrice=Number(item.purchasePrice)||0;
+                const unitPriceCalc=Number(item.unitPrice)>0
+                    ? Math.round(Number(item.unitPrice))
+                    : (_pQty>0 ? Math.round(_pPrice/_pQty) : 0);
+                const unitPriceHtml=unitPriceCalc>0
+                    ? `<span style="color:#0369a1;font-weight:600">낱개당 단가: <strong>₩${unitPriceCalc.toLocaleString()}</strong></span>`
+                    : '';
                 const buyLink=item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" style="display:inline-block;background:#f0f0f0;color:#333;font-size:.65rem;padding:2px 6px;border-radius:3px;text-decoration:none;margin-left:4px;vertical-align:middle">🛒</a>`:'';
                 const lowBg=isLow?'background:rgba(255,152,0,0.08);border-left:3px solid #ff9800':'';
 
@@ -3801,6 +3810,7 @@
                             <div class="inv-item-meta">
                                 <span>${catLabel}</span>
                                 <span>총 재고: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
+                                ${unitPriceHtml}
                                 ${isLow?`<span style="color:var(--red)">안전: ${item.safetyStock}</span>`:''}
                                 ${lastQty!=null?`<span>지난실사: ${lastQty} (${lastDate})</span>`:''}
                                 ${item.lastReceiveDate?`<span style="color:var(--green)">최근입고: ${item.lastReceiveDate}</span>`:''}
