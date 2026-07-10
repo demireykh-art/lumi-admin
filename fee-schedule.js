@@ -6,6 +6,11 @@
 let feeSchedule = {}; // key -> {key, price, recipe:[{itemId,amount}], manualCost, discountRate, durationMin, updatedAt, updatedBy}
 const FEE_LOSS_RATE = 0.10; // 소분(portioned) 품목 로스율
 
+// 직원(비관리자)에게 보여줄 컬럼 (true=표시). 수익 정보는 기본 숨김.
+// admin/실장은 항상 전체 표시. 이 설정으로 직원 노출 여부만 제어.
+let feeColVis = { cost: true, margin: false, marginRate: false, per10: false };
+const FEE_COL_LABELS = { cost: '원가', margin: '마진', marginRate: '마진율', per10: '10분당이익' };
+
 function feeKey(catId, tName, vDesc) { return `${catId}||${tName}||${vDesc}`; }
 function feeDocId(key) { return key.replace(/\//g, '∕').replace(/\./g, '·').slice(0, 1400); }
 function canEditFees() { return typeof currentCrmCanEditFees !== 'undefined' && currentCrmCanEditFees; }
@@ -16,6 +21,35 @@ async function loadFeeSchedule() {
         const s = await db.collection('feeSchedule').get();
         s.docs.forEach(d => { const data = d.data(); if (data && data.key) feeSchedule[data.key] = data; });
     } catch (e) { console.warn('수가표 로드 실패:', e); }
+    // 직원 노출 컬럼 설정
+    try {
+        const d = await db.collection('settings').doc('feeColVisibility').get();
+        if (d.exists) feeColVis = Object.assign(feeColVis, d.data());
+    } catch (e) { console.warn('수가표 표시설정 로드 실패:', e); }
+}
+async function saveFeeColVis() {
+    try { await db.collection('settings').doc('feeColVisibility').set(feeColVis, { merge: true }); }
+    catch (e) { alert('표시설정 저장 실패: ' + e.message); }
+}
+function toggleFeeCol(col, checked) {
+    if (!canEditFees()) return;
+    feeColVis[col] = !!checked;
+    saveFeeColVis();
+    renderFeeSchedule();
+}
+// admin/실장 전용: 직원 노출 컬럼 체크박스
+function renderFeeVisConfig() {
+    const box = document.getElementById('feeVisConfig');
+    if (!box) return;
+    if (!canEditFees()) { box.innerHTML = ''; return; }
+    const boxes = Object.keys(FEE_COL_LABELS).map(col =>
+        `<label style="display:inline-flex;align-items:center;gap:.3rem;font-size:.8rem;margin-right:.9rem">
+            <input type="checkbox" ${feeColVis[col] ? 'checked' : ''} onchange="toggleFeeCol('${col}',this.checked)"> ${FEE_COL_LABELS[col]}
+        </label>`).join('');
+    box.innerHTML = `<div style="background:#F7F8FB;border:1px solid #E9EAF0;border-radius:8px;padding:.5rem .75rem">
+        <span style="font-size:.78rem;font-weight:600;color:#4F46E5;margin-right:.6rem">🔒 직원에게 표시할 항목</span>${boxes}
+        <span style="font-size:.72rem;color:var(--text-muted);margin-left:.3rem">(체크 해제 시 직원 화면에서 숨김 · admin/실장은 항상 전체 표시)</span>
+    </div>`;
 }
 
 // 재고 1단위당 단가(원)
@@ -61,6 +95,7 @@ function feeOverridePrice(catId, tName, vDesc) {
 function renderFeeSchedule() {
     const wrap = document.getElementById('feeWrap');
     if (!wrap) return;
+    renderFeeVisConfig();
     const editable = canEditFees();
     const badge = document.getElementById('feeEditBadge');
     if (badge) badge.innerHTML = editable
@@ -69,6 +104,13 @@ function renderFeeSchedule() {
     if (typeof treatmentCategories === 'undefined' || !treatmentCategories.length) {
         wrap.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-secondary)">시술 데이터를 불러오지 못했습니다.</div>'; return;
     }
+    // 컬럼 노출: 편집권한자는 전체, 직원은 feeColVis 설정에 따름
+    const vis = {
+        cost: editable || !!feeColVis.cost,
+        margin: editable || !!feeColVis.margin,
+        marginRate: editable || !!feeColVis.marginRate,
+        per10: editable || !!feeColVis.per10
+    };
     const q = (document.getElementById('feeSearch')?.value || '').trim().toLowerCase();
     const dis = editable ? '' : 'disabled';
     let html = '';
@@ -94,13 +136,13 @@ function renderFeeSchedule() {
                 rows += `<tr>
                     <td style="font-size:.82rem">${escapeHtml(t.name)} <span style="color:var(--text-muted)">${escapeHtml(vDesc)}</span></td>
                     <td class="text-right"><input type="number" class="form-input" style="width:70px;text-align:right;padding:.3rem" value="${priceMan}" ${dis} onchange="saveFeeField('${key}','price',this.value)">만</td>
-                    <td class="text-right" style="min-width:120px"><div>${formatCurrency(cost)}</div><button class="btn btn-sm btn-outline" ${dis} onclick="openCostModal('${key.replace(/'/g, "\\'")}','${escapeHtml(t.name + ' ' + vDesc).replace(/'/g, "\\'")}')" style="font-size:.66rem;padding:.12rem .4rem;margin-top:.15rem">${costSrc} 믹스</button></td>
+                    ${vis.cost ? `<td class="text-right" style="min-width:120px"><div>${formatCurrency(cost)}</div>${editable ? `<button class="btn btn-sm btn-outline" onclick="openCostModal('${key.replace(/'/g, "\\'")}','${escapeHtml(t.name + ' ' + vDesc).replace(/'/g, "\\'")}')" style="font-size:.66rem;padding:.12rem .4rem;margin-top:.15rem">${costSrc} 믹스</button>` : ''}</td>` : ''}
                     <td class="text-right"><input type="number" class="form-input" style="width:50px;text-align:right;padding:.3rem" value="${disc || ''}" ${dis} onchange="saveFeeField('${key}','discountRate',this.value)">%</td>
                     <td class="text-right">${formatCurrency(salePrice)}</td>
-                    <td class="text-right" style="color:${margin >= 0 ? '#16A34A' : '#DC2626'};font-weight:600">${formatCurrency(margin)}</td>
-                    <td class="text-right" style="color:${marginRate >= 0 ? '#16A34A' : '#DC2626'}">${marginRate.toFixed(0)}%</td>
+                    ${vis.margin ? `<td class="text-right" style="color:${margin >= 0 ? '#16A34A' : '#DC2626'};font-weight:600">${formatCurrency(margin)}</td>` : ''}
+                    ${vis.marginRate ? `<td class="text-right" style="color:${marginRate >= 0 ? '#16A34A' : '#DC2626'}">${marginRate.toFixed(0)}%</td>` : ''}
                     <td class="text-right"><input type="number" class="form-input" style="width:50px;text-align:right;padding:.3rem" value="${dur || ''}" ${dis} onchange="saveFeeField('${key}','durationMin',this.value)">분</td>
-                    <td class="text-right" style="font-weight:600;color:#4F46E5">${per10 != null ? formatCurrency(per10) : '-'}</td>
+                    ${vis.per10 ? `<td class="text-right" style="font-weight:600;color:#4F46E5">${per10 != null ? formatCurrency(per10) : '-'}</td>` : ''}
                 </tr>`;
             });
         });
@@ -108,8 +150,8 @@ function renderFeeSchedule() {
         html += `<div class="section" style="margin-bottom:1.1rem">
             <div class="section-header"><div class="section-title">${escapeHtml(c.name)}</div></div>
             <div class="table-container"><table><thead><tr>
-                <th>시술/옵션</th><th class="text-right">정가</th><th class="text-right">원가</th><th class="text-right">할인</th>
-                <th class="text-right">실판매가</th><th class="text-right">마진</th><th class="text-right">마진율</th><th class="text-right">소요</th><th class="text-right">10분당</th>
+                <th>시술/옵션</th><th class="text-right">정가</th>${vis.cost ? '<th class="text-right">원가</th>' : ''}<th class="text-right">할인</th>
+                <th class="text-right">실판매가</th>${vis.margin ? '<th class="text-right">마진</th>' : ''}${vis.marginRate ? '<th class="text-right">마진율</th>' : ''}<th class="text-right">소요</th>${vis.per10 ? '<th class="text-right">10분당</th>' : ''}
             </tr></thead><tbody>${rows}</tbody></table></div></div>`;
     });
     wrap.innerHTML = html || '<div style="padding:2rem;text-align:center;color:var(--text-secondary)">검색 결과가 없습니다.</div>';
