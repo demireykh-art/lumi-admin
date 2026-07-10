@@ -473,7 +473,7 @@
                 <div class="sub-content" id="sub-inv-locations">
                     <div class="section-header">
                         <div class="section-title">📍 재고 보관 장소 관리</div>
-                        <button class="btn btn-primary" onclick="openLocationModal()">+ 장소 추가</button>
+                        <button class="btn btn-primary" onclick="openLocationModal()">➕ 새 장소 추가</button>
                     </div>
                     <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
                         층별·장소별로 재고를 관리합니다. 장소를 추가/수정/삭제하고 순서를 조정할 수 있습니다.
@@ -1113,32 +1113,32 @@
 
     <!-- 장소 관리 모달 -->
     <div class="modal" id="locationModal">
-        <div class="modal-content" style="max-width:400px">
+        <div class="modal-content" style="max-width:420px">
             <div class="modal-header">
-                <div class="modal-title" id="locationModalTitle">장소 추가</div>
+                <div class="modal-title" id="locationModalTitle">📍 새 장소 추가</div>
                 <button class="modal-close" onclick="closeModal('locationModal')">&times;</button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="locationEditId">
+                <input type="hidden" id="locationFloor" value="5층">
                 <div class="form-group">
-                    <label class="form-label">층 *</label>
-                    <select class="form-select" id="locationFloor">
-                        <option value="5층">5층</option>
-                        <option value="6층">6층</option>
-                    </select>
+                    <label class="form-label">층</label>
+                    <div class="loc-floor-seg">
+                        <button type="button" class="loc-floor-btn" data-floor="5층" onclick="setLocFloor('5층')">5층</button>
+                        <button type="button" class="loc-floor-btn" data-floor="6층" onclick="setLocFloor('6층')">6층</button>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">장소명 *</label>
+                    <label class="form-label">장소명</label>
                     <input type="text" class="form-input" id="locationName" placeholder="예: 처치실, 냉장고" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">순서</label>
-                    <input type="number" class="form-input" id="locationOrder" value="1" min="1">
-                    <div style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">숫자가 작을수록 먼저 표시됩니다</div>
+                    <label class="form-label">표시 순서 <span style="font-weight:400;color:var(--text-muted);font-size:.75rem">(작을수록 먼저)</span></label>
+                    <input type="number" class="form-input" id="locationOrder" value="1" min="1" style="max-width:120px">
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('locationModal')">취소</button>
+                <button class="btn btn-outline" onclick="closeModal('locationModal')">취소</button>
                 <button class="btn btn-primary" onclick="saveLocation()">저장</button>
             </div>
         </div>
@@ -1151,7 +1151,7 @@
     <script src="card-statements.js"></script>
     <script src="expense.js"></script>
     <script src="hr-attendance.js"></script>
-    <script src="inventory.js?v=20260626"></script>
+    <script src="inventory.js?v=20260626b"></script>
     <script src="finance.js"></script>
     <script src="crm-analytics.js?v=20260621"></script>
     <script>

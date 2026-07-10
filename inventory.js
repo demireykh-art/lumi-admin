@@ -681,6 +681,24 @@ async function loadLocations(){
     updateLocationFilters();
 }
 
+// 층 세그먼트 토글 (장소 모달)
+function setLocFloor(f){
+    const el=document.getElementById('locationFloor'); if(el) el.value=f;
+    document.querySelectorAll('#locationModal .loc-floor-btn').forEach(b=>b.classList.toggle('active', b.dataset.floor===f));
+}
+// 장소 목록 행 (공통)
+function _locRow(l, floorLabel){
+    return `<div class="loc-list-row">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+            <span class="loc-order-badge">${l.order}</span>
+            <strong style="font-size:.9rem;overflow:hidden;text-overflow:ellipsis">${l.name}</strong>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="loc-btn-edit" onclick="editLocation('${l.id}')">수정</button>
+            <button class="loc-btn-del" onclick="deleteLocation('${l.id}','${l.name.replace(/'/g,"\\'")} (${floorLabel})')">삭제</button>
+        </div>
+    </div>`;
+}
 function renderLocations(){
     const el5=document.getElementById('locations5F');
     const el6=document.getElementById('locations6F');
@@ -692,31 +710,13 @@ function renderLocations(){
     if(!locs5.length){
         el5.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem;font-size:.85rem">등록된 장소가 없습니다</div>';
     }else{
-        el5.innerHTML=locs5.map(l=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:#fff">
-            <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:.7rem;color:var(--text-muted);min-width:20px">${l.order}</span>
-                <strong style="font-size:.9rem">${l.name}</strong>
-            </div>
-            <div style="display:flex;gap:4px">
-                <button onclick="editLocation('${l.id}')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--primary);color:var(--primary);background:none;border-radius:4px;cursor:pointer">수정</button>
-                <button onclick="deleteLocation('${l.id}','${l.name.replace(/'/g,"\\'")} (5층)')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--red);color:var(--red);background:none;border-radius:4px;cursor:pointer">삭제</button>
-            </div>
-        </div>`).join('');
+        el5.innerHTML=locs5.map(l=>_locRow(l,'5층')).join('');
     }
     
     if(!locs6.length){
         el6.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem;font-size:.85rem">등록된 장소가 없습니다</div>';
     }else{
-        el6.innerHTML=locs6.map(l=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:#fff">
-            <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:.7rem;color:var(--text-muted);min-width:20px">${l.order}</span>
-                <strong style="font-size:.9rem">${l.name}</strong>
-            </div>
-            <div style="display:flex;gap:4px">
-                <button onclick="editLocation('${l.id}')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--primary);color:var(--primary);background:none;border-radius:4px;cursor:pointer">수정</button>
-                <button onclick="deleteLocation('${l.id}','${l.name.replace(/'/g,"\\'")} (6층)')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--red);color:var(--red);background:none;border-radius:4px;cursor:pointer">삭제</button>
-            </div>
-        </div>`).join('');
+        el6.innerHTML=locs6.map(l=>_locRow(l,'6층')).join('');
     }
 }
 
@@ -735,16 +735,16 @@ function updateLocationFilters(){
 }
 
 function openLocationModal(id=null){
-    document.getElementById('locationModalTitle').textContent=id?'장소 수정':'장소 추가';
+    document.getElementById('locationModalTitle').textContent=id?'📍 장소 수정':'📍 새 장소 추가';
     document.getElementById('locationEditId').value=id||'';
-    document.getElementById('locationFloor').value='5층';
+    setLocFloor('5층');
     document.getElementById('locationName').value='';
     document.getElementById('locationOrder').value='1';
-    
+
     if(id){
         const loc=locations.find(l=>l.id===id);
         if(loc){
-            document.getElementById('locationFloor').value=loc.floor||'5층';
+            setLocFloor(loc.floor||'5층');
             document.getElementById('locationName').value=loc.name||'';
             document.getElementById('locationOrder').value=loc.order||1;
         }
