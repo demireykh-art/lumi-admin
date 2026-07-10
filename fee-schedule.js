@@ -37,11 +37,19 @@ function feeRecipeCost(recipe) {
     });
     return Math.round(cost);
 }
-// 변형 원가: 수동(manualCost) 우선, 없으면 믹스 계산
+// 조제 원가 × (실사용량 / 총조제량). 조제량 미입력 시 전량 사용 기준
+function feeComputedCost(f) {
+    const mixCost = feeRecipeCost(f && f.recipe);
+    const total = Number(f && f.mixTotal) || 0;
+    const used = Number(f && f.mixUsed) || 0;
+    if (total > 0 && used > 0) return Math.round(mixCost * used / total);
+    return mixCost;
+}
+// 변형 원가: 수동(manualCost) 우선, 없으면 조제/사용량 기반 계산
 function feeCost(f) {
     if (!f) return 0;
     if (f.manualCost != null && f.manualCost !== '') return Number(f.manualCost) || 0;
-    return feeRecipeCost(f.recipe);
+    return feeComputedCost(f);
 }
 // CRM 오더 단가 연동: 정가 override(원) 반환, 없으면 null
 function feeOverridePrice(catId, tName, vDesc) {
@@ -133,6 +141,8 @@ function openCostModal(key, label) {
     if (!_costRows.length) _costRows.push({ itemId: '', amount: 0 });
     const dl = document.getElementById('invItemDatalist');
     if (dl) dl.innerHTML = _invList().map(i => `<option value="${escapeHtml(i.name)}">`).join('');
+    const mt = document.getElementById('costMixTotal'); if (mt) mt.value = (f.mixTotal != null ? f.mixTotal : '');
+    const mu = document.getElementById('costMixUsed'); if (mu) mu.value = (f.mixUsed != null ? f.mixUsed : '');
     renderCostRows();
     openModal('costModal');
 }
@@ -144,8 +154,8 @@ function renderCostRows() {
         const unit = it ? (it.unit || '개') : 'cc';
         const uc = it ? invUnitCost(it) : 0;
         return `<div style="display:flex;gap:.4rem;align-items:center;margin-bottom:.4rem">
-            <input class="form-input" list="invItemDatalist" placeholder="재고 품목명 (예: 코어톡스, 식염수)" value="${it ? escapeHtml(it.name) : ''}" onchange="setCostItem(${i},this.value)" style="flex:1">
-            <input type="number" class="form-input" placeholder="사용량" value="${r.amount || ''}" onchange="setCostAmount(${i},this.value)" style="width:90px;text-align:right" step="0.01">
+            <input class="form-input" list="invItemDatalist" placeholder="재고 품목명 (예: 하이톡스, NS)" value="${it ? escapeHtml(it.name) : ''}" onchange="setCostItem(${i},this.value)" style="flex:1">
+            <input type="number" class="form-input" placeholder="투입량" value="${r.amount || ''}" onchange="setCostAmount(${i},this.value)" style="width:90px;text-align:right" step="0.01">
             <span style="font-size:.72rem;color:var(--text-muted);width:78px">${unit}${uc ? ' · ' + formatCurrency(uc) : ' · 단가?'}</span>
             <button class="btn btn-sm btn-danger" onclick="removeCostRow(${i})">×</button>
         </div>`;
@@ -156,12 +166,25 @@ function setCostItem(i, name) { const it = _itemByName(name); _costRows[i].itemI
 function setCostAmount(i, val) { _costRows[i].amount = Number(val) || 0; updateCostTotal(); }
 function addCostRow() { _costRows.push({ itemId: '', amount: 0 }); renderCostRows(); }
 function removeCostRow(i) { _costRows.splice(i, 1); if (!_costRows.length) _costRows.push({ itemId: '', amount: 0 }); renderCostRows(); }
-function updateCostTotal() { const el = document.getElementById('costModalTotal'); if (el) el.textContent = formatCurrency(feeRecipeCost(_costRows)); }
+function updateCostTotal() {
+    const mix = feeRecipeCost(_costRows);
+    const total = Number(document.getElementById('costMixTotal')?.value) || 0;
+    const used = Number(document.getElementById('costMixUsed')?.value) || 0;
+    const final = (total > 0 && used > 0) ? Math.round(mix * used / total) : mix;
+    const mixEl = document.getElementById('costModalMix'); if (mixEl) mixEl.textContent = formatCurrency(mix);
+    const el = document.getElementById('costModalTotal'); if (el) el.textContent = formatCurrency(final);
+    const hint = document.getElementById('costModalHint');
+    if (hint) hint.textContent = (total > 0 && used > 0)
+        ? `조제 ${formatCurrency(mix)} × ${used}cc ÷ ${total}cc = ${formatCurrency(final)}`
+        : '총 조제량·1회 실사용량 미입력 시 전량 사용 기준으로 계산됩니다.';
+}
 async function saveCost() {
     if (!canEditFees()) { alert('권한이 없습니다.'); return; }
     const recipe = _costRows.filter(r => r.itemId && r.amount > 0);
+    const total = Number(document.getElementById('costMixTotal')?.value) || null;
+    const used = Number(document.getElementById('costMixUsed')?.value) || null;
     const f = feeSchedule[_costKey] || { key: _costKey };
-    f.key = _costKey; f.recipe = recipe; f.manualCost = null;
+    f.key = _costKey; f.recipe = recipe; f.mixTotal = total; f.mixUsed = used; f.manualCost = null;
     f.updatedAt = new Date().toISOString();
     if (typeof currentCrmUser !== 'undefined' && currentCrmUser) f.updatedBy = currentCrmUser.id;
     feeSchedule[_costKey] = f;
