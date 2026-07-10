@@ -563,262 +563,56 @@ async function loadLocations(){
         locations=[];
         console.error('장소 로드 실패:',e);
     }
-    renderLocations();
+    // renderLocations / showAdminDuplicateLocationBanner 는 관리자 UI 제거로 no-op
     updateLocationFilters();
-    showAdminDuplicateLocationBanner();
 }
 
 // ===== 중복 장소 통합 (admin 측) =====
-function _adminGroupDuplicateLocations(){
-    const groups={};
-    locations.forEach(loc=>{
-        const key=String(loc.name||'').trim();
-        if(!key) return;
-        if(!groups[key]) groups[key]=[];
-        groups[key].push(loc);
-    });
-    return Object.entries(groups).filter(([,list])=>list.length>1);
-}
+// admin 측 장소 편집/중복 통합 로직 제거 — staff 앱에서만 관리.
 
-function showAdminDuplicateLocationBanner(){
-    const box=document.getElementById('adminDupLocBox');
-    const listEl=document.getElementById('adminDupLocList');
-    if(!box||!listEl) return;
-    const dups=_adminGroupDuplicateLocations();
-    if(dups.length===0){ box.style.display='none'; return; }
-    listEl.innerHTML=dups.map(([name,list])=>{
-        const floors=Array.from(new Set(list.map(l=>l.floor||'?'))).join(', ');
-        return `• <strong>${name}</strong> — ${list.length}개 중복 (${floors})`;
-    }).join('<br>');
-    box.style.display='block';
-}
-
-function _collectLocVariants(loc){
-    const variants=new Set();
+// staff.html 과 동일한 규칙: name 이 이미 층 접두어 포함 시 그대로, 아니면 concat
+function locDisplayName(loc){
+    if(!loc) return '';
     const name=String(loc.name||'').trim();
     const floor=String(loc.floor||'').trim();
-    if(name){
-        variants.add(name);
-        if(floor) variants.add(`${floor}-${name}`);
-    }
-    if(loc.id) variants.add(loc.id);
-    return variants;
+    if(!name) return floor;
+    if(!floor) return name;
+    if(name===floor||name.startsWith(floor+'-')||name.startsWith(floor+' ')) return name;
+    return `${floor}-${name}`;
 }
 
-async function adminMergeDuplicateLocations(){
-    const dups=_adminGroupDuplicateLocations();
-    if(dups.length===0){ alert('통합할 중복 장소가 없습니다.'); return; }
-
-    const summary=dups.map(([name,list])=>`• ${name} (${list.length}개)`).join('\n');
-    if(!confirm(`다음 중복 장소를 통합합니다:\n\n${summary}\n\n각 그룹에서 가장 먼저 생성된(또는 order 작은) 장소를 남기고 나머지는 삭제합니다.\n실사된 재고 수량은 손실 없이 합산됩니다.\n\n계속하시겠습니까?`)) return;
-
-    let report=[];
-    try{
-        for(const [name,group] of dups){
-            group.sort((a,b)=>{
-                const oa=a.order!=null?a.order:Infinity;
-                const ob=b.order!=null?b.order:Infinity;
-                if(oa!==ob) return oa-ob;
-                return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
-            });
-            const canonical=group[0];
-            const dupesToRemove=group.slice(1);
-            const canonicalKey=String(canonical.name||'').trim();
-
-            const allVariants=new Set();
-            group.forEach(loc=>{
-                _collectLocVariants(loc).forEach(v=>allVariants.add(v));
-            });
-            allVariants.delete(canonicalKey);
-
-            const invSnap=await db.collection('inventory').get();
-            let itemsUpdated=0;
-            let batch=db.batch();
-            let opCount=0;
-            const flush=async()=>{
-                if(opCount>0){ await batch.commit(); batch=db.batch(); opCount=0; }
-            };
-
-            for(const doc of invSnap.docs){
-                const data=doc.data();
-                if(!data.locations||typeof data.locations!=='object') continue;
-                let changed=false;
-                const newLocs={...data.locations};
-                for(const variant of allVariants){
-                    if(newLocs[variant]!=null){
-                        const qty=Number(newLocs[variant])||0;
-                        if(qty>0){
-                            newLocs[canonicalKey]=(Number(newLocs[canonicalKey])||0)+qty;
-                        }
-                        delete newLocs[variant];
-                        changed=true;
-                    }
-                }
-                if(changed){
-                    const newTotal=Object.values(newLocs).reduce((s,q)=>s+(Number(q)||0),0);
-                    batch.update(doc.ref,{
-                        locations:newLocs,
-                        currentStock:newTotal,
-                        totalStock:newTotal,
-                        updatedAt:new Date().toISOString()
-                    });
-                    opCount++; itemsUpdated++;
-                    if(opCount>=450) await flush();
-                }
-            }
-            for(const loc of dupesToRemove){
-                batch.delete(db.collection('locations').doc(loc.id));
-                opCount++;
-                if(opCount>=450) await flush();
-            }
-            await flush();
-            report.push(`• ${name}: ${dupesToRemove.length}개 삭제, 품목 ${itemsUpdated}개 통합`);
-        }
-
-        alert(`✅ 통합 완료\n\n${report.join('\n')}\n\n장소 목록과 재고를 다시 불러옵니다.`);
-        // 재로드
-        await loadLocations();
-        if(typeof loadInventory==='function') await loadInventory();
-        if(typeof renderInventory==='function') renderInventory();
-    }catch(e){
-        console.error('통합 실패:',e);
-        alert('통합 실패: '+(e.message||e));
-    }
-}
-
-function renderLocations(){
-    const el5=document.getElementById('locations5F');
-    const el6=document.getElementById('locations6F');
-    if(!el5||!el6)return;
-    
-    const locs5=locations.filter(l=>l.floor==='5층');
-    const locs6=locations.filter(l=>l.floor==='6층');
-    
-    if(!locs5.length){
-        el5.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem;font-size:.85rem">등록된 장소가 없습니다</div>';
-    }else{
-        el5.innerHTML=locs5.map(l=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:#fff">
-            <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:.7rem;color:var(--text-muted);min-width:20px">${l.order}</span>
-                <strong style="font-size:.9rem">${l.name}</strong>
-            </div>
-            <div style="display:flex;gap:4px">
-                <button onclick="editLocation('${l.id}')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--primary);color:var(--primary);background:none;border-radius:4px;cursor:pointer">수정</button>
-                <button onclick="deleteLocation('${l.id}','${l.name.replace(/'/g,"\\'")} (5층)')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--red);color:var(--red);background:none;border-radius:4px;cursor:pointer">삭제</button>
-            </div>
-        </div>`).join('');
-    }
-    
-    if(!locs6.length){
-        el6.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem;font-size:.85rem">등록된 장소가 없습니다</div>';
-    }else{
-        el6.innerHTML=locs6.map(l=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:#fff">
-            <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:.7rem;color:var(--text-muted);min-width:20px">${l.order}</span>
-                <strong style="font-size:.9rem">${l.name}</strong>
-            </div>
-            <div style="display:flex;gap:4px">
-                <button onclick="editLocation('${l.id}')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--primary);color:var(--primary);background:none;border-radius:4px;cursor:pointer">수정</button>
-                <button onclick="deleteLocation('${l.id}','${l.name.replace(/'/g,"\\'")} (6층)')" style="padding:3px 8px;font-size:.7rem;border:1px solid var(--red);color:var(--red);background:none;border-radius:4px;cursor:pointer">삭제</button>
-            </div>
-        </div>`).join('');
-    }
-}
-
+// admin '재고관리 → 소모품 목록' 상단 필터 드롭다운 채우기 (읽기 전용).
+// 장소 자체의 편집/추가/삭제는 staff 앱에서만 수행하도록 정책 변경.
 function updateLocationFilters(){
     const filter=document.getElementById('invLocationFilter');
     if(!filter)return;
     const current=filter.value;
     filter.innerHTML='<option value="">전체 장소</option><option value="5층">5층 전체</option><option value="6층">6층 전체</option>';
-    locations.forEach(loc=>{
+    locations.slice().sort((a,b)=>{
+        const fa=(a.floor||''),fb=(b.floor||'');
+        if(fa!==fb) return fa.localeCompare(fb,'ko');
+        return String(a.name||'').localeCompare(String(b.name||''),'ko');
+    }).forEach(loc=>{
         const opt=document.createElement('option');
-        opt.value=`${loc.floor}-${loc.name}`;
-        opt.textContent=`${loc.floor}-${loc.name}`;
+        const v=locDisplayName(loc);
+        opt.value=v; opt.textContent=v;
         filter.appendChild(opt);
     });
     filter.value=current;
 }
 
-function openLocationModal(id=null){
-    document.getElementById('locationModalTitle').textContent=id?'장소 수정':'장소 추가';
-    document.getElementById('locationEditId').value=id||'';
-    document.getElementById('locationFloor').value='5층';
-    document.getElementById('locationName').value='';
-    document.getElementById('locationOrder').value='1';
-    
-    if(id){
-        const loc=locations.find(l=>l.id===id);
-        if(loc){
-            document.getElementById('locationFloor').value=loc.floor||'5층';
-            document.getElementById('locationName').value=loc.name||'';
-            document.getElementById('locationOrder').value=loc.order||1;
-        }
-    }
-    openModal('locationModal');
-}
+// 아래 관리 UI 함수들은 관리자 화면에서 제거됨. staff 앱을 사용하도록 안내.
+function renderLocations(){/* admin 측 장소 관리 UI 제거됨 */}
+function openLocationModal(){ alert('장소 추가/편집은 staff 앱 [장소 관리] 에서 진행해주세요.'); }
+function editLocation(){ openLocationModal(); }
+function saveLocation(){ openLocationModal(); }
+function deleteLocation(){ openLocationModal(); }
+function initDefaultLocations(){/* 자동 초기 데이터 생성 비활성화 */}
+function showAdminDuplicateLocationBanner(){/* admin 측 노출 없음 */}
+function adminMergeDuplicateLocations(){ alert('중복 통합은 staff 앱 [장소 관리] 에서 진행해주세요.'); }
 
-function editLocation(id){openLocationModal(id);}
-
-async function saveLocation(){
-    const editId=document.getElementById('locationEditId').value;
-    const floor=document.getElementById('locationFloor').value;
-    const name=document.getElementById('locationName').value.trim();
-    const order=parseInt(document.getElementById('locationOrder').value)||1;
-    
-    if(!name){alert('장소명을 입력하세요.');return;}
-    
-    const data={floor,name,order,updatedAt:new Date().toISOString()};
-    if(!editId)data.createdAt=new Date().toISOString();
-    
-    try{
-        if(editId){
-            await db.collection('locations').doc(editId).update(data);
-        }else{
-            await db.collection('locations').add(data);
-        }
-        closeModal('locationModal');
-        await loadLocations();
-        alert('✅ 저장 완료');
-    }catch(e){alert('저장 실패: '+e.message);}
-}
-
-async function deleteLocation(id,name){
-    if(!confirm(`"${name}" 장소를 삭제하시겠습니까?\n해당 장소의 재고 데이터는 유지되지만 새로 입력할 수 없습니다.`))return;
-    try{
-        await db.collection('locations').doc(id).delete();
-        await loadLocations();
-        alert('✅ 삭제 완료');
-    }catch(e){alert('삭제 실패: '+e.message);}
-}
-
-// 초기 장소 데이터 생성 (최초 1회)
-async function initDefaultLocations(){
-    const snap=await db.collection('locations').limit(1).get();
-    if(!snap.empty)return; // 이미 데이터 있음
-    
-    const defaults=[
-        {floor:'5층',name:'처치실',order:1},
-        {floor:'5층',name:'냉장고',order:2},
-        {floor:'6층',name:'시술실',order:1},
-        {floor:'6층',name:'수액실',order:2},
-        {floor:'6층',name:'줄기세포센터',order:3},
-        {floor:'6층',name:'수술실',order:4},
-        {floor:'6층',name:'준비실',order:5},
-        {floor:'6층',name:'준비실옆보관실',order:6},
-        {floor:'6층',name:'준비실 냉장고',order:7},
-        {floor:'6층',name:'어븀실',order:8},
-        {floor:'6층',name:'레이저실',order:9},
-        {floor:'6층',name:'리팟실',order:10}
-    ];
-    
-    const batch=db.batch();
-    defaults.forEach(d=>{
-        const ref=db.collection('locations').doc();
-        batch.set(ref,{...d,createdAt:new Date().toISOString()});
-    });
-    await batch.commit();
-    console.log('기본 장소 데이터 생성 완료');
-}
+// admin 측 장소 관리 관련 원본 정의는 제거되었습니다.
+// staff 앱 [장소 관리] 화면이 유일한 진입점입니다.
 
 // ===== 단가표 내보내기 (제품명/단위/용량(cc)/단가) =====
 // 단위 정규화 규칙

@@ -608,7 +608,8 @@ async function initApp(){
     if(typeof loadAdminAccounts==='function')loadAdminAccounts();
     if(typeof loadSharedStaffAccounts==='function')loadSharedStaffAccounts();
     if(typeof initCardStatements==='function')initCardStatements();
-    if(typeof initDefaultLocations==='function')await initDefaultLocations();
+    // 장소 자동 초기화 제거: staff 앱에서만 관리하도록 통일 (2026-06 정책)
+    // 관리자 admin 은 소모품 목록의 장소 필터 표시를 위해 조회만 수행.
     if(typeof loadLocations==='function')await loadLocations();
     updateAdminUI();
     initAdminAutoLogout();

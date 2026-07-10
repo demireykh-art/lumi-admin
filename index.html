@@ -371,7 +371,6 @@
             <div class="tab-content" id="tab-inventory">
                 <div class="sub-tabs">
                     <div class="sub-tab active" data-sub="inv-list">소모품 목록</div>
-                    <div class="sub-tab" data-sub="inv-locations">📍 장소 관리</div>
                     <div class="sub-tab" data-sub="inv-recipe">레시피 (시술 원가)</div>
                     <div class="sub-tab" data-sub="inv-audit">재고 실사</div>
                     <div class="sub-tab" data-sub="inv-wishlist">🛍️ 구매 요청 <span id="wishlistBadge" style="display:none;background:var(--red);color:#fff;font-size:.65rem;padding:1px 5px;border-radius:8px;margin-left:3px;vertical-align:middle">0</span></div>
@@ -410,38 +409,9 @@
                     </tr></thead><tbody id="inventoryTable"></tbody></table></div>
                 </div>
                 
-                <!-- 장소 관리 서브탭 -->
-                <div class="sub-content" id="sub-inv-locations">
-                    <div class="section-header">
-                        <div class="section-title">📍 재고 보관 장소 관리</div>
-                        <button class="btn btn-primary" onclick="openLocationModal()">+ 장소 추가</button>
-                    </div>
-                    <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
-                        층별·장소별로 재고를 관리합니다. 장소를 추가/수정/삭제하고 순서를 조정할 수 있습니다.
-                    </div>
-                    <!-- 중복 장소 통합 안내 -->
-                    <div id="adminDupLocBox" style="display:none;background:#FFF4E5;border:2px solid #FFB85C;padding:1rem 1.25rem;border-radius:8px;margin-bottom:1.5rem">
-                        <div style="font-weight:700;font-size:.95rem;margin-bottom:.5rem;color:#A05A00">⚠️ 중복 장소 발견</div>
-                        <div id="adminDupLocList" style="font-size:.85rem;color:#7a4500;margin-bottom:.75rem;line-height:1.6"></div>
-                        <div style="font-size:.75rem;color:#7a4500;margin-bottom:.75rem">실사된 재고 수량은 손실 없이 합산되며, 가장 먼저 생성된(order 작은) 장소를 유지합니다.</div>
-                        <button class="btn btn-primary" onclick="adminMergeDuplicateLocations()" style="padding:.6rem 1.25rem;font-size:.9rem;font-weight:700;background:#E07B00;border-color:#E07B00">🔧 중복 통합 실행</button>
-                    </div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
-                        <div class="card">
-                            <div class="card-title" style="display:flex;align-items:center;gap:.5rem">
-                                🏢 5층 장소
-                            </div>
-                            <div id="locations5F" style="margin-top:.75rem"></div>
-                        </div>
-                        <div class="card">
-                            <div class="card-title" style="display:flex;align-items:center;gap:.5rem">
-                                🏢 6층 장소
-                            </div>
-                            <div id="locations6F" style="margin-top:.75rem"></div>
-                        </div>
-                    </div>
-                </div>
-                
+                <!-- 장소 관리는 staff 앱에서만 관리 (관리자 UI 제거됨) -->
+
+
                 <div class="sub-content" id="sub-inv-recipe">
                     <div class="cards-grid" id="recipeCards"></div>
                     <div class="section-header">
@@ -1015,38 +985,7 @@
         </div>
     </div>
 
-    <!-- 장소 관리 모달 -->
-    <div class="modal" id="locationModal">
-        <div class="modal-content" style="max-width:400px">
-            <div class="modal-header">
-                <div class="modal-title" id="locationModalTitle">장소 추가</div>
-                <button class="modal-close" onclick="closeModal('locationModal')">&times;</button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="locationEditId">
-                <div class="form-group">
-                    <label class="form-label">층 *</label>
-                    <select class="form-select" id="locationFloor">
-                        <option value="5층">5층</option>
-                        <option value="6층">6층</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">장소명 *</label>
-                    <input type="text" class="form-input" id="locationName" placeholder="예: 처치실, 냉장고" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">순서</label>
-                    <input type="number" class="form-input" id="locationOrder" value="1" min="1">
-                    <div style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">숫자가 작을수록 먼저 표시됩니다</div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('locationModal')">취소</button>
-                <button class="btn btn-primary" onclick="saveLocation()">저장</button>
-            </div>
-        </div>
-    </div>
+    <!-- 장소 관리 모달 제거됨: staff 앱에서만 장소를 관리 -->
 
     <!-- JS Modules -->
     <script src="firebase-config.js"></script>
@@ -1055,7 +994,7 @@
     <script src="card-statements.js"></script>
     <script src="expense.js"></script>
     <script src="hr-attendance.js?v=20260613a"></script>
-    <script src="inventory.js?v=20260613c"></script>
+    <script src="inventory.js?v=20260613d"></script>
     <script src="finance.js"></script>
     <script src="version-check.js"></script>
 </body>
