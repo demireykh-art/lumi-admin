@@ -435,8 +435,9 @@
                 <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
                     <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
                         <span>📦 재고 실사</span>
-                        <div style="display:flex;gap:.5rem">
+                        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
                             <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
+                            <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openInventoryOverviewModal()">🗂️ 정리된 목록</button>
                             <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openWishlistModal()">🛍️ 비품 요청</button>
                         </div>
                     </div>
@@ -1177,6 +1178,36 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('locationManageModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 재고 품목 정리 목록 모달 -->
+    <div class="modal" id="inventoryOverviewModal">
+        <div class="modal-content" style="max-width:900px;width:96vw;max-height:92vh;display:flex;flex-direction:column">
+            <div class="modal-header">
+                <div class="modal-title">🗂️ 재고 품목 정리 목록</div>
+                <button class="modal-close" onclick="closeModal('inventoryOverviewModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y:auto;flex:1">
+                <div id="overviewSummary" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem;font-size:.85rem"></div>
+                <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">
+                    <input type="text" id="overviewSearch" placeholder="🔍 품목명 검색" oninput="renderInventoryOverview()"
+                        style="flex:1;min-width:180px;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem">
+                    <select id="overviewGroupBy" onchange="renderInventoryOverview()"
+                        style="padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem">
+                        <option value="parent">상위 품목 그룹핑</option>
+                        <option value="category">카테고리 그룹핑</option>
+                        <option value="floor">층별 그룹핑</option>
+                        <option value="none">그룹핑 없음</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="printInventoryOverview()" style="font-size:.8rem">🖨️ 인쇄</button>
+                    <button class="btn btn-secondary" onclick="exportInventoryOverviewCsv()" style="font-size:.8rem">📥 CSV</button>
+                </div>
+                <div id="overviewList"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('inventoryOverviewModal')" style="flex:1">닫기</button>
             </div>
         </div>
     </div>
@@ -4051,6 +4082,186 @@
         }
 
         // ===== 신규 품목 등록 =====
+        // ===== 재고 정리 목록 (그룹핑 뷰) =====
+        function openInventoryOverviewModal(){
+            renderInventoryOverview();
+            openModal('inventoryOverviewModal');
+        }
+
+        function _overviewItemUnitPrice(item){
+            const up=Number(item?.unitPrice)||0;
+            if(up>0) return Math.round(up);
+            const q=Number(item?.purchaseQty)||0;
+            const p=Number(item?.purchasePrice)||0;
+            return q>0?Math.round(p/q):0;
+        }
+        function _overviewItemValue(item){
+            const stock=Number(item?.currentStock)||0;
+            return _overviewItemUnitPrice(item)*stock;
+        }
+        function _overviewLocationSummary(item){
+            const locs=item?.locations&&typeof item.locations==='object'?item.locations:{};
+            const entries=Object.entries(locs).filter(([,q])=>(Number(q)||0)>0);
+            if(entries.length===0) return item.location||'—';
+            return entries.map(([k,q])=>`${k}: ${q}`).join(' · ');
+        }
+
+        function renderInventoryOverview(){
+            const container=document.getElementById('overviewList');
+            const summary=document.getElementById('overviewSummary');
+            if(!container) return;
+            const searchQ=String(document.getElementById('overviewSearch')?.value||'').toLowerCase().trim();
+            const groupBy=document.getElementById('overviewGroupBy')?.value||'parent';
+
+            let items=(invItems||[]).slice();
+            if(searchQ){
+                items=items.filter(i=>
+                    String(i.name||'').toLowerCase().includes(searchQ)||
+                    String(i.parentName||'').toLowerCase().includes(searchQ)
+                );
+            }
+
+            // 상단 요약
+            const total=items.length;
+            const totalStock=items.reduce((s,i)=>s+(Number(i.currentStock)||0),0);
+            const totalValue=items.reduce((s,i)=>s+_overviewItemValue(i),0);
+            summary.innerHTML=`
+                <span style="background:#eef2ff;color:#4338ca;padding:.35rem .7rem;border-radius:16px;font-weight:700">총 품목 ${total}</span>
+                <span style="background:#f0fdf4;color:#166534;padding:.35rem .7rem;border-radius:16px;font-weight:700">총 재고 수량 ${Math.round(totalStock).toLocaleString()}</span>
+                <span style="background:#fef3c7;color:#92400e;padding:.35rem .7rem;border-radius:16px;font-weight:700">추정 재고 가치 ₩${Math.round(totalValue).toLocaleString()}</span>
+            `;
+
+            // 그룹 결정 함수
+            const groupKey=(i)=>{
+                if(groupBy==='category') return INV_CATEGORIES[i.category]||'기타';
+                if(groupBy==='floor'){
+                    const locs=Object.keys(i.locations||{});
+                    const has5=locs.some(k=>k.startsWith('5층'))||(i.location||'').startsWith('5층');
+                    const has6=locs.some(k=>k.startsWith('6층'))||(i.location||'').startsWith('6층');
+                    if(has5&&has6) return '5층 + 6층';
+                    if(has5) return '5층';
+                    if(has6) return '6층';
+                    return '층 미지정';
+                }
+                if(groupBy==='none') return '전체';
+                return String(i.parentName||'').trim()||'미분류';
+            };
+            const groups=new Map();
+            items.forEach(i=>{
+                const k=groupKey(i);
+                if(!groups.has(k)) groups.set(k,[]);
+                groups.get(k).push(i);
+            });
+            const groupNames=Array.from(groups.keys()).sort((a,b)=>{
+                if(a==='미분류'||a==='기타'||a==='층 미지정') return 1;
+                if(b==='미분류'||b==='기타'||b==='층 미지정') return -1;
+                return a.localeCompare(b,'ko');
+            });
+
+            if(items.length===0){
+                container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:2rem">조건에 맞는 품목이 없습니다.</div>';
+                return;
+            }
+
+            container.innerHTML=groupNames.map(gname=>{
+                const list=groups.get(gname).slice().sort((a,b)=>
+                    String(a.name||'').localeCompare(String(b.name||''),'ko'));
+                const gStock=list.reduce((s,i)=>s+(Number(i.currentStock)||0),0);
+                const gValue=list.reduce((s,i)=>s+_overviewItemValue(i),0);
+                const rows=list.map(i=>{
+                    const catLabel=INV_CATEGORIES[i.category]||'-';
+                    const up=_overviewItemUnitPrice(i);
+                    const stock=Number(i.currentStock)||0;
+                    const val=up*stock;
+                    const isLow=i.safetyStock&&stock<i.safetyStock;
+                    const locSum=_overviewLocationSummary(i);
+                    return `<tr style="${isLow?'background:rgba(255,152,0,.06)':''}">
+                        <td style="padding:.4rem .55rem;font-weight:600">${i.name||'-'}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;margin-left:4px">발주</span>':''}</td>
+                        <td style="padding:.4rem .55rem;font-size:.78rem;color:#666">${catLabel}</td>
+                        <td style="padding:.4rem .55rem;text-align:right;font-weight:600">${Math.round(stock).toLocaleString()}${i.unit||'개'}</td>
+                        <td style="padding:.4rem .55rem;text-align:right;color:#0369a1">${up>0?'₩'+up.toLocaleString():'-'}</td>
+                        <td style="padding:.4rem .55rem;text-align:right;color:#92400e">${val>0?'₩'+Math.round(val).toLocaleString():'-'}</td>
+                        <td style="padding:.4rem .55rem;font-size:.72rem;color:#4b5563">${locSum}</td>
+                        <td style="padding:.4rem .55rem;font-size:.72rem;color:#4b5563">${i.expiryDate||'-'}</td>
+                    </tr>`;
+                }).join('');
+                return `<div style="margin-bottom:1.25rem;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+                    <div style="background:#f8fafc;padding:.6rem .85rem;font-weight:700;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem;font-size:.9rem">
+                        <span>${gname==='미분류'||gname==='기타'||gname==='층 미지정'?'':'📂 '}${gname} (${list.length})</span>
+                        <span style="font-weight:600;color:#4b5563;font-size:.8rem">재고 ${Math.round(gStock).toLocaleString()} · 가치 ₩${Math.round(gValue).toLocaleString()}</span>
+                    </div>
+                    <div style="overflow-x:auto">
+                    <table style="width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px">
+                        <thead><tr style="background:#f9fafb;color:#374151;font-size:.75rem">
+                            <th style="padding:.45rem .55rem;text-align:left">품목명</th>
+                            <th style="padding:.45rem .55rem;text-align:left">카테고리</th>
+                            <th style="padding:.45rem .55rem;text-align:right">재고</th>
+                            <th style="padding:.45rem .55rem;text-align:right">단가</th>
+                            <th style="padding:.45rem .55rem;text-align:right">가치</th>
+                            <th style="padding:.45rem .55rem;text-align:left">보관 장소</th>
+                            <th style="padding:.45rem .55rem;text-align:left">유통기한</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function printInventoryOverview(){
+            const html=document.getElementById('overviewList')?.innerHTML||'';
+            const summary=document.getElementById('overviewSummary')?.innerHTML||'';
+            const w=window.open('','_blank');
+            if(!w) return;
+            const dateStr=new Date().toLocaleDateString('ko-KR');
+            w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>재고 품목 정리 목록</title>
+                <style>body{font-family:-apple-system,'Noto Sans KR',sans-serif;margin:20px;color:#1f2937}
+                h1{font-size:1.3rem;margin-bottom:.5rem}
+                @media print{ .no-print{display:none} }
+                </style></head><body>
+                <h1>재고 품목 정리 목록</h1>
+                <div style="color:#6b7280;font-size:.85rem;margin-bottom:1rem">기준일: ${dateStr}</div>
+                <div style="margin-bottom:1rem;display:flex;gap:.5rem;flex-wrap:wrap">${summary}</div>
+                ${html}
+                <div class="no-print" style="margin-top:1rem"><button onclick="window.print()">🖨️ 인쇄</button></div>
+                </body></html>`);
+            w.document.close();
+        }
+
+        function exportInventoryOverviewCsv(){
+            const searchQ=String(document.getElementById('overviewSearch')?.value||'').toLowerCase().trim();
+            let items=(invItems||[]).slice();
+            if(searchQ){
+                items=items.filter(i=>
+                    String(i.name||'').toLowerCase().includes(searchQ)||
+                    String(i.parentName||'').toLowerCase().includes(searchQ));
+            }
+            items.sort((a,b)=>{
+                const pa=String(a.parentName||'').localeCompare(String(b.parentName||''),'ko');
+                if(pa!==0) return pa;
+                return String(a.name||'').localeCompare(String(b.name||''),'ko');
+            });
+            const rows=[['상위품목','품목명','카테고리','재고수량','단위','단가(원)','가치(원)','보관장소','유통기한']];
+            items.forEach(i=>{
+                const up=_overviewItemUnitPrice(i);
+                const stock=Number(i.currentStock)||0;
+                rows.push([
+                    i.parentName||'', i.name||'', INV_CATEGORIES[i.category]||'',
+                    stock, i.unit||'개', up||0, up*stock,
+                    _overviewLocationSummary(i), i.expiryDate||''
+                ]);
+            });
+            const esc=v=>{ const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+            const csv='﻿'+rows.map(r=>r.map(esc).join(',')).join('\r\n');
+            const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a');
+            const stamp=new Date().toISOString().slice(0,10).replace(/-/g,'');
+            a.href=url; a.download=`재고_정리목록_${stamp}.csv`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }
+
         // 기존 품목 이름 선택 시 상위 품목 자동 채움
         function onNewItemNameInput(val){
             const parentInp=document.getElementById('newItemParent');
