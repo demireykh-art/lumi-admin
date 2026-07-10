@@ -11,6 +11,22 @@ const FEE_LOSS_RATE = 0.10; // 소분(portioned) 품목 로스율
 let feeColVis = { cost: true, margin: false, marginRate: false, per10: false };
 const FEE_COL_LABELS = { cost: '원가', margin: '마진', marginRate: '마진율', per10: '10분당이익' };
 
+// 시술 구성(회차별) 상세
+let _feeExpanded = new Set(); // 펼쳐진 key
+let _feeElKey = {};           // elId -> key (특수문자 회피용)
+function feeElId(key) {
+    try { return 'fs' + btoa(unescape(encodeURIComponent(key))).replace(/[^A-Za-z0-9]/g, ''); }
+    catch (_) { return 'fs' + Math.abs(key.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0)); }
+}
+function _feeGet(key) { const f = feeSchedule[key] || { key }; feeSchedule[key] = f; return f; }
+async function _persistSessions(key, f) {
+    f.key = key; f.updatedAt = new Date().toISOString();
+    if (typeof currentCrmUser !== 'undefined' && currentCrmUser) f.updatedBy = currentCrmUser.id;
+    feeSchedule[key] = f;
+    try { await db.collection('feeSchedule').doc(feeDocId(key)).set({ key, sessions: f.sessions || [], updatedAt: f.updatedAt, updatedBy: f.updatedBy || null }, { merge: true }); }
+    catch (e) { alert('회차 저장 실패: ' + e.message); }
+}
+
 function feeKey(catId, tName, vDesc) { return `${catId}||${tName}||${vDesc}`; }
 function feeDocId(key) { return key.replace(/\//g, '∕').replace(/\./g, '·').slice(0, 1400); }
 function canEditFees() { return typeof currentCrmCanEditFees !== 'undefined' && currentCrmCanEditFees; }
@@ -113,6 +129,7 @@ function renderFeeSchedule() {
     };
     const q = (document.getElementById('feeSearch')?.value || '').trim().toLowerCase();
     const dis = editable ? '' : 'disabled';
+    const colCount = 5 + (vis.cost ? 1 : 0) + (vis.margin ? 1 : 0) + (vis.marginRate ? 1 : 0) + (vis.per10 ? 1 : 0);
     let html = '';
     treatmentCategories.forEach(c => {
         let rows = '';
@@ -121,6 +138,9 @@ function renderFeeSchedule() {
             (t.variants || []).forEach(v => {
                 const vDesc = variantDesc(v);
                 const key = feeKey(c.id, t.name, vDesc);
+                const elId = feeElId(key); _feeElKey[elId] = key;
+                const expanded = _feeExpanded.has(key);
+                const sessN = Array.isArray((feeSchedule[key] || {}).sessions) ? feeSchedule[key].sessions.length : 0;
                 const f = feeSchedule[key] || {};
                 const priceMan = (f.price != null && f.price !== '') ? f.price : (v.price || 0);
                 const priceWon = manToWon(priceMan);
@@ -134,7 +154,7 @@ function renderFeeSchedule() {
                 const costSrc = (f.manualCost != null && f.manualCost !== '') ? '수동'
                     : (Array.isArray(f.recipe) && f.recipe.length ? '믹스' : '미설정');
                 rows += `<tr>
-                    <td style="font-size:.82rem">${escapeHtml(t.name)} <span style="color:var(--text-muted)">${escapeHtml(vDesc)}</span></td>
+                    <td style="font-size:.82rem"><button class="btn btn-sm" onclick="toggleFeeSessions('${elId}')" title="시술 구성(회차) 상세" style="padding:.02rem .35rem;font-size:.72rem;background:#EEF0FE;color:#4F46E5;margin-right:.35rem">${expanded ? '▾' : '▸'}${sessN ? '<span style="font-size:.62rem"> ' + sessN + '</span>' : ''}</button>${escapeHtml(t.name)} <span style="color:var(--text-muted)">${escapeHtml(vDesc)}</span></td>
                     <td class="text-right"><input type="number" class="form-input" style="width:70px;text-align:right;padding:.3rem" value="${priceMan}" ${dis} onchange="saveFeeField('${key}','price',this.value)">만</td>
                     ${vis.cost ? `<td class="text-right" style="min-width:120px"><div>${formatCurrency(cost)}</div>${editable ? `<button class="btn btn-sm btn-outline" onclick="openCostModal('${key.replace(/'/g, "\\'")}','${escapeHtml(t.name + ' ' + vDesc).replace(/'/g, "\\'")}')" style="font-size:.66rem;padding:.12rem .4rem;margin-top:.15rem">${costSrc} 믹스</button>` : ''}</td>` : ''}
                     <td class="text-right"><input type="number" class="form-input" style="width:50px;text-align:right;padding:.3rem" value="${disc || ''}" ${dis} onchange="saveFeeField('${key}','discountRate',this.value)">%</td>
@@ -143,7 +163,8 @@ function renderFeeSchedule() {
                     ${vis.marginRate ? `<td class="text-right" style="color:${marginRate >= 0 ? '#16A34A' : '#DC2626'}">${marginRate.toFixed(0)}%</td>` : ''}
                     <td class="text-right"><input type="number" class="form-input" style="width:50px;text-align:right;padding:.3rem" value="${dur || ''}" ${dis} onchange="saveFeeField('${key}','durationMin',this.value)">분</td>
                     ${vis.per10 ? `<td class="text-right" style="font-weight:600;color:#4F46E5">${per10 != null ? formatCurrency(per10) : '-'}</td>` : ''}
-                </tr>`;
+                </tr>
+                <tr id="r${elId}" ${expanded ? '' : 'style="display:none"'}><td colspan="${colCount}" style="background:#FAFBFE;padding:.4rem .8rem"><div id="${elId}">${feeSessionsHtml(elId)}</div></td></tr>`;
             });
         });
         if (!rows) return;
@@ -234,4 +255,67 @@ async function saveCost() {
     catch (e) { alert('저장 실패: ' + e.message); return; }
     closeModal('costModal');
     renderFeeSchedule();
+}
+
+// ===== 시술 구성(회차별) 상세 =====
+function toggleFeeSessions(elId) {
+    const key = _feeElKey[elId]; if (!key) return;
+    if (_feeExpanded.has(key)) _feeExpanded.delete(key); else _feeExpanded.add(key);
+    renderFeeSchedule();
+}
+function _refreshSess(elId) { const el = document.getElementById(elId); if (el) el.innerHTML = feeSessionsHtml(elId); }
+function feeSessionsHtml(elId) {
+    const key = _feeElKey[elId]; if (!key) return '';
+    const editable = canEditFees();
+    const f = feeSchedule[key] || {};
+    const sessions = Array.isArray(f.sessions) ? f.sessions : [];
+    const dis = editable ? '' : 'disabled';
+    let rows = sessions.map((s, i) => `
+        <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem">
+            <span style="width:46px;font-size:.78rem;color:#6B7280;flex-shrink:0">${i + 1}회차</span>
+            <input class="form-input" style="flex:1;padding:.3rem;font-size:.82rem" value="${escapeHtml(s.c || '')}" ${dis} placeholder="예: 토닝 + 실펌" onchange="setFeeSession('${elId}',${i},this.value)">
+            <button class="btn btn-sm ${s.photo ? 'btn-primary' : 'btn-outline'}" ${dis} onclick="toggleFeeSessionPhoto('${elId}',${i})" title="촬영 여부" style="font-size:.72rem;padding:.2rem .45rem;flex-shrink:0">📷${s.photo ? ' ✓' : ''}</button>
+            ${editable ? `<button class="btn btn-sm btn-secondary" onclick="cloneFeeSession('${elId}',${i})" title="다음 회차로 복제" style="font-size:.72rem;padding:.2rem .5rem;flex-shrink:0">복제</button>
+            <button class="btn btn-sm btn-danger" onclick="removeFeeSession('${elId}',${i})" style="font-size:.72rem;padding:.2rem .4rem;flex-shrink:0">×</button>` : ''}
+        </div>`).join('');
+    if (!sessions.length) rows = `<div style="font-size:.78rem;color:var(--text-muted);padding:.3rem 0">회차 구성이 없습니다.${editable ? ' [+ 회차 추가]로 시작하세요.' : ''}</div>`;
+    return `<div style="padding:.35rem .2rem">
+        <div style="font-weight:600;font-size:.8rem;margin-bottom:.4rem;color:#4F46E5">🗂 시술 구성 (회차별) <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">· 📷=촬영 회차</span></div>
+        ${rows}
+        ${editable ? `<button class="btn btn-sm btn-secondary" onclick="addFeeSession('${elId}')" style="margin-top:.25rem">+ 회차 추가</button>` : ''}
+    </div>`;
+}
+async function addFeeSession(elId) {
+    const key = _feeElKey[elId]; if (!key || !canEditFees()) return;
+    const f = _feeGet(key); f.sessions = Array.isArray(f.sessions) ? f.sessions : [];
+    f.sessions.push({ c: '', photo: false });
+    await _persistSessions(key, f); _refreshSess(elId);
+}
+async function cloneFeeSession(elId, i) {
+    const key = _feeElKey[elId]; if (!key || !canEditFees()) return;
+    const f = _feeGet(key); const arr = Array.isArray(f.sessions) ? f.sessions : [];
+    const src = arr[i]; if (!src) return;
+    arr.splice(i + 1, 0, { c: src.c || '', photo: !!src.photo }); // 그대로 다음 회차로 복제
+    f.sessions = arr;
+    await _persistSessions(key, f); _refreshSess(elId);
+}
+async function removeFeeSession(elId, i) {
+    const key = _feeElKey[elId]; if (!key || !canEditFees()) return;
+    const f = _feeGet(key); const arr = Array.isArray(f.sessions) ? f.sessions : [];
+    arr.splice(i, 1); f.sessions = arr;
+    await _persistSessions(key, f); _refreshSess(elId);
+}
+function setFeeSession(elId, i, val) {
+    const key = _feeElKey[elId]; if (!key || !canEditFees()) return;
+    const f = _feeGet(key); const arr = Array.isArray(f.sessions) ? f.sessions : [];
+    if (!arr[i]) arr[i] = { c: '', photo: false };
+    arr[i].c = val; f.sessions = arr;
+    _persistSessions(key, f); // 재렌더 없이 저장(입력 흐름 유지)
+}
+async function toggleFeeSessionPhoto(elId, i) {
+    const key = _feeElKey[elId]; if (!key || !canEditFees()) return;
+    const f = _feeGet(key); const arr = Array.isArray(f.sessions) ? f.sessions : [];
+    if (!arr[i]) arr[i] = { c: '', photo: false };
+    arr[i].photo = !arr[i].photo; f.sessions = arr;
+    await _persistSessions(key, f); _refreshSess(elId);
 }
