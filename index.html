@@ -473,10 +473,15 @@
                 <div class="sub-content" id="sub-inv-locations">
                     <div class="section-header">
                         <div class="section-title">📍 재고 보관 장소 관리</div>
-                        <button class="btn btn-primary" onclick="openLocationModal()">➕ 새 장소 추가</button>
                     </div>
-                    <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">
-                        층별·장소별로 재고를 관리합니다. 장소를 추가/수정/삭제하고 순서를 조정할 수 있습니다.
+                    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;padding:.6rem .75rem;background:var(--bg-secondary,#f4f2ef);border-radius:8px">
+                        <span style="font-size:.8rem;color:var(--text-secondary);font-weight:600">새 장소</span>
+                        <select id="locAddFloor" class="form-select" style="width:auto;padding:.45rem .6rem">
+                            <option value="5층">5층</option>
+                            <option value="6층">6층</option>
+                        </select>
+                        <input id="locAddName" class="form-input" placeholder="장소명 (예: 냉장고, 처치실)" style="width:220px;padding:.45rem .6rem" onkeydown="if(event.key==='Enter')addLocationInline()">
+                        <button class="loc-btn-add" onclick="addLocationInline()">추가</button>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
                         <div class="card">
@@ -1151,7 +1156,7 @@
     <script src="card-statements.js"></script>
     <script src="expense.js"></script>
     <script src="hr-attendance.js"></script>
-    <script src="inventory.js?v=20260626b"></script>
+    <script src="inventory.js?v=20260626c"></script>
     <script src="finance.js"></script>
     <script src="crm-analytics.js?v=20260621"></script>
     <script>

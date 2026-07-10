@@ -197,3 +197,5 @@ td{font-size:.85rem}
 .loc-btn-edit:hover{background:var(--accent-gold);color:#fff}
 .loc-btn-del{padding:4px 11px;font-size:.72rem;border:1px solid var(--red);color:var(--red);background:none;border-radius:6px;cursor:pointer}
 .loc-btn-del:hover{background:var(--red);color:#fff}
+.loc-btn-add{padding:5px 14px;font-size:.75rem;border:1px solid var(--accent-gold);background:var(--accent-gold);color:#fff;border-radius:6px;cursor:pointer;font-weight:600}
+.loc-btn-add:hover{opacity:.9}

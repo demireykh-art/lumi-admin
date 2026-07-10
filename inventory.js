@@ -754,6 +754,20 @@ function openLocationModal(id=null){
 
 function editLocation(id){openLocationModal(id);}
 
+// 인라인 빠른 추가 (순서는 같은 층 최대값+1 자동)
+async function addLocationInline(){
+    const floor=document.getElementById('locAddFloor')?.value||'5층';
+    const name=(document.getElementById('locAddName')?.value||'').trim();
+    if(!name){alert('장소명을 입력하세요.');return;}
+    const sameFloor=locations.filter(l=>l.floor===floor);
+    const order=sameFloor.length?Math.max(...sameFloor.map(l=>Number(l.order)||0))+1:1;
+    try{
+        await db.collection('locations').add({floor,name,order,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+        document.getElementById('locAddName').value='';
+        await loadLocations();
+    }catch(e){alert('추가 실패: '+e.message);}
+}
+
 async function saveLocation(){
     const editId=document.getElementById('locationEditId').value;
     const floor=document.getElementById('locationFloor').value;
