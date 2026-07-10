@@ -873,12 +873,13 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label class="form-label">품목명 *</label>
-                    <input type="text" class="form-input" id="newItemName" placeholder="예: 리도카인크림 (하위 품목명)">
+                    <label class="form-label">품목명 * <span style="font-size:.7rem;color:var(--text-muted)">(기존 목록에서 선택 or 신규 입력)</span></label>
+                    <input type="text" class="form-input" id="newItemName" list="itemNameDatalist" placeholder="🔍 예: 리도카인크림" oninput="onNewItemNameInput(this.value)">
+                    <datalist id="itemNameDatalist"></datalist>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(선택 · 예: 마취크림)</span></label>
-                    <input type="text" class="form-input" id="newItemParent" list="parentItemDatalist" placeholder="🔍 상위 품목명 입력 or 검색">
+                    <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(카테고리 · 신규로 입력 가능 · 예: 마취크림)</span></label>
+                    <input type="text" class="form-input" id="newItemParent" list="parentItemDatalist" placeholder="예: 마취크림">
                     <datalist id="parentItemDatalist"></datalist>
                 </div>
                 <div style="display:flex;gap:.5rem">
@@ -4050,17 +4051,43 @@
         }
 
         // ===== 신규 품목 등록 =====
+        // 기존 품목 이름 선택 시 상위 품목 자동 채움
+        function onNewItemNameInput(val){
+            const parentInp=document.getElementById('newItemParent');
+            if(!parentInp) return;
+            // 사용자가 이미 상위 품목을 직접 입력한 상태면 덮어쓰지 않음
+            if(String(parentInp.value||'').trim()!=='') return;
+            const v=String(val||'').trim();
+            if(!v) return;
+            const match=(invItems||[]).find(i=>String(i.name||'').trim()===v);
+            if(match && match.parentName){
+                parentInp.value=String(match.parentName).trim();
+            }
+        }
+
         function _refreshParentItemDatalist(){
-            const dl=document.getElementById('parentItemDatalist');
-            if(!dl) return;
-            // 기존 parentName / 자기 자신 이름 후보로 등록
-            const set=new Set();
-            (invItems||[]).forEach(i=>{
-                if(i.parentName) set.add(String(i.parentName).trim());
-                if(i.name) set.add(String(i.name).trim());
-            });
-            dl.innerHTML=Array.from(set).sort((a,b)=>a.localeCompare(b,'ko'))
-                .map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+            // 상위 품목(카테고리): 기존 parentName 값만 (기존 item.name 은 포함 X)
+            const dlParent=document.getElementById('parentItemDatalist');
+            if(dlParent){
+                const parentSet=new Set();
+                (invItems||[]).forEach(i=>{
+                    const p=String(i.parentName||'').trim();
+                    if(p) parentSet.add(p);
+                });
+                dlParent.innerHTML=Array.from(parentSet).sort((a,b)=>a.localeCompare(b,'ko'))
+                    .map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+            }
+            // 품목명(하위): 기존 item.name 후보로 등록 → 자동완성 목록
+            const dlName=document.getElementById('itemNameDatalist');
+            if(dlName){
+                const nameSet=new Set();
+                (invItems||[]).forEach(i=>{
+                    const n=String(i.name||'').trim();
+                    if(n) nameSet.add(n);
+                });
+                dlName.innerHTML=Array.from(nameSet).sort((a,b)=>a.localeCompare(b,'ko'))
+                    .map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+            }
         }
         function openNewItemModal(){
             _refreshParentItemDatalist();
