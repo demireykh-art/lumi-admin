@@ -698,7 +698,7 @@ async function saveVisit() {
             if (pkgId) await _adjustPackage(pid, pkgId, +1);
         }
         await loadVisits();
-        renderPatients(); renderRecall(); renderBirthdays();
+        renderPatients(); renderRecall(); renderBirthdays(); renderBoard();
         renderPatientVisits();      // Progress Note 갱신
         renderDetailHeader();       // 방문/매출 헤더 갱신
         resetChartEntry();          // 입력폼을 새 차팅으로 비움(워크스페이스 유지)
@@ -712,7 +712,7 @@ async function deleteVisit(id) {
         await db.collection('visits').doc(id).delete();
         if (v && v.packageId) await _adjustPackage(v.patientId, v.packageId, -1); // 차감 복원
         await loadVisits();
-        renderPatients(); renderRecall(); renderBirthdays();
+        renderPatients(); renderRecall(); renderBirthdays(); renderBoard();
         if (_detailPatientId) { renderPatientVisits(); renderDetailHeader(); }
     } catch (e) { alert('삭제 실패: ' + e.message); }
 }
@@ -794,4 +794,84 @@ function renderCRM() {
     renderBirthdays();
     renderPriceList();
     renderChannels();
+    renderBoard();
+    renderNotices();
+}
+
+// ============================================================
+//  당일 현황판 (예약 · 접수 · 완료/수납)
+// ============================================================
+let _boardDate = new Date().toISOString().slice(0, 10);
+function boardShift(d) { const dt = new Date(_boardDate); dt.setDate(dt.getDate() + d); _boardDate = dt.toISOString().slice(0, 10); renderBoard(); }
+function boardToday() { _boardDate = new Date().toISOString().slice(0, 10); renderBoard(); }
+function _boardSet(listId, cntId, arr, cardFn, empty) {
+    const l = document.getElementById(listId), c = document.getElementById(cntId);
+    if (c) c.textContent = arr.length;
+    if (l) l.innerHTML = arr.length ? arr.map(cardFn).join('') : `<div style="padding:2rem;text-align:center;color:var(--text-muted);font-size:.85rem">${empty}</div>`;
+}
+function renderBoard() {
+    const lbl = document.getElementById('boardDateLabel');
+    if (!lbl) return;
+    const dt = new Date(_boardDate);
+    const wd = ['일', '월', '화', '수', '목', '금', '토'][dt.getDay()];
+    lbl.textContent = `${_boardDate} (${wd})`;
+    const resv = visits.filter(v => v.nextReservation === _boardDate);
+    const done = visits.filter(v => v.date === _boardDate).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+    const pInfo = pid => { const p = patients.find(x => x.id === pid); return p ? { p, d: deriveFromRRN(p.rrnFront, p.rrnGender) } : { p: null, d: { sex: '', age: '' } }; };
+    const cardResv = v => {
+        const { p, d } = pInfo(v.patientId);
+        return `<div class="board-card" onclick="openPatientDetail('${v.patientId}')">
+            <strong>${escapeHtml(v.patientName || (p && p.name) || '-')}</strong> <span class="board-sub">${d.sex}/${d.age}</span>
+            <div class="board-sub">${escapeHtml((p && p.phone) || '')}${v.doctorId ? ' · ' + escapeHtml(empName(v.doctorId)) : ''}</div>
+            ${v.memo ? `<div class="board-sub" style="color:#4F46E5">${escapeHtml(v.memo)}</div>` : ''}
+        </div>`;
+    };
+    const cardDone = v => {
+        const { p } = pInfo(v.patientId);
+        const items = (v.items || []).map(it => escapeHtml(it.treatmentName)).join(', ');
+        return `<div class="board-card done" onclick="openPatientDetail('${v.patientId}')">
+            <div style="display:flex;justify-content:space-between;gap:.5rem"><strong>${escapeHtml(v.patientName || (p && p.name) || '-')}</strong><span style="color:#16A34A;font-weight:700">${formatCurrency(v.total || 0)}</span></div>
+            <div class="board-sub">${items || (v.consultOnly ? '상담만' : '-')}${v.doctorId ? ' · ' + escapeHtml(empName(v.doctorId)) : ''}${v.payMethod ? ' · ' + escapeHtml(v.payMethod) : ''}</div>
+        </div>`;
+    };
+    _boardSet('boardResv', 'boardResvCount', resv, cardResv, '예약된 환자가 없습니다.');
+    _boardSet('boardWait', 'boardWaitCount', [], null, '대기 중인 접수가 없습니다.');
+    _boardSet('boardDone', 'boardDoneCount', done, cardDone, '완료·수납 내역이 없습니다.');
+}
+
+// ============================================================
+//  병원 공지
+// ============================================================
+let notices = [];
+async function loadNotices() {
+    try { const s = await db.collection('notices').orderBy('createdAt', 'desc').limit(80).get(); notices = s.docs.map(d => ({ id: d.id, ...d.data() })); }
+    catch (e) { console.warn('공지 로드 실패:', e); notices = []; }
+}
+function renderNotices() {
+    const wrap = document.getElementById('noticeList');
+    if (!wrap) return;
+    if (!notices.length) { wrap.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--text-muted)">등록된 공지가 없습니다.</div>'; return; }
+    wrap.innerHTML = notices.map(n => `<div style="border:1px solid #E9EAF0;border-radius:10px;padding:.6rem .8rem;margin-bottom:.5rem;background:#fff">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem">
+            <div style="white-space:pre-wrap;font-size:.9rem;line-height:1.5">${escapeHtml(n.text || '')}</div>
+            <button class="btn btn-sm btn-danger" onclick="deleteNotice('${n.id}')" style="flex-shrink:0">×</button>
+        </div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:.35rem">${escapeHtml(n.author || '')} · ${(n.createdAt || '').slice(0, 16).replace('T', ' ')}</div>
+    </div>`).join('');
+}
+async function addNotice() {
+    const el = document.getElementById('noticeInput');
+    const t = (el.value || '').trim();
+    if (!t) return;
+    const me = (typeof currentCrmUser !== 'undefined' && currentCrmUser) ? currentCrmUser : null;
+    try {
+        await db.collection('notices').add({ text: t, author: me ? me.name : '', createdAt: new Date().toISOString() });
+        el.value = '';
+        await loadNotices(); renderNotices();
+    } catch (e) { alert('공지 등록 실패: ' + e.message); }
+}
+async function deleteNotice(id) {
+    if (!confirm('이 공지를 삭제하시겠습니까?')) return;
+    try { await db.collection('notices').doc(id).delete(); await loadNotices(); renderNotices(); }
+    catch (e) { alert('삭제 실패: ' + e.message); }
 }
