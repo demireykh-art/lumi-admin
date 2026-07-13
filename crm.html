@@ -151,7 +151,10 @@
             <div class="crm-page" id="page-pricelist">
                 <div class="section-header">
                     <div class="section-title">시술 수가표 <span id="feeEditBadge" style="font-size:.72rem;font-weight:500"></span></div>
-                    <input type="text" class="form-input" id="feeSearch" placeholder="시술 검색..." style="width:200px" oninput="renderFeeSchedule()">
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                        <button class="btn btn-secondary" id="tmManageBtn" style="display:none" onclick="openTreatmentManager()">🛠 시술 추가·관리</button>
+                        <input type="text" class="form-input" id="feeSearch" placeholder="시술 검색..." style="width:180px" oninput="renderFeeSchedule()">
+                    </div>
                 </div>
                 <div style="font-size:.74rem;color:var(--text-muted);margin-bottom:.5rem">정가·원가(만원/₩) · 원가는 [믹스 설정]으로 재고 소모량 입력 시 자동계산 · 마진=실판매가−원가 · 10분당이익=마진÷(소요시간/10)</div>
                 <div id="feeVisConfig" style="margin-bottom:.5rem"></div>
@@ -313,6 +316,14 @@
         </div>
     </div>
 
+    <!-- 시술 추가·수정·삭제 관리 모달 -->
+    <div class="modal" id="tmModal">
+        <div class="modal-content" style="max-width:580px">
+            <div class="modal-header"><div class="modal-title" id="tmModalTitle">시술 관리</div><button class="modal-close" onclick="closeModal('tmModal')">&times;</button></div>
+            <div class="modal-body" id="tmModalBody"></div>
+        </div>
+    </div>
+
     <!-- ===== Bootstrap (firebase init + patients.js 가 기대하는 전역 정의) ===== -->
     <script>
         // Firebase (index.html 과 동일 프로젝트)
@@ -434,7 +445,7 @@
         }
     </script>
     <script src="patients.js?v=20260625b"></script>
-    <script src="fee-schedule.js?v=20260626d"></script>
+    <script src="fee-schedule.js?v=20260626e"></script>
     <script>
     // ===== 자동 업데이트: 새 배포 감지 시 자동 새로고침 (강력 새로고침 불필요) =====
     (function(){

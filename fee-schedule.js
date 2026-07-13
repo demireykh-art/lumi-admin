@@ -113,6 +113,7 @@ function renderFeeSchedule() {
     if (!wrap) return;
     renderFeeVisConfig();
     const editable = canEditFees();
+    const tmBtn = document.getElementById('tmManageBtn'); if (tmBtn) tmBtn.style.display = editable ? '' : 'none';
     const badge = document.getElementById('feeEditBadge');
     if (badge) badge.innerHTML = editable
         ? '<span style="background:#E7F6EC;color:#16A34A;padding:1px 8px;border-radius:8px">편집 가능 (admin/실장)</span>'
@@ -318,4 +319,109 @@ async function toggleFeeSessionPhoto(elId, i) {
     if (!arr[i]) arr[i] = { c: '', photo: false };
     arr[i].photo = !arr[i].photo; f.sessions = arr;
     await _persistSessions(key, f); _refreshSess(elId);
+}
+
+// ============================================================
+//  시술 추가·수정·삭제 (treatments 컬렉션) — admin/실장
+//  시드(JSON) 상태면 최초 1회 DB로 이관 후 CRUD
+// ============================================================
+function treatmentsAreSeed(){
+    // DB 로드분은 각 treatment에 docId가 있음. 하나도 없으면 시드.
+    return !(treatmentCategories||[]).some(c=>(c.treatments||[]).some(t=>t.docId));
+}
+async function ensureTreatmentsDb(){
+    if(!treatmentsAreSeed()) return;
+    const batch=db.batch();
+    (treatmentCategories||[]).forEach(c=>{
+        (c.treatments||[]).forEach(t=>{
+            const ref=db.collection('treatments').doc();
+            batch.set(ref,{categoryId:c.id,categoryName:c.name,name:t.name,note:t.note||'',variants:t.variants||[],createdAt:new Date().toISOString()});
+        });
+    });
+    await batch.commit();
+    if(typeof loadTreatmentsMaster==='function') await loadTreatmentsMaster();
+}
+async function openTreatmentManager(){
+    if(!canEditFees()){ alert('권한이 없습니다. (admin/실장)'); return; }
+    openModal('tmModal');
+    document.getElementById('tmModalBody').innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--text-muted)">불러오는 중…</div>';
+    try{ await ensureTreatmentsDb(); }catch(e){ alert('시술 DB 준비 실패: '+e.message); }
+    renderTmList();
+}
+function renderTmList(){
+    const body=document.getElementById('tmModalBody'); if(!body) return;
+    document.getElementById('tmModalTitle').textContent='시술 관리';
+    let html=`<div style="margin-bottom:.6rem"><button class="btn btn-primary btn-sm" onclick="openTmForm()">+ 시술 추가</button></div>`;
+    (treatmentCategories||[]).forEach(c=>{
+        html+=`<div style="font-weight:700;font-size:.82rem;color:#4F46E5;margin:.7rem 0 .25rem">${escapeHtml(c.name)}</div>`;
+        (c.treatments||[]).forEach(t=>{
+            html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:.35rem .4rem;border-bottom:1px solid #F0F1F5">
+                <span style="font-size:.85rem;min-width:0">${escapeHtml(t.name)} <span style="color:var(--text-muted);font-size:.72rem">${(t.variants||[]).length}옵션</span></span>
+                <span style="display:flex;gap:.3rem;flex-shrink:0">
+                    <button class="btn btn-sm btn-outline" onclick="openTmForm('${t.docId}')">수정</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteTreatment('${t.docId}')">삭제</button>
+                </span></div>`;
+        });
+    });
+    body.innerHTML=html;
+}
+let _tmEditDocId='', _tmVariants=[];
+function openTmForm(docId){
+    _tmEditDocId=docId||'';
+    document.getElementById('tmModalTitle').textContent=docId?'시술 수정':'시술 추가';
+    let t=null, cat=null;
+    if(docId){ (treatmentCategories||[]).forEach(c=>{ const f=(c.treatments||[]).find(x=>x.docId===docId); if(f){ t=f; cat=c; } }); }
+    _tmVariants = t ? (t.variants||[]).map(v=>({label:variantDesc(v), price:v.price||0})) : [{label:'기본',price:0}];
+    const catList=(treatmentCategories||[]).map(c=>`<option value="${escapeHtml(c.name)}">`).join('');
+    document.getElementById('tmModalBody').innerHTML=`
+        <div class="form-group"><label class="form-label">카테고리</label>
+            <input class="form-input" id="tmCat" list="tmCatList" value="${cat?escapeHtml(cat.name):''}" placeholder="예: 보톡스 (기존 선택 또는 새로 입력)">
+            <datalist id="tmCatList">${catList}</datalist></div>
+        <div class="form-group"><label class="form-label">시술명</label><input class="form-input" id="tmName" value="${t?escapeHtml(t.name):''}" placeholder="시술명"></div>
+        <div class="form-group"><label class="form-label">옵션 · 정가(만원)</label><div id="tmVariants"></div>
+            <button class="btn btn-sm btn-secondary" onclick="addTmVariant()" style="margin-top:.35rem">+ 옵션 추가</button></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;border-top:1px solid #eee;padding-top:.7rem">
+            <button class="btn btn-outline btn-sm" onclick="renderTmList()">← 목록</button>
+            <button class="btn btn-primary" onclick="saveTreatment()">저장</button>
+        </div>`;
+    renderTmVariants();
+}
+function renderTmVariants(){
+    const wrap=document.getElementById('tmVariants'); if(!wrap) return;
+    wrap.innerHTML=_tmVariants.map((v,i)=>`<div style="display:flex;gap:.4rem;align-items:center;margin-bottom:.35rem">
+        <input class="form-input" style="flex:1" placeholder="옵션명 (예: 100u 코어톡스)" value="${escapeHtml(v.label||'')}" onchange="setTmVariant(${i},'label',this.value)">
+        <input type="number" class="form-input" style="width:90px;text-align:right" placeholder="만원" value="${v.price||''}" onchange="setTmVariant(${i},'price',this.value)">
+        <button class="btn btn-sm btn-danger" onclick="removeTmVariant(${i})">×</button>
+    </div>`).join('');
+}
+function setTmVariant(i,f,val){ if(!_tmVariants[i])return; _tmVariants[i][f] = (f==='price')?(Number(val)||0):val; }
+function addTmVariant(){ _tmVariants.push({label:'',price:0}); renderTmVariants(); }
+function removeTmVariant(i){ _tmVariants.splice(i,1); if(!_tmVariants.length)_tmVariants.push({label:'기본',price:0}); renderTmVariants(); }
+async function saveTreatment(){
+    if(!canEditFees()){ alert('권한이 없습니다.'); return; }
+    await ensureTreatmentsDb();
+    const catName=(document.getElementById('tmCat').value||'').trim();
+    const name=(document.getElementById('tmName').value||'').trim();
+    if(!catName||!name){ alert('카테고리와 시술명을 입력하세요.'); return; }
+    const existCat=(treatmentCategories||[]).find(c=>c.name===catName);
+    const categoryId = existCat ? existCat.id : ('cat_'+Date.now());
+    const variants=_tmVariants.map(v=>({label:(v.label||'').trim()||'기본', price:Number(v.price)||0}));
+    const data={categoryId, categoryName:catName, name, variants, updatedAt:new Date().toISOString()};
+    if(typeof currentCrmUser!=='undefined'&&currentCrmUser) data.updatedBy=currentCrmUser.id;
+    try{
+        if(_tmEditDocId){ await db.collection('treatments').doc(_tmEditDocId).update(data); }
+        else{ data.note=''; data.createdAt=new Date().toISOString(); await db.collection('treatments').add(data); }
+        if(typeof loadTreatmentsMaster==='function') await loadTreatmentsMaster();
+        renderTmList(); renderFeeSchedule();
+    }catch(e){ alert('저장 실패: '+e.message); }
+}
+async function deleteTreatment(docId){
+    if(!canEditFees()){ alert('권한이 없습니다.'); return; }
+    if(!confirm('이 시술을 삭제하시겠습니까? (수가표에서도 사라집니다)')) return;
+    await ensureTreatmentsDb();
+    try{
+        await db.collection('treatments').doc(docId).delete();
+        if(typeof loadTreatmentsMaster==='function') await loadTreatmentsMaster();
+        renderTmList(); renderFeeSchedule();
+    }catch(e){ alert('삭제 실패: '+e.message); }
 }
