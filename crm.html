@@ -116,7 +116,10 @@
     <div id="crmApp" class="hidden">
         <div class="crm-header">
             <div class="title" style="display:flex;align-items:center;gap:.5rem"><span class="lumi-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>루미의원 <span style="color:#6B7280;font-weight:500">CRM</span> <span id="crmUserName" style="font-size:.8rem;color:var(--text-muted);font-weight:400"></span></div>
-            <button class="btn btn-outline btn-sm" onclick="crmLogout()">로그아웃</button>
+            <div style="display:flex;align-items:center;gap:.5rem">
+                <button class="btn btn-outline btn-sm" onclick="openInterp()">🌐 통역</button>
+                <button class="btn btn-outline btn-sm" onclick="crmLogout()">로그아웃</button>
+            </div>
         </div>
         <div class="crm-nav">
             <div class="nav-tab" data-page="notice">📢 병원공지</div>
@@ -196,6 +199,7 @@
                 <div class="section-header">
                     <div class="section-title">시술 수가표 <span id="feeEditBadge" style="font-size:.72rem;font-weight:500"></span></div>
                     <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                        <button class="btn btn-outline" onclick="openInterp()" title="일본인 환자 실시간 통역">🌐 통역</button>
                         <button class="btn btn-secondary" id="tmManageBtn" style="display:none" onclick="openTreatmentManager()">🛠 시술 추가·관리</button>
                         <input type="text" class="form-input" id="feeSearch" placeholder="시술 검색..." style="width:180px" oninput="renderFeeSchedule()">
                     </div>
@@ -360,6 +364,27 @@
         </div>
     </div>
 
+    <!-- 🌐 실시간 통역 패널 -->
+    <div class="modal" id="interpModal">
+        <div class="modal-content" style="max-width:560px;height:82vh;display:flex;flex-direction:column">
+            <div class="modal-header"><div class="modal-title">🌐 실시간 통역</div><button class="modal-close" onclick="closeModal('interpModal')">&times;</button></div>
+            <div class="modal-body" style="flex:1;display:flex;flex-direction:column;min-height:0">
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
+                    <span id="interpDirLabel" style="font-weight:700;color:#4F46E5">한국어 → 일본어</span>
+                    <button class="btn btn-sm btn-outline" onclick="interpToggleDir()">⇄ 방향전환</button>
+                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('interpLog').innerHTML=''" style="margin-left:auto">지우기</button>
+                </div>
+                <div id="interpLog" style="flex:1;overflow:auto;border:1px solid #E9EAF0;border-radius:10px;padding:.6rem;min-height:0;background:#fff"></div>
+                <div style="display:flex;gap:.4rem;margin-top:.5rem">
+                    <button class="btn btn-primary" id="interpMicBtn" onclick="interpMic()">🎤 말하기</button>
+                    <input class="form-input" id="interpInput" placeholder="또는 텍스트 입력 후 Enter" style="flex:1" onkeydown="if(event.key==='Enter')interpInputSend()">
+                    <button class="btn btn-secondary" onclick="interpInputSend()">번역</button>
+                </div>
+                <div style="font-size:.7rem;color:var(--text-muted);margin-top:.35rem">※ 참고용 통역입니다(법적 통역 아님). PC/안드로이드 크롬은 음성인식 지원, 아이폰 Safari는 텍스트 입력을 이용하세요.</div>
+            </div>
+        </div>
+    </div>
+
     <!-- 시술 추가·수정·삭제 관리 모달 -->
     <div class="modal" id="tmModal">
         <div class="modal-content" style="max-width:580px">
@@ -489,7 +514,7 @@
             if(typeof renderFeeSchedule==='function'){ try{ renderFeeSchedule(); }catch(_){ } }
         }
     </script>
-    <script src="patients.js?v=20260626"></script>
+    <script src="patients.js?v=20260627"></script>
     <script src="fee-schedule.js?v=20260626e"></script>
     <script>
     // ===== 자동 업데이트: 새 배포 감지 시 자동 새로고침 (강력 새로고침 불필요) =====

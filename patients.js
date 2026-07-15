@@ -875,3 +875,65 @@ async function deleteNotice(id) {
     try { await db.collection('notices').doc(id).delete(); await loadNotices(); renderNotices(); }
     catch (e) { alert('삭제 실패: ' + e.message); }
 }
+
+// ============================================================
+//  🌐 실시간 통역 (Papago 프록시 /api/translate + 브라우저 STT/TTS)
+// ============================================================
+let _interpDir = 'ko-ja';      // source-target
+let _interpRec = null, _interpListening = false;
+function openInterp() { openModal('interpModal'); interpSetDir(_interpDir); }
+function interpSetDir(d) {
+    _interpDir = d;
+    const el = document.getElementById('interpDirLabel');
+    if (el) el.textContent = (d === 'ko-ja') ? '한국어 → 일본어' : '일본어 → 한국어';
+}
+function interpToggleDir() { interpSetDir(_interpDir === 'ko-ja' ? 'ja-ko' : 'ko-ja'); }
+async function interpTranslate(text) {
+    const [src, tgt] = _interpDir.split('-');
+    try {
+        const r = await fetch('/api/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, source: src, target: tgt }) });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.translated) return { ok: false, msg: (data.error || ('번역 실패(' + r.status + ')')) };
+        return { ok: true, text: data.translated };
+    } catch (e) { return { ok: false, msg: String(e) }; }
+}
+function interpSpeak(text, lang) { try { const u = new SpeechSynthesisUtterance(text); u.lang = lang; speechSynthesis.speak(u); } catch (_) { } }
+function interpAddRow(orig, trans, ok, tgtLang) {
+    const log = document.getElementById('interpLog'); if (!log) return;
+    const div = document.createElement('div');
+    div.style.cssText = 'border-bottom:1px solid #F0F1F5;padding:.45rem 0';
+    const safe = (trans || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    div.innerHTML = `<div style="font-size:.82rem;color:var(--text-secondary)">${escapeHtml(orig)}</div>
+        <div style="font-size:.98rem;color:${ok ? '#4F46E5' : '#DC2626'};display:flex;align-items:center;gap:.4rem;margin-top:.15rem">
+            <span style="flex:1">${escapeHtml(trans)}</span>
+            ${ok ? `<button class="btn btn-sm btn-outline" onclick="interpSpeak('${safe}','${tgtLang}')">🔊</button>` : ''}
+        </div>`;
+    log.appendChild(div); log.scrollTop = log.scrollHeight;
+}
+async function interpHandleText(text) {
+    if (!text) return;
+    const tgt = _interpDir.split('-')[1];
+    const tgtLang = tgt === 'ja' ? 'ja-JP' : 'ko-KR';
+    interpAddRow(text, '…', true, tgtLang);
+    const res = await interpTranslate(text);
+    // 마지막 임시행 갱신
+    const log = document.getElementById('interpLog');
+    if (log && log.lastChild) log.removeChild(log.lastChild);
+    if (res.ok) { interpAddRow(text, res.text, true, tgtLang); interpSpeak(res.text, tgtLang); }
+    else { interpAddRow(text, '⚠ ' + res.msg, false, tgtLang); }
+}
+function interpInputSend() { const el = document.getElementById('interpInput'); const t = (el.value || '').trim(); if (!t) return; el.value = ''; interpHandleText(t); }
+function interpMic() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const btn = document.getElementById('interpMicBtn');
+    if (!SR) { alert('이 브라우저는 음성인식을 지원하지 않습니다. (아이폰 Safari 미지원) — 아래 텍스트 입력을 사용하세요.'); return; }
+    if (_interpListening) { try { _interpRec && _interpRec.stop(); } catch (_) { } return; }
+    _interpRec = new SR();
+    _interpRec.lang = _interpDir.split('-')[0] === 'ko' ? 'ko-KR' : 'ja-JP';
+    _interpRec.interimResults = false; _interpRec.maxAlternatives = 1;
+    _interpRec.onresult = e => { const t = e.results[0][0].transcript; interpHandleText(t); };
+    _interpRec.onend = () => { _interpListening = false; if (btn) { btn.textContent = '🎤 말하기'; btn.classList.remove('btn-danger'); btn.classList.add('btn-primary'); } };
+    _interpRec.onerror = () => { _interpListening = false; if (btn) { btn.textContent = '🎤 말하기'; btn.classList.remove('btn-danger'); btn.classList.add('btn-primary'); } };
+    try { _interpRec.start(); _interpListening = true; if (btn) { btn.textContent = '■ 중지'; btn.classList.remove('btn-primary'); btn.classList.add('btn-danger'); } }
+    catch (_) { }
+}
