@@ -882,6 +882,11 @@ async function deleteNotice(id) {
 let _interpDir = 'ko-ja';      // source-target
 let _interpRec = null, _interpListening = false;
 function openInterp() { openModal('interpModal'); interpSetDir(_interpDir); }
+// 파파고 새 창 (아이패드/PC에서 파파고 자체 음성대화 이용)
+function openPapago() {
+    const [src, tgt] = _interpDir.split('-');
+    window.open(`https://papago.naver.com/?sk=${src}&tk=${tgt}`, '_blank');
+}
 function interpSetDir(d) {
     _interpDir = d;
     const el = document.getElementById('interpDirLabel');
