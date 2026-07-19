@@ -1,0 +1,115 @@
+/* styles.css — 피부과 보이스 차팅 위젯 (루미 디자인 톤 재사용) */
+:root{
+  --bg:#faf9f7;--card:#fff;--accent-gold:#9a8b7a;--dark:#2c2c2c;
+  --green:#5a7a5a;--red:#a85a5a;--text:#2c2c2c;--text-secondary:#8a857e;
+  --border-color:#e8e4df;--warning:#e67e22;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+  background:var(--bg);color:var(--text);font-size:13px;overflow:hidden;
+  display:flex;flex-direction:column;height:100vh;
+}
+
+/* 헤더(Electron에서 드래그 영역) */
+.widget-header{
+  -webkit-app-region:drag;
+  display:flex;align-items:center;gap:.5rem;
+  padding:.55rem .7rem;background:#fff;border-bottom:1px solid var(--border-color);
+}
+.widget-title{
+  font-family:'Cormorant Garamond',serif;font-weight:600;letter-spacing:1px;
+  font-size:.85rem;color:var(--text);white-space:nowrap;
+}
+.widget-title .dot{color:var(--accent-gold)}
+.header-spacer{flex:1}
+.win-btn,.icon-btn{
+  -webkit-app-region:no-drag;
+  border:none;background:transparent;color:var(--text-secondary);
+  cursor:pointer;font-size:.9rem;line-height:1;padding:.25rem .4rem;border-radius:4px;
+}
+.win-btn:hover,.icon-btn:hover{background:var(--bg);color:var(--text)}
+
+/* 모드 토글 */
+.mode-row{display:flex;gap:.35rem;padding:.55rem .7rem;background:#fff;border-bottom:1px solid var(--border-color)}
+.mode-btn{
+  -webkit-app-region:no-drag;flex:1;padding:.45rem;border:1px solid var(--border-color);
+  background:var(--bg);color:var(--text-secondary);cursor:pointer;font-size:.8rem;border-radius:6px;
+}
+.mode-btn.active{background:var(--accent-gold);color:#fff;border-color:var(--accent-gold)}
+
+/* 본문 스크롤 영역 */
+.widget-body{flex:1;overflow-y:auto;padding:.7rem}
+
+/* 녹음 컨트롤 */
+.rec-panel{display:flex;flex-direction:column;align-items:center;gap:.5rem;padding:.4rem 0 .8rem}
+.rec-btn{
+  width:78px;height:78px;border-radius:50%;border:none;cursor:pointer;
+  background:var(--dark);color:#fff;font-size:1.7rem;display:flex;align-items:center;
+  justify-content:center;transition:transform .1s,background .2s;
+}
+.rec-btn:hover{transform:scale(1.04)}
+.rec-btn.recording{background:var(--red);animation:pulse 1.4s infinite}
+.rec-btn:disabled{opacity:.5;cursor:not-allowed}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(168,90,90,.5)}70%{box-shadow:0 0 0 14px rgba(168,90,90,0)}100%{box-shadow:0 0 0 0 rgba(168,90,90,0)}}
+.rec-timer{font-variant-numeric:tabular-nums;font-size:1rem;color:var(--text);letter-spacing:1px}
+.status{font-size:.78rem;color:var(--text-secondary);min-height:1.1em;text-align:center}
+.status.err{color:var(--red)}
+.status.busy{color:var(--warning)}
+
+/* 결과 섹션 */
+.section{margin-bottom:.7rem;border:1px solid var(--border-color);border-radius:8px;background:#fff;overflow:hidden}
+.section-head{display:flex;align-items:center;gap:.4rem;padding:.45rem .6rem;background:var(--card);border-bottom:1px solid var(--border-color)}
+.section-head h3{font-size:.78rem;font-weight:600;color:var(--text);flex:1}
+.section-body{padding:.5rem .6rem}
+textarea.out{
+  width:100%;min-height:96px;resize:vertical;border:1px solid var(--border-color);
+  border-radius:6px;padding:.5rem;font-family:inherit;font-size:.82rem;line-height:1.5;
+  color:var(--text);background:var(--bg);
+}
+textarea.out:focus{outline:none;border-color:var(--accent-gold);background:#fff}
+.copy-btn{
+  padding:.3rem .6rem;border:1px solid var(--border-color);background:var(--bg);
+  color:var(--text-secondary);cursor:pointer;font-size:.72rem;border-radius:5px;
+}
+.copy-btn:hover{border-color:var(--accent-gold);color:var(--text)}
+.copy-btn.ok{background:var(--green);color:#fff;border-color:var(--green)}
+.chart-btn{
+  width:100%;padding:.55rem;margin-top:.2rem;border:none;border-radius:6px;
+  background:var(--accent-gold);color:#fff;cursor:pointer;font-size:.82rem;
+}
+.chart-btn:hover{filter:brightness(.96)}
+.chart-btn:disabled{opacity:.5;cursor:not-allowed}
+
+.hidden{display:none !important}
+
+/* 설정 오버레이 */
+.overlay{position:fixed;inset:0;background:rgba(44,44,44,.35);display:flex;z-index:50}
+.overlay.hidden{display:none}
+.settings-panel{
+  margin:auto;width:calc(100% - 24px);max-width:340px;max-height:calc(100vh - 40px);
+  overflow-y:auto;background:#fff;border-radius:10px;border:1px solid var(--border-color);
+}
+.settings-head{display:flex;align-items:center;padding:.7rem .8rem;border-bottom:1px solid var(--border-color)}
+.settings-head h2{font-size:.9rem;flex:1}
+.settings-body{padding:.7rem .8rem;display:flex;flex-direction:column;gap:.7rem}
+.field{display:flex;flex-direction:column;gap:.25rem}
+.field label{font-size:.74rem;color:var(--text-secondary)}
+.field input,.field textarea,.field select{
+  border:1px solid var(--border-color);border-radius:6px;padding:.45rem;font-family:inherit;
+  font-size:.8rem;color:var(--text);background:var(--bg);
+}
+.field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--accent-gold);background:#fff}
+.field-inline{display:flex;align-items:center;gap:.5rem}
+.field-inline input[type=checkbox]{width:16px;height:16px}
+.field-inline label{font-size:.78rem;color:var(--text)}
+.fieldset-title{font-size:.72rem;font-weight:600;color:var(--accent-gold);letter-spacing:.5px;margin-top:.3rem}
+.save-btn{padding:.6rem;border:none;border-radius:6px;background:var(--dark);color:#fff;cursor:pointer;font-size:.82rem}
+.save-btn:hover{filter:brightness(1.1)}
+.hint{font-size:.68rem;color:var(--text-secondary);line-height:1.4}
+.warn-box{font-size:.7rem;color:var(--warning);background:rgba(230,126,34,.08);border:1px solid rgba(230,126,34,.25);border-radius:6px;padding:.5rem}
+
+/* 스크롤바 */
+.widget-body::-webkit-scrollbar,.settings-panel::-webkit-scrollbar{width:7px}
+.widget-body::-webkit-scrollbar-thumb,.settings-panel::-webkit-scrollbar-thumb{background:var(--border-color);border-radius:4px}

@@ -1,0 +1,25 @@
+{
+  "name": "lumi-voice-charting",
+  "version": "0.1.0",
+  "description": "피부과 전용 AI 보이스 차팅 위젯 (STT + LLM SOAP scribe) — Electron 플로팅 위젯 / 웹 겸용",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win"
+  },
+  "author": "Lumi Clinic",
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.lumi.voicecharting",
+    "productName": "LumiVoiceCharting",
+    "files": ["index.html", "styles.css", "app.js", "config.js", "main.js", "preload.js"],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
