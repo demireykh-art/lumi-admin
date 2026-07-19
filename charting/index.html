@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 보이스 차팅</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 헤더 -->
+  <header class="widget-header">
+    <span class="widget-title">LUMI<span class="dot">·</span>차팅</span>
+    <span class="header-spacer"></span>
+    <button class="icon-btn" id="btnSettings" title="설정">⚙</button>
+    <!-- 아래 창 버튼은 Electron에서만 동작(웹에서는 숨김) -->
+    <button class="win-btn hidden" id="btnMin" title="최소화">—</button>
+    <button class="win-btn hidden" id="btnClose" title="닫기">×</button>
+  </header>
+
+  <!-- 모드 토글 -->
+  <div class="mode-row">
+    <button class="mode-btn active" data-mode="clinic">진료실 · SOAP</button>
+    <button class="mode-btn" data-mode="consult">상담실 · 요약</button>
+  </div>
+
+  <!-- 본문 -->
+  <main class="widget-body">
+    <!-- 녹음 -->
+    <div class="rec-panel">
+      <button class="rec-btn" id="btnRec" title="녹음 시작/정지">●</button>
+      <div class="rec-timer" id="timer">00:00</div>
+      <div class="status" id="status">녹음 버튼을 눌러 진료 대화를 기록하세요.</div>
+    </div>
+
+    <!-- 원문(STT) -->
+    <section class="section hidden" id="secTranscript">
+      <div class="section-head">
+        <h3>① 음성 원문</h3>
+        <button class="copy-btn" data-copy="transcript">복사</button>
+      </div>
+      <div class="section-body">
+        <textarea class="out" id="transcript" placeholder="음성 인식 결과가 여기에 표시됩니다. 필요하면 직접 수정한 뒤 차트를 생성하세요."></textarea>
+        <button class="chart-btn" id="btnChart">② 차트 생성</button>
+      </div>
+    </section>
+
+    <!-- 차트(LLM) -->
+    <section class="section hidden" id="secChart">
+      <div class="section-head">
+        <h3 id="chartTitle">③ SOAP 차트</h3>
+        <button class="copy-btn" data-copy="chart">복사</button>
+      </div>
+      <div class="section-body">
+        <textarea class="out" id="chart" style="min-height:150px" placeholder="생성된 차트가 여기에 표시됩니다. 수정 후 복사해 EMR에 붙여넣으세요."></textarea>
+      </div>
+    </section>
+  </main>
+
+  <!-- 설정 오버레이 -->
+  <div class="overlay hidden" id="overlay">
+    <div class="settings-panel">
+      <div class="settings-head">
+        <h2>설정</h2>
+        <span class="header-spacer"></span>
+        <button class="icon-btn" id="btnCloseSettings">×</button>
+      </div>
+      <div class="settings-body">
+        <div class="warn-box">
+          ⚠ 환자 대화를 외부 API로 전송하기 전에 개인정보 비식별화·환자 동의·리전(국내/온프레미스) 정책을 먼저 확정하세요.
+          아래 base URL을 국내 리전/자체 서버로 바꾸면 해외 전송을 피할 수 있습니다.
+        </div>
+
+        <div class="fieldset-title">음성 인식 (STT)</div>
+        <div class="field"><label>Base URL</label><input id="sttBaseUrl" placeholder="https://api.openai.com/v1"></div>
+        <div class="field"><label>모델</label><input id="sttModel" placeholder="whisper-1"></div>
+        <div class="field"><label>API Key</label><input id="sttKey" type="password" placeholder="sk-..."></div>
+        <div class="field"><label>인식 언어</label><input id="sttLanguage" placeholder="ko"></div>
+
+        <div class="fieldset-title">차팅 (LLM)</div>
+        <div class="field"><label>Base URL</label><input id="llmBaseUrl" placeholder="https://api.openai.com/v1"></div>
+        <div class="field"><label>모델</label><input id="llmModel" placeholder="gpt-4o-mini"></div>
+        <div class="field"><label>API Key</label><input id="llmKey" type="password" placeholder="sk-..."></div>
+
+        <div class="fieldset-title">개인정보 · 동작</div>
+        <div class="field-inline"><input type="checkbox" id="deidentify"><label for="deidentify">전송 전 비식별화(주민번호·전화번호·환자명 마스킹)</label></div>
+        <div class="field"><label>마스킹할 환자명(선택)</label><input id="patientNameMask" placeholder="예: 홍길동"></div>
+        <div class="field-inline"><input type="checkbox" id="autoDeleteAudio"><label for="autoDeleteAudio">처리 후 녹음 버퍼 즉시 폐기</label></div>
+        <p class="hint">비식별화는 음성 인식 <b>이후 텍스트</b>에 적용됩니다. 오디오 자체는 마스킹할 수 없으므로, 민감한 경우 국내 리전/온프레미스 STT를 사용하세요.</p>
+
+        <div class="fieldset-title">피부과 용어 사전 (STT 힌트)</div>
+        <div class="field">
+          <textarea id="termList" rows="4" placeholder="쉼표 또는 줄바꿈으로 구분"></textarea>
+          <p class="hint">인식률이 낮은 다빈도 시술·질환·약품명을 추가하세요.</p>
+        </div>
+
+        <button class="save-btn" id="btnSaveSettings">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
