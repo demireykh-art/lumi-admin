@@ -147,18 +147,37 @@ function renderAttendance(){
 }
 
 function formatOTMinutes(min){
-    const h=Math.floor(min/60);
-    const m=min%60;
-    return h>0?`${h}시간 ${m}분`:`${m}분`;
+    const sign=min<0?'-':'';
+    const abs=Math.abs(min);
+    const h=Math.floor(abs/60);
+    const m=abs%60;
+    return sign+(h>0?`${h}시간 ${m}분`:`${m}분`);
+}
+
+// 저녁 퇴근 기준 OT 산출 (조기퇴근 10분 grace, 초과분은 음수 OT 로 차감)
+// - checkOutMin > endMin        : (checkOutMin - endMin)  // 늦게 퇴근 = 양수
+// - endMin - 10 <= checkOutMin  : 0                       // grace 이내
+// - checkOutMin < endMin - 10   : checkOutMin - (endMin - 10)  // 음수 (조기퇴근)
+const EARLY_LEAVE_GRACE_MIN=10;
+function calcEveningOtMinutes(checkOut, dateStr){
+    if(!checkOut||!dateStr) return 0;
+    const parts=String(checkOut).split(':');
+    if(parts.length<2) return 0;
+    const h=parseInt(parts[0],10), m=parseInt(parts[1],10);
+    if(isNaN(h)||isNaN(m)) return 0;
+    const checkOutMin=h*60+m;
+    const endMin=getAdminWorkEndMin(dateStr);
+    if(checkOutMin>endMin) return checkOutMin-endMin;
+    const graceMin=endMin-EARLY_LEAVE_GRACE_MIN;
+    if(checkOutMin>=graceMin) return 0;
+    return checkOutMin-graceMin; // 항상 음수
 }
 
 function calculateAfterOT(att){
     if(!att.checkOut||!att.date) return '-';
-    const [h,m]=att.checkOut.split(':').map(Number);
-    const checkOutMin=h*60+m;
-    const endMin=getAdminWorkEndMin(att.date);
-    if(checkOutMin<=endMin) return '-';
-    return formatOTMinutes(checkOutMin-endMin);
+    const mins=calcEveningOtMinutes(att.checkOut,att.date);
+    if(mins===0) return '-';
+    return formatOTMinutes(mins);
 }
 
 function renderStaffOTTable(){
@@ -168,16 +187,19 @@ function renderStaffOTTable(){
     const rows=activeEmps.map(emp=>{
         let afterMin=0;
         attendance.filter(a=>a.employeeId===emp.id && a.checkOut).forEach(a=>{
-            const [h,m]=a.checkOut.split(':').map(Number);
-            const endMin=getAdminWorkEndMin(a.date);
-            if(h*60+m>endMin) afterMin+=h*60+m-endMin;
+            afterMin+=calcEveningOtMinutes(a.checkOut,a.date);
         });
         const lunchMin=lunchOT.filter(ot=>ot.employeeId===emp.id).reduce((s,ot)=>s+(ot.minutes||0),0);
         return {name:emp.name, afterMin, lunchMin, totalMin:afterMin+lunchMin};
     }).sort((a,b)=>b.totalMin-a.totalMin);
+    const cell=(v)=>{
+        if(v===0) return '-';
+        const color=v<0?'color:#dc2626':'';
+        return `<span style="${color}">${formatOTMinutes(v)}</span>`;
+    };
     tbody.innerHTML=rows.map(r=>{
-        const hl=r.totalMin>0?'font-weight:600':'color:var(--text-muted)';
-        return `<tr><td>${r.name}</td><td>${r.afterMin>0?formatOTMinutes(r.afterMin):'-'}</td><td>${r.lunchMin>0?formatOTMinutes(r.lunchMin):'-'}</td><td style="${hl}">${r.totalMin>0?formatOTMinutes(r.totalMin):'-'}</td></tr>`;
+        const hl=r.totalMin!==0?(r.totalMin<0?'font-weight:600;color:#dc2626':'font-weight:600'):'color:var(--text-muted)';
+        return `<tr><td>${r.name}</td><td>${cell(r.afterMin)}</td><td>${r.lunchMin>0?formatOTMinutes(r.lunchMin):'-'}</td><td style="${hl}">${r.totalMin!==0?formatOTMinutes(r.totalMin):'-'}</td></tr>`;
     }).join('')||'<tr><td colspan="4" class="text-center">직원 없음</td></tr>';
 }
 
@@ -218,10 +240,7 @@ function renderOvertime(){
     let eveningMinutes=0;
     attendance.forEach(a=>{
         if(a.checkOut){
-            const [h,m]=a.checkOut.split(':').map(Number);
-            const checkOutMin=h*60+m;
-            const endMin=getAdminWorkEndMin(a.date);
-            if(checkOutMin>endMin){eveningMinutes+=checkOutMin-endMin;}
+            eveningMinutes+=calcEveningOtMinutes(a.checkOut,a.date);
         }
     });
     const lunchMinutes=lunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
@@ -490,9 +509,7 @@ function renderSalary(){
         let otMinutes=0;
         empAttendance.forEach(a=>{
             if(a.checkOut){
-                const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
-                const endMin=getAdminWorkEndMin(a.date);
-                if(h*60+m>endMin)otMinutes+=(h*60+m)-endMin;
+                otMinutes+=calcEveningOtMinutes(a.checkOut,a.date);
             }
         });
         const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
@@ -516,7 +533,7 @@ function renderSalary(){
             <td><strong>${emp.name}</strong></td>
             <td>${roleLabelsLocal[emp.role]||emp.role}</td>
             <td>${salaryDisplay}</td>
-            <td class="text-right">${otMinutes}분</td>
+            <td class="text-right" style="${otMinutes<0?'color:#dc2626;font-weight:600':''}">${otMinutes>=0?otMinutes:otMinutes}분</td>
             <td class="text-right">${incentiveAmount>0?formatCurrency(incentiveAmount):''}</td>
             <td><input type="text" class="form-input" style="font-size:.8rem;padding:.25rem .5rem;border:1px solid var(--border)" placeholder="" value="${emp._payrollMemo||''}" onchange="updatePayrollMemo('${emp.id}',this.value)"></td>
         </tr>`;
@@ -992,9 +1009,7 @@ function exportPrePayroll(){
         let otMin=0;
         empAtt.forEach(a=>{
             if(a.checkOut){
-                const [h,m]=(a.checkOut||'00:00').split(':').map(Number);
-                const endMin=getAdminWorkEndMin(a.date);
-                if(h*60+m>endMin) otMin+=(h*60+m)-endMin;
+                otMin+=calcEveningOtMinutes(a.checkOut,a.date);
             }
         });
         otMin+=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym)).reduce((s,ot)=>s+(ot.minutes||0),0);
