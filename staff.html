@@ -455,16 +455,54 @@
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
-                        <a href="https://lumi-staff-git-claude-hospital-crm-44b8da-lumiclinics-projects.vercel.app/crm.html" target="_blank" rel="noopener"
-                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                        <button type="button" onclick="showTop('feeschedule')"
+                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <span style="font-size:2.5rem">💊</span>
                             <div style="flex:1">
-                                <div style="font-weight:700;font-size:1.1rem">시술 수가표</div>
-                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">CRM 시술 가격표 — 새 창으로 열림</div>
+                                <div style="font-weight:700;font-size:1.1rem;color:#1f2937">시술 수가표</div>
+                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">카테고리별 정가·옵션 목록</div>
                             </div>
-                            <span style="color:#9ca3af">↗</span>
-                        </a>
+                            <span style="color:#9ca3af">→</span>
+                        </button>
+                        <button type="button" onclick="showTop('consult')"
+                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <span style="font-size:2.5rem">🩺</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1.1rem;color:#1f2937">상담</div>
+                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">피부퀄리티 · 쳐짐 · 꺼짐 → 세부문제 → 시술 → 오더</div>
+                            </div>
+                            <span style="color:#9ca3af">→</span>
+                        </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- === 💊 시술 수가표 (읽기 전용, seed 데이터 기반) === -->
+            <div class="tab-content" id="tab-feeschedule">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+                        <span style="display:flex;align-items:center;gap:.5rem">
+                            <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem" onclick="showTopHome()">← 홈</button>
+                            <span>💊 시술 수가표</span>
+                        </span>
+                        <input type="text" id="feeQ" placeholder="🔍 시술 검색" oninput="renderFeeList()"
+                            style="width:180px;padding:.4rem .55rem;font-size:.85rem;border:1px solid var(--border);border-radius:6px">
+                    </div>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.4rem">정가는 만원 단위 · variant 단위 = 결제 1건 · 아직 편집 기능 없음(추후 확장)</div>
+                    <div id="feeList" style="margin-top:.75rem"></div>
+                </div>
+            </div>
+
+            <!-- === 🩺 상담 뷰 (문제 → 세부 → 시술 → 세부오더) === -->
+            <div class="tab-content" id="tab-consult">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+                        <span style="display:flex;align-items:center;gap:.5rem">
+                            <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem" onclick="showTopHome()">← 홈</button>
+                            <span id="consultBreadcrumb">🩺 상담</span>
+                        </span>
+                    </div>
+                    <div id="consultBody" style="margin-top:.75rem"></div>
                 </div>
             </div>
 
@@ -4294,6 +4332,198 @@
             document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
             const navInv=document.querySelector('.nav-item[data-tab="inventory"]');
             if(navInv) navInv.classList.add('active');
+        }
+
+        // ==================================================================
+        //  💊 시술 수가표 + 🩺 상담  — Firebase / Firestore 완전 미사용, 로컬 seed 만
+        // ==================================================================
+        // 최상위 홈 카드에서 각 뷰 여는 통합 라우터
+        function showTop(view){
+            document.querySelectorAll('.tab-content').forEach(t=>{
+                t.classList.remove('active');
+                t.style.display='none';
+            });
+            const el=document.getElementById('tab-'+view);
+            if(el){ el.style.display=''; el.classList.add('active'); }
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+            if(view==='feeschedule'){
+                if(typeof loadFeeSeed==='function') loadFeeSeed().then(renderFeeList);
+                else renderFeeList();
+            }else if(view==='consult'){
+                _consultPath=[];
+                renderConsult();
+            }
+        }
+
+        // ---- 시술 수가표 ----
+        let _feeSeed=null;
+        async function loadFeeSeed(){
+            if(_feeSeed) return _feeSeed;
+            try{
+                const r=await fetch('treatments-seed.json?v=20260725b');
+                const d=await r.json();
+                _feeSeed=Array.isArray(d.categories)?d.categories:[];
+            }catch(e){
+                console.warn('시술 seed 로드 실패:',e);
+                _feeSeed=[];
+            }
+            return _feeSeed;
+        }
+        function _variantLabel(v){
+            return [v.product,v.dose,v.sessions,v.size,v.qty,v.region,v.label].filter(Boolean).join(' · ')||'기본';
+        }
+        function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        function renderFeeList(){
+            const wrap=document.getElementById('feeList');
+            if(!wrap) return;
+            const cats=_feeSeed||[];
+            const q=(document.getElementById('feeQ')?.value||'').toLowerCase().trim();
+            if(!cats.length){
+                wrap.innerHTML='<div style="padding:1.5rem;text-align:center;color:#9ca3af">시술 데이터를 불러오지 못했습니다.</div>';
+                return;
+            }
+            const html=cats.map(c=>{
+                const rows=(c.treatments||[]).filter(t=>{
+                    if(!q) return true;
+                    return (t.name||'').toLowerCase().includes(q)||(c.name||'').toLowerCase().includes(q);
+                }).map(t=>{
+                    const vs=(t.variants||[]).map(v=>`<tr>
+                        <td style="padding:.4rem .6rem;font-size:.82rem;color:#4b5563">${_esc(_variantLabel(v))}</td>
+                        <td style="padding:.4rem .6rem;text-align:right;font-weight:600">${_esc(v.price||0)}만</td>
+                        <td style="padding:.4rem .6rem;text-align:right;color:#6b7280;font-size:.78rem">₩${((Number(v.price)||0)*10000).toLocaleString()}</td>
+                    </tr>`).join('');
+                    return `<tr style="background:#f9fafb"><td colspan="3" style="padding:.5rem .7rem;font-weight:700">${_esc(t.name)}${t.note?` <span style="font-weight:400;font-size:.72rem;color:#6b7280">(${_esc(t.note)})</span>`:''}</td></tr>${vs}`;
+                }).join('');
+                if(!rows) return '';
+                return `<div style="margin-bottom:1rem;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+                    <div style="background:#eef2ff;padding:.55rem .85rem;font-weight:700;color:#4338ca">${_esc(c.name)}${c.note?` <span style="font-weight:400;font-size:.72rem;color:#6b7280">${_esc(c.note)}</span>`:''}</div>
+                    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem;min-width:420px">
+                        <thead><tr style="background:#f3f4f6;color:#374151;font-size:.75rem">
+                            <th style="padding:.4rem .6rem;text-align:left">시술 / 옵션</th>
+                            <th style="padding:.4rem .6rem;text-align:right">정가(만원)</th>
+                            <th style="padding:.4rem .6rem;text-align:right">원(₩)</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table></div>
+                </div>`;
+            }).join('');
+            wrap.innerHTML=html||'<div style="padding:1.5rem;text-align:center;color:#9ca3af">검색 결과가 없습니다.</div>';
+        }
+
+        // ---- 상담 트리 ----
+        // 3-depth 트리: 문제 카테고리 → 세부 문제 → plan → 세부오더
+        const CONSULT_TREE={
+            skin:{
+                label:'✨ 피부 퀄리티',
+                color:'#a21caf',
+                issues:{
+                    '색소':{plans:['리팟','피코','BBL'],orders:['검버섯 5mm 1회','흑자 5mm','BBL HERO 색소 1회','BBL HERO 색소 5회','피코 눈썹문신 1회']},
+                    '결':{plans:['라라필','토닝','실펌'],orders:['라라필+토닝+LDM 1회','토닝+재생관리 1회','실펌 항염관리 1회']},
+                    '주름':{plans:['보톡스','쥬브젠','파인샷'],orders:['이마 국산 4만','이마/미간/눈가 코어톡스 6만','파인샷 1회 40만','이마 주름 쥬브젠 80만']},
+                    '건조':{plans:['리쥬란','콜라겐','스킨부스터'],orders:['리쥬란HB 1cc','리쥬란HB 4cc 이벤트 49만','콜라겐 1cc 19만','콜라겐 1vial 50만','리쥬네이처 5cc 49만']},
+                    '모공':{plans:['실펌','모공핏','레노펌','엑소좀'],orders:['실펌 항염 1회','모공핏(셀라 블레싱) 1회 49만','엑소좀 1회 50만','레노펌 1세트 80만']},
+                    '여드름':{plans:['클리어밸런스','라라필','GA','압출'],orders:['클리어밸런스 1세트 80만','라라필+압출+네오빔 1회 19만','GA+압출 12만','줄기세포 MCT 1회 50만','피부 석회종 개당 3만']},
+                    '돌출':{plans:['CO2','피지선증식증','한관종'],orders:['보통점 개당 2만','돌출점 ~2mm 5만','돌출점 5mm~ 10만','피지선증식증 최초 1개 10만','한관종 개당 3만']},
+                }
+            },
+            saggy:{
+                label:'⬇ 쳐짐',
+                color:'#7c2d12',
+                issues:{
+                    '심부볼':{plans:['덴서티','탄력실','파인샷'],orders:['덴서티 100샷','덴서티+파인샷 이벤트','파인샷 3회 100만']},
+                    '팔자':{plans:['탄력실','파인샷','실리프팅'],orders:['실리프팅(원더트리플) 1줄 15만','파인샷 1회 40만','코그실 1줄 10만']},
+                    '눈두덩이':{plans:['아이올리지오','슈링크'],orders:['아이올리지오 100샷 13만','아이올리지오 300샷 30만','슈링크 300샷 15만']},
+                    '전체 리프팅':{plans:['BBL HERO','파인샷','실리프팅'],orders:['BBL HERO 타이트닝 1회 40만','BBL HERO 안티에이징+타이트닝 1회 70만','BBL HERO 안티에이징+타이트닝 3회 180만','턱라인 리프팅 보톡스 코어톡스 25만']},
+                }
+            },
+            hollow:{
+                label:'⬆ 꺼짐',
+                color:'#c2410c',
+                issues:{
+                    '눈밑':{plans:['리쥬오볼륨','필러'],orders:['아말리안 1cc 32만','팔자/입술/애교 이벤트 25만']},
+                    '팔자':{plans:['필러','쥬브젠'],orders:['아말리안 1cc 32만','팔자 주름 쥬브젠 80만']},
+                    '마리오넷':{plans:['필러','쥬브젠'],orders:['이마/미간/마리오넷 쥬브젠 60만','아말리안 1cc 32만']},
+                    '이마':{plans:['필러','쥬브젠'],orders:['이마 주름 쥬브젠 80만','목/이마 주름 최초 1줄 80만']},
+                    '입술':{plans:['필러'],orders:['입술 필러 이벤트 25만','아말리안 1cc 32만']},
+                    '코':{plans:['필러'],orders:['아말리안 1cc 32만','아말리안 추가 시 20만']},
+                }
+            }
+        };
+
+        // 상담 상태: 현재 breadcrumb 경로
+        let _consultPath=[]; // [] | [catKey] | [catKey, issueName]
+        function renderConsult(){
+            const body=document.getElementById('consultBody');
+            const bc=document.getElementById('consultBreadcrumb');
+            if(!body) return;
+
+            // Breadcrumb
+            const bcParts=['🩺 상담'];
+            if(_consultPath[0]) bcParts.push(CONSULT_TREE[_consultPath[0]]?.label||'');
+            if(_consultPath[1]) bcParts.push(_consultPath[1]);
+            if(bc) bc.textContent=bcParts.join(' → ');
+
+            // Level 0: 3개 큰 카테고리
+            if(_consultPath.length===0){
+                body.innerHTML=Object.entries(CONSULT_TREE).map(([key,c])=>`
+                    <button onclick="_consultGo('${key}')" style="width:100%;display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;cursor:pointer;text-align:left;margin-bottom:.75rem;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                        <span style="font-size:2rem">${c.label.split(' ')[0]}</span>
+                        <div style="flex:1">
+                            <div style="font-weight:700;font-size:1.1rem;color:${c.color}">${_esc(c.label)}</div>
+                            <div style="font-size:.78rem;color:#6b7280;margin-top:.15rem">${Object.keys(c.issues).length}개 세부 문제</div>
+                        </div>
+                        <span style="color:#9ca3af">→</span>
+                    </button>
+                `).join('');
+                return;
+            }
+
+            // Level 1: 세부 문제 목록
+            if(_consultPath.length===1){
+                const cat=CONSULT_TREE[_consultPath[0]];
+                if(!cat){ _consultPath=[]; return renderConsult(); }
+                body.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.6rem">'+
+                    Object.keys(cat.issues).map(name=>`
+                        <button onclick="_consultGo('${_consultPath[0]}','${_esc(name)}')" style="padding:1rem .75rem;border:1px solid #e5e7eb;background:#fff;border-radius:12px;cursor:pointer;font-weight:600;font-size:.95rem;color:${cat.color};box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                            ${_esc(name)}
+                        </button>
+                    `).join('')+'</div>';
+                return;
+            }
+
+            // Level 2: plans + orders
+            if(_consultPath.length===2){
+                const cat=CONSULT_TREE[_consultPath[0]];
+                const issue=cat?.issues[_consultPath[1]];
+                if(!issue){ _consultPath=[_consultPath[0]]; return renderConsult(); }
+                body.innerHTML=`
+                    <div style="margin-bottom:1rem">
+                        <div style="font-weight:700;font-size:.9rem;color:#374151;margin-bottom:.5rem">📋 추천 Plan</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+                            ${(issue.plans||[]).map(p=>`<span style="display:inline-flex;padding:.4rem .85rem;background:#eef2ff;color:#4338ca;border-radius:14px;font-weight:600;font-size:.85rem">${_esc(p)}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;font-size:.9rem;color:#374151;margin-bottom:.5rem">✍ 세부 오더 (참고)</div>
+                        <div style="display:grid;gap:.4rem">
+                            ${(issue.orders||[]).map(o=>`
+                                <div style="padding:.7rem .9rem;border:1px solid #e5e7eb;border-radius:10px;background:#fff;display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+                                    <span style="font-size:.9rem;color:#1f2937">${_esc(o)}</span>
+                                    <button onclick="showTop('feeschedule');setTimeout(()=>{const q=document.getElementById('feeQ');if(q){q.value='${_esc(o.split(/[\s(0-9]/)[0])}';q.dispatchEvent(new Event('input'))}},50)" style="background:none;border:1px solid #3b82f6;color:#3b82f6;padding:.25rem .55rem;border-radius:6px;font-size:.7rem;cursor:pointer;white-space:nowrap">💊 수가표</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div style="margin-top:1.2rem;padding:.6rem;background:#fef3c7;border:1px dashed #f59e0b;border-radius:8px;font-size:.75rem;color:#78350f">
+                        ℹ️ 상담 트리는 초기 세팅 데이터입니다. 실제 원장님/실장님 상담 노하우에 맞게 향후 편집 UI를 붙일 수 있습니다.
+                    </div>
+                `;
+                return;
+            }
+        }
+        function _consultGo(cat, issue){
+            _consultPath=issue?[cat, issue]:[cat];
+            renderConsult();
         }
 
         // 홈 카드 액션 레지스트리 (event delegation 으로 안전하게 호출)
