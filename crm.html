@@ -97,6 +97,57 @@
         .board-card.done{border-left-color:#16A34A}
         .board-sub{font-size:.74rem;color:var(--text-muted)}
         @media(max-width:900px){.board-grid{grid-template-columns:1fr}}
+        /* ===== 사이드바 레이아웃 (전면 개편) ===== */
+        .crm-shell{display:flex;min-height:100vh}
+        .crm-sidebar{width:274px;flex-shrink:0;background:#1E2233;color:#E5E7EB;display:flex;flex-direction:column;padding:.85rem .8rem;gap:.65rem;height:100vh;position:sticky;top:0;overflow:hidden}
+        .side-brand{display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:1rem;color:#fff}
+        .side-user{font-size:.72rem;color:#9AA1AD;font-weight:400}
+        .side-search input{width:100%;background:#2A2F45;border:1px solid #3A3F57;color:#fff;border-radius:9px;padding:.5rem .7rem;font-size:.85rem;box-sizing:border-box}
+        .side-search input::placeholder{color:#8891A5}
+        .side-date{display:flex;align-items:center;justify-content:space-between;gap:.3rem;background:#2A2F45;border-radius:9px;padding:.3rem .4rem}
+        .side-date .sd-label{font-weight:700;font-size:.84rem;color:#fff;text-align:center;flex:1}
+        .side-date button{background:transparent;border:none;color:#C7CBD6;cursor:pointer;font-size:.85rem;padding:.15rem .45rem;border-radius:6px}
+        .side-date button:hover{background:#3A3F57}
+        .side-stats{display:flex;gap:.45rem;font-size:.76rem}
+        .side-stats .st{flex:1;background:#2A2F45;border-radius:8px;padding:.35rem .5rem;text-align:center;color:#A6ADBF}
+        .side-stats .st b{display:block;font-size:1.05rem;color:#fff;line-height:1.3}
+        .side-stats .st.no b{color:#F87171}
+        .side-listwrap{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:.4rem;margin:.1rem -.15rem;padding:.15rem}
+        .resv-card{background:#2A2F45;border-radius:9px;padding:.5rem .6rem;cursor:pointer;border-left:3px solid #4F46E5}
+        .resv-card:hover{background:#343A54}
+        .resv-card.sel{background:#4F46E5;border-left-color:#fff}
+        .resv-card .rc-name{font-weight:700;font-size:.9rem;color:#fff}
+        .resv-card .rc-sub{font-size:.71rem;color:#A6ADBF;margin-top:.1rem}
+        .resv-card .rc-tags{margin-top:.25rem;display:flex;flex-wrap:wrap;gap:.2rem}
+        .resv-card .rc-tag{font-size:.65rem;background:rgba(255,255,255,.13);color:#DDE1EC;padding:0 .4rem;border-radius:6px}
+        .side-menu{display:flex;flex-direction:column;gap:.12rem;border-top:1px solid #333850;padding-top:.5rem}
+        .side-item{padding:.5rem .6rem;border-radius:8px;cursor:pointer;font-size:.85rem;color:#C7CBD6}
+        .side-item:hover{background:#2A2F45;color:#fff}
+        .side-item.active{background:#4F46E5;color:#fff}
+        .side-notice{margin-top:.15rem;background:#DB2777;color:#fff;border:none;border-radius:9px;padding:.55rem;font-weight:700;cursor:pointer;font-size:.85rem}
+        .side-notice:hover{background:#BE1E63}
+        .crm-main{flex:1;min-width:0;display:flex;flex-direction:column}
+        .crm-topbar{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.55rem 1rem;background:#fff;border-bottom:1px solid #E9EAF0;position:sticky;top:0;z-index:20}
+        .crm-topbar .tb-title{font-weight:700;font-size:1rem}
+        .crm-topbar .tb-actions{display:flex;gap:.4rem;flex-wrap:wrap}
+        .crm-content{padding:1rem;flex:1;min-width:0}
+        .chart-empty{display:flex;align-items:center;justify-content:center;height:58vh;color:var(--text-muted);font-size:.95rem;text-align:center;padding:1rem}
+        .detail-topbar{display:flex;align-items:center;gap:.9rem;flex-wrap:wrap;margin-bottom:.7rem;padding-bottom:.6rem;border-bottom:1px solid #E9EAF0}
+        .detail-topbar .modal-title{font-size:1.1rem;font-weight:700}
+        #page-chart .ws-grid{display:grid;grid-template-columns:280px 260px 1fr 220px;gap:0;border:1px solid #E9EAF0;border-radius:12px;overflow:hidden;background:#fff}
+        #page-chart .ws-col{max-height:none;overflow:visible;border-right:1px solid #E9EAF0}
+        #page-chart .ws-col:last-child{border-right:none}
+        @media(max-width:1200px){#page-chart .ws-grid{grid-template-columns:1fr 1fr}}
+        @media(max-width:760px){#page-chart .ws-grid{grid-template-columns:1fr}.crm-sidebar{width:210px}}
+        #problemQuickBar{background:#FCE7F0;border:1px solid #F7C6DD;border-radius:9px;padding:.5rem .6rem;margin-bottom:.55rem}
+        #problemQuickBar label{font-weight:700;font-size:.78rem;color:#DB2777}
+        #chartProblemOrders{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem}
+        .po-chip{background:#fff;border:1px solid #F7C6DD;color:#BE1E63;border-radius:20px;padding:.2rem .6rem;font-size:.76rem;cursor:pointer}
+        .po-chip:hover{background:#DB2777;color:#fff}
+        .set-tabs{display:flex;gap:.3rem;border-bottom:1px solid #E9EAF0;margin-bottom:.8rem;flex-wrap:wrap}
+        .set-tab{padding:.45rem .8rem;border-radius:8px 8px 0 0;cursor:pointer;font-size:.86rem;color:#6B7280}
+        .set-tab.active{background:#EEF0FE;color:#4F46E5;font-weight:700}
+        .set-pane{display:none}.set-pane.active{display:block}
     </style>
 </head>
 <body>
@@ -114,23 +165,59 @@
 
     <!-- 앱 -->
     <div id="crmApp" class="hidden">
-        <div class="crm-header">
-            <div class="title" style="display:flex;align-items:center;gap:.5rem"><span class="lumi-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>루미의원 <span style="color:#6B7280;font-weight:500">CRM</span> <span id="crmUserName" style="font-size:.8rem;color:var(--text-muted);font-weight:400"></span></div>
-            <div style="display:flex;align-items:center;gap:.5rem">
+      <div class="crm-shell">
+        <!-- ===== 좌측 사이드바 ===== -->
+        <aside class="crm-sidebar">
+            <div class="side-brand"><span class="lumi-logo"><svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>루미 CRM <span class="side-user" id="crmUserName"></span></div>
+            <div class="side-search"><input id="sideSearch" placeholder="🔍 고객검색 (이름/전화)" oninput="sideRenderList()"></div>
+            <div class="side-date">
+                <button onclick="sideShift(-1)">◀</button>
+                <div class="sd-label" id="sideDateLabel">-</div>
+                <button onclick="sideShift(1)">▶</button>
+                <button onclick="sideToday()" title="오늘" style="font-size:.7rem">오늘</button>
+            </div>
+            <div class="side-stats">
+                <div class="st"><b id="sideResvCount">0</b>예약</div>
+                <div class="st"><b id="sideDoneCount">0</b>완료</div>
+                <div class="st no"><b id="sideNoShowCount">0</b>부도</div>
+            </div>
+            <div class="side-listwrap" id="sideResvList"></div>
+            <div class="side-menu">
+                <div class="side-item active" data-page="chart">🩺 진료·차팅</div>
+                <div class="side-item" data-page="board">📋 현황판</div>
+                <div class="side-item" data-page="patients">👥 고객 전체</div>
+                <div class="side-item" data-page="recall">📞 리콜·생일</div>
+                <div class="side-item" data-page="pricelist">💰 시술 수가표</div>
+            </div>
+            <button class="side-notice" data-page="notice">📢 병원공지</button>
+        </aside>
+        <!-- ===== 메인 ===== -->
+        <main class="crm-main">
+          <div class="crm-topbar">
+            <div class="tb-title" id="topbarTitle">🩺 진료·차팅</div>
+            <div class="tb-actions">
+                <button class="btn btn-outline btn-sm" onclick="goAdmin('revenue')">📈 매출집계</button>
+                <button class="btn btn-outline btn-sm" onclick="goAdmin('pl')">📊 경영분석</button>
                 <button class="btn btn-outline btn-sm" onclick="openInterp()">🌐 통역</button>
+                <button class="btn btn-secondary btn-sm" onclick="openSettings()">⚙️ 설정</button>
                 <button class="btn btn-outline btn-sm" onclick="crmLogout()">로그아웃</button>
             </div>
-        </div>
-        <div class="crm-nav">
-            <div class="nav-tab" data-page="notice">📢 병원공지</div>
-            <div class="nav-tab" data-page="patients">고객</div>
-            <div class="nav-tab active" data-page="board">현황판</div>
-            <div class="nav-tab" data-page="recall">📞 리콜·생일</div>
-            <div class="nav-tab" data-page="pricelist">💰 시술 수가표</div>
-        </div>
-        <div class="crm-content">
+          </div>
+          <div class="crm-content">
+            <!-- 진료·차팅: 선택 고객 상세 (인라인) -->
+            <div class="crm-page active" id="page-chart">
+                <div class="chart-empty" id="chartEmpty">← 왼쪽 예약 목록에서 고객을 선택하거나, 상단 검색으로 고객을 찾으세요.</div>
+                <div id="chartBody" style="display:none">
+                    <div class="detail-topbar">
+                        <div class="modal-title" id="detailTitle">환자 상세</div>
+                        <div id="detailHeaderInfo" style="flex:1;min-width:0;font-size:.82rem;color:var(--text-secondary);display:flex;gap:.9rem;flex-wrap:wrap;align-items:center"></div>
+                        <button class="btn btn-outline btn-sm" onclick="if(_detailPatientId)openPatientModal(_detailPatientId)">✏️ 정보수정</button>
+                    </div>
+                    <div id="chartMount"></div>
+                </div>
+            </div>
             <!-- 현황판 (당일 예약·접수·수납 보드) -->
-            <div class="crm-page active" id="page-board">
+            <div class="crm-page" id="page-board">
                 <div class="board-head">
                     <button class="btn btn-outline btn-sm" onclick="boardShift(-1)">◀</button>
                     <strong id="boardDateLabel" style="font-size:1.05rem"></strong>
@@ -208,7 +295,9 @@
                 <div id="feeVisConfig" style="margin-bottom:.5rem"></div>
                 <div id="feeWrap"></div>
             </div>
-        </div>
+          </div>
+        </main>
+      </div>
     </div>
 
     <!-- ===== Modals (patients.js 와 동일 id) ===== -->
@@ -252,8 +341,7 @@
     <div class="modal fullscreen" id="patientDetailModal">
         <div class="modal-content">
             <div class="modal-header" style="gap:1rem">
-                <div class="modal-title" id="detailTitle">환자 상세</div>
-                <div id="detailHeaderInfo" style="flex:1;min-width:0;font-size:.82rem;color:var(--text-secondary);display:flex;gap:.9rem;flex-wrap:wrap;align-items:center"></div>
+                <div class="modal-title">환자 상세</div>
                 <button class="modal-close" onclick="closeModal('patientDetailModal')">&times;</button>
             </div>
             <div class="ws-grid">
@@ -394,6 +482,23 @@
         </div>
     </div>
 
+    <!-- ⚙️ 설정 모달: 직원 / 문제점·오더 / 재고 현황 -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content" style="max-width:840px;width:92vw">
+            <div class="modal-header"><div class="modal-title">⚙️ 설정</div><button class="modal-close" onclick="closeModal('settingsModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="set-tabs">
+                    <div class="set-tab active" data-pane="staff" onclick="setTab('staff')">👥 직원</div>
+                    <div class="set-tab" data-pane="problems" onclick="setTab('problems')">🩹 문제점·오더</div>
+                    <div class="set-tab" data-pane="inv" onclick="setTab('inv')">📦 재고 현황</div>
+                </div>
+                <div class="set-pane active" id="setpane-staff"></div>
+                <div class="set-pane" id="setpane-problems"></div>
+                <div class="set-pane" id="setpane-inv"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== Bootstrap (firebase init + patients.js 가 기대하는 전역 정의) ===== -->
     <script>
         // Firebase (index.html 과 동일 프로젝트)
@@ -493,30 +598,43 @@
             if(!_crmInited){ _crmInited=true; await initCRM(); }
         });
 
-        // 네비게이션
-        document.querySelectorAll('.crm-nav .nav-tab').forEach(tab=>{
-            tab.addEventListener('click',()=>{
-                document.querySelectorAll('.crm-nav .nav-tab').forEach(t=>t.classList.remove('active'));
-                tab.classList.add('active');
-                document.querySelectorAll('.crm-page').forEach(p=>p.classList.remove('active'));
-                document.getElementById('page-'+tab.dataset.page).classList.add('active');
-            });
+        // ===== 사이드바 네비게이션 / 뷰 전환 =====
+        const VIEW_TITLES={chart:'🩺 진료·차팅',board:'📋 현황판',patients:'👥 고객 전체',recall:'📞 리콜·생일',pricelist:'💰 시술 수가표',notice:'📢 병원공지'};
+        function crmShowView(page){
+            document.querySelectorAll('.crm-sidebar [data-page]').forEach(el=>el.classList.toggle('active', el.dataset.page===page));
+            document.querySelectorAll('.crm-content .crm-page').forEach(p=>p.classList.remove('active'));
+            const el=document.getElementById('page-'+page); if(el) el.classList.add('active');
+            const t=document.getElementById('topbarTitle'); if(t) t.textContent=VIEW_TITLES[page]||'';
+        }
+        document.querySelectorAll('.crm-sidebar [data-page]').forEach(el=>{
+            el.addEventListener('click',()=>crmShowView(el.dataset.page));
         });
+        // 상세 인라인 표시(차팅 뷰 전환 + 빈 화면 숨김) — patients.js openPatientDetail 에서 호출
+        function crmOpenDetail(){
+            const e=document.getElementById('chartEmpty'); if(e) e.style.display='none';
+            const b=document.getElementById('chartBody'); if(b) b.style.display='';
+            crmShowView('chart');
+        }
+        // admin(index.html) 해당 탭으로 이동 (index.html 이 #tab-<name> 해시를 해석)
+        function goAdmin(tab){ location.href='index.html#tab-'+tab; }
 
         // 데이터 로드 + 렌더 (patients.js 함수 사용)
         async function initCRM(){
             await Promise.all([
                 loadTreatmentsMaster(), loadPatients(), loadVisits(), loadChannels(), loadRecipesAndInventory(),
-                (typeof loadNotices==='function'?loadNotices():Promise.resolve())
+                (typeof loadNotices==='function'?loadNotices():Promise.resolve()),
+                (typeof loadCrmProblems==='function'?loadCrmProblems():Promise.resolve())
             ]);
             if(typeof initDefaultChannels==='function'){ try{ await initDefaultChannels(); }catch(_){ } }
             if(typeof loadFeeSchedule==='function'){ try{ await loadFeeSchedule(); }catch(_){ } }
             renderCRM();
             if(typeof renderFeeSchedule==='function'){ try{ renderFeeSchedule(); }catch(_){ } }
+            if(typeof sideRenderList==='function'){ try{ sideRenderList(); }catch(_){ } }
         }
     </script>
-    <script src="patients.js?v=20260627b"></script>
+    <script src="patients.js?v=20260725a"></script>
     <script src="fee-schedule.js?v=20260626e"></script>
+    <script src="crm-shell.js?v=20260725a"></script>
     <script>
     // ===== 자동 업데이트: 새 배포 감지 시 자동 새로고침 (강력 새로고침 불필요) =====
     (function(){
