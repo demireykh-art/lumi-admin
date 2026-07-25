@@ -455,16 +455,36 @@
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
-                        <a href="https://lumi-staff-git-claude-hospital-crm-44b8da-lumiclinics-projects.vercel.app/crm.html" target="_blank" rel="noopener"
-                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                        <button type="button" onclick="openFeeScheduleView()"
+                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <span style="font-size:2.5rem">💊</span>
                             <div style="flex:1">
-                                <div style="font-weight:700;font-size:1.1rem">시술 수가표</div>
-                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">CRM 시술 가격표 — 새 창으로 열림</div>
+                                <div style="font-weight:700;font-size:1.1rem;color:#1f2937">시술 수가표</div>
+                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">정가·믹스·재고연동 원가·회차 프로토콜</div>
                             </div>
-                            <span style="color:#9ca3af">↗</span>
-                        </a>
+                            <span style="color:#9ca3af">→</span>
+                        </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- === 시술 수가표 탭 (CRM에서 이관) === -->
+            <div class="tab-content" id="tab-feeschedule">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+                        <span style="display:flex;align-items:center;gap:.5rem">
+                            <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem" onclick="showTopHome()">← 홈</button>
+                            <span>💊 시술 수가표 <span id="feeEditBadge" style="font-size:.72rem;font-weight:500"></span></span>
+                        </span>
+                        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+                            <input type="text" class="form-input" id="feeSearch" placeholder="🔍 시술 검색" oninput="renderFeeSchedule()"
+                                style="width:170px;padding:.4rem .55rem;font-size:.85rem;border:1px solid var(--border);border-radius:6px">
+                            <button class="btn btn-secondary" id="tmManageBtn" style="display:none;font-size:.75rem;padding:.35rem .65rem" onclick="openTreatmentManager()">🛠 시술 추가·관리</button>
+                        </div>
+                    </div>
+                    <div style="font-size:.74rem;color:var(--text-muted);margin-top:.4rem">정가·원가(만원/₩) · 원가는 [믹스 설정]으로 재고 소모량 입력 시 자동계산 · 마진=실판매가−원가 · 10분당이익=마진÷(소요시간/10)</div>
+                    <div id="feeVisConfig" style="margin-top:.5rem"></div>
+                    <div id="feeWrap" style="margin-top:.5rem"></div>
                 </div>
             </div>
 
@@ -1324,6 +1344,38 @@
     </div>
 
     <!-- 장소 수정 모달 -->
+    <!-- 원가 믹스 설정 모달 (수가표) -->
+    <div class="modal" id="costModal">
+        <div class="modal-content" style="max-width:620px">
+            <div class="modal-header"><div class="modal-title" id="costModalTitle">원가 믹스 설정</div><button class="modal-close" onclick="closeModal('costModal')">&times;</button></div>
+            <div class="modal-body">
+                <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.6rem">① 한 번에 <b>조제(믹스)</b>하는 재료·투입량을 넣고 → ② <b>총 조제량</b>과 <b>1회 실사용량</b>(뽑아 쓰는 양)을 입력하면 원가가 비례 계산됩니다.<br>예) 하이톡스 1병 + NS 4cc 조제 → 총 4cc 중 0.3cc 사용</div>
+                <div style="font-weight:700;font-size:.82rem;margin-bottom:.35rem">① 믹스(조제) 구성</div>
+                <div id="costRows"></div>
+                <button class="btn btn-secondary btn-sm" onclick="addCostRow()" style="margin-top:.4rem">+ 재료 추가</button>
+                <datalist id="invItemDatalist"></datalist>
+                <div style="display:flex;gap:.6rem;margin-top:.8rem">
+                    <div class="form-group" style="flex:1;margin:0"><label class="form-label">② 총 조제량 (cc)</label><input type="number" class="form-input" id="costMixTotal" step="0.1" placeholder="예: 4" oninput="updateCostTotal()"></div>
+                    <div class="form-group" style="flex:1;margin:0"><label class="form-label">1회 실사용량 (cc)</label><input type="number" class="form-input" id="costMixUsed" step="0.01" placeholder="예: 0.3" oninput="updateCostTotal()"></div>
+                </div>
+                <div style="margin-top:.7rem;padding:.6rem;background:#F7F8FB;border-radius:8px">
+                    <div style="display:flex;justify-content:space-between;font-size:.82rem;color:var(--text-secondary)"><span>조제 원가(전체)</span><span id="costModalMix">₩0</span></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.3rem"><span style="font-size:.85rem;font-weight:700">최종 원가 (1회 사용분)</span><strong id="costModalTotal" style="color:#4F46E5;font-size:1.05rem">₩0</strong></div>
+                    <div id="costModalHint" style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem"></div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('costModal')">취소</button><button class="btn btn-primary" onclick="saveCost()">저장</button></div>
+        </div>
+    </div>
+
+    <!-- 시술 추가·수정·삭제 관리 모달 -->
+    <div class="modal" id="tmModal">
+        <div class="modal-content" style="max-width:580px">
+            <div class="modal-header"><div class="modal-title" id="tmModalTitle">시술 관리</div><button class="modal-close" onclick="closeModal('tmModal')">&times;</button></div>
+            <div class="modal-body" id="tmModalBody"></div>
+        </div>
+    </div>
+
     <div class="modal" id="editLocationModal">
         <div class="modal-content" style="max-width:400px">
             <div class="modal-header">
@@ -5997,10 +6049,78 @@
             });
         });
         
-        // Init
-        checkAuth();
+        // ================================================================
+        //  💊 시술 수가표 — CRM에서 이관 (fee-schedule.js 브릿지)
+        // ================================================================
+        // fee-schedule.js 가 참조하는 전역들을 staff 앱 것으로 매핑
+        window.treatmentCategories = [];
+        window.currentCrmUser = null;
+        window.currentCrmCanEditFees = false;
+        // fee-schedule 이 쓰는 helper — staff.html 에 없는 것만 신설
+        function manToWon(m){ return Math.round((Number(m)||0)*10000); }
+        function escapeHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+        function variantDesc(v){ return [v.product,v.dose,v.sessions,v.size,v.qty,v.region,v.label].filter(Boolean).join(' · ') || '기본'; }
+
+        // treatments 마스터: Firestore 우선, 없으면 seed JSON
+        async function loadTreatmentsMaster(){
+            try{
+                const snap = await db.collection('treatments').get();
+                if(!snap.empty){
+                    const byCat={};
+                    snap.docs.forEach(d=>{
+                        const t=d.data(); const cid=t.categoryId||'etc';
+                        if(!byCat[cid]) byCat[cid]={id:cid,name:t.categoryName||cid,treatments:[]};
+                        byCat[cid].treatments.push({docId:d.id, name:t.name, note:t.note, variants:t.variants||[]});
+                    });
+                    window.treatmentCategories = Object.values(byCat);
+                    return;
+                }
+            }catch(e){ console.warn('treatments 로드 실패, 시드 사용:',e); }
+            try{
+                const res = await fetch('treatments-seed.json?v='+Date.now());
+                const data = await res.json();
+                window.treatmentCategories = (data.categories||[]).map(c=>({
+                    id:c.id, name:c.name, note:c.note,
+                    treatments:(c.treatments||[]).map(t=>({name:t.name, note:t.note, variants:t.variants||[]}))
+                }));
+            }catch(e){ console.error('정가표 시드 로드 실패:',e); window.treatmentCategories=[]; }
+        }
+
+        // 편집 권한: bizAdmins 화이트리스트에 있으면 편집 가능
+        async function _resolveFeeEditPermission(){
+            try{
+                const email=(auth?.currentUser?.email||'').toLowerCase();
+                if(!email){ currentCrmCanEditFees=false; return; }
+                const doc=await db.collection('settings').doc('bizAdmins').get();
+                const list=(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[]).map(e=>String(e).toLowerCase());
+                currentCrmCanEditFees = list.includes(email);
+                // 편집자 식별 (updatedBy 저장용)
+                currentCrmUser = { id: (currentUser?.id||email), name: (currentUser?.name||email), email };
+            }catch(e){ currentCrmCanEditFees=false; }
+        }
+
+        let _feeInited=false;
+        async function openFeeScheduleView(){
+            // 다른 탭 모두 숨기고 tab-feeschedule 만 노출
+            document.querySelectorAll('.tab-content').forEach(t=>{
+                t.classList.remove('active');
+                t.style.display='none';
+            });
+            const view=document.getElementById('tab-feeschedule');
+            if(view){ view.style.display=''; view.classList.add('active'); }
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+
+            if(!_feeInited){
+                _feeInited=true;
+                await _resolveFeeEditPermission();
+                await loadTreatmentsMaster();
+                if(typeof loadFeeSchedule==='function') await loadFeeSchedule();
+            }
+            if(typeof renderFeeSchedule==='function') renderFeeSchedule();
+        }
     </script>
     <script src="supplies-catalog.js?v=20260725a"></script>
+    <script src="fee-schedule.js?v=20260725a"></script>
     <script src="version-check.js"></script>
 </body>
 </html>
