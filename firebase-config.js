@@ -449,6 +449,15 @@ function initNavigation(){
             }
         });
     });
+    // CRM(crm.html) 등에서 #tab-<name> 해시로 진입 시 해당 탭 자동 활성화
+    function _applyTabHash(){
+        const m=(location.hash||'').match(/^#tab-([\w-]+)/);
+        if(!m)return;
+        const t=document.querySelector('.nav-tab[data-tab="'+m[1]+'"]');
+        if(t)t.click();
+    }
+    _applyTabHash();
+    window.addEventListener('hashchange',_applyTabHash);
 }
 
 // ===== Month Selector =====

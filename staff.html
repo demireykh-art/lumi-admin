@@ -4206,12 +4206,14 @@
         // ===== 입고 시스템 =====
         let receivingLocations=[]; // 장소 목록
         
-        // 장소 목록 로드
+        // 장소 목록 로드 (locations 컬렉션이 유일한 소스 — 하드코딩 제거)
+        // orderBy('order') 는 order 필드 없는 문서를 제외하므로, 전체를 받아 메모리 정렬한다.
         async function loadReceivingLocations(){
             if(typeof db==='undefined')return;
             try{
-                const snap=await db.collection('locations').orderBy('order','asc').get();
-                receivingLocations=snap.docs.map(d=>({id:d.id,...d.data()}));
+                const snap=await db.collection('locations').get();
+                receivingLocations=snap.docs.map(d=>({id:d.id,...d.data()}))
+                    .sort((a,b)=>((a.order||999)-(b.order||999))||(`${a.floor}-${a.name}`).localeCompare(`${b.floor}-${b.name}`));
                 updateLocationSelect();
             }catch(e){
                 receivingLocations=[];
@@ -4233,19 +4235,11 @@
                     sel.appendChild(opt);
                 });
             }else{
-                // 기본 장소 (DB 로드 실패 시 fallback)
-                const defaults=[
-                    '5층-처치실','5층-냉장고',
-                    '6층-시술실','6층-수액실','6층-줄기세포센터','6층-수술실',
-                    '6층-준비실','6층-준비실옆보관실','6층-준비실 냉장고',
-                    '6층-어븀실','6층-레이저실','6층-리팟실'
-                ];
-                defaults.forEach(loc=>{
-                    const opt=document.createElement('option');
-                    opt.value=loc;
-                    opt.textContent=loc;
-                    sel.appendChild(opt);
-                });
+                // 하드코딩 제거: 장소는 locations 컬렉션에서만 관리 (모든 계정 공통)
+                const opt=document.createElement('option');
+                opt.value='';
+                opt.textContent='(등록된 장소 없음 — 재고 앱 장소관리에서 추가하세요)';
+                sel.appendChild(opt);
             }
         }
         
@@ -4269,22 +4263,11 @@
                     sel.appendChild(opt);
                 });
             } else {
-                // 기본 장소
-                const defaults = [
-                    '5층-처치실', '5층-냉장고',
-                    '6층-시술실', '6층-수액실', '6층-줄기세포센터', '6층-수술실',
-                    '6층-준비실', '6층-준비실옆보관실', '6층-준비실 냉장고',
-                    '6층-어븀실', '6층-레이저실', '6층-리팟실'
-                ];
-                defaults.forEach(loc => {
-                    const opt = document.createElement('option');
-                    opt.value = loc;
-                    opt.textContent = loc;
-                    if (loc === currentValue) {
-                        opt.selected = true;
-                    }
-                    sel.appendChild(opt);
-                });
+                // 하드코딩 제거: 현재 값이 있으면 유지, 없으면 안내
+                const opt = document.createElement('option');
+                if (currentValue) { opt.value = currentValue; opt.textContent = currentValue; opt.selected = true; }
+                else { opt.value = ''; opt.textContent = '(등록된 장소 없음 — 재고 앱 장소관리에서 추가하세요)'; }
+                sel.appendChild(opt);
             }
         }
         
