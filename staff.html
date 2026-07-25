@@ -49,6 +49,8 @@
         .logout-btn{padding:.4rem .8rem;border:1px solid var(--border);background:transparent;font-size:.75rem;cursor:pointer;letter-spacing:1px}
         
         .content{flex:1;overflow-y:auto;padding:1rem;padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+        /* 하단 네비 숨김 상태에서는 여백도 최소화 */
+        body.nav-hidden .content{padding-bottom:calc(1rem + env(safe-area-inset-bottom))}
         
         .card{background:var(--bg-card);border:1px solid var(--border);padding:1.25rem;margin-bottom:1rem}
         .card-title{font-weight:600;margin-bottom:1rem;font-size:.95rem;display:flex;justify-content:space-between;align-items:center}
@@ -667,7 +669,8 @@
                 </div>
             </div>
         </div>
-        <nav class="bottom-nav">
+        <!-- 하단 네비게이션 (공용/재고 전용 계정은 자동 숨김 · 개인 근태 계정은 유지) -->
+        <nav class="bottom-nav" id="mainBottomNav">
             <div class="nav-item active" data-tab="attendance"><div class="nav-icon">📅</div>출퇴근</div>
             <div class="nav-item" data-tab="meal"><div class="nav-icon">🍽</div>식사</div>
             <div class="nav-item" data-tab="ot"><div class="nav-icon">⏰</div>OT</div>
@@ -1610,8 +1613,16 @@
             }
 
             if(shared){
+                // 공용/재고 전용 계정 → 하단 네비게이션 숨김 (재고 홈 카드로 이동)
+                const nav=document.getElementById('mainBottomNav');
+                if(nav) nav.style.display='none';
+                document.body.classList.add('nav-hidden');
                 await initInventoryTab();
                 await loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
+            }else{
+                const nav=document.getElementById('mainBottomNav');
+                if(nav) nav.style.display='';
+                document.body.classList.remove('nav-hidden');
             }
             checkLocation();
             await loadAttendanceSettings(); // v2.0
@@ -4135,29 +4146,44 @@
             const cutoff=Date.now()-30*24*60*60*1000;
             return (invItems||[]).filter(i=>_getInvLastUsedTs(i)<cutoff).length;
         }
+        // 홈 카드 액션 레지스트리 (event delegation 으로 안전하게 호출)
+        window._invHomeActions=window._invHomeActions||{
+            all:()=>showInvList('','전체 재고'),
+            nursing:()=>showInvList('nursing','간호'),
+            skin:()=>showInvList('skin','피부'),
+            desk:()=>showInvList('desk','데스크'),
+            common:()=>showInvList('common','공용'),
+            low:()=>showInvListLowStock(),
+            unused:()=>showInvListUnused(),
+            buy:()=>openSuppliesCatalog(),
+        };
         function renderInvHome(){
             const grid=document.getElementById('invHomeGrid');
             if(!grid) return;
-            const total=_invCatCount('');
-            const low=_invLowStockCount();
-            const unused=_invUnusedCountCard();
             const cards=[
-                {key:'',label:'전체',icon:'📋',color:'#374151',count:total,action:()=>showInvList('','전체 재고')},
-                {key:'nursing',label:'간호',icon:'💉',color:'#0369a1',count:_invCatCount('nursing'),action:()=>showInvList('nursing','간호')},
-                {key:'skin',label:'피부',icon:'✨',color:'#a21caf',count:_invCatCount('skin'),action:()=>showInvList('skin','피부')},
-                {key:'desk',label:'데스크',icon:'🖥️',color:'#7c2d12',count:_invCatCount('desk'),action:()=>showInvList('desk','데스크')},
-                {key:'common',label:'공용',icon:'📎',color:'#4b5563',count:_invCatCount('common'),action:()=>showInvList('common','공용')},
-                {key:'low',label:'발주 필요',icon:'⚠️',color:'#dc2626',count:low,action:()=>showInvListLowStock()},
-                {key:'unused',label:'안쓰는 제품',icon:'😴',color:'#7c3aed',count:unused,action:()=>showInvListUnused()},
-                {key:'buy',label:'소모품 구입',icon:'🛍️',color:'#16a34a',count:'',action:()=>openSuppliesCatalog()},
+                {act:'all',label:'전체',icon:'📋',color:'#374151',count:_invCatCount('')},
+                {act:'nursing',label:'간호',icon:'💉',color:'#0369a1',count:_invCatCount('nursing')},
+                {act:'skin',label:'피부',icon:'✨',color:'#a21caf',count:_invCatCount('skin')},
+                {act:'desk',label:'데스크',icon:'🖥️',color:'#7c2d12',count:_invCatCount('desk')},
+                {act:'common',label:'공용',icon:'📎',color:'#4b5563',count:_invCatCount('common')},
+                {act:'low',label:'발주 필요',icon:'⚠️',color:'#dc2626',count:_invLowStockCount()},
+                {act:'unused',label:'안쓰는 제품',icon:'😴',color:'#7c3aed',count:_invUnusedCountCard()},
+                {act:'buy',label:'소모품 구입',icon:'🛍️',color:'#16a34a',count:''},
             ];
             grid.innerHTML=cards.map(c=>`
-                <button onclick='(${c.action.toString()})()' style="border:1px solid #e5e7eb;background:#fff;padding:1rem .75rem;border-radius:14px;cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:.35rem;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform .1s" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform=''" ontouchend="this.style.transform=''">
+                <button type="button" data-inv-home-act="${c.act}" style="border:1px solid #e5e7eb;background:#fff;padding:1rem .75rem;border-radius:14px;cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:.35rem;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform .1s;touch-action:manipulation">
                     <span style="font-size:2rem">${c.icon}</span>
                     <span style="font-weight:700;color:${c.color};font-size:1rem">${c.label}</span>
                     ${c.count!==''?`<span style="font-size:.72rem;color:#6b7280">${c.count}건</span>`:''}
                 </button>
             `).join('');
+            // 위임 이벤트 (중복 등록 방지)
+            grid.onclick=function(e){
+                const btn=e.target.closest('[data-inv-home-act]');
+                if(!btn) return;
+                const fn=window._invHomeActions[btn.dataset.invHomeAct];
+                if(typeof fn==='function') fn();
+            };
         }
 
         function showInvHome(){
