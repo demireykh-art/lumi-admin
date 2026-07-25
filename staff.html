@@ -1113,6 +1113,12 @@
                     </div>
                     <input type="url" class="form-input" id="editItemPurchaseLink" placeholder="🔗 구매 링크 (쿠팡·네이버 등)"
                         style="width:100%;padding:.5rem;font-size:.85rem;border:1px solid var(--border);border-radius:6px;margin-bottom:.5rem">
+                    <input type="url" class="form-input" id="editItemKakaoUrl" placeholder="💛 카톡 채널/오픈채팅 URL (예: https://pf.kakao.com/_xxxxx 또는 https://open.kakao.com/o/xxxxx)"
+                        style="width:100%;padding:.5rem;font-size:.8rem;border:1px solid var(--border);border-radius:6px;margin-bottom:.5rem">
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.5rem;line-height:1.4">
+                        ※ 카카오톡은 전화번호로 바로 대화창을 여는 웹 링크가 없습니다.<br>
+                        구매처의 <strong>카톡 채널</strong>(pf.kakao.com) 또는 <strong>오픈채팅</strong>(open.kakao.com) URL 을 붙여넣어 주세요.
+                    </div>
                     <div style="font-size:.72rem;color:var(--text-secondary);margin-bottom:.3rem">우선 연결 방식</div>
                     <div style="display:flex;flex-wrap:wrap;gap:.3rem" id="editItemContactMethod">
                         <label style="flex:1;min-width:70px;display:flex;align-items:center;justify-content:center;padding:.45rem;border:1px solid var(--border);border-radius:6px;font-size:.8rem;cursor:pointer;background:#fff"><input type="radio" name="editContactMethod" value="link" style="margin-right:4px" checked>🛒 링크</label>
@@ -3919,7 +3925,15 @@
                 let primaryAction='';
                 if(method==='phone'&&phoneClean) primaryAction=`<a href="tel:${phoneClean}" style="background:#3b82f6;color:#fff;font-size:.6rem;padding:1px 6px;border-radius:3px;text-decoration:none">📞 전화</a>`;
                 else if(method==='sms'&&phoneClean) primaryAction=`<a href="sms:${phoneClean}" style="background:#0ea5e9;color:#fff;font-size:.6rem;padding:1px 6px;border-radius:3px;text-decoration:none">💬 문자</a>`;
-                else if(method==='kakao') primaryAction=item.contactPhone?`<a href="https://qr.kakao.com/talk/${encodeURIComponent(item.contactPhone)}" target="_blank" style="background:#fee500;color:#3c1e1e;font-size:.6rem;padding:1px 6px;border-radius:3px;text-decoration:none">💛 카톡</a>`:'';
+                else if(method==='kakao'){
+                    if(item.kakaoUrl){
+                        primaryAction=`<a href="${item.kakaoUrl}" target="_blank" rel="noopener" style="background:#fee500;color:#3c1e1e;font-size:.6rem;padding:1px 6px;border-radius:3px;text-decoration:none">💛 카톡</a>`;
+                    }else if(item.contactPhone){
+                        // 카톡 URL 미설정 → 클릭 시 안내 + 전화번호 클립보드 복사
+                        const p=String(item.contactPhone).replace(/'/g,"\\'");
+                        primaryAction=`<a href="javascript:void(0)" onclick="_kakaoFallback('${p}')" style="background:#fee500;color:#3c1e1e;font-size:.6rem;padding:1px 6px;border-radius:3px;text-decoration:none">💛 카톡</a>`;
+                    }
+                }
                 else if(item.purchaseLink) primaryAction=`<a href="${item.purchaseLink}" target="_blank" style="background:#f97316;color:#fff;font-size:.6rem;padding:1px 6px;border-radius:3px;text-decoration:none">🛒 구매</a>`;
                 // 낱개당 단가: unitPrice 저장값 우선, 없으면 purchasePrice / purchaseQty
                 const _pQty=Number(item.purchaseQty)||0;
@@ -4356,6 +4370,19 @@
         }
 
         // ===== 신규 품목 등록 =====
+        // 카톡 URL 없이 전화번호만 있을 때 fallback
+        async function _kakaoFallback(phone){
+            const msg=`카카오톡은 전화번호로 대화창을 여는 웹 링크가 없습니다.\n\n전화번호 ${phone} 을(를) 복사했습니다. 카카오톡에서 검색해 대화하세요.\n\n다음번엔 [수정] → 카톡 채널/오픈채팅 URL 을 입력해두면 바로 연결됩니다.`;
+            try{
+                if(navigator.clipboard&&navigator.clipboard.writeText){
+                    await navigator.clipboard.writeText(phone);
+                }
+            }catch(_){}
+            // 카카오톡 앱 실행 시도 (있으면 홈)
+            try{ window.location.href='kakaotalk://'; }catch(_){}
+            setTimeout(()=>alert(msg),300);
+        }
+
         // ===== 소모품 구입 카탈로그 (Google Sheet 기반) =====
         function openSuppliesCatalog(){
             renderSuppliesCatalog();
@@ -5134,6 +5161,7 @@
             // 담당자 / 연락 방식 / 단종
             const cn=document.getElementById('editItemContactName'); if(cn) cn.value=item.contactName||'';
             const cp=document.getElementById('editItemContactPhone'); if(cp) cp.value=item.contactPhone||'';
+            const kk=document.getElementById('editItemKakaoUrl'); if(kk) kk.value=item.kakaoUrl||'';
             const method=item.contactMethod||'link';
             document.querySelectorAll('input[name="editContactMethod"]').forEach(r=>{ r.checked=(r.value===method); });
             const dc=document.getElementById('editItemDiscontinued'); if(dc) dc.checked=!!item.discontinued;
@@ -5294,6 +5322,7 @@
                 purchaseLink:document.getElementById('editItemPurchaseLink').value.trim(),
                 contactName:(document.getElementById('editItemContactName')?.value||'').trim(),
                 contactPhone:(document.getElementById('editItemContactPhone')?.value||'').trim(),
+                kakaoUrl:(document.getElementById('editItemKakaoUrl')?.value||'').trim(),
                 contactMethod:(document.querySelector('input[name="editContactMethod"]:checked')?.value)||'link',
                 discontinued:!!document.getElementById('editItemDiscontinued')?.checked,
                 updatedAt:new Date().toISOString(),
