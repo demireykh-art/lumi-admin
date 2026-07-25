@@ -513,15 +513,19 @@
                         </div>
                     </div>
                     <div id="invHomeGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-top:.75rem"></div>
-                    <!-- 홈 하단 반쪽 높이 버튼 (장소 관리 · 단종 목록) -->
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.75rem">
+                    <!-- 홈 하단 반쪽 높이 버튼 (장소 · 거래처 · 단종) -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-top:.75rem">
                         <button type="button" onclick="openLocationManageModal()"
                             style="padding:.55rem;border:1px solid #e5e7eb;background:#f9fafb;color:#374151;font-weight:600;font-size:.85rem;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.35rem">
-                            📍 장소 관리
+                            📍 장소
+                        </button>
+                        <button type="button" onclick="openVendorManageModal()"
+                            style="padding:.55rem;border:1px solid #e5e7eb;background:#f9fafb;color:#374151;font-weight:600;font-size:.85rem;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.35rem">
+                            📞 거래처 <span id="vendorCount" style="opacity:.7;font-size:.72rem">0</span>
                         </button>
                         <button type="button" onclick="showInvListDiscontinued()"
                             style="padding:.55rem;border:1px solid #e5e7eb;background:#f9fafb;color:#374151;font-weight:600;font-size:.85rem;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.35rem">
-                            🏳️ 단종 목록 <span id="invDiscontinuedCount" style="opacity:.7;font-size:.72rem">0</span>
+                            🏳️ 단종 <span id="invDiscontinuedCount" style="opacity:.7;font-size:.72rem">0</span>
                         </button>
                     </div>
                 </div>
@@ -1175,6 +1179,13 @@
                 <!-- 담당자 / 연락 / 링크 -->
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:8px;margin-top:.75rem">
                     <div style="font-weight:700;font-size:.85rem;margin-bottom:.5rem">📞 구매·연락 정보</div>
+                    <div style="display:flex;gap:.3rem;margin-bottom:.5rem">
+                        <input type="text" class="form-input" id="editItemVendorPicker" list="vendorPickerDatalist" placeholder="🔍 기존 거래처 선택 (또는 신규 입력)"
+                            oninput="onEditVendorPick(this.value)"
+                            style="flex:1;padding:.5rem;font-size:.85rem;border:1px solid #a5b4fc;border-radius:6px;background:#eef2ff">
+                        <datalist id="vendorPickerDatalist"></datalist>
+                        <button type="button" onclick="openVendorManageModal()" style="padding:.4rem .55rem;background:none;border:1px solid #a5b4fc;color:#4338ca;border-radius:6px;font-size:.72rem;cursor:pointer;white-space:nowrap">거래처 관리</button>
+                    </div>
                     <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
                         <input type="text" class="form-input" id="editItemContactName" placeholder="담당자 이름"
                             style="flex:1;padding:.5rem;font-size:.85rem;border:1px solid var(--border);border-radius:6px">
@@ -1358,6 +1369,65 @@
     </div>
 
     <!-- 장소 수정 모달 -->
+    <!-- 거래처 관리 모달 -->
+    <div class="modal" id="vendorManageModal">
+        <div class="modal-content" style="max-width:640px;width:96vw;max-height:92vh;display:flex;flex-direction:column">
+            <div class="modal-header">
+                <div class="modal-title">거래처 관리</div>
+                <button class="modal-close" onclick="closeModal('vendorManageModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y:auto;flex:1">
+                <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+                    <input type="text" id="vendorSearch" placeholder="이름/담당자/전화 검색" oninput="renderVendorList()"
+                        style="flex:1;padding:.5rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
+                    <button class="btn btn-primary" onclick="openVendorForm()" style="padding:.5rem 1rem;font-size:.85rem;white-space:nowrap">+ 신규</button>
+                </div>
+                <div id="vendorList"></div>
+
+                <!-- 인라인 편집 폼 (접힘) -->
+                <div id="vendorForm" style="display:none;background:#f9fafb;border:1px solid #d1d5db;padding:1rem;border-radius:8px;margin-top:1rem">
+                    <input type="hidden" id="vendorEditId">
+                    <div style="font-weight:700;font-size:.9rem;margin-bottom:.6rem" id="vendorFormTitle">거래처 추가</div>
+                    <div class="form-group" style="margin-bottom:.5rem">
+                        <label class="form-label" style="font-size:.8rem;margin-bottom:.2rem">거래처 이름 *</label>
+                        <input type="text" class="form-input" id="vendorName" placeholder="예: 하이톡스 공급업체 · 아말리안 대리점" style="padding:.5rem;font-size:.85rem">
+                    </div>
+                    <div style="display:flex;gap:.4rem;margin-bottom:.5rem">
+                        <div class="form-group" style="flex:1;margin-bottom:0">
+                            <label class="form-label" style="font-size:.8rem;margin-bottom:.2rem">담당자 이름</label>
+                            <input type="text" class="form-input" id="vendorContactName" style="padding:.5rem;font-size:.85rem">
+                        </div>
+                        <div class="form-group" style="flex:1.4;margin-bottom:0">
+                            <label class="form-label" style="font-size:.8rem;margin-bottom:.2rem">담당자 전화</label>
+                            <input type="tel" class="form-input" id="vendorContactPhone" placeholder="010-1234-5678" style="padding:.5rem;font-size:.85rem">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:.5rem">
+                        <label class="form-label" style="font-size:.8rem;margin-bottom:.2rem">구매 링크</label>
+                        <input type="url" class="form-input" id="vendorPurchaseLink" placeholder="https://쿠팡·네이버 등" style="padding:.5rem;font-size:.85rem">
+                    </div>
+                    <div style="font-size:.72rem;color:var(--text-secondary);margin-bottom:.35rem">우선 연결 방식</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.7rem">
+                        <label style="flex:1;min-width:80px;display:flex;align-items:center;justify-content:center;padding:.4rem;border:1px solid #d1d5db;border-radius:6px;font-size:.78rem;cursor:pointer;background:#fff"><input type="radio" name="vendorContactMethod" value="link" style="margin-right:4px" checked>🛒 링크</label>
+                        <label style="flex:1;min-width:80px;display:flex;align-items:center;justify-content:center;padding:.4rem;border:1px solid #d1d5db;border-radius:6px;font-size:.78rem;cursor:pointer;background:#fff"><input type="radio" name="vendorContactMethod" value="phone" style="margin-right:4px">📞 전화</label>
+                        <label style="flex:1;min-width:80px;display:flex;align-items:center;justify-content:center;padding:.4rem;border:1px solid #d1d5db;border-radius:6px;font-size:.78rem;cursor:pointer;background:#fff"><input type="radio" name="vendorContactMethod" value="sms" style="margin-right:4px">💬 문자</label>
+                    </div>
+                    <div class="form-group" style="margin-bottom:.5rem">
+                        <label class="form-label" style="font-size:.8rem;margin-bottom:.2rem">메모</label>
+                        <textarea class="form-textarea" id="vendorMemo" rows="2" placeholder="계약 조건, 특이사항 등" style="padding:.5rem;font-size:.85rem;width:100%;box-sizing:border-box"></textarea>
+                    </div>
+                    <div style="display:flex;gap:.4rem;justify-content:flex-end">
+                        <button class="btn btn-secondary" onclick="closeVendorForm()" style="padding:.5rem 1rem;font-size:.85rem">취소</button>
+                        <button class="btn btn-primary" onclick="saveVendor()" style="padding:.5rem 1.25rem;font-size:.85rem;font-weight:700">저장</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('vendorManageModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="editLocationModal">
         <div class="modal-content" style="max-width:400px">
             <div class="modal-header">
@@ -4790,6 +4860,187 @@
         }
 
         // 오더 이름 → 수가표 매칭
+        // ================================================================
+        //  거래처 관리 (localStorage 'staff_vendors_v1')
+        // ================================================================
+        const VENDOR_LS_KEY='staff_vendors_v1';
+        let _vendors=null;
+        function _loadVendors(){
+            if(_vendors) return _vendors;
+            try{
+                const raw=localStorage.getItem(VENDOR_LS_KEY);
+                _vendors=raw?JSON.parse(raw):[];
+            }catch(_){ _vendors=[]; }
+            return _vendors;
+        }
+        function _saveVendors(){ try{ localStorage.setItem(VENDOR_LS_KEY,JSON.stringify(_vendors||[])); }catch(_){ } _updateVendorHomeCount(); _refreshVendorPickerDatalist(); }
+        function _updateVendorHomeCount(){
+            const el=document.getElementById('vendorCount');
+            if(el) el.textContent=(_loadVendors()||[]).length;
+        }
+        function _vendorById(id){ return (_loadVendors()||[]).find(v=>v.id===id); }
+        function _vendorByName(name){ const n=String(name||'').trim(); if(!n) return null; return (_loadVendors()||[]).find(v=>String(v.name||'').trim()===n); }
+        function _refreshVendorPickerDatalist(){
+            const dl=document.getElementById('vendorPickerDatalist');
+            if(!dl) return;
+            dl.innerHTML=(_loadVendors()||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'))
+                .map(v=>`<option value="${_esc(v.name)}" data-id="${v.id}"></option>`).join('');
+        }
+
+        // ---- 거래처 관리 모달 ----
+        function openVendorManageModal(){
+            _loadVendors();
+            renderVendorList();
+            closeVendorForm();
+            openModal('vendorManageModal');
+        }
+        function renderVendorList(){
+            const wrap=document.getElementById('vendorList');
+            if(!wrap) return;
+            const q=(document.getElementById('vendorSearch')?.value||'').toLowerCase().trim();
+            let list=(_loadVendors()||[]).slice();
+            if(q) list=list.filter(v=>
+                (v.name||'').toLowerCase().includes(q)||
+                (v.contactName||'').toLowerCase().includes(q)||
+                (v.contactPhone||'').includes(q)
+            );
+            list.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+            if(!list.length){
+                wrap.innerHTML='<div style="padding:1.5rem;text-align:center;color:#9ca3af">저장된 거래처가 없습니다. [+ 신규] 로 추가하세요.</div>';
+                return;
+            }
+            wrap.innerHTML=list.map(v=>{
+                const method=v.contactMethod||'link';
+                const methodBadge={link:'🛒 링크',phone:'📞 전화',sms:'💬 문자'}[method]||'';
+                const phoneClean=String(v.contactPhone||'').replace(/[^0-9+]/g,'');
+                const action = method==='phone'&&phoneClean?`<a href="tel:${phoneClean}" style="background:#3b82f6;color:#fff;font-size:.7rem;padding:.2rem .5rem;border-radius:4px;text-decoration:none">📞</a>`
+                    : method==='sms'&&phoneClean?`<a href="sms:${phoneClean}" style="background:#0ea5e9;color:#fff;font-size:.7rem;padding:.2rem .5rem;border-radius:4px;text-decoration:none">💬</a>`
+                    : v.purchaseLink?`<a href="${v.purchaseLink}" target="_blank" style="background:#f97316;color:#fff;font-size:.7rem;padding:.2rem .5rem;border-radius:4px;text-decoration:none">🛒</a>`
+                    : '';
+                return `<div style="padding:.7rem .85rem;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:#fff">
+                    <div style="flex:1;min-width:0">
+                        <div style="font-weight:700;font-size:.9rem">${_esc(v.name)}</div>
+                        <div style="font-size:.75rem;color:#6b7280;margin-top:.15rem">
+                            ${v.contactName?_esc(v.contactName)+' · ':''}${v.contactPhone?_esc(v.contactPhone)+' · ':''}${methodBadge}
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:.25rem;flex-shrink:0">
+                        ${action}
+                        <button onclick="openVendorForm('${v.id}')" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.2rem .5rem;border-radius:4px;font-size:.72rem;cursor:pointer">수정</button>
+                        <button onclick="deleteVendor('${v.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.2rem .5rem;border-radius:4px;font-size:.72rem;cursor:pointer">×</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        function openVendorForm(id){
+            const v=id?_vendorById(id):null;
+            document.getElementById('vendorFormTitle').textContent=v?'거래처 수정':'거래처 추가';
+            document.getElementById('vendorEditId').value=id||'';
+            document.getElementById('vendorName').value=v?.name||'';
+            document.getElementById('vendorContactName').value=v?.contactName||'';
+            document.getElementById('vendorContactPhone').value=v?.contactPhone||'';
+            document.getElementById('vendorPurchaseLink').value=v?.purchaseLink||'';
+            document.getElementById('vendorMemo').value=v?.memo||'';
+            const method=v?.contactMethod||'link';
+            document.querySelectorAll('input[name="vendorContactMethod"]').forEach(r=>{ r.checked=(r.value===method); });
+            document.getElementById('vendorForm').style.display='';
+            document.getElementById('vendorForm').scrollIntoView({behavior:'smooth',block:'nearest'});
+            setTimeout(()=>document.getElementById('vendorName')?.focus(),50);
+        }
+        function closeVendorForm(){
+            const f=document.getElementById('vendorForm');
+            if(f) f.style.display='none';
+        }
+        function saveVendor(){
+            const id=document.getElementById('vendorEditId').value;
+            const name=(document.getElementById('vendorName').value||'').trim();
+            if(!name){ alert('거래처 이름을 입력하세요.'); return; }
+            const data={
+                name,
+                contactName:(document.getElementById('vendorContactName').value||'').trim(),
+                contactPhone:(document.getElementById('vendorContactPhone').value||'').trim(),
+                purchaseLink:(document.getElementById('vendorPurchaseLink').value||'').trim(),
+                contactMethod:(document.querySelector('input[name="vendorContactMethod"]:checked')?.value)||'link',
+                memo:(document.getElementById('vendorMemo').value||'').trim(),
+                updatedAt:new Date().toISOString()
+            };
+            const list=_loadVendors();
+            if(id){
+                const v=list.find(x=>x.id===id);
+                if(v){ Object.assign(v,data); }
+            }else{
+                // 이름 중복 방지
+                if(list.some(x=>x.name===name)){
+                    if(!confirm(`'${name}' 이미 있는 거래처 이름입니다. 그대로 저장할까요?`)) return;
+                }
+                list.push({id:_uid(),createdAt:new Date().toISOString(),...data});
+            }
+            _saveVendors();
+            renderVendorList();
+            closeVendorForm();
+        }
+        function deleteVendor(id){
+            const v=_vendorById(id); if(!v) return;
+            if(!confirm(`거래처 "${v.name}" 삭제?`)) return;
+            _vendors=(_loadVendors()||[]).filter(x=>x.id!==id);
+            _saveVendors();
+            renderVendorList();
+        }
+
+        // ---- 편집 모달의 거래처 선택 ----
+        // 사용자가 datalist 에서 이름 선택 → 담당자/전화/링크/method 자동 채움
+        function onEditVendorPick(name){
+            const v=_vendorByName(name);
+            if(!v) return; // 신규 이름은 채우지 않음
+            const cn=document.getElementById('editItemContactName'); if(cn) cn.value=v.contactName||'';
+            const cp=document.getElementById('editItemContactPhone'); if(cp) cp.value=v.contactPhone||'';
+            const pl=document.getElementById('editItemPurchaseLink'); if(pl) pl.value=v.purchaseLink||'';
+            const method=v.contactMethod||'link';
+            document.querySelectorAll('input[name="editContactMethod"]').forEach(r=>{ r.checked=(r.value===method); });
+        }
+        // 편집 모달 저장 시: 채워진 거래처 이름이 신규면 자동으로 vendors 에 추가
+        // (saveEditItem 흐름에서 훅으로 호출)
+        function _autoSaveVendorFromEditForm(){
+            const name=(document.getElementById('editItemVendorPicker')?.value||'').trim();
+            if(!name) return null;
+            let v=_vendorByName(name);
+            const data={
+                name,
+                contactName:(document.getElementById('editItemContactName')?.value||'').trim(),
+                contactPhone:(document.getElementById('editItemContactPhone')?.value||'').trim(),
+                purchaseLink:(document.getElementById('editItemPurchaseLink')?.value||'').trim(),
+                contactMethod:(document.querySelector('input[name="editContactMethod"]:checked')?.value)||'link',
+                updatedAt:new Date().toISOString()
+            };
+            if(v){
+                // 기존 거래처 정보 갱신 (하지만 사용자가 명시적으로 바꾸지 않았다면 그대로)
+                // → 폼 값과 기존 값이 다르면 update (transparent)
+                let changed=false;
+                ['contactName','contactPhone','purchaseLink','contactMethod'].forEach(k=>{
+                    if((v[k]||'')!==(data[k]||'')) changed=true;
+                });
+                if(changed){ Object.assign(v,data); _saveVendors(); }
+                return v.id;
+            }else{
+                const nv={id:_uid(),createdAt:new Date().toISOString(),...data};
+                (_loadVendors()||[]).push(nv);
+                _saveVendors();
+                return nv.id;
+            }
+        }
+        // 편집 모달 진입 시 vendor picker 초기값 세팅
+        function _presetVendorPickerFromItem(item){
+            const inp=document.getElementById('editItemVendorPicker');
+            if(!inp) return;
+            _refreshVendorPickerDatalist();
+            if(item?.vendorId){
+                const v=_vendorById(item.vendorId);
+                inp.value=v?v.name:'';
+            }else{
+                inp.value='';
+            }
+        }
+
         function _findFeeVariantByOrderName(name){
             const cats=_feeData||[];
             const n=String(name||'').toLowerCase();
@@ -4879,6 +5130,8 @@
             const dcCount=(invItems||[]).filter(i=>i.discontinued).length;
             const dcEl=document.getElementById('invDiscontinuedCount');
             if(dcEl) dcEl.textContent=dcCount;
+            // 거래처 카운트 (localStorage)
+            if(typeof _updateVendorHomeCount==='function') _updateVendorHomeCount();
         }
 
         function showInvHome(){
@@ -5738,6 +5991,8 @@
             // 담당자 / 연락 방식 / 단종
             const cn=document.getElementById('editItemContactName'); if(cn) cn.value=item.contactName||'';
             const cp=document.getElementById('editItemContactPhone'); if(cp) cp.value=item.contactPhone||'';
+            // 거래처 picker 초기화 (localStorage 기반)
+            if(typeof _presetVendorPickerFromItem==='function') _presetVendorPickerFromItem(item);
             // 예전에 kakao 로 저장되어 있던 경우엔 링크로 폴백
             let method=item.contactMethod||'link';
             if(method==='kakao') method='link';
@@ -5901,6 +6156,7 @@
                 contactName:(document.getElementById('editItemContactName')?.value||'').trim(),
                 contactPhone:(document.getElementById('editItemContactPhone')?.value||'').trim(),
                 contactMethod:(document.querySelector('input[name="editContactMethod"]:checked')?.value)||'link',
+                vendorId:(typeof _autoSaveVendorFromEditForm==='function'?_autoSaveVendorFromEditForm():null),
                 discontinued:!!document.getElementById('editItemDiscontinued')?.checked,
                 updatedAt:new Date().toISOString(),
                 updatedBy:currentUser?.name||'staff'
