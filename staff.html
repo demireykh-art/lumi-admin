@@ -432,9 +432,24 @@
 
             <!-- 재고 실사 탭 -->
             <div class="tab-content" id="tab-inventory">
-                <div class="card" style="margin-bottom:0;padding-bottom:.5rem">
+                <!-- === 재고 홈: 파트별 카드 === -->
+                <div id="invHomeView" class="card" style="margin-bottom:0">
                     <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
-                        <span>📦 재고 실사</span>
+                        <span>📦 재고</span>
+                        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                            <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
+                        </div>
+                    </div>
+                    <div id="invHomeGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-top:.75rem"></div>
+                </div>
+
+                <!-- === 재고 실사 상세 (홈에서 카테고리 선택 시 노출) === -->
+                <div id="invListView" class="card" style="display:none;margin-bottom:0;padding-bottom:.5rem">
+                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+                        <span style="display:flex;align-items:center;gap:.5rem">
+                            <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem" onclick="showInvHome()">← 홈</button>
+                            <span id="invListTitle">📦 재고 실사</span>
+                        </span>
                         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
                             <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
                             <button class="btn btn-secondary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openInventoryOverviewModal()">🗂️ 정리된 목록</button>
@@ -497,12 +512,12 @@
                         <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
                         <span id="invProgressText">0/0</span>
                     </div>
-                </div>
-                <div id="invAuditList" style="padding:.5rem 0"></div>
-                <div class="inv-submit-bar">
-                    <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()">실사 결과 제출</button>
-                </div>
-            </div>
+                    <div id="invAuditList" style="padding:.5rem 0"></div>
+                    <div class="inv-submit-bar">
+                        <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()">실사 결과 제출</button>
+                    </div>
+                </div><!-- /invListView -->
+            </div><!-- /tab-inventory -->
 
             <!-- 입고 탭 -->
             <div class="tab-content" id="tab-receiving">
@@ -3711,6 +3726,10 @@
                 items=items.filter(i=>(i.parentName||'')===currentInvParent);
             }
 
+            // 발주 필요(재고 부족) 강제 필터 — 홈에서 '발주 필요' 카드 진입 시 적용
+            if(typeof _invForceLowStock!=='undefined' && _invForceLowStock){
+                items=items.filter(i=>i.safetyStock&&(Number(i.currentStock)||0)<i.safetyStock);
+            }
             // 30일+ 미사용 필터
             if(showInvUnusedOnly){
                 const cutoff=Date.now()-30*24*60*60*1000;
@@ -4039,7 +4058,7 @@
 
         async function initInventoryTab(){
             await Promise.all([loadInventoryForStaff(),loadLastWeekAudits(),loadReceivingLocations()]);
-            
+
             // 장소 필터 초기화
             const locFilter = document.getElementById('invAuditLocationFilter');
             if(locFilter && receivingLocations.length > 0){
@@ -4052,7 +4071,7 @@
                     locFilter.appendChild(opt);
                 });
             }
-            
+
             // 파트별 계정 자동 카테고리 필터
             //   nurse@... / desk@... / skin@...  → 로그인 시 해당 카테고리 자동 선택
             try{
@@ -4066,6 +4085,93 @@
             renderInvParentButtons();
             renderInvAuditList();
             renderLowStockAlert();
+            // 홈 화면(카테고리 카드) 렌더 후 화면 상태 결정
+            renderInvHome();
+            // nurse/desk/skin 처럼 자동 카테고리가 지정된 계정은 바로 리스트로 이동
+            if(currentInvCat) showInvList(currentInvCat, INV_CATEGORIES[currentInvCat]||'재고 실사');
+            else showInvHome();
+        }
+
+        // ===== 재고 홈 화면 (파트별 카드) =====
+        function _invCatCount(catKey){
+            return (invItems||[]).filter(i=>!catKey||i.category===catKey).length;
+        }
+        function _invLowStockCount(){
+            return (invItems||[]).filter(i=>i.safetyStock&&(Number(i.currentStock)||0)<i.safetyStock).length;
+        }
+        function _invUnusedCountCard(){
+            const cutoff=Date.now()-30*24*60*60*1000;
+            return (invItems||[]).filter(i=>_getInvLastUsedTs(i)<cutoff).length;
+        }
+        function renderInvHome(){
+            const grid=document.getElementById('invHomeGrid');
+            if(!grid) return;
+            const total=_invCatCount('');
+            const low=_invLowStockCount();
+            const unused=_invUnusedCountCard();
+            const cards=[
+                {key:'',label:'전체',icon:'📋',color:'#374151',count:total,action:()=>showInvList('','전체 재고')},
+                {key:'nursing',label:'간호',icon:'💉',color:'#0369a1',count:_invCatCount('nursing'),action:()=>showInvList('nursing','간호')},
+                {key:'skin',label:'피부',icon:'✨',color:'#a21caf',count:_invCatCount('skin'),action:()=>showInvList('skin','피부')},
+                {key:'desk',label:'데스크',icon:'🖥️',color:'#7c2d12',count:_invCatCount('desk'),action:()=>showInvList('desk','데스크')},
+                {key:'common',label:'공용',icon:'📎',color:'#4b5563',count:_invCatCount('common'),action:()=>showInvList('common','공용')},
+                {key:'low',label:'발주 필요',icon:'⚠️',color:'#dc2626',count:low,action:()=>showInvListLowStock()},
+                {key:'unused',label:'안쓰는 제품',icon:'😴',color:'#7c3aed',count:unused,action:()=>showInvListUnused()},
+                {key:'buy',label:'소모품 구입',icon:'🛍️',color:'#16a34a',count:'',action:()=>openWishlistModal()},
+            ];
+            grid.innerHTML=cards.map(c=>`
+                <button onclick='(${c.action.toString()})()' style="border:1px solid #e5e7eb;background:#fff;padding:1rem .75rem;border-radius:14px;cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:.35rem;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform .1s" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform=''" ontouchend="this.style.transform=''">
+                    <span style="font-size:2rem">${c.icon}</span>
+                    <span style="font-weight:700;color:${c.color};font-size:1rem">${c.label}</span>
+                    ${c.count!==''?`<span style="font-size:.72rem;color:#6b7280">${c.count}건</span>`:''}
+                </button>
+            `).join('');
+        }
+
+        function showInvHome(){
+            document.getElementById('invHomeView').style.display='';
+            document.getElementById('invListView').style.display='none';
+            // 홈으로 돌아올 때 카운트 새로고침
+            renderInvHome();
+        }
+        function showInvList(catKey, title){
+            currentInvCat=catKey||'';
+            showInvUnusedOnly=false;
+            _invForceLowStock=false;
+            const t=document.getElementById('invListTitle');
+            if(t) t.textContent='📦 '+(title||'재고 실사');
+            document.getElementById('invHomeView').style.display='none';
+            document.getElementById('invListView').style.display='';
+            renderInvCatButtons();
+            renderInvParentButtons();
+            renderInvAuditList();
+        }
+        let _invForceLowStock=false;
+        function showInvListLowStock(){
+            currentInvCat='';
+            showInvUnusedOnly=false;
+            _invForceLowStock=true;
+            const t=document.getElementById('invListTitle');
+            if(t) t.textContent='⚠️ 발주 필요 품목';
+            document.getElementById('invHomeView').style.display='none';
+            document.getElementById('invListView').style.display='';
+            renderInvCatButtons();
+            renderInvParentButtons();
+            renderInvAuditList();
+        }
+        function showInvListUnused(){
+            currentInvCat='';
+            _invForceLowStock=false;
+            showInvUnusedOnly=true;
+            const t=document.getElementById('invListTitle');
+            if(t) t.textContent='😴 30일+ 미사용 품목';
+            document.getElementById('invHomeView').style.display='none';
+            document.getElementById('invListView').style.display='';
+            const btn=document.getElementById('invUnusedToggle');
+            if(btn){ btn.style.background='#7c3aed'; btn.style.color='#fff'; btn.style.borderColor='#7c3aed'; }
+            renderInvCatButtons();
+            renderInvParentButtons();
+            renderInvAuditList();
         }
 
         // ===== 발주 필요 알림 =====
