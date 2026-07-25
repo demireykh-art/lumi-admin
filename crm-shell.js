@@ -93,6 +93,9 @@
             ${tags ? `<div class="rc-tags">${tags}</div>` : ''}
         </div>`;
     }
+    window.crmEditPatient = function () {
+        if (typeof _detailPatientId !== 'undefined' && _detailPatientId && typeof openPatientModal === 'function') openPatientModal(_detailPatientId);
+    };
     window.sideShift = function (d) { if (typeof boardShift === 'function') boardShift(d); window.sideRenderList(); };
     window.sideToday = function () { if (typeof boardToday === 'function') boardToday(); window.sideRenderList(); };
 
