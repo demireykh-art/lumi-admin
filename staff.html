@@ -260,7 +260,7 @@
     <div class="app-container" id="appContainer">
         <header class="header">
             <div class="header-content">
-                <div class="header-logo">
+                <div class="header-logo" onclick="showTopHome()" style="cursor:pointer" title="홈으로">
                     <div class="header-logo-sub">THE CLINIC</div>
                     <div class="header-logo-text">LUMI</div>
                 </div>
@@ -429,6 +429,42 @@
                     <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem">Face ID 또는 지문으로 빠르게 로그인하세요.</p>
                     <button class="btn btn-gold" onclick="registerBiometric()" id="biometricRegisterBtn">생체인식 등록</button>
                     <div id="biometricStatus" style="font-size:.85rem;color:var(--text-muted);margin-top:.5rem;text-align:center"></div>
+                </div>
+            </div>
+
+            <!-- === 최상위 홈 (로고 클릭 시 진입) === -->
+            <div class="tab-content" id="tab-tophome">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title">🏥 THE CLINIC LUMI</div>
+                    <div style="display:grid;grid-template-columns:1fr;gap:1rem;margin-top:1rem">
+                        <a href="https://www.lumiclinic.co.kr" target="_blank" rel="noopener"
+                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <span style="font-size:2.5rem">🌐</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1.1rem">홈페이지</div>
+                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">lumiclinic.co.kr — 새 창으로 열림</div>
+                            </div>
+                            <span style="color:#9ca3af">↗</span>
+                        </a>
+                        <button type="button" onclick="openInventoryFromTop()"
+                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <span style="font-size:2.5rem">📦</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1.1rem;color:#1f2937">재고 관리</div>
+                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">파트별 재고 실사 · 발주 · 카탈로그</div>
+                            </div>
+                            <span style="color:#9ca3af">→</span>
+                        </button>
+                        <a href="https://lumi-staff-git-claude-hospital-crm-44b8da-lumiclinics-projects.vercel.app/crm.html" target="_blank" rel="noopener"
+                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <span style="font-size:2.5rem">💊</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1.1rem">시술 수가표</div>
+                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">CRM 시술 가격표 — 새 창으로 열림</div>
+                            </div>
+                            <span style="color:#9ca3af">↗</span>
+                        </a>
+                    </div>
                 </div>
             </div>
 
@@ -1638,12 +1674,14 @@
             }
 
             if(shared){
-                // 공용/재고 전용 계정 → 하단 네비게이션 숨김 (재고 홈 카드로 이동)
+                // 공용/재고 전용 계정 → 하단 네비게이션 숨김
                 const nav=document.getElementById('mainBottomNav');
                 if(nav) nav.style.display='none';
                 document.body.classList.add('nav-hidden');
                 await initInventoryTab();
                 await loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
+                // 최상위 홈(재고·수가표·홈페이지 3개 큰 버튼)부터 시작
+                showTopHome();
             }else{
                 const nav=document.getElementById('mainBottomNav');
                 if(nav) nav.style.display='';
@@ -4231,6 +4269,33 @@
             const cutoff=Date.now()-30*24*60*60*1000;
             return (invItems||[]).filter(i=>_getInvLastUsedTs(i)<cutoff).length;
         }
+        // ===== 최상위 홈 (로고 클릭) =====
+        function showTopHome(){
+            // 모든 tab-content 숨김 후 tab-tophome 만 노출
+            document.querySelectorAll('.tab-content').forEach(t=>{
+                t.classList.remove('active');
+                if(t.id!=='tab-tophome') t.style.display='none';
+            });
+            const top=document.getElementById('tab-tophome');
+            if(top){ top.style.display=''; top.classList.add('active'); }
+            // 하단 nav 항목 활성 표시 리셋
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+        }
+        function openInventoryFromTop(){
+            document.querySelectorAll('.tab-content').forEach(t=>{
+                t.classList.remove('active');
+                t.style.display='none';
+            });
+            const inv=document.getElementById('tab-inventory');
+            if(inv){ inv.style.display=''; inv.classList.add('active'); }
+            // 재고 탭 내 재고 홈(파트별 카드)으로 초기화
+            if(typeof showInvHome==='function') showInvHome();
+            // 하단 nav 활성 표시 (개인 계정에서 nav 보이는 경우)
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+            const navInv=document.querySelector('.nav-item[data-tab="inventory"]');
+            if(navInv) navInv.classList.add('active');
+        }
+
         // 홈 카드 액션 레지스트리 (event delegation 으로 안전하게 호출)
         window._invHomeActions=window._invHomeActions||{
             all:()=>showInvList('','전체 재고'),
