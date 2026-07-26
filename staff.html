@@ -4067,9 +4067,27 @@
                 const unitPriceCalc=Number(item.unitPrice)>0
                     ? Math.round(Number(item.unitPrice))
                     : (_pQty>0 ? Math.round(_pPrice/_pQty) : 0);
-                const unitPriceHtml=unitPriceCalc>0
-                    ? `<span style="color:#0369a1;font-weight:600">낱개당 단가: <strong>₩${unitPriceCalc.toLocaleString()}</strong></span>`
-                    : '';
+
+                // priceHistory: [최신, 이전, ...] 최대 5개
+                const priceHist=Array.isArray(item.priceHistory)?item.priceHistory:[];
+                const _fmtDate=d=>d?String(d).slice(2).replace(/-/g,'/'):'';
+                let unitPriceHtml='';
+                if(unitPriceCalc>0){
+                    const cur=priceHist[0];
+                    const curCtx = cur ? ` (${_esc(cur.vendorName||'거래처없음')}, ${_fmtDate(cur.receiveDate)})` : '';
+                    unitPriceHtml=`<span style="color:#0369a1;font-weight:600">낱개당 단가: <strong>₩${unitPriceCalc.toLocaleString()}</strong>${curCtx}</span>`;
+                    // 이전 항목이 있고 가격이 다르면 아래에 표기
+                    for(let i=1;i<priceHist.length;i++){
+                        const prev=priceHist[i];
+                        if(prev && prev.unitPrice!=null && Number(prev.unitPrice)!==unitPriceCalc){
+                            const diff=unitPriceCalc-Number(prev.unitPrice);
+                            const arrow=diff>0?'↑':'↓';
+                            const color=diff>0?'#dc2626':'#16a34a';
+                            unitPriceHtml+=`<br><span style="color:#6b7280;font-size:.72rem;margin-left:4px">이전 ₩${Number(prev.unitPrice).toLocaleString()} (${_esc(prev.vendorName||'-')}, ${_fmtDate(prev.receiveDate)}) <span style="color:${color};font-weight:600">${arrow}${Math.abs(diff).toLocaleString()}</span></span>`;
+                            break;
+                        }
+                    }
+                }
                 const buyLink=item.purchaseLink?`<a href="${item.purchaseLink}" target="_blank" style="display:inline-block;background:#f0f0f0;color:#333;font-size:.65rem;padding:2px 6px;border-radius:3px;text-decoration:none;margin-left:4px;vertical-align:middle">🛒</a>`:'';
                 const lowBg=isLow?'background:rgba(255,152,0,0.08);border-left:3px solid #ff9800':'';
 
@@ -5840,6 +5858,15 @@
             const perBox = parseFloat(document.getElementById('receivePerBox').value) || 1;
             const totalQty = boxes * perBox;
 
+            // 현재 시점의 거래처 스냅샷 (localStorage) — vendorId 있으면 이름/링크 캐시
+            let snapVendorName='';
+            try{
+                if(item.vendorId && typeof _vendorById==='function'){
+                    const v=_vendorById(item.vendorId);
+                    if(v) snapVendorName=v.name||'';
+                }
+            }catch(_){}
+
             const updateData = {
                 locations: newLocations,
                 currentStock: newTotal,
@@ -5848,16 +5875,32 @@
                 lastReceiveDate: receiveDate,
             };
             if(receiveExpiry) updateData.expiryDate = receiveExpiry;
+            let newUnitPrice=null;
             if(totalPrice > 0){
+                newUnitPrice = Math.round(totalPrice / totalQty);
                 updateData.purchasePrice = totalPrice;
                 updateData.purchaseQty = totalQty;
-                updateData.unitPrice = Math.round(totalPrice / totalQty);
+                updateData.unitPrice = newUnitPrice;
+            }
+
+            // 가격 이력 (item.priceHistory) — 최근 5개 유지
+            if(newUnitPrice != null){
+                const prevHist = Array.isArray(item.priceHistory) ? item.priceHistory.slice() : [];
+                prevHist.unshift({
+                    unitPrice: newUnitPrice,
+                    vendorId: item.vendorId || null,
+                    vendorName: snapVendorName || '',
+                    receiveDate: receiveDate,
+                    totalPrice: totalPrice,
+                    totalQty: totalQty
+                });
+                updateData.priceHistory = prevHist.slice(0, 5);
             }
 
             try{
                 await db.collection('inventory').doc(id).update(updateData);
 
-                // 입고 이력 기록
+                // 입고 이력 기록 (별도 컬렉션)
                 await db.collection('receiveHistory').add({
                     itemId: id,
                     itemName: item.name,
@@ -5866,6 +5909,9 @@
                     locations: addMap,
                     totalQty: totalAdd,
                     purchasePrice: totalPrice || null,
+                    unitPrice: newUnitPrice,
+                    vendorId: item.vendorId || null,
+                    vendorName: snapVendorName || '',
                     receivedBy: currentUser?.name || 'staff',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
