@@ -474,6 +474,17 @@
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
+                        <button type="button" onclick="showTop('notice')"
+                            style="display:flex;align-items:center;gap:1rem;padding:1.5rem;border:1px solid #e5e7eb;background:#fff;border-radius:16px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <span style="font-size:2.5rem">📢</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1.1rem;color:#1f2937">공지 <span id="topHomeNoticeCount" style="font-size:.75rem;color:#dc2626;margin-left:.35rem"></span></div>
+                                <div style="font-size:.8rem;color:#6b7280;margin-top:.15rem">할일 체크박스 · 날짜별 공지 관리</div>
+                            </div>
+                            <span style="color:#9ca3af">→</span>
+                        </button>
+                        <!-- 홈 인라인: 오늘 공지 (있을 때만 노출) -->
+                        <div id="topHomeNoticeInline" style="display:none;margin-top:-.35rem;background:#fff;border:1px solid #fef3c7;border-radius:14px;padding:.6rem .75rem;max-height:260px;overflow-y:auto"></div>
                     </div>
                 </div>
             </div>
@@ -489,6 +500,36 @@
                         <button class="btn btn-primary" style="font-size:.7rem;padding:.3rem .55rem;flex-shrink:0;white-space:nowrap" onclick="feeAddCategory()">+ 카테고리</button>
                     </div>
                     <div id="feeList" style="margin-top:.6rem;max-width:100%;overflow-x:hidden"></div>
+                </div>
+            </div>
+
+            <!-- === 공지 · 할일 뷰 === -->
+            <div class="tab-content" id="tab-notice">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTopHome()">← 홈</button>
+                        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">공지 · 할일</span>
+                    </div>
+                    <!-- 공지 추가 폼 -->
+                    <div style="margin-top:.6rem;padding:.65rem;background:#fef3c7;border:1px solid #fde68a;border-radius:10px">
+                        <div style="display:flex;gap:.35rem;margin-bottom:.4rem">
+                            <input type="date" id="noticeDateInput" style="padding:.45rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;flex-shrink:0">
+                            <input type="text" id="noticeTextInput" placeholder="공지·할일 내용 입력 후 Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();addNotice();}" style="flex:1;min-width:0;padding:.45rem .6rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
+                            <button onclick="addNotice()" class="btn btn-primary" style="padding:.45rem .8rem;font-size:.8rem;font-weight:700;white-space:nowrap;flex-shrink:0">추가</button>
+                        </div>
+                    </div>
+                    <!-- 검색 + 필터 -->
+                    <div style="margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap">
+                        <input type="text" id="noticeSearch" placeholder="🔍 검색" oninput="renderNoticeList()" style="flex:1;min-width:120px;padding:.4rem .55rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
+                        <select id="noticeFilter" onchange="renderNoticeList()" style="padding:.4rem .5rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
+                            <option value="all">전체</option>
+                            <option value="today">오늘</option>
+                            <option value="week">이번 주</option>
+                            <option value="pending">미완료만</option>
+                            <option value="done">완료만</option>
+                        </select>
+                    </div>
+                    <div id="noticeList" style="margin-top:.6rem"></div>
                 </div>
             </div>
 
@@ -4403,6 +4444,8 @@
             if(top){ top.style.display=''; top.classList.add('active'); }
             // 하단 nav 항목 활성 표시 리셋
             document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+            // 오늘 공지 인라인 갱신
+            if(typeof _renderHomeNoticeInline==='function') _renderHomeNoticeInline();
         }
         function openInventoryFromTop(){
             document.querySelectorAll('.tab-content').forEach(t=>{
@@ -4456,6 +4499,11 @@
                 await ensureConsultData();
                 if(!opts.keepPath){ _consultDraft=[]; }
                 renderConsult();
+            }else if(view==='notice'){
+                // 진입 시 오늘 날짜 기본 세팅
+                const di=document.getElementById('noticeDateInput');
+                if(di) di.value=_todayYmd();
+                renderNoticeList();
             }
         }
         function _feeBack(){
@@ -4984,6 +5032,139 @@
         }
 
         // 오더 이름 → 수가표 매칭
+        // ================================================================
+        //  공지 · 할일 (localStorage 'staff_notices_v1')
+        // ================================================================
+        const NOTICE_LS_KEY='staff_notices_v1';
+        let _notices=null;
+        function _loadNotices(){
+            if(_notices) return _notices;
+            try{ _notices=JSON.parse(localStorage.getItem(NOTICE_LS_KEY))||[]; }catch(_){ _notices=[]; }
+            return _notices;
+        }
+        function _saveNotices(){
+            try{ localStorage.setItem(NOTICE_LS_KEY,JSON.stringify(_notices||[])); }catch(_){}
+            _renderHomeNoticeInline();
+        }
+        function _todayYmd(){
+            const d=new Date();
+            return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        }
+        function _weekStartYmd(){
+            const d=new Date();
+            d.setDate(d.getDate()-d.getDay()); // 이번 주 일요일
+            return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        }
+        function _weekEndYmd(){
+            const d=new Date();
+            d.setDate(d.getDate()+(6-d.getDay()));
+            return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        }
+        function _todayNotices(){
+            const today=_todayYmd();
+            return (_loadNotices()||[]).filter(n=>n.date===today).sort((a,b)=>(a.done?1:0)-(b.done?1:0));
+        }
+        function addNotice(){
+            const dateEl=document.getElementById('noticeDateInput');
+            const textEl=document.getElementById('noticeTextInput');
+            const date=(dateEl?.value||_todayYmd());
+            const text=(textEl?.value||'').trim();
+            if(!text){ alert('공지 내용을 입력하세요.'); textEl?.focus(); return; }
+            _loadNotices();
+            _notices.push({id:_uid(),date,text,done:false,createdAt:new Date().toISOString()});
+            _saveNotices();
+            if(textEl){ textEl.value=''; textEl.focus(); }
+            renderNoticeList();
+        }
+        function toggleNoticeDone(id){
+            _loadNotices();
+            const n=_notices.find(x=>x.id===id); if(!n) return;
+            n.done=!n.done;
+            _saveNotices();
+            renderNoticeList();
+        }
+        function editNotice(id){
+            _loadNotices();
+            const n=_notices.find(x=>x.id===id); if(!n) return;
+            const t=prompt('공지 내용:',n.text); if(t==null) return;
+            n.text=t.trim()||n.text;
+            const d=prompt('날짜 (YYYY-MM-DD):',n.date); if(d==null) return;
+            n.date=d.trim()||n.date;
+            _saveNotices();
+            renderNoticeList();
+        }
+        function deleteNotice(id){
+            if(!confirm('이 공지를 삭제하시겠습니까?')) return;
+            _loadNotices();
+            _notices=_notices.filter(x=>x.id!==id);
+            _saveNotices();
+            renderNoticeList();
+        }
+        function renderNoticeList(){
+            const wrap=document.getElementById('noticeList');
+            if(!wrap) return;
+            const q=(document.getElementById('noticeSearch')?.value||'').toLowerCase().trim();
+            const filter=document.getElementById('noticeFilter')?.value||'all';
+            let list=(_loadNotices()||[]).slice();
+            if(q) list=list.filter(n=>String(n.text||'').toLowerCase().includes(q));
+            const today=_todayYmd();
+            const wStart=_weekStartYmd(), wEnd=_weekEndYmd();
+            if(filter==='today') list=list.filter(n=>n.date===today);
+            else if(filter==='week') list=list.filter(n=>n.date>=wStart&&n.date<=wEnd);
+            else if(filter==='pending') list=list.filter(n=>!n.done);
+            else if(filter==='done') list=list.filter(n=>!!n.done);
+            // 날짜 내림차순 (미래 → 과거), 완료된 것은 뒤로
+            list.sort((a,b)=>{
+                if((a.done?1:0)!==(b.done?1:0)) return (a.done?1:0)-(b.done?1:0);
+                return (b.date||'').localeCompare(a.date||'');
+            });
+            if(!list.length){
+                wrap.innerHTML='<div style="padding:1.25rem;text-align:center;color:#9ca3af;font-size:.85rem">조건에 맞는 공지가 없습니다.</div>';
+                return;
+            }
+            // 날짜별 그룹
+            const byDate={};
+            list.forEach(n=>{ (byDate[n.date]=byDate[n.date]||[]).push(n); });
+            const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+            wrap.innerHTML=dates.map(d=>{
+                const items=byDate[d].map(n=>_noticeRowHtml(n,false)).join('');
+                const label=(d===today?'오늘 · ':'')+d;
+                return `<div style="margin-bottom:.85rem">
+                    <div style="font-weight:700;font-size:.78rem;color:#4b5563;padding:.3rem .1rem;border-bottom:1px solid #e5e7eb;margin-bottom:.3rem">${_esc(label)}</div>
+                    ${items}
+                </div>`;
+            }).join('');
+        }
+        function _noticeRowHtml(n, home){
+            const done=!!n.done;
+            const strike=done?'text-decoration:line-through;color:#9ca3af':'';
+            const bg=done?'#f9fafb':'#fff';
+            const actions=home?'':`
+                <button onclick="editNotice('${n.id}')" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">수정</button>
+                <button onclick="deleteNotice('${n.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">×</button>`;
+            return `<div style="display:flex;align-items:flex-start;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:8px;background:${bg};margin-bottom:.3rem">
+                <input type="checkbox" ${done?'checked':''} onchange="toggleNoticeDone('${n.id}')" style="margin-top:.15rem;width:18px;height:18px;flex-shrink:0;cursor:pointer">
+                <div style="flex:1;min-width:0;font-size:.85rem;word-break:break-word;${strike}">${_esc(n.text)}</div>
+                <div style="display:flex;gap:.2rem;flex-shrink:0">${actions}</div>
+            </div>`;
+        }
+        function _renderHomeNoticeInline(){
+            const box=document.getElementById('topHomeNoticeInline');
+            const badge=document.getElementById('topHomeNoticeCount');
+            if(!box) return;
+            const today=_todayNotices();
+            const pending=today.filter(n=>!n.done).length;
+            if(badge) badge.textContent=today.length?`(${pending?pending+'개 남음':'완료'})`:'';
+            if(!today.length){ box.style.display='none'; return; }
+            box.style.display='';
+            box.innerHTML=
+                `<div style="font-weight:700;font-size:.78rem;color:#92400e;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center">
+                    <span>오늘 (${_todayYmd()})</span>
+                    <span style="font-weight:400;font-size:.7rem;color:#9ca3af">스크롤해서 아래까지 확인</span>
+                </div>`+
+                today.map(n=>_noticeRowHtml(n,true)).join('');
+        }
+
         // ================================================================
         //  거래처 관리 (localStorage 'staff_vendors_v1')
         // ================================================================
