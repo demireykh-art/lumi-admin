@@ -4501,13 +4501,36 @@
         }
         function saveFeeData(){ try{ localStorage.setItem(FEE_LS_KEY, JSON.stringify(_feeData)); }catch(_){ } }
 
-        // 시술별 접힘 상태 (treatment id → bool)
+        // 접힘 상태 (id → bool). category / treatment 공용 저장소
         const FEE_COLLAPSED_KEY='staff_fee_collapsed_v1';
+        const FEE_CAT_COLLAPSED_KEY='staff_fee_cat_collapsed_v1';
         let _feeCollapsed=(function(){ try{return JSON.parse(localStorage.getItem(FEE_COLLAPSED_KEY))||{}}catch(_){return {}} })();
+        let _feeCatCollapsed=(function(){ try{return JSON.parse(localStorage.getItem(FEE_CAT_COLLAPSED_KEY))||{}}catch(_){return {}} })();
         function feeToggleTreatment(tid){
             _feeCollapsed[tid]=!_feeCollapsed[tid];
             try{ localStorage.setItem(FEE_COLLAPSED_KEY,JSON.stringify(_feeCollapsed)); }catch(_){}
             renderFeeList();
+        }
+        function feeToggleCategory(cid){
+            _feeCatCollapsed[cid]=!_feeCatCollapsed[cid];
+            try{ localStorage.setItem(FEE_CAT_COLLAPSED_KEY,JSON.stringify(_feeCatCollapsed)); }catch(_){}
+            renderFeeList();
+        }
+        // 순서 이동
+        function _moveInArray(arr, idx, dir){
+            const j=idx+dir;
+            if(idx<0||idx>=arr.length||j<0||j>=arr.length) return false;
+            const tmp=arr[idx]; arr[idx]=arr[j]; arr[j]=tmp; return true;
+        }
+        function feeMoveCategory(cid, dir){
+            if(!_feeData) return;
+            const idx=_feeData.findIndex(c=>c.id===cid);
+            if(_moveInArray(_feeData, idx, dir)){ saveFeeData(); renderFeeList(); }
+        }
+        function feeMoveTreatment(cid, tid, dir){
+            const {c}=_feeFind(cid); if(!c||!Array.isArray(c.treatments)) return;
+            const idx=c.treatments.findIndex(t=>t.id===tid);
+            if(_moveInArray(c.treatments, idx, dir)){ saveFeeData(); renderFeeList(); }
         }
 
         // 상담 태그 정의 (CONSULT_SEED 의 key 와 매칭)
@@ -4554,12 +4577,13 @@
                 wrap.innerHTML='<div style="padding:1.5rem;text-align:center;color:#9ca3af">시술 데이터가 없습니다. 우측 상단 [+ 카테고리] 로 추가하세요.</div>';
                 return;
             }
-            wrap.innerHTML=cats.map(c=>{
+            wrap.innerHTML=cats.map((c,cIdx)=>{
                 const treats=(c.treatments||[]).filter(t=>{
                     if(!q) return true;
                     return (t.name||'').toLowerCase().includes(q)||(c.name||'').toLowerCase().includes(q);
                 });
-                const treatsHtml=treats.map(t=>{
+                const catCollapsed=!!_feeCatCollapsed[c.id];
+                const treatsHtml=treats.map((t,tIdx)=>{
                     const collapsed=!!_feeCollapsed[t.id];
                     const vsBody=(t.variants||[]).map(v=>{
                         const priceWon=(Number(v.price)||0)*10000;
@@ -4581,11 +4605,16 @@
                         </div>`;
                     }).join('');
                     const varCount=(t.variants||[]).length;
+                    // 시술 순서 이동: 검색 필터 있을 땐 순서 변경 위험하므로 검색 없을 때만
+                    const tUpDown = !q ? `
+                        <button onclick="feeMoveTreatment('${c.id}','${t.id}',-1)" ${tIdx===0?'disabled':''} style="background:${tIdx===0?'#f3f4f6':'#fff'};border:1px solid #d1d5db;color:${tIdx===0?'#d1d5db':'#4b5563'};padding:.1rem .3rem;border-radius:4px;font-size:.7rem;cursor:${tIdx===0?'not-allowed':'pointer'}">↑</button>
+                        <button onclick="feeMoveTreatment('${c.id}','${t.id}',1)" ${tIdx===treats.length-1?'disabled':''} style="background:${tIdx===treats.length-1?'#f3f4f6':'#fff'};border:1px solid #d1d5db;color:${tIdx===treats.length-1?'#d1d5db':'#4b5563'};padding:.1rem .3rem;border-radius:4px;font-size:.7rem;cursor:${tIdx===treats.length-1?'not-allowed':'pointer'}">↓</button>` : '';
                     return `<div style="border-top:1px solid #e5e7eb">
                         <div style="display:flex;align-items:center;gap:.35rem;padding:.5rem .6rem;background:#f9fafb;flex-wrap:wrap">
                             <button onclick="feeToggleTreatment('${t.id}')" style="background:none;border:none;font-size:.85rem;padding:0 .3rem;cursor:pointer;color:#374151;flex-shrink:0">${collapsed?'▶':'▼'}</button>
                             <div style="flex:1;min-width:0;font-weight:700;font-size:.85rem;word-break:break-word">${_esc(t.name)}${t.note?` <span style="font-weight:400;font-size:.7rem;color:#6b7280">(${_esc(t.note)})</span>`:''}<span style="font-weight:400;font-size:.68rem;color:#9ca3af;margin-left:4px">${varCount}</span></div>
                             <div style="display:flex;gap:.15rem;flex-shrink:0">
+                                ${tUpDown}
                                 <button onclick="feeAddVariant('${c.id}','${t.id}')" style="background:#eef2ff;border:1px solid #4338ca;color:#4338ca;padding:.15rem .4rem;border-radius:4px;font-size:.68rem;cursor:pointer;font-weight:600">+ 옵션</button>
                                 <button onclick="feeEditTreatment('${c.id}','${t.id}')" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.1rem .35rem;border-radius:4px;font-size:.68rem;cursor:pointer">수정</button>
                                 <button onclick="feeDeleteTreatment('${c.id}','${t.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.1rem .35rem;border-radius:4px;font-size:.68rem;cursor:pointer">×</button>
@@ -4595,16 +4624,22 @@
                     </div>`;
                 }).join('');
                 if(q&&!treatsHtml) return '';
+                const cUpDown = !q ? `
+                    <button onclick="feeMoveCategory('${c.id}',-1)" ${cIdx===0?'disabled':''} style="background:${cIdx===0?'#f3f4f6':'#fff'};border:1px solid #a5b4fc;color:${cIdx===0?'#c7d2fe':'#4338ca'};padding:.15rem .35rem;border-radius:4px;font-size:.7rem;cursor:${cIdx===0?'not-allowed':'pointer'}">↑</button>
+                    <button onclick="feeMoveCategory('${c.id}',1)" ${cIdx===cats.length-1?'disabled':''} style="background:${cIdx===cats.length-1?'#f3f4f6':'#fff'};border:1px solid #a5b4fc;color:${cIdx===cats.length-1?'#c7d2fe':'#4338ca'};padding:.15rem .35rem;border-radius:4px;font-size:.7rem;cursor:${cIdx===cats.length-1?'not-allowed':'pointer'}">↓</button>` : '';
+                const treatCount=(c.treatments||[]).length;
                 return `<div style="margin-bottom:.85rem;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#fff">
                     <div style="background:#eef2ff;padding:.5rem .75rem;font-weight:700;color:#4338ca;display:flex;align-items:center;gap:.3rem;flex-wrap:wrap">
-                        <div style="flex:1;min-width:0;word-break:break-word">${_esc(c.name)}${c.note?` <span style="font-weight:400;font-size:.7rem;color:#6b7280">${_esc(c.note)}</span>`:''}</div>
+                        <button onclick="feeToggleCategory('${c.id}')" style="background:none;border:none;font-size:.9rem;padding:0 .25rem;cursor:pointer;color:#4338ca;flex-shrink:0">${catCollapsed?'▶':'▼'}</button>
+                        <div style="flex:1;min-width:0;word-break:break-word">${_esc(c.name)}${c.note?` <span style="font-weight:400;font-size:.7rem;color:#6b7280">${_esc(c.note)}</span>`:''}<span style="font-weight:400;font-size:.68rem;color:#9ca3af;margin-left:4px">${treatCount}</span></div>
                         <div style="display:flex;gap:.15rem;flex-shrink:0">
+                            ${cUpDown}
                             <button onclick="feeAddTreatment('${c.id}')" style="background:#4338ca;color:#fff;border:none;padding:.2rem .55rem;border-radius:4px;font-size:.7rem;cursor:pointer;font-weight:600">+ 시술</button>
                             <button onclick="feeEditCategory('${c.id}')" style="background:none;border:1px solid #4338ca;color:#4338ca;padding:.15rem .4rem;border-radius:4px;font-size:.7rem;cursor:pointer">수정</button>
                             <button onclick="feeDeleteCategory('${c.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .4rem;border-radius:4px;font-size:.7rem;cursor:pointer">×</button>
                         </div>
                     </div>
-                    ${treatsHtml||'<div style="padding:1rem;text-align:center;color:#9ca3af;font-size:.85rem">시술이 없습니다.</div>'}
+                    ${catCollapsed?'':(treatsHtml||'<div style="padding:1rem;text-align:center;color:#9ca3af;font-size:.85rem">시술이 없습니다.</div>')}
                 </div>`;
             }).filter(Boolean).join('')||'<div style="padding:1.5rem;text-align:center;color:#9ca3af">검색 결과가 없습니다.</div>';
         }
