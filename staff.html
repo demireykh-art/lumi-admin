@@ -4454,7 +4454,7 @@
                 renderFeeList();
             }else if(view==='consult'){
                 await ensureConsultData();
-                if(!opts.keepPath) _consultPath=[];
+                if(!opts.keepPath){ _consultDraft=[]; }
                 renderConsult();
             }
         }
@@ -4467,8 +4467,11 @@
             }
         }
         function _consultBack(){
-            if(_consultPath.length>0){ _consultPath.pop(); renderConsult(); }
-            else showTopHome();
+            if(_consultDraft && _consultDraft.length>0){
+                _consultDraft.pop(); renderConsult();
+            } else {
+                showTopHome();
+            }
         }
 
         // ---- 시술 수가표: seed + localStorage ----
@@ -4717,252 +4720,267 @@
         }
 
         // ---- 상담 트리 seed ----
-        const CONSULT_SEED={
-            skin:{label:'피부 퀄리티', color:'#a21caf', issues:{
-                '색소':{plans:['리팟','피코','BBL','실펌','어븀'], groups:[
-                    {name:'검버섯·흑자', orders:[{name:'검버섯 5mm 1회'},{name:'흑자 5mm 기준'}]},
-                    {name:'BBL', orders:[{name:'BBL HERO 색소 1회'},{name:'BBL HERO 색소 5회'}]},
-                    {name:'피코', orders:[{name:'피코 눈썹문신 1회'}]}
-                ]},
-                '결':{plans:['라라필','토닝','실펌'], groups:[
-                    {name:'토닝', orders:[{name:'토닝+재생관리 1회'},{name:'BB 토닝 1회'}]},
-                    {name:'라라필', orders:[{name:'라라필+토닝+LDM 1회'}]}
-                ]},
-                '주름':{plans:['보톡스','쥬브젠','파인샷'], groups:[
-                    {name:'보톡스', orders:[{name:'이마 국산 4만'},{name:'이마/미간/눈가 코어톡스 6만'}]},
-                    {name:'파인샷', orders:[{name:'파인샷 1회 40만'}]},
-                    {name:'쥬브젠', orders:[{name:'이마 주름 쥬브젠 80만'}]}
-                ]},
-                '건조':{plans:['리쥬란','콜라겐','스킨부스터'], groups:[
-                    {name:'리쥬란', orders:[{name:'리쥬란HB 1cc'},{name:'리쥬란HB 4cc 이벤트 49만'}]},
-                    {name:'콜라겐', orders:[{name:'콜라겐 1cc 19만'},{name:'콜라겐 1vial 50만'}]}
-                ]},
-                '모공':{plans:['실펌','모공핏','레노펌','엑소좀'], groups:[
-                    {name:'실펌', orders:[{name:'실펌 항염 1회'}]},
-                    {name:'모공핏', orders:[{name:'모공핏(셀라 블레싱) 1회 49만'}]},
-                    {name:'엑소좀·레노펌', orders:[{name:'엑소좀 1회 50만'},{name:'레노펌 1세트 80만'}]}
-                ]},
-                '여드름':{plans:['클리어밸런스','라라필','GA','압출'], groups:[
-                    {name:'클리어밸런스', orders:[{name:'클리어밸런스 1세트 80만'}]},
-                    {name:'라라필', orders:[{name:'라라필+압출+네오빔 1회 19만'}]},
-                    {name:'기타', orders:[{name:'GA+압출 12만'},{name:'줄기세포 MCT 1회 50만'}]}
-                ]},
-                '돌출':{plans:['CO2','피지선증식증','한관종'], groups:[
-                    {name:'점 제거', orders:[{name:'보통점 개당 2만'},{name:'돌출점 ~2mm 5만'},{name:'돌출점 5mm~ 10만'}]},
-                    {name:'피지선/한관종', orders:[{name:'피지선증식증 최초 1개 10만'},{name:'한관종 개당 3만'}]}
-                ]}
-            }},
-            saggy:{label:'쳐짐', color:'#7c2d12', issues:{
-                '심부볼':{plans:['덴서티','탄력실','파인샷'], groups:[
-                    {name:'덴서티', orders:[{name:'덴서티 100샷'},{name:'덴서티+파인샷 이벤트'}]},
-                    {name:'파인샷', orders:[{name:'파인샷 3회 100만'}]}
-                ]},
-                '팔자':{plans:['탄력실','파인샷','실리프팅'], groups:[
-                    {name:'실리프팅', orders:[{name:'실리프팅(원더트리플) 1줄 15만'},{name:'코그실 1줄 10만'}]},
-                    {name:'파인샷', orders:[{name:'파인샷 1회 40만'}]}
-                ]},
-                '눈두덩이':{plans:['아이올리지오','슈링크'], groups:[
-                    {name:'아이올리지오', orders:[{name:'아이올리지오 100샷 13만'},{name:'아이올리지오 300샷 30만'}]},
-                    {name:'슈링크', orders:[{name:'슈링크 300샷 15만'}]}
-                ]},
-                '전체 리프팅':{plans:['BBL HERO','파인샷','실리프팅'], groups:[
-                    {name:'BBL HERO', orders:[{name:'BBL HERO 타이트닝 1회 40만'},{name:'BBL HERO 안티에이징+타이트닝 1회 70만'}]},
-                    {name:'보톡스', orders:[{name:'턱라인 리프팅 보톡스 코어톡스 25만'}]}
-                ]}
-            }},
-            hollow:{label:'꺼짐', color:'#c2410c', issues:{
-                '눈밑':{plans:['리쥬오볼륨','필러'], groups:[{name:'필러', orders:[{name:'아말리안 1cc 32만'},{name:'팔자/입술/애교 이벤트 25만'}]}]},
-                '팔자':{plans:['필러','쥬브젠'], groups:[{name:'필러', orders:[{name:'아말리안 1cc 32만'}]},{name:'쥬브젠', orders:[{name:'팔자 주름 쥬브젠 80만'}]}]},
-                '마리오넷':{plans:['필러','쥬브젠'], groups:[{name:'쥬브젠', orders:[{name:'이마/미간/마리오넷 쥬브젠 60만'}]},{name:'필러', orders:[{name:'아말리안 1cc 32만'}]}]},
-                '이마':{plans:['필러','쥬브젠'], groups:[{name:'쥬브젠', orders:[{name:'이마 주름 쥬브젠 80만'},{name:'목/이마 주름 최초 1줄 80만'}]}]},
-                '입술':{plans:['필러'], groups:[{name:'필러', orders:[{name:'입술 필러 이벤트 25만'},{name:'아말리안 1cc 32만'}]}]},
-                '코':{plans:['필러'], groups:[{name:'필러', orders:[{name:'아말리안 1cc 32만'},{name:'아말리안 추가 시 20만'}]}]}
-            }}
-        };
-        async function ensureConsultData(){
-            if(_consultData) return _consultData;
-            const saved=localStorage.getItem(CONSULT_LS_KEY);
-            if(saved){ try{ _consultData=JSON.parse(saved); return _consultData; }catch(_){} }
-            _consultData=JSON.parse(JSON.stringify(CONSULT_SEED));
-            saveConsultData();
-            return _consultData;
-        }
-        function saveConsultData(){ try{ localStorage.setItem(CONSULT_LS_KEY, JSON.stringify(_consultData)); }catch(_){ } }
+        // ================================================================
+        //  상담 v3 — N-depth 중첩 트리 + 저장 목록 (드롭다운 카스케이드)
+        // ================================================================
+        const CONSULT_TREE_KEY='staff_consult_tree_v3';
+        const CONSULT_SAVED_KEY='staff_consult_saved_v1';
+        // 마취연고 옵션 (자유 편집)
+        const ANESTHESIA_KEY='staff_anesthesia_opts_v1';
+        const ANESTHESIA_SEED=['없음','리도카인 크림','웰리도카인','라파즐리 크림','EMLA'];
 
-        let _consultPath=[]; // [] | [catKey] | [catKey, issueName]
+        // seed: leaf = null. 하위가 있으면 객체.
+        const CONSULT_SEED_V3={
+            '피부퀄리티':{
+                '색소':{
+                    '흑자':{ '리팟':{ '5mm 기준 30만원':null } },
+                    '검버섯':{
+                        'co2':{ '~2mm 5만원':null, '5mm~ 10만원':null },
+                        '어븀':{ '~2mm 5만원':null, '5mm~ 10만원':null }
+                    },
+                    '기미':{ '세부오더':{ '회차별 프로그램 상세':null } },
+                    '잡티':{ 'BBL':{ '세부오더':null }, '피코':{ '세부오더':null } },
+                    '오타모반':{ '피코':{ '세부오더':null } },
+                    '점(보통점)':{ '어븀':{ '세부오더':null } }
+                },
+                '톤':{
+                    '칙칙함':{
+                        'BBL':{ '라라BBL':null, 'BB토닝':{ '1회 30만원':null, '5회 120만원':null } },
+                        '피코':{
+                            '피코토닝+LDM재생관리':{ '1회 17만원':null, '10회 130만원':null },
+                            '라라필+토닝+LDM재생관리':{ '1회 17만원':null, '10회 130만원':null }
+                        },
+                        '라비앙':{ '라비앙':{ '1회 20만원':null, '3회 49만원':null } }
+                    }
+                },
+                '피부결·건조':{
+                    '스킨부스터':{
+                        '리쥬란':{ '세부오더':null },
+                        '리투오물광':{ '세부오더':null },
+                        '엑소좀':{ '세부오더':null }
+                    }
+                },
+                '모공·피부결':{
+                    '모공핏':{ '실펌':{ '세부오더':null, '회차별 프로그램 상세':null } }
+                },
+                '주름':{
+                    '큰주름':{
+                        '쥬브젠':{ '세부오더':null },
+                        '실리프팅':{ '세부오더':null },
+                        '리투오볼륨':{ '세부오더':null }
+                    },
+                    '잔주름':{ '보톡스':{}, '리투오PN':{} }
+                },
+                '여드름':{
+                    '클리어밸런스':{ '세부오더':{ '회차별 프로그램 상세':null } }
+                },
+                '돌출':{
+                    '편평사마귀':{ '세부오더':null },
+                    '피지선증식증':{ '세부오더':null },
+                    '돌출점':{ '세부오더':null },
+                    '한관종':{ '세부오더':null },
+                    '모낭상피종':{ '세부오더':null },
+                    '피지선모반':{ '세부오더':null },
+                    '낭종':{ '세부오더':null }
+                }
+            }
+        };
+
+        let _consultTree=null;
+        let _consultSaved=[];
+        let _consultAnesth=null;
+        let _consultDraft=[]; // 현재 작성 중 path (문자열 배열)
+        let _consultDraftAnesth='없음';
+
+        async function ensureConsultData(){
+            if(!_consultTree){
+                try{ _consultTree=JSON.parse(localStorage.getItem(CONSULT_TREE_KEY)); }catch(_){}
+                if(!_consultTree) _consultTree=JSON.parse(JSON.stringify(CONSULT_SEED_V3));
+                _saveTree();
+            }
+            if(!_consultAnesth){
+                try{ _consultAnesth=JSON.parse(localStorage.getItem(ANESTHESIA_KEY)); }catch(_){}
+                if(!Array.isArray(_consultAnesth)||!_consultAnesth.length) _consultAnesth=ANESTHESIA_SEED.slice();
+                _saveAnesth();
+            }
+            try{ _consultSaved=JSON.parse(localStorage.getItem(CONSULT_SAVED_KEY))||[]; }catch(_){ _consultSaved=[]; }
+        }
+        function _saveTree(){ try{ localStorage.setItem(CONSULT_TREE_KEY,JSON.stringify(_consultTree||{})); }catch(_){} }
+        function _saveSaved(){ try{ localStorage.setItem(CONSULT_SAVED_KEY,JSON.stringify(_consultSaved||[])); }catch(_){} }
+        function _saveAnesth(){ try{ localStorage.setItem(ANESTHESIA_KEY,JSON.stringify(_consultAnesth||[])); }catch(_){} }
+
+        // 트리 특정 path 의 하위 객체 반환
+        function _consultNodeAt(path){
+            let node=_consultTree;
+            for(const p of (path||[])){
+                if(node && typeof node==='object' && node[p]!==undefined){
+                    node=node[p];
+                } else return null;
+            }
+            return node;
+        }
+        function _consultChildrenAt(path){
+            const node=_consultNodeAt(path);
+            if(node && typeof node==='object') return Object.keys(node);
+            return [];
+        }
+        // 새 자식 추가 (기존 leaf 였다면 객체로 승격)
+        function _consultAddChild(path, name){
+            let parent=_consultTree;
+            for(let i=0;i<path.length;i++){
+                const p=path[i];
+                if(parent[p]==null||typeof parent[p]!=='object'){ parent[p]={}; }
+                parent=parent[p];
+            }
+            if(parent[name]===undefined){ parent[name]={}; _saveTree(); return true; }
+            return false;
+        }
+
+        const LEVEL_LABELS=['문제 카테고리','세부 문제','세부 진단','Plan / Tool','세부 오더'];
+        function _levelLabel(depth){ return LEVEL_LABELS[depth]||('레벨 '+(depth+1)); }
+
         function renderConsult(){
             const body=document.getElementById('consultBody');
             const bc=document.getElementById('consultBreadcrumb');
             if(!body) return;
-            const parts=['상담'];
-            if(_consultPath[0]) parts.push(_consultData[_consultPath[0]]?.label||'');
-            if(_consultPath[1]) parts.push(_consultPath[1]);
-            if(bc) bc.textContent=parts.filter(Boolean).join(' > ');
+            if(bc) bc.textContent='상담';
 
-            // L0: 3개 카테고리 (편집 X, 고정)
-            if(_consultPath.length===0){
-                body.innerHTML=Object.entries(_consultData).map(([key,c])=>`
-                    <button onclick="_consultGo('${key}')" style="width:100%;display:flex;align-items:center;gap:1rem;padding:1.25rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;margin-bottom:.6rem;box-shadow:0 1px 2px rgba(0,0,0,.04)">
-                        <div style="flex:1">
-                            <div style="font-weight:700;font-size:1.05rem;color:${c.color}">${_esc(c.label)}</div>
-                            <div style="font-size:.75rem;color:#6b7280;margin-top:.15rem">${Object.keys(c.issues||{}).length}개 세부 문제</div>
-                        </div>
-                        <span style="color:#9ca3af">→</span>
-                    </button>
-                `).join('');
-                return;
-            }
-
-            // L1: 세부 문제
-            if(_consultPath.length===1){
-                const cat=_consultData[_consultPath[0]];
-                if(!cat){ _consultPath=[]; return renderConsult(); }
-                const chips=Object.keys(cat.issues||{}).map(name=>`
-                    <div style="position:relative;display:inline-flex;align-items:center;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:0;overflow:hidden">
-                        <button onclick="_consultGo('${_consultPath[0]}','${_esc(name)}')" style="padding:.7rem 1rem;background:none;border:none;font-weight:600;font-size:.9rem;color:${cat.color};cursor:pointer">${_esc(name)}</button>
-                        <button onclick="consultEditIssue('${_consultPath[0]}','${_esc(name)}')" style="background:none;border:none;color:#9ca3af;padding:.5rem .35rem;cursor:pointer;font-size:.7rem;border-left:1px solid #f3f4f6">✎</button>
-                        <button onclick="consultDeleteIssue('${_consultPath[0]}','${_esc(name)}')" style="background:none;border:none;color:#ef4444;padding:.5rem .55rem;cursor:pointer;font-size:.75rem;border-left:1px solid #f3f4f6">×</button>
-                    </div>
-                `).join('');
-                body.innerHTML=`
-                    <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">${chips}</div>
-                    <button onclick="consultAddIssue('${_consultPath[0]}')" style="padding:.5rem .95rem;background:${cat.color};color:#fff;border:none;border-radius:10px;font-weight:600;font-size:.85rem;cursor:pointer">+ 세부 문제 추가</button>
-                `;
-                return;
-            }
-
-            // L2: plans + orderGroups
-            const cat=_consultData[_consultPath[0]];
-            const issue=cat?.issues[_consultPath[1]];
-            if(!issue){ _consultPath=[_consultPath[0]]; return renderConsult(); }
-            const plans=(issue.plans||[]).map((p,i)=>`
-                <span style="display:inline-flex;align-items:center;background:#eef2ff;color:#4338ca;border-radius:14px;padding:.25rem .35rem .25rem .8rem;font-weight:600;font-size:.85rem;gap:.3rem">
-                    ${_esc(p)}
-                    <button onclick="consultDeletePlan(${i})" style="background:none;border:none;color:#4338ca;cursor:pointer;padding:.1rem .3rem;font-size:.7rem;border-radius:8px">×</button>
-                </span>
-            `).join('');
-            const groupsHtml=(issue.groups||[]).map((g,gi)=>{
-                const ordersHtml=(g.orders||[]).map((o,oi)=>{
-                    const matched=_findFeeVariantByOrderName(o.name);
-                    return `<div style="padding:.55rem .75rem;border:1px solid #e5e7eb;border-radius:8px;background:#fff;display:flex;justify-content:space-between;align-items:center;gap:.4rem;margin-bottom:.35rem">
-                        <span style="font-size:.85rem;color:#1f2937;flex:1;min-width:0">${_esc(o.name)}${matched?` <span style="font-size:.7rem;color:#16a34a;font-weight:600">· ${matched.price}만</span>`:''}</span>
-                        <span style="display:flex;gap:.25rem;flex-shrink:0">
-                            <button onclick="consultOpenFee('${_esc(o.name).replace(/'/g,"\\'")}')" style="background:${matched?'#3b82f6':'#f59e0b'};color:#fff;border:none;padding:.25rem .55rem;border-radius:5px;font-size:.7rem;cursor:pointer;white-space:nowrap">${matched?'수가표':'수가표 만들기'}</button>
-                            <button onclick="consultEditOrder(${gi},${oi})" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.2rem .45rem;border-radius:5px;font-size:.7rem;cursor:pointer">수정</button>
-                            <button onclick="consultDeleteOrder(${gi},${oi})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.2rem .45rem;border-radius:5px;font-size:.7rem;cursor:pointer">×</button>
-                        </span>
-                    </div>`;
-                }).join('');
-                return `<div style="margin-bottom:.85rem;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">
-                    <div style="background:#f3f4f6;padding:.5rem .75rem;font-weight:700;font-size:.85rem;display:flex;justify-content:space-between;align-items:center;gap:.4rem">
-                        <span>${_esc(g.name)}</span>
-                        <span style="display:flex;gap:.2rem">
-                            <button onclick="consultAddOrder(${gi})" style="background:#4338ca;color:#fff;border:none;padding:.15rem .5rem;border-radius:4px;font-size:.7rem;cursor:pointer">+ 오더</button>
-                            <button onclick="consultEditGroup(${gi})" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;cursor:pointer">수정</button>
-                            <button onclick="consultDeleteGroup(${gi})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;cursor:pointer">×</button>
-                        </span>
-                    </div>
-                    <div style="padding:.5rem .5rem 0">${ordersHtml||'<div style="padding:.5rem;font-size:.78rem;color:#9ca3af;text-align:center">오더 없음</div>'}</div>
+            // === 저장된 상담 리스트 (상단) ===
+            const savedHtml=(_consultSaved||[]).map((s,idx)=>{
+                const pathText=(s.path||[]).map(_esc).join(' > ');
+                const anesth=s.anesthesia&&s.anesthesia!=='없음'?`<span style="display:inline-block;background:#fce7f3;color:#9d174d;font-size:.65rem;padding:1px 6px;border-radius:8px;margin-left:.35rem">마취 ${_esc(s.anesthesia)}</span>`:'';
+                return `<div style="display:flex;align-items:center;gap:.4rem;padding:.55rem .7rem;background:#fff;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:.35rem">
+                    <div style="flex:1;min-width:0;font-size:.85rem;color:#1f2937;word-break:break-word">${pathText||'-'}${anesth}</div>
+                    <button onclick="consultRemoveSaved(${idx})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer;flex-shrink:0">×</button>
                 </div>`;
             }).join('');
-            body.innerHTML=`
-                <div style="margin-bottom:1rem">
-                    <div style="font-weight:700;font-size:.85rem;color:#374151;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center">
-                        <span>추천 Plan</span>
-                        <button onclick="consultAddPlan()" style="background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;padding:.15rem .55rem;border-radius:5px;font-size:.7rem;font-weight:600;cursor:pointer">+ Plan</button>
-                    </div>
-                    <div style="display:flex;flex-wrap:wrap;gap:.3rem">${plans||'<span style="font-size:.78rem;color:#9ca3af">Plan 없음</span>'}</div>
+            const savedBlock=`<div style="margin-bottom:1rem">
+                <div style="font-weight:700;font-size:.85rem;color:#374151;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center">
+                    <span>선택된 오더 (${(_consultSaved||[]).length})</span>
+                    ${(_consultSaved||[]).length>0?`<button onclick="consultClearAllSaved()" style="background:none;border:1px solid #d1d5db;color:#6b7280;padding:.15rem .5rem;border-radius:4px;font-size:.7rem;cursor:pointer">전체 지우기</button>`:''}
                 </div>
-                <div>
-                    <div style="font-weight:700;font-size:.85rem;color:#374151;margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center">
-                        <span>세부 오더</span>
-                        <button onclick="consultAddGroup()" style="background:#4338ca;color:#fff;border:none;padding:.2rem .6rem;border-radius:5px;font-size:.72rem;font-weight:600;cursor:pointer">+ 오더 카테고리</button>
-                    </div>
-                    ${groupsHtml||'<div style="padding:.75rem;text-align:center;color:#9ca3af;font-size:.85rem">카테고리 없음</div>'}
+                ${savedHtml||'<div style="padding:.75rem;text-align:center;color:#9ca3af;font-size:.8rem;background:#f9fafb;border:1px dashed #e5e7eb;border-radius:8px">아직 저장된 오더가 없습니다. 아래에서 문제·시술을 선택 후 저장하세요.</div>'}
+            </div>`;
+
+            // === 카스케이드 드롭다운 (하단) ===
+            const draft=_consultDraft||[];
+            const selectsHtml=[];
+            for(let depth=0; depth<=draft.length; depth++){
+                const parentPath=draft.slice(0,depth);
+                const options=_consultChildrenAt(parentPath);
+                // 상위 노드가 leaf 상태면 더 이상 렌더 X (options=[])
+                if(depth>0 && !options.length){
+                    // 마지막 depth 도달 (leaf) — 저장 가능 상태
+                    break;
+                }
+                const currentVal=draft[depth]||'';
+                const optionsHtml=options.map(o=>`<option value="${_esc(o)}"></option>`).join('');
+                selectsHtml.push(`
+                    <div style="margin-bottom:.55rem">
+                        <label style="display:block;font-size:.72rem;color:#6b7280;margin-bottom:.15rem;font-weight:600">${_esc(_levelLabel(depth))}</label>
+                        <div style="display:flex;gap:.3rem">
+                            <input type="text" list="consultDL_${depth}"
+                                value="${_esc(currentVal)}"
+                                placeholder="선택 또는 새로 입력 후 Enter"
+                                onkeydown="if(event.key==='Enter'){event.preventDefault();consultOnLevelSelect(${depth},this.value);}"
+                                onchange="consultOnLevelSelect(${depth},this.value)"
+                                style="flex:1;min-width:0;padding:.5rem .6rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
+                            <datalist id="consultDL_${depth}">${optionsHtml}</datalist>
+                            ${currentVal?`<button onclick="consultClearFrom(${depth})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.3rem .55rem;border-radius:6px;font-size:.7rem;cursor:pointer;white-space:nowrap;flex-shrink:0">지우기</button>`:''}
+                        </div>
+                    </div>`);
+            }
+            // 저장 버튼: draft 가 있고 leaf 에 도달한 경우 활성
+            const leafReached = draft.length>0 && (_consultChildrenAt(draft).length===0);
+            const anesthOpts=(_consultAnesth||[]).map(o=>`<option value="${_esc(o)}">${_esc(o)}</option>`).join('');
+            const draftBlock=`<div style="border:1px solid #e5e7eb;border-radius:10px;padding:.75rem;background:#fafbfc">
+                <div style="font-weight:700;font-size:.85rem;color:#4338ca;margin-bottom:.6rem;display:flex;justify-content:space-between;align-items:center">
+                    <span>새 오더 선택</span>
+                    ${draft.length?`<button onclick="consultResetDraft()" style="background:none;border:1px solid #d1d5db;color:#6b7280;padding:.15rem .5rem;border-radius:4px;font-size:.7rem;cursor:pointer">처음부터</button>`:''}
                 </div>
-            `;
-        }
-        function _consultGo(cat, issue){
-            _consultPath=issue?[cat, issue]:[cat];
-            renderConsult();
+                ${selectsHtml.join('')}
+                <div style="margin-top:.4rem;padding-top:.55rem;border-top:1px dashed #e5e7eb">
+                    <label style="display:block;font-size:.72rem;color:#6b7280;margin-bottom:.15rem;font-weight:600">마취연고 옵션</label>
+                    <div style="display:flex;gap:.3rem">
+                        <select id="consultDraftAnesth" onchange="_consultDraftAnesth=this.value" style="flex:1;padding:.45rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
+                            ${anesthOpts}
+                        </select>
+                        <button onclick="consultAddAnesthOption()" style="background:none;border:1px solid #a5b4fc;color:#4338ca;padding:.3rem .55rem;border-radius:6px;font-size:.7rem;cursor:pointer;white-space:nowrap;flex-shrink:0">+ 마취</button>
+                    </div>
+                </div>
+                <button onclick="consultSaveDraft()" ${draft.length===0?'disabled':''} style="width:100%;margin-top:.75rem;padding:.65rem;background:${draft.length===0?'#e5e7eb':'#4338ca'};color:${draft.length===0?'#9ca3af':'#fff'};border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:${draft.length===0?'not-allowed':'pointer'}">
+                    ${leafReached?'선택 완료 · 저장':`현재 선택 저장 (${draft.length}단계)`}
+                </button>
+            </div>`;
+
+            body.innerHTML=savedBlock+draftBlock;
+            // 마취연고 선택값 복원
+            const anesEl=document.getElementById('consultDraftAnesth');
+            if(anesEl) anesEl.value=_consultDraftAnesth||'없음';
         }
 
-        // ---- 상담 CRUD ----
-        function consultAddIssue(catKey){
-            const name=prompt('세부 문제 이름:'); if(!name) return;
-            const cat=_consultData[catKey]; if(!cat) return;
-            cat.issues=cat.issues||{};
-            if(cat.issues[name.trim()]){ alert('이미 있는 이름입니다.'); return; }
-            cat.issues[name.trim()]={plans:[],groups:[]};
-            saveConsultData(); renderConsult();
+        // 특정 depth 에서 선택/입력한 값 처리
+        function consultOnLevelSelect(depth,val){
+            const v=String(val||'').trim();
+            if(!v){
+                // 값 지움 → 이 depth 이후 모두 제거
+                _consultDraft=_consultDraft.slice(0,depth);
+                renderConsult();
+                return;
+            }
+            // 상위 path 아래 자식 목록 확인
+            const parentPath=_consultDraft.slice(0,depth);
+            const children=_consultChildrenAt(parentPath);
+            const isNew=!children.includes(v);
+            if(isNew){
+                if(!confirm(`"${v}" 항목이 없습니다. 새로 추가할까요?`)){
+                    // 취소 → 값 원복
+                    renderConsult();
+                    return;
+                }
+                _consultAddChild(parentPath, v);
+            }
+            _consultDraft=_consultDraft.slice(0,depth);
+            _consultDraft.push(v);
+            renderConsult();
         }
-        function consultEditIssue(catKey, oldName){
-            const name=prompt('세부 문제 이름:',oldName); if(name==null||name.trim()===oldName) return;
-            const cat=_consultData[catKey]; if(!cat) return;
-            if(cat.issues[name.trim()]){ alert('이미 있는 이름입니다.'); return; }
-            cat.issues[name.trim()]=cat.issues[oldName];
-            delete cat.issues[oldName];
-            saveConsultData(); renderConsult();
+        function consultClearFrom(depth){
+            _consultDraft=_consultDraft.slice(0,depth);
+            renderConsult();
         }
-        function consultDeleteIssue(catKey, name){
-            if(!confirm(`"${name}" 삭제?`)) return;
-            const cat=_consultData[catKey]; if(!cat) return;
-            delete cat.issues[name];
-            saveConsultData(); renderConsult();
+        function consultResetDraft(){
+            _consultDraft=[]; renderConsult();
         }
-        function _curIssue(){
-            return _consultData[_consultPath[0]]?.issues[_consultPath[1]];
+        function consultSaveDraft(){
+            if(!_consultDraft.length){ alert('선택된 항목이 없습니다.'); return; }
+            _consultSaved=_consultSaved||[];
+            _consultSaved.push({
+                id:_uid(),
+                path:_consultDraft.slice(),
+                anesthesia:_consultDraftAnesth||'없음',
+                savedAt:new Date().toISOString()
+            });
+            _saveSaved();
+            // 새 오더 위해 초기화
+            _consultDraft=[];
+            renderConsult();
         }
-        function consultAddPlan(){
-            const p=prompt('Plan 이름:'); if(!p) return;
-            const issue=_curIssue(); if(!issue) return;
-            issue.plans=issue.plans||[];
-            issue.plans.push(p.trim());
-            saveConsultData(); renderConsult();
+        function consultRemoveSaved(idx){
+            if(!confirm('이 항목을 목록에서 지울까요?')) return;
+            _consultSaved.splice(idx,1); _saveSaved(); renderConsult();
         }
-        function consultDeletePlan(idx){
-            const issue=_curIssue(); if(!issue) return;
-            issue.plans.splice(idx,1); saveConsultData(); renderConsult();
+        function consultClearAllSaved(){
+            if(!confirm('저장된 오더 전체를 지울까요?')) return;
+            _consultSaved=[]; _saveSaved(); renderConsult();
         }
-        function consultAddGroup(){
-            const name=prompt('오더 카테고리 이름:'); if(!name) return;
-            const issue=_curIssue(); if(!issue) return;
-            issue.groups=issue.groups||[];
-            issue.groups.push({name:name.trim(),orders:[]});
-            saveConsultData(); renderConsult();
-        }
-        function consultEditGroup(gi){
-            const issue=_curIssue(); if(!issue) return;
-            const g=issue.groups[gi]; if(!g) return;
-            const name=prompt('카테고리 이름:',g.name); if(name==null) return;
-            g.name=name.trim()||g.name;
-            saveConsultData(); renderConsult();
-        }
-        function consultDeleteGroup(gi){
-            const issue=_curIssue(); if(!issue) return;
-            const g=issue.groups[gi]; if(!g) return;
-            if(!confirm(`카테고리 "${g.name}" 삭제? (하위 오더 모두 삭제)`)) return;
-            issue.groups.splice(gi,1); saveConsultData(); renderConsult();
-        }
-        function consultAddOrder(gi){
-            const name=prompt('오더 이름 (예: BBL HERO 색소 1회):'); if(!name) return;
-            const issue=_curIssue(); if(!issue) return;
-            issue.groups[gi].orders=issue.groups[gi].orders||[];
-            issue.groups[gi].orders.push({name:name.trim()});
-            saveConsultData(); renderConsult();
-        }
-        function consultEditOrder(gi,oi){
-            const issue=_curIssue(); if(!issue) return;
-            const o=issue.groups[gi].orders[oi]; if(!o) return;
-            const name=prompt('오더 이름:',o.name); if(name==null) return;
-            o.name=name.trim()||o.name;
-            saveConsultData(); renderConsult();
-        }
-        function consultDeleteOrder(gi,oi){
-            const issue=_curIssue(); if(!issue) return;
-            const o=issue.groups[gi].orders[oi]; if(!o) return;
-            if(!confirm(`오더 "${o.name}" 삭제?`)) return;
-            issue.groups[gi].orders.splice(oi,1); saveConsultData(); renderConsult();
+        function consultAddAnesthOption(){
+            const v=prompt('추가할 마취연고 이름:'); if(!v) return;
+            _consultAnesth=_consultAnesth||[];
+            if(!_consultAnesth.includes(v.trim())){
+                _consultAnesth.push(v.trim()); _saveAnesth();
+            }
+            _consultDraftAnesth=v.trim();
+            renderConsult();
         }
 
         // 오더 이름 → 수가표 매칭
