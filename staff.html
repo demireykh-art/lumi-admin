@@ -512,10 +512,16 @@
                     </div>
                     <!-- 공지 추가 폼 -->
                     <div style="margin-top:.6rem;padding:.65rem;background:#fef3c7;border:1px solid #fde68a;border-radius:10px">
-                        <div style="display:flex;gap:.35rem;margin-bottom:.4rem">
-                            <input type="date" id="noticeDateInput" style="padding:.45rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;flex-shrink:0">
-                            <input type="text" id="noticeTextInput" placeholder="공지·할일 내용 입력 후 Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();addNotice();}" style="flex:1;min-width:0;padding:.45rem .6rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
-                            <button onclick="addNotice()" class="btn btn-primary" style="padding:.45rem .8rem;font-size:.8rem;font-weight:700;white-space:nowrap;flex-shrink:0">추가</button>
+                        <div style="display:flex;gap:.35rem;margin-bottom:.4rem;align-items:center">
+                            <label style="font-size:.72rem;color:#92400e;font-weight:600;flex-shrink:0">날짜</label>
+                            <input type="date" id="noticeDateInput" style="padding:.4rem .5rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;flex:1;min-width:0;box-sizing:border-box">
+                        </div>
+                        <textarea id="noticeTextInput" placeholder="공지·할일 내용 (긴 내용도 가능, 여러 줄 입력 시 Shift+Enter)" rows="2"
+                            oninput="this.style.height='auto';this.style.height=(this.scrollHeight)+'px'"
+                            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addNotice();}"
+                            style="display:block;width:100%;padding:.5rem .6rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;resize:vertical;min-height:44px;font-family:inherit;line-height:1.4;margin-bottom:.4rem"></textarea>
+                        <div style="text-align:right">
+                            <button type="button" onclick="addNotice()" style="display:inline-block;padding:.45rem 1.1rem;font-size:.85rem;font-weight:700;background:#4338ca;color:#fff;border:none;border-radius:6px;cursor:pointer">추가</button>
                         </div>
                     </div>
                     <!-- 검색 + 필터 -->
@@ -5073,7 +5079,11 @@
             _loadNotices();
             _notices.push({id:_uid(),date,text,done:false,createdAt:new Date().toISOString()});
             _saveNotices();
-            if(textEl){ textEl.value=''; textEl.focus(); }
+            if(textEl){
+                textEl.value='';
+                textEl.style.height='auto';
+                textEl.focus();
+            }
             renderNoticeList();
         }
         function toggleNoticeDone(id){
@@ -5144,7 +5154,7 @@
                 <button onclick="deleteNotice('${n.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">×</button>`;
             return `<div style="display:flex;align-items:flex-start;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:8px;background:${bg};margin-bottom:.3rem">
                 <input type="checkbox" ${done?'checked':''} onchange="toggleNoticeDone('${n.id}')" style="margin-top:.15rem;width:18px;height:18px;flex-shrink:0;cursor:pointer">
-                <div style="flex:1;min-width:0;font-size:.85rem;word-break:break-word;${strike}">${_esc(n.text)}</div>
+                <div style="flex:1;min-width:0;font-size:.85rem;word-break:break-word;white-space:pre-wrap;line-height:1.4;${strike}">${_esc(n.text)}</div>
                 <div style="display:flex;gap:.2rem;flex-shrink:0">${actions}</div>
             </div>`;
         }
