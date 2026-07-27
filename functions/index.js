@@ -50,15 +50,50 @@ exports.resetUserPassword = onCall(
       throw new HttpsError('failed-precondition', '본인 비밀번호는 이 기능으로 변경할 수 없습니다.');
     }
 
-    // 5) 사용자 조회 + 비밀번호 갱신
+    // 5) 사용자 조회 + 비밀번호 갱신 (없으면 옵션에 따라 생성)
+    const createIfMissing = !!(request.data && request.data.createIfMissing);
+    const addToStaffWhitelist = !!(request.data && request.data.addToStaffWhitelist);
     let user;
+    let created = false;
     try {
       user = await admin.auth().getUserByEmail(targetEmail);
     } catch (e) {
-      logger.warn(`User not found for password reset: ${targetEmail}`, e);
-      throw new HttpsError('not-found', `Firebase Auth에 ${targetEmail} 사용자가 없습니다.`);
+      if (createIfMissing) {
+        try {
+          user = await admin.auth().createUser({email: targetEmail, password: newPassword});
+          created = true;
+          logger.info(`New user created by ${callerEmail}: ${targetEmail} (uid=${user.uid})`);
+        } catch (ce) {
+          logger.error('createUser failed:', ce);
+          throw new HttpsError('internal', '계정 생성 실패: ' + (ce.message || ce.code || String(ce)));
+        }
+      } else {
+        logger.warn(`User not found for password reset: ${targetEmail}`, e);
+        throw new HttpsError('not-found', `Firebase Auth에 ${targetEmail} 사용자가 없습니다.`);
+      }
     }
-    await admin.auth().updateUser(user.uid, {password: newPassword});
+    if (!created) {
+      await admin.auth().updateUser(user.uid, {password: newPassword});
+    }
+
+    // 5-1) 공용 staff 화이트리스트에 추가 (신규 계정 등록 시)
+    let whitelistAdded = false;
+    if (addToStaffWhitelist) {
+      try {
+        const staffDoc = await admin.firestore().collection('settings').doc('staff').get();
+        const cur = (staffDoc.exists && Array.isArray(staffDoc.data().emails))
+          ? staffDoc.data().emails.slice() : [];
+        const lower = cur.map((e) => String(e).toLowerCase());
+        if (!lower.includes(targetEmail)) {
+          cur.push(targetEmail);
+          await admin.firestore().collection('settings').doc('staff')
+            .set({emails: cur}, {merge: true});
+          whitelistAdded = true;
+        }
+      } catch (we) {
+        logger.warn('whitelist add failed:', we);
+      }
+    }
 
     // 6) employees doc에 mustChangePassword:true 플래그 설정
     let flagSet = false;
@@ -76,7 +111,7 @@ exports.resetUserPassword = onCall(
       logger.warn(`mustChangePassword flag set failed for ${targetEmail}`, e);
     }
 
-    logger.info(`Password reset by ${callerEmail} for ${targetEmail} (uid=${user.uid})`);
-    return {success: true, email: targetEmail, uid: user.uid, mustChangePasswordSet: flagSet};
+    logger.info(`Password reset by ${callerEmail} for ${targetEmail} (uid=${user.uid}, created=${created}, whitelistAdded=${whitelistAdded})`);
+    return {success: true, email: targetEmail, uid: user.uid, mustChangePasswordSet: flagSet, created, whitelistAdded};
   }
 );
