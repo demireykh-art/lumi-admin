@@ -476,6 +476,15 @@
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
+                        <button type="button" onclick="showTop('charting')" id="topHomeChartingBtn"
+                            style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <span style="font-size:2.25rem">📋</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1rem;color:#1f2937">상담 차팅</div>
+                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">환자별 진단·플랜·오더·경과 기록 (Vegas 보조)</div>
+                            </div>
+                            <span style="color:#9ca3af">→</span>
+                        </button>
                         <!-- 공지 블록: 헤더 클릭 → 관리 뷰, 아래는 오늘 공지 인라인 -->
                         <div style="border:1px solid #e5e7eb;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <button type="button" onclick="showTop('notice')" id="topHomeNoticeHeader"
@@ -550,6 +559,48 @@
                         <span id="consultBreadcrumb" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">상담</span>
                     </div>
                     <div id="consultBody" style="margin-top:.6rem"></div>
+                </div>
+            </div>
+
+            <!-- === 상담 차팅 홈 (환자 검색·최근 방문 리스트) === -->
+            <div class="tab-content" id="tab-charting">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTopHome()">← 홈</button>
+                        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📋 상담 차팅</span>
+                        <button class="btn btn-primary" style="font-size:.75rem;padding:.35rem .7rem;flex-shrink:0" onclick="chartingOpenEdit(null)">+ 신규 차팅</button>
+                    </div>
+                    <div style="margin-top:.6rem">
+                        <input type="text" id="chartingSearch" placeholder="🔍 차트번호 or 환자 이름 검색"
+                            oninput="renderChartingList()"
+                            style="width:100%;padding:.55rem .7rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:8px;box-sizing:border-box">
+                    </div>
+                    <div id="chartingList" style="margin-top:.75rem;display:flex;flex-direction:column;gap:.5rem">
+                        <div style="text-align:center;color:#9ca3af;font-size:.85rem;padding:1rem">로딩 중...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === 차팅 편집 (신규·기존 방문) === -->
+            <div class="tab-content" id="tab-chartingEdit">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTop('charting')">← 목록</button>
+                        <span id="chartingEditTitle" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">신규 차팅</span>
+                    </div>
+                    <div id="chartingEditBody" style="margin-top:.6rem"></div>
+                </div>
+            </div>
+
+            <!-- === 환자 타임라인 === -->
+            <div class="tab-content" id="tab-chartingTimeline">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTop('charting')">← 목록</button>
+                        <span id="chartingTimelineTitle" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">환자 타임라인</span>
+                        <button class="btn btn-primary" style="font-size:.75rem;padding:.35rem .7rem;flex-shrink:0" onclick="chartingTimelineNewVisit()">+ 새 방문</button>
+                    </div>
+                    <div id="chartingTimelineBody" style="margin-top:.6rem"></div>
                 </div>
             </div>
 
@@ -2022,6 +2073,11 @@
             _migrateLocalNoticesToFirestore().finally(()=>_initNoticesRealtime());
             // 상담 트리·마취연고 실시간 동기화
             _migrateConsultToFirestore().finally(()=>_initConsultRealtime());
+            // 상담 차팅: 개인계정에만 홈 버튼 노출
+            const chartBtn=document.getElementById('topHomeChartingBtn');
+            if(chartBtn) chartBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
+            // 이전 태그 캐시 로드 (자동완성용)
+            _chartingLoadRecentTags();
 
             const shared=isSharedAccount();
             
@@ -4733,6 +4789,12 @@
                 const di=document.getElementById('noticeDateInput');
                 if(di) di.value=_todayYmd();
                 renderNoticeList();
+            }else if(view==='charting'){
+                renderChartingList();
+            }else if(view==='chartingEdit'){
+                // chartingOpenEdit 에서 이미 렌더링 처리
+            }else if(view==='chartingTimeline'){
+                // chartingOpenTimeline 에서 이미 렌더링 처리
             }
         }
         function _feeBack(){
@@ -5836,6 +5898,472 @@
                 return;
             }
             box.innerHTML=today.map(n=>_noticeRowHtml(n,true)).join('');
+        }
+
+        // ================================================================
+        //  📋 상담 차팅 (Vegas Chart 보조용)
+        //   · 환자 식별: chartNo(Vegas) + patientName
+        //   · 태그 자유입력 + 이전 사용 태그 자동완성
+        //   · 방문·오더·경과 기록 → 복사 가능한 텍스트 요약
+        // ================================================================
+        let _chartingCache=[];        // 최근 방문 목록 캐시
+        let _chartingRecentTags={doctor:[], plan:[]}; // 자동완성용 빈도 정렬 태그
+        let _chartingCurrent=null;    // 편집 중 방문 (visitId or null)
+        let _chartingCurrentPatient=null; // 타임라인 열람 중 환자 {chartNo, patientName}
+
+        function _chartFmtToday(){
+            const d=new Date();
+            return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        }
+        function _chartFmtDateShort(iso){
+            if(!iso) return '';
+            return String(iso).slice(0,10).replace(/-/g,'-');
+        }
+
+        // 최근 태그 빈도 계산 (자동완성 소스)
+        async function _chartingLoadRecentTags(){
+            try{
+                const snap=await db.collection('visits')
+                    .orderBy('updatedAt','desc').limit(80).get();
+                const dfreq={}, pfreq={};
+                snap.forEach(d=>{
+                    const v=d.data()||{};
+                    (v.doctorTags||[]).forEach(t=>{ dfreq[t]=(dfreq[t]||0)+1; });
+                    (v.planTags||[]).forEach(t=>{ pfreq[t]=(pfreq[t]||0)+1; });
+                });
+                _chartingRecentTags.doctor=Object.keys(dfreq).sort((a,b)=>dfreq[b]-dfreq[a]);
+                _chartingRecentTags.plan=Object.keys(pfreq).sort((a,b)=>pfreq[b]-pfreq[a]);
+            }catch(e){ console.warn('최근 태그 로드 실패:', e); }
+        }
+
+        // 목록 화면
+        async function renderChartingList(){
+            const el=document.getElementById('chartingList');
+            if(!el) return;
+            el.innerHTML='<div style="text-align:center;color:#9ca3af;font-size:.85rem;padding:1rem">로딩 중...</div>';
+            try{
+                const snap=await db.collection('visits')
+                    .orderBy('date','desc').limit(60).get();
+                _chartingCache=snap.docs.map(d=>({id:d.id, ...d.data()}));
+                _renderChartingListFiltered();
+            }catch(e){
+                el.innerHTML='<div style="color:var(--red);font-size:.85rem;padding:1rem;text-align:center">로드 실패: '+e.message+'</div>';
+            }
+        }
+        function _renderChartingListFiltered(){
+            const el=document.getElementById('chartingList');
+            if(!el) return;
+            const q=(document.getElementById('chartingSearch')?.value||'').trim().toLowerCase();
+            let list=_chartingCache.slice();
+            if(q){
+                list=list.filter(v=>{
+                    return String(v.chartNo||'').toLowerCase().includes(q)
+                        || String(v.patientName||'').toLowerCase().includes(q);
+                });
+            }
+            if(!list.length){
+                el.innerHTML=`<div style="text-align:center;color:#9ca3af;font-size:.85rem;padding:1.5rem">
+                    ${q?'검색 결과 없음':'아직 저장된 차팅이 없습니다.'}<br>
+                    <button onclick="chartingOpenEdit(null)" style="margin-top:.5rem;background:#4338ca;color:#fff;border:none;padding:.4rem 1rem;border-radius:6px;font-size:.85rem;font-weight:600;cursor:pointer">+ 신규 차팅 시작</button>
+                </div>`;
+                return;
+            }
+            // 환자별 그룹핑 (chartNo|patientName)
+            const groups={};
+            list.forEach(v=>{
+                const key=(v.chartNo||'')+'|'+(v.patientName||'');
+                if(!groups[key]) groups[key]={chartNo:v.chartNo, patientName:v.patientName, visits:[]};
+                groups[key].visits.push(v);
+            });
+            el.innerHTML=Object.values(groups).map(g=>{
+                const latest=g.visits[0];
+                const tagsPreview=[...(latest.doctorTags||[]), ...(latest.planTags||[])].slice(0,4).map(t=>`<span style="display:inline-block;background:#eef2ff;color:#4338ca;font-size:.7rem;padding:1px 6px;border-radius:8px;margin-right:3px">${_esc(t)}</span>`).join('');
+                return `<div onclick='chartingOpenTimeline("${_esc(g.chartNo||'')}","${_esc(g.patientName||'')}")'
+                    style="padding:.7rem .85rem;background:#fff;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.03)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.25rem">
+                        <div style="font-weight:700;font-size:.95rem;color:#111827">
+                            ${_esc(g.patientName||'(이름없음)')}
+                            <span style="color:#9ca3af;font-weight:500;font-size:.78rem;margin-left:.35rem">#${_esc(g.chartNo||'-')}</span>
+                        </div>
+                        <div style="font-size:.72rem;color:#6b7280">${_esc(_chartFmtDateShort(latest.date))} · 방문 ${g.visits.length}회</div>
+                    </div>
+                    <div style="font-size:.72rem;color:#6b7280">${tagsPreview||'<span style="color:#9ca3af">태그 없음</span>'}</div>
+                </div>`;
+            }).join('');
+        }
+
+        // 편집 화면 (신규 or 기존)
+        async function chartingOpenEdit(visitId, presetPatient){
+            _chartingCurrent=null;
+            let visit={
+                chartNo:'', patientName:'', date:_chartFmtToday(),
+                doctorTags:[], planTags:[],
+                doctorMemo:'', consultMemo:'', extraMemo:'',
+                orders:[]
+            };
+            if(presetPatient){
+                visit.chartNo=presetPatient.chartNo||'';
+                visit.patientName=presetPatient.patientName||'';
+            }
+            if(visitId){
+                try{
+                    const doc=await db.collection('visits').doc(visitId).get();
+                    if(doc.exists){ visit={...visit, ...doc.data()}; _chartingCurrent=visitId; }
+                }catch(e){ alert('로드 실패: '+e.message); return; }
+            }
+            document.getElementById('chartingEditTitle').textContent=visitId?'차팅 편집':'신규 차팅';
+            _renderChartingEdit(visit);
+            showTop('chartingEdit');
+        }
+
+        function _renderChartingEdit(v){
+            const body=document.getElementById('chartingEditBody');
+            if(!body) return;
+            const doctorChips=(v.doctorTags||[]).map((t,i)=>_chartTagChip(t,i,'doctor')).join('');
+            const planChips=(v.planTags||[]).map((t,i)=>_chartTagChip(t,i,'plan')).join('');
+            const orderRows=(v.orders||[]).map((o,i)=>_chartOrderRow(o,i)).join('');
+            body.innerHTML=`
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem">
+                    <div style="flex:1;min-width:120px">
+                        <label style="display:block;font-size:.72rem;color:#6b7280;font-weight:600;margin-bottom:.15rem">차트번호 (Vegas)</label>
+                        <input type="text" id="ceChartNo" value="${_esc(v.chartNo||'')}"
+                            style="width:100%;padding:.5rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box">
+                    </div>
+                    <div style="flex:1;min-width:120px">
+                        <label style="display:block;font-size:.72rem;color:#6b7280;font-weight:600;margin-bottom:.15rem">환자 이름</label>
+                        <input type="text" id="ceName" value="${_esc(v.patientName||'')}"
+                            style="width:100%;padding:.5rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box">
+                    </div>
+                    <div style="flex:0 0 130px">
+                        <label style="display:block;font-size:.72rem;color:#6b7280;font-weight:600;margin-bottom:.15rem">방문일</label>
+                        <input type="date" id="ceDate" value="${_esc(v.date||_chartFmtToday())}"
+                            style="width:100%;padding:.5rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box">
+                    </div>
+                </div>
+
+                <div style="padding:.7rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;margin-bottom:.6rem">
+                    <div style="font-weight:700;font-size:.85rem;color:#0369a1;margin-bottom:.35rem">🩺 의사 진단·플랜</div>
+                    <label style="display:block;font-size:.72rem;color:#0369a1;font-weight:600;margin:.25rem 0 .15rem">진단 태그</label>
+                    <div id="ceDoctorChips" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.3rem">${doctorChips}</div>
+                    <input type="text" id="ceDoctorInput" list="ceDoctorDL" placeholder="예: 색소>흑자 (Enter로 추가)"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();chartingAddTag('doctor');}"
+                        style="width:100%;padding:.45rem;font-size:.85rem;border:1px solid #7dd3fc;border-radius:6px;box-sizing:border-box;background:#fff">
+                    <datalist id="ceDoctorDL">${_chartingRecentTags.doctor.map(t=>`<option value="${_esc(t)}"></option>`).join('')}</datalist>
+
+                    <label style="display:block;font-size:.72rem;color:#0369a1;font-weight:600;margin:.5rem 0 .15rem">플랜 태그</label>
+                    <div id="cePlanChips" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.3rem">${planChips}</div>
+                    <input type="text" id="cePlanInput" list="cePlanDL" placeholder="예: 리팟, BBL (Enter로 추가)"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();chartingAddTag('plan');}"
+                        style="width:100%;padding:.45rem;font-size:.85rem;border:1px solid #7dd3fc;border-radius:6px;box-sizing:border-box;background:#fff">
+                    <datalist id="cePlanDL">${_chartingRecentTags.plan.map(t=>`<option value="${_esc(t)}"></option>`).join('')}</datalist>
+
+                    <label style="display:block;font-size:.72rem;color:#0369a1;font-weight:600;margin:.5rem 0 .15rem">의사 메모</label>
+                    <textarea id="ceDoctorMemo" rows="2" placeholder="관찰·소견·환자 반응 등"
+                        style="width:100%;padding:.5rem;font-size:.85rem;border:1px solid #7dd3fc;border-radius:6px;box-sizing:border-box;font-family:inherit;line-height:1.4;resize:vertical">${_esc(v.doctorMemo||'')}</textarea>
+                </div>
+
+                <div style="padding:.7rem;background:#fefce8;border:1px solid #fde68a;border-radius:10px;margin-bottom:.6rem">
+                    <div style="font-weight:700;font-size:.85rem;color:#92400e;margin-bottom:.35rem">💬 상담 · 오더</div>
+                    <label style="display:block;font-size:.72rem;color:#92400e;font-weight:600;margin:.25rem 0 .15rem">상담 메모</label>
+                    <textarea id="ceConsultMemo" rows="3" placeholder="환자와 나눈 상담 내용·설명 요약"
+                        style="width:100%;padding:.5rem;font-size:.85rem;border:1px solid #fcd34d;border-radius:6px;box-sizing:border-box;font-family:inherit;line-height:1.4;resize:vertical">${_esc(v.consultMemo||'')}</textarea>
+
+                    <label style="display:block;font-size:.72rem;color:#92400e;font-weight:600;margin:.5rem 0 .15rem">오더 (시술명 · 가격)</label>
+                    <div id="ceOrders" style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:.3rem">${orderRows||'<div style="color:#9ca3af;font-size:.8rem;padding:.3rem 0">아직 오더 없음</div>'}</div>
+                    <button onclick="chartingAddOrder()" style="background:#fff;border:1px dashed #f59e0b;color:#b45309;padding:.4rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">+ 오더 추가</button>
+
+                    <label style="display:block;font-size:.72rem;color:#92400e;font-weight:600;margin:.5rem 0 .15rem">추가 메모</label>
+                    <textarea id="ceExtraMemo" rows="2" placeholder="예: 흑자 작은것 같이 치료 요청"
+                        style="width:100%;padding:.5rem;font-size:.85rem;border:1px solid #fcd34d;border-radius:6px;box-sizing:border-box;font-family:inherit;line-height:1.4;resize:vertical">${_esc(v.extraMemo||'')}</textarea>
+                </div>
+
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem">
+                    <button onclick="chartingSaveVisit()" style="flex:2;background:#4338ca;color:#fff;border:none;padding:.7rem;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer">💾 저장</button>
+                    <button onclick="chartingCopyDraft()" style="flex:1;background:#f3f4f6;border:1px solid #d1d5db;color:#374151;padding:.7rem;border-radius:8px;font-weight:600;font-size:.85rem;cursor:pointer">📋 복사</button>
+                    ${_chartingCurrent?`<button onclick="chartingDeleteVisit()" style="flex:0 0 auto;background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.7rem 1rem;border-radius:8px;font-weight:600;font-size:.85rem;cursor:pointer">🗑</button>`:''}
+                </div>
+            `;
+            // draft 를 편집 상태로 저장 (chip 추가/삭제용)
+            _chartingDraft=v;
+        }
+        let _chartingDraft=null;
+
+        function _chartTagChip(t,i,kind){
+            return `<span style="display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .5rem;background:#dbeafe;color:#1e40af;font-size:.75rem;border-radius:12px">
+                ${_esc(t)}
+                <button onclick="chartingRemoveTag('${kind}',${i})" style="background:none;border:none;color:#1e40af;padding:0;font-size:.85rem;cursor:pointer;line-height:1">×</button>
+            </span>`;
+        }
+        function _chartOrderRow(o,i){
+            return `<div style="display:flex;gap:.35rem;align-items:center">
+                <input type="text" value="${_esc(o.name||'')}" placeholder="시술명" onchange="_chartingUpdateOrder(${i},'name',this.value)"
+                    style="flex:2;padding:.35rem .5rem;font-size:.8rem;border:1px solid #d1d5db;border-radius:5px;min-width:0">
+                <input type="number" value="${o.price||''}" placeholder="가격" onchange="_chartingUpdateOrder(${i},'price',this.value)"
+                    style="flex:1;padding:.35rem .5rem;font-size:.8rem;border:1px solid #d1d5db;border-radius:5px;min-width:80px">
+                <button onclick="_chartingRemoveOrder(${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.25rem .5rem;font-size:.75rem;border-radius:4px;cursor:pointer">×</button>
+            </div>`;
+        }
+
+        function chartingAddTag(kind){
+            const inputId=(kind==='doctor')?'ceDoctorInput':'cePlanInput';
+            const chipsId=(kind==='doctor')?'ceDoctorChips':'cePlanChips';
+            const arrKey=(kind==='doctor')?'doctorTags':'planTags';
+            const inp=document.getElementById(inputId);
+            const val=(inp?.value||'').trim();
+            if(!val) return;
+            // 콤마 구분 다중 입력 지원
+            const parts=val.split(',').map(s=>s.trim()).filter(Boolean);
+            _chartingDraft[arrKey]=_chartingDraft[arrKey]||[];
+            for(const p of parts){
+                if(!_chartingDraft[arrKey].includes(p)) _chartingDraft[arrKey].push(p);
+            }
+            if(inp){ inp.value=''; inp.focus(); }
+            document.getElementById(chipsId).innerHTML=_chartingDraft[arrKey].map((t,i)=>_chartTagChip(t,i,kind)).join('');
+        }
+        function chartingRemoveTag(kind,i){
+            const arrKey=(kind==='doctor')?'doctorTags':'planTags';
+            const chipsId=(kind==='doctor')?'ceDoctorChips':'cePlanChips';
+            _chartingDraft[arrKey].splice(i,1);
+            document.getElementById(chipsId).innerHTML=(_chartingDraft[arrKey]||[]).map((t,idx)=>_chartTagChip(t,idx,kind)).join('');
+        }
+        function chartingAddOrder(){
+            _chartingDraft.orders=_chartingDraft.orders||[];
+            _chartingDraft.orders.push({name:'', price:0, memo:''});
+            document.getElementById('ceOrders').innerHTML=_chartingDraft.orders.map((o,i)=>_chartOrderRow(o,i)).join('');
+        }
+        function _chartingUpdateOrder(i,field,val){
+            if(!_chartingDraft.orders[i]) return;
+            if(field==='price') val=parseInt(String(val).replace(/[^\d]/g,''))||0;
+            _chartingDraft.orders[i][field]=val;
+        }
+        function _chartingRemoveOrder(i){
+            _chartingDraft.orders.splice(i,1);
+            document.getElementById('ceOrders').innerHTML=_chartingDraft.orders.map((o,i)=>_chartOrderRow(o,i)).join('') || '<div style="color:#9ca3af;font-size:.8rem;padding:.3rem 0">아직 오더 없음</div>';
+        }
+
+        async function chartingSaveVisit(){
+            const d=_chartingDraft;
+            if(!d) return;
+            // 입력창에 남아있는 값도 태그로 흡수
+            const doctorLeft=(document.getElementById('ceDoctorInput')?.value||'').trim();
+            if(doctorLeft){ chartingAddTag('doctor'); }
+            const planLeft=(document.getElementById('cePlanInput')?.value||'').trim();
+            if(planLeft){ chartingAddTag('plan'); }
+            d.chartNo=(document.getElementById('ceChartNo')?.value||'').trim();
+            d.patientName=(document.getElementById('ceName')?.value||'').trim();
+            d.date=(document.getElementById('ceDate')?.value||_chartFmtToday()).trim();
+            d.doctorMemo=(document.getElementById('ceDoctorMemo')?.value||'').trim();
+            d.consultMemo=(document.getElementById('ceConsultMemo')?.value||'').trim();
+            d.extraMemo=(document.getElementById('ceExtraMemo')?.value||'').trim();
+            if(!d.chartNo && !d.patientName){ alert('차트번호나 환자 이름 중 하나는 입력해주세요.'); return; }
+            const payload={
+                ...d,
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser?.name||currentUser?.id||'staff'
+            };
+            try{
+                if(_chartingCurrent){
+                    await db.collection('visits').doc(_chartingCurrent).update(payload);
+                }else{
+                    payload.createdAt=new Date().toISOString();
+                    payload.createdBy=payload.updatedBy;
+                    const ref=await db.collection('visits').add(payload);
+                    _chartingCurrent=ref.id;
+                }
+                await _chartingLoadRecentTags();
+                alert('✅ 저장 완료');
+                // 타임라인으로 이동
+                chartingOpenTimeline(d.chartNo, d.patientName);
+            }catch(e){ alert('저장 실패: '+(e?.message||e)); }
+        }
+        async function chartingDeleteVisit(){
+            if(!_chartingCurrent) return;
+            if(!confirm('이 방문 기록을 삭제합니다. (경과 기록도 함께 삭제)\n계속?')) return;
+            try{
+                // 하위 followups 삭제
+                const fu=await db.collection('visits').doc(_chartingCurrent).collection('followups').get();
+                const batch=db.batch();
+                fu.forEach(d=>batch.delete(d.ref));
+                batch.delete(db.collection('visits').doc(_chartingCurrent));
+                await batch.commit();
+                _chartingCurrent=null;
+                alert('✅ 삭제 완료');
+                showTop('charting');
+                await renderChartingList();
+            }catch(e){ alert('삭제 실패: '+(e?.message||e)); }
+        }
+
+        // 편집 중 draft 를 텍스트로 → 클립보드
+        function chartingCopyDraft(){
+            // 최신 입력 반영
+            const d={..._chartingDraft};
+            d.chartNo=(document.getElementById('ceChartNo')?.value||'').trim();
+            d.patientName=(document.getElementById('ceName')?.value||'').trim();
+            d.date=(document.getElementById('ceDate')?.value||_chartFmtToday()).trim();
+            d.doctorMemo=(document.getElementById('ceDoctorMemo')?.value||'').trim();
+            d.consultMemo=(document.getElementById('ceConsultMemo')?.value||'').trim();
+            d.extraMemo=(document.getElementById('ceExtraMemo')?.value||'').trim();
+            _chartingCopyText(_chartingFormatVisit(d));
+        }
+        function _chartingFormatVisit(v, followups){
+            const lines=[];
+            const header=`[${v.date||_chartFmtToday()} / ${v.patientName||'-'}${v.chartNo?' #'+v.chartNo:''}]`;
+            lines.push(header);
+            if((v.doctorTags||[]).length) lines.push('#진단: '+v.doctorTags.join(', '));
+            if((v.planTags||[]).length)  lines.push('#플랜: '+v.planTags.join(', '));
+            if(v.doctorMemo) lines.push('의사메모: '+v.doctorMemo);
+            const hasConsult=v.consultMemo || (v.orders||[]).length || v.extraMemo;
+            if(hasConsult){
+                lines.push('');
+                lines.push('[상담]');
+                if(v.consultMemo) lines.push(v.consultMemo);
+                (v.orders||[]).forEach(o=>{
+                    if(!o.name && !o.price) return;
+                    lines.push(`· ${o.name||'(이름없음)'} ${o.price?Number(o.price).toLocaleString()+'원':''}${o.memo?' ('+o.memo+')':''}`);
+                });
+                if(v.extraMemo) lines.push('메모: '+v.extraMemo);
+            }
+            (followups||[]).forEach(f=>{
+                lines.push('');
+                const stars='⭐'.repeat(f.rating||0);
+                lines.push(`[경과 ${f.date||''}] ${stars} ${f.note||''}`);
+            });
+            return lines.join('\n');
+        }
+        function _chartingCopyText(text){
+            if(navigator.clipboard && navigator.clipboard.writeText){
+                navigator.clipboard.writeText(text).then(()=>{
+                    _chartToast('클립보드에 복사됨');
+                },()=>_chartFallbackCopy(text));
+            }else{ _chartFallbackCopy(text); }
+        }
+        function _chartFallbackCopy(text){
+            const ta=document.createElement('textarea');
+            ta.value=text; ta.style.position='fixed'; ta.style.left='-9999px';
+            document.body.appendChild(ta); ta.select();
+            try{ document.execCommand('copy'); _chartToast('클립보드에 복사됨'); }
+            catch(_){ prompt('복사할 내용:', text); }
+            document.body.removeChild(ta);
+        }
+        function _chartToast(msg){
+            const div=document.createElement('div');
+            div.textContent=msg;
+            div.style.cssText='position:fixed;bottom:32px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:.5rem 1rem;border-radius:8px;font-size:.85rem;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.2)';
+            document.body.appendChild(div);
+            setTimeout(()=>{ div.style.opacity='0'; div.style.transition='opacity .3s'; }, 1300);
+            setTimeout(()=>{ document.body.removeChild(div); }, 1800);
+        }
+
+        // ---- 환자 타임라인 ----
+        async function chartingOpenTimeline(chartNo, patientName){
+            _chartingCurrentPatient={chartNo, patientName};
+            document.getElementById('chartingTimelineTitle').textContent=`${patientName||'-'}${chartNo?' #'+chartNo:''}`;
+            showTop('chartingTimeline');
+            await _chartingRenderTimeline();
+        }
+        function chartingTimelineNewVisit(){
+            if(!_chartingCurrentPatient) return;
+            chartingOpenEdit(null, _chartingCurrentPatient);
+        }
+        async function _chartingRenderTimeline(){
+            const body=document.getElementById('chartingTimelineBody');
+            if(!body) return;
+            body.innerHTML='<div style="text-align:center;color:#9ca3af;padding:1rem;font-size:.85rem">로딩 중...</div>';
+            const p=_chartingCurrentPatient||{};
+            try{
+                let query=db.collection('visits');
+                if(p.chartNo) query=query.where('chartNo','==',p.chartNo);
+                else query=query.where('patientName','==',p.patientName);
+                const snap=await query.get();
+                const visits=snap.docs.map(d=>({id:d.id, ...d.data()}))
+                    .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+                if(!visits.length){
+                    body.innerHTML='<div style="text-align:center;color:#9ca3af;padding:1.5rem;font-size:.85rem">방문 기록 없음</div>';
+                    return;
+                }
+                // 각 방문의 followups 병렬 조회
+                const withFu=await Promise.all(visits.map(async v=>{
+                    try{
+                        const fs=await db.collection('visits').doc(v.id).collection('followups').orderBy('date','desc').get();
+                        v._followups=fs.docs.map(d=>({id:d.id, ...d.data()}));
+                    }catch(_){ v._followups=[]; }
+                    return v;
+                }));
+                const totalCopyBtn=`<div style="text-align:right;margin-bottom:.5rem">
+                    <button onclick="chartingCopyAllTimeline()" style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;padding:.35rem .8rem;font-size:.75rem;border-radius:6px;cursor:pointer">📋 전체 타임라인 복사</button>
+                </div>`;
+                body.innerHTML=totalCopyBtn+withFu.map(v=>_chartingRenderVisitCard(v)).join('');
+                _chartingLastRendered=withFu;
+            }catch(e){
+                body.innerHTML='<div style="color:var(--red);padding:1rem;font-size:.85rem">로드 실패: '+e.message+'</div>';
+            }
+        }
+        let _chartingLastRendered=[];
+        function _chartingRenderVisitCard(v){
+            const tags=[...(v.doctorTags||[]), ...(v.planTags||[])].map(t=>`<span style="display:inline-block;background:#eef2ff;color:#4338ca;font-size:.7rem;padding:1px 6px;border-radius:8px;margin-right:3px;margin-bottom:2px">${_esc(t)}</span>`).join('');
+            const orderLines=(v.orders||[]).filter(o=>o.name||o.price).map(o=>
+                `<div style="font-size:.8rem;color:#374151">· ${_esc(o.name||'')} ${o.price?'<strong>'+Number(o.price).toLocaleString()+'원</strong>':''}</div>`
+            ).join('');
+            const fuHtml=(v._followups||[]).map(f=>`
+                <div style="margin-top:.35rem;padding:.4rem .6rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:.78rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <div><strong>경과 ${_esc(f.date||'')}</strong> ${'⭐'.repeat(f.rating||0)}</div>
+                        <button onclick="chartingDeleteFollowup('${v.id}','${f.id}')" style="background:none;border:none;color:#dc2626;font-size:.85rem;cursor:pointer">×</button>
+                    </div>
+                    ${f.note?`<div style="color:#4b5563;margin-top:.15rem;white-space:pre-wrap">${_esc(f.note)}</div>`:''}
+                </div>`).join('');
+            return `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:.7rem .85rem;margin-bottom:.6rem;box-shadow:0 1px 2px rgba(0,0,0,.03)">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;margin-bottom:.35rem;flex-wrap:wrap">
+                    <div style="font-weight:700;font-size:.9rem;color:#111827">${_esc(v.date||'')}</div>
+                    <div style="display:flex;gap:.25rem;flex-shrink:0">
+                        <button onclick="chartingCopyVisit('${v.id}')" title="복사" style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;padding:.2rem .55rem;font-size:.72rem;border-radius:4px;cursor:pointer">📋</button>
+                        <button onclick="chartingOpenEdit('${v.id}')" title="편집" style="background:#eef2ff;border:1px solid #a5b4fc;color:#4338ca;padding:.2rem .55rem;font-size:.72rem;border-radius:4px;cursor:pointer">✎</button>
+                        <button onclick="chartingAddFollowup('${v.id}')" title="경과 추가" style="background:#fef3c7;border:1px solid #fbbf24;color:#92400e;padding:.2rem .55rem;font-size:.72rem;border-radius:4px;cursor:pointer">+ 경과</button>
+                    </div>
+                </div>
+                ${tags?`<div style="margin-bottom:.3rem">${tags}</div>`:''}
+                ${v.doctorMemo?`<div style="font-size:.78rem;color:#4b5563;margin-bottom:.3rem;white-space:pre-wrap"><strong style="color:#0369a1">의사메모:</strong> ${_esc(v.doctorMemo)}</div>`:''}
+                ${v.consultMemo?`<div style="font-size:.78rem;color:#4b5563;margin-bottom:.3rem;white-space:pre-wrap"><strong style="color:#92400e">상담:</strong> ${_esc(v.consultMemo)}</div>`:''}
+                ${orderLines?`<div style="margin-bottom:.3rem">${orderLines}</div>`:''}
+                ${v.extraMemo?`<div style="font-size:.78rem;color:#4b5563;margin-bottom:.3rem;white-space:pre-wrap"><strong>메모:</strong> ${_esc(v.extraMemo)}</div>`:''}
+                ${fuHtml}
+            </div>`;
+        }
+        async function chartingCopyVisit(visitId){
+            const v=_chartingLastRendered.find(x=>x.id===visitId);
+            if(!v) return;
+            _chartingCopyText(_chartingFormatVisit(v, v._followups||[]));
+        }
+        function chartingCopyAllTimeline(){
+            if(!_chartingLastRendered.length) return;
+            const p=_chartingCurrentPatient||{};
+            const head=`=== ${p.patientName||'-'}${p.chartNo?' #'+p.chartNo:''} 타임라인 ===\n`;
+            const body=_chartingLastRendered.map(v=>_chartingFormatVisit(v, v._followups||[])).join('\n\n');
+            _chartingCopyText(head+body);
+        }
+        async function chartingAddFollowup(visitId){
+            const dateStr=prompt('경과 날짜 (YYYY-MM-DD):', _chartFmtToday());
+            if(!dateStr) return;
+            const ratingStr=prompt('별점 (1~5):','3');
+            if(ratingStr===null) return;
+            const rating=Math.max(1, Math.min(5, parseInt(ratingStr)||3));
+            const note=prompt('경과 메모:','');
+            if(note===null) return;
+            try{
+                await db.collection('visits').doc(visitId).collection('followups').add({
+                    date: dateStr.trim(), rating, note: note.trim(),
+                    createdAt: new Date().toISOString(),
+                    createdBy: currentUser?.name||currentUser?.id||'staff'
+                });
+                await _chartingRenderTimeline();
+            }catch(e){ alert('실패: '+(e?.message||e)); }
+        }
+        async function chartingDeleteFollowup(visitId, fuId){
+            if(!confirm('이 경과를 삭제하시겠습니까?')) return;
+            try{
+                await db.collection('visits').doc(visitId).collection('followups').doc(fuId).delete();
+                await _chartingRenderTimeline();
+            }catch(e){ alert('삭제 실패: '+(e?.message||e)); }
         }
 
         // ================================================================
