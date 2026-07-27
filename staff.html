@@ -1566,9 +1566,85 @@
                 <div id="sharedStaffListStaff" style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.75rem">
                     <div style="color:#888;font-size:.85rem">로딩 중...</div>
                 </div>
+
+                <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
+                    <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">🌳 상담 트리 관리</div>
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
+                        노션 스타일 텍스트 붙여넣기·시각 편집·백업 복원을 지원합니다.
+                    </div>
+                    <button onclick="openConsultAdmin()"
+                        style="width:100%;background:#4338ca;color:#fff;border:none;padding:.6rem;border-radius:6px;font-weight:600;font-size:.85rem;cursor:pointer">
+                        상담 트리 편집 열기 →
+                    </button>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('adminSettingsModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 상담 트리 관리 모달 (bizAdmins 전용) -->
+    <div class="modal" id="consultAdminModal">
+        <div class="modal-content" style="max-width:900px;max-height:92vh">
+            <div class="modal-header">
+                <div class="modal-title">🌳 상담 트리 관리</div>
+                <button class="modal-close" onclick="closeModal('consultAdminModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="consultAdminTabs" style="display:flex;gap:.3rem;border-bottom:1px solid #e5e7eb;margin-bottom:.75rem">
+                    <button data-tab="text" onclick="switchConsultAdminTab('text')"
+                        style="background:none;border:none;padding:.5rem .8rem;font-size:.85rem;font-weight:600;color:#4338ca;border-bottom:2px solid #4338ca;cursor:pointer">📝 텍스트 편집</button>
+                    <button data-tab="visual" onclick="switchConsultAdminTab('visual')"
+                        style="background:none;border:none;padding:.5rem .8rem;font-size:.85rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer">🌲 시각 편집</button>
+                    <button data-tab="backup" onclick="switchConsultAdminTab('backup')"
+                        style="background:none;border:none;padding:.5rem .8rem;font-size:.85rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer">💾 백업 복원</button>
+                </div>
+
+                <div id="consultTab-text" class="consultTab">
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
+                        노션·아웃라이너에서 복사한 <strong>들여쓰기 텍스트</strong>를 붙여넣으세요. 2칸/4칸/탭 자동 감지.
+                    </div>
+                    <textarea id="consultBulkText"
+                        style="width:100%;height:280px;font-family:'D2 Coding',Consolas,monospace;font-size:.85rem;padding:.6rem;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box"
+                        placeholder="피부퀄리티&#10;  색소&#10;    흑자&#10;      리팟&#10;        5mm 기준 30만원"></textarea>
+                    <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+                        <button onclick="_consultAdminLoadCurrentToText()"
+                            style="background:#f3f4f6;border:1px solid #d1d5db;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">현재 트리 불러오기</button>
+                        <button onclick="consultPreviewText()"
+                            style="background:#eef2ff;border:1px solid #a5b4fc;color:#4338ca;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">🔍 파싱 미리보기</button>
+                        <button onclick="consultApplyText('merge')"
+                            style="background:#fef3c7;border:1px solid #fbbf24;color:#92400e;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">병합 적용</button>
+                        <button onclick="consultApplyText('replace')"
+                            style="background:#fee2e2;border:1px solid #ef4444;color:#991b1b;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">⚠️ 전체 교체</button>
+                    </div>
+                    <div id="consultPreview" style="display:none;margin-top:.75rem;padding:.6rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:.8rem;max-height:220px;overflow:auto"></div>
+                </div>
+
+                <div id="consultTab-visual" class="consultTab" style="display:none">
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
+                        각 노드 옆 [+] 하위추가 · [✎] 이름변경 · [↑↓] 이동 · [×] 삭제. 변경 즉시 저장.
+                    </div>
+                    <div id="consultTreeEditor" style="max-height:60vh;overflow:auto;padding:.5rem;background:#fff;border:1px solid #e5e7eb;border-radius:6px"></div>
+                    <div style="margin-top:.5rem">
+                        <button onclick="_consultAdminAddChild([])"
+                            style="background:#4338ca;color:#fff;border:none;padding:.5rem 1rem;border-radius:6px;font-size:.85rem;font-weight:600;cursor:pointer">+ 최상위 카테고리 추가</button>
+                    </div>
+                </div>
+
+                <div id="consultTab-backup" class="consultTab" style="display:none">
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
+                        전체 교체·병합 적용·복원 전에 자동 백업. 최근 10개 유지.
+                    </div>
+                    <div id="consultBackupList" style="display:flex;flex-direction:column;gap:.35rem;margin-bottom:.5rem">
+                        <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                    </div>
+                    <button onclick="consultCreateBackupNow()"
+                        style="background:#f3f4f6;border:1px solid #d1d5db;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">💾 지금 백업 만들기</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('consultAdminModal')" style="flex:1">닫기</button>
             </div>
         </div>
     </div>
@@ -5263,6 +5339,336 @@
             }
             _consultDraftAnesth=v.trim();
             renderConsult();
+        }
+
+        // ================================================================
+        //  🌳 상담 트리 관리자 편집기 (bizAdmins 전용)
+        //    · 텍스트 붙여넣기 대량 편집 (노션 → 트리)
+        //    · 시각 편집 (추가·이름변경·이동·삭제)
+        //    · 백업 스냅샷 (최근 10개, 자동/수동)
+        // ================================================================
+        let _consultTreeCollapsedAdmin={};
+        function openConsultAdmin(){
+            if(!isBizAdmin){ alert('경영관리자 권한이 필요합니다.'); return; }
+            closeModal('adminSettingsModal');
+            document.getElementById('consultAdminModal').classList.add('active');
+            switchConsultAdminTab('text');
+            _consultAdminLoadCurrentToText();
+            _consultAdminRenderVisual();
+            _consultAdminRenderBackups();
+        }
+        function switchConsultAdminTab(name){
+            document.querySelectorAll('.consultTab').forEach(el=>el.style.display='none');
+            const target=document.getElementById('consultTab-'+name);
+            if(target) target.style.display='block';
+            document.querySelectorAll('#consultAdminTabs button').forEach(btn=>{
+                const active=btn.dataset.tab===name;
+                btn.style.color=active?'#4338ca':'#6b7280';
+                btn.style.fontWeight=active?'600':'500';
+                btn.style.borderBottom=active?'2px solid #4338ca':'2px solid transparent';
+            });
+            if(name==='visual') _consultAdminRenderVisual();
+            if(name==='backup') _consultAdminRenderBackups();
+        }
+
+        // ---- 트리 ↔ 텍스트 변환 ----
+        function _stringifyTree(tree, indent){
+            indent=indent||0;
+            const out=[];
+            for(const key of Object.keys(tree||{})){
+                out.push('  '.repeat(indent)+key);
+                const sub=tree[key];
+                if(sub && typeof sub==='object' && Object.keys(sub).length){
+                    out.push(_stringifyTree(sub, indent+1));
+                }
+            }
+            return out.filter(x=>x).join('\n');
+        }
+        function _parseIndentedText(text){
+            const lines=String(text||'').split(/\r?\n/).filter(l=>l.trim().length>0);
+            if(!lines.length) return {};
+            // 첫 indented 라인으로 indent unit 감지 (탭은 4칸으로 정규화)
+            let unit=null;
+            for(const l of lines){
+                const norm=l.replace(/\t/g,'    ');
+                const m=norm.match(/^(\s+)\S/);
+                if(m && m[1].length>0){ unit=m[1].length; break; }
+            }
+            if(!unit) unit=2;
+            const root={};
+            const stack=[{depth:-1, node:root}];
+            for(const raw of lines){
+                const line=raw.replace(/\t/g,'    ');
+                const m=line.match(/^(\s*)(.+?)\s*$/);
+                if(!m) continue;
+                const leading=m[1].length;
+                const name=m[2];
+                const depth=Math.floor(leading/unit);
+                while(stack.length>0 && stack[stack.length-1].depth>=depth){ stack.pop(); }
+                const parent=stack.length ? stack[stack.length-1].node : root;
+                if(!parent[name]) parent[name]={};
+                stack.push({depth, node:parent[name]});
+            }
+            return root;
+        }
+        function _mergeTree(base, add){
+            const out={};
+            for(const k of Object.keys(base||{})){ out[k]=base[k]; }
+            for(const k of Object.keys(add||{})){
+                if(!out[k] || typeof out[k]!=='object'){
+                    out[k]=add[k];
+                }else{
+                    out[k]=_mergeTree(out[k], add[k]||{});
+                }
+            }
+            return out;
+        }
+
+        // ---- 텍스트 탭 ----
+        function _consultAdminLoadCurrentToText(){
+            const el=document.getElementById('consultBulkText');
+            if(!el) return;
+            el.value=_stringifyTree(_consultTree||{});
+        }
+        function consultPreviewText(){
+            const text=document.getElementById('consultBulkText')?.value||'';
+            const el=document.getElementById('consultPreview');
+            try{
+                const parsed=_parseIndentedText(text);
+                el.style.display='block';
+                el.innerHTML='<div style="font-weight:600;margin-bottom:.3rem;color:#4338ca">파싱 결과 (' +
+                    _countTreeNodes(parsed) + '개 노드)</div>' +
+                    '<pre style="margin:0;white-space:pre-wrap;font-family:inherit">'+_esc(_stringifyTree(parsed))+'</pre>';
+            }catch(e){ el.style.display='block'; el.innerHTML='<span style="color:#dc2626">파싱 오류: '+_esc(e.message)+'</span>'; }
+        }
+        function _countTreeNodes(tree){
+            let c=0;
+            for(const k of Object.keys(tree||{})){ c++; c+=_countTreeNodes(tree[k]); }
+            return c;
+        }
+        async function consultApplyText(mode){
+            const text=document.getElementById('consultBulkText')?.value||'';
+            if(!text.trim()){ alert('내용이 비어있습니다.'); return; }
+            let parsed;
+            try{ parsed=_parseIndentedText(text); }
+            catch(e){ alert('파싱 실패: '+e.message); return; }
+            const cnt=_countTreeNodes(parsed);
+            const msg=mode==='replace'
+                ? `⚠️ 현재 트리를 완전히 교체합니다 (파싱된 ${cnt}개 노드로).\n\n계속하시겠습니까?\n(자동 백업이 만들어집니다)`
+                : `병합 적용합니다. 파싱된 ${cnt}개 노드 중 기존에 없는 것만 추가되고, 기존 하위 트리는 유지됩니다.\n\n계속하시겠습니까?\n(자동 백업이 만들어집니다)`;
+            if(!confirm(msg)) return;
+            try{
+                await _consultCreateBackup('적용 전 자동 백업 ('+mode+')');
+                if(mode==='replace'){ _consultTree=parsed; }
+                else{ _consultTree=_mergeTree(_consultTree||{}, parsed); }
+                _saveTree();
+                alert('✅ 적용 완료 ('+_countTreeNodes(_consultTree)+'개 노드)');
+                _consultAdminRenderVisual();
+                _consultAdminLoadCurrentToText();
+            }catch(e){ alert('적용 실패: '+(e?.message||e)); }
+        }
+
+        // ---- 시각 편집 탭 ----
+        function _consultAdminRenderVisual(){
+            const el=document.getElementById('consultTreeEditor');
+            if(!el) return;
+            el.innerHTML=_renderTreeAdminNode(_consultTree||{}, []) ||
+                '<div style="padding:1rem;text-align:center;color:#9ca3af;font-size:.85rem">트리가 비어있습니다. 아래에서 최상위 카테고리를 추가하세요.</div>';
+            // 이벤트 위임 (한 번만 등록)
+            if(!el.dataset.bound){
+                el.addEventListener('click', e=>{
+                    const btn=e.target.closest('button[data-act]');
+                    if(!btn) return;
+                    let path=[];
+                    try{ path=JSON.parse(btn.dataset.path||'[]'); }catch(_){ return; }
+                    switch(btn.dataset.act){
+                        case 'add': _consultAdminAddChild(path); break;
+                        case 'ren': _consultAdminRename(path); break;
+                        case 'up':  _consultAdminMove(path,-1); break;
+                        case 'dn':  _consultAdminMove(path,+1); break;
+                        case 'del': _consultAdminDelete(path); break;
+                        case 'tog': _consultAdminToggleCollapse(path); break;
+                    }
+                });
+                el.dataset.bound='1';
+            }
+        }
+        function _renderTreeAdminNode(tree, path){
+            const keys=Object.keys(tree||{});
+            if(!keys.length) return '';
+            return keys.map(key=>{
+                const childPath=[...path, key];
+                const sub=tree[key];
+                const hasChildren=sub && typeof sub==='object' && Object.keys(sub).length>0;
+                const collapseKey=childPath.join('␟');
+                const collapsed=_consultTreeCollapsedAdmin[collapseKey];
+                const arrow=hasChildren?(collapsed?'▶':'▼'):'·';
+                const pathJson=JSON.stringify(childPath).replace(/"/g,'&quot;');
+                return `<div style="padding:.15rem 0 .15rem ${path.length*18}px">
+                    <div style="display:flex;align-items:center;gap:.25rem;flex-wrap:wrap">
+                        <button data-act="tog" data-path="${pathJson}" style="background:none;border:none;width:16px;color:#6b7280;font-size:.7rem;cursor:${hasChildren?'pointer':'default'};padding:0">${arrow}</button>
+                        <span style="font-size:.88rem;color:#111827;font-weight:${path.length===0?'700':'500'};margin-right:.2rem">${_esc(key)}</span>
+                        <button data-act="add" data-path="${pathJson}" title="하위 추가" style="background:#eef2ff;border:1px solid #a5b4fc;color:#4338ca;padding:0 .4rem;font-size:.7rem;border-radius:4px;cursor:pointer;line-height:1.4">+</button>
+                        <button data-act="ren" data-path="${pathJson}" title="이름변경" style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;padding:0 .4rem;font-size:.7rem;border-radius:4px;cursor:pointer;line-height:1.4">✎</button>
+                        <button data-act="up"  data-path="${pathJson}" title="위로" style="background:#f9fafb;border:1px solid #e5e7eb;color:#6b7280;padding:0 .35rem;font-size:.7rem;border-radius:4px;cursor:pointer;line-height:1.4">↑</button>
+                        <button data-act="dn"  data-path="${pathJson}" title="아래로" style="background:#f9fafb;border:1px solid #e5e7eb;color:#6b7280;padding:0 .35rem;font-size:.7rem;border-radius:4px;cursor:pointer;line-height:1.4">↓</button>
+                        <button data-act="del" data-path="${pathJson}" title="삭제" style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:0 .4rem;font-size:.7rem;border-radius:4px;cursor:pointer;line-height:1.4">×</button>
+                    </div>
+                    ${hasChildren && !collapsed ? _renderTreeAdminNode(sub, childPath) : ''}
+                </div>`;
+            }).join('');
+        }
+        function _consultAdminToggleCollapse(path){
+            const key=path.join('␟');
+            _consultTreeCollapsedAdmin[key]=!_consultTreeCollapsedAdmin[key];
+            _consultAdminRenderVisual();
+        }
+        // 트리 특정 path 의 부모 객체와 마지막 이름 반환 [parent, keyName] — 편집용
+        function _consultPathToParent(path){
+            if(!path.length) return null;
+            let parent=_consultTree;
+            for(let i=0;i<path.length-1;i++){
+                if(!parent[path[i]] || typeof parent[path[i]]!=='object') return null;
+                parent=parent[path[i]];
+            }
+            return [parent, path[path.length-1]];
+        }
+        function _consultAdminAddChild(path){
+            const name=prompt(path.length===0 ? '추가할 최상위 카테고리 이름:' : `"${path[path.length-1]}" 하위에 추가할 항목 이름:`);
+            if(!name) return;
+            const clean=name.trim(); if(!clean) return;
+            let parent=_consultTree;
+            for(const p of path){
+                if(!parent[p] || typeof parent[p]!=='object'){ parent[p]={}; }
+                parent=parent[p];
+            }
+            if(parent[clean]!==undefined){ alert('같은 이름이 이미 존재합니다.'); return; }
+            parent[clean]={};
+            _saveTree();
+            _consultAdminRenderVisual();
+        }
+        function _consultAdminRename(path){
+            const pp=_consultPathToParent(path); if(!pp) return;
+            const [parent, oldName]=pp;
+            const newName=prompt('새 이름:', oldName); if(!newName) return;
+            const clean=newName.trim(); if(!clean || clean===oldName) return;
+            if(parent[clean]!==undefined){ alert('같은 이름이 이미 존재합니다.'); return; }
+            const keys=Object.keys(parent);
+            const rebuilt={};
+            for(const k of keys){ rebuilt[k===oldName?clean:k]=parent[k]; }
+            _consultReplaceParent(path, rebuilt);
+            _saveTree();
+            _consultAdminRenderVisual();
+        }
+        function _consultAdminDelete(path){
+            if(!path.length) return;
+            if(!confirm(`"${path[path.length-1]}" 및 모든 하위 항목을 삭제합니다. 계속?`)) return;
+            const pp=_consultPathToParent(path); if(!pp) return;
+            const [parent, name]=pp;
+            delete parent[name];
+            _saveTree();
+            _consultAdminRenderVisual();
+        }
+        function _consultAdminMove(path, delta){
+            if(!path.length) return;
+            let parent;
+            if(path.length===1){ parent=_consultTree; }
+            else{
+                parent=_consultTree;
+                for(let i=0;i<path.length-1;i++) parent=parent[path[i]];
+            }
+            const name=path[path.length-1];
+            const keys=Object.keys(parent);
+            const idx=keys.indexOf(name);
+            const newIdx=idx+delta;
+            if(idx<0 || newIdx<0 || newIdx>=keys.length) return;
+            keys.splice(idx,1);
+            keys.splice(newIdx,0,name);
+            const rebuilt={};
+            for(const k of keys) rebuilt[k]=parent[k];
+            _consultReplaceParent(path, rebuilt);
+            _saveTree();
+            _consultAdminRenderVisual();
+        }
+        // path 의 parent 를 rebuilt 로 교체 (부모 위치를 트리에서 찾아 대입)
+        function _consultReplaceParent(path, rebuilt){
+            if(path.length<=1){ _consultTree=rebuilt; return; }
+            const parentKey=path[path.length-2];
+            let gp=_consultTree;
+            for(let i=0;i<path.length-2;i++) gp=gp[path[i]];
+            gp[parentKey]=rebuilt;
+        }
+
+        // ---- 백업 ----
+        async function _consultCreateBackup(note){
+            try{
+                await db.collection('consultTreeBackups').add({
+                    json: JSON.stringify(_consultTree||{}),
+                    note: note||'백업',
+                    createdAt: new Date().toISOString(),
+                    createdBy: currentUser?.name||currentUser?.id||'staff'
+                });
+                // 최근 10개만 유지
+                const snap=await db.collection('consultTreeBackups')
+                    .orderBy('createdAt','desc').get();
+                if(snap.size>10){
+                    const toDelete=snap.docs.slice(10);
+                    const batch=db.batch();
+                    toDelete.forEach(d=>batch.delete(d.ref));
+                    await batch.commit();
+                }
+            }catch(e){ console.warn('백업 실패:', e); throw e; }
+        }
+        async function consultCreateBackupNow(){
+            const note=prompt('백업 메모(선택):','수동 백업 '+new Date().toLocaleString('ko-KR'));
+            if(note===null) return;
+            try{
+                await _consultCreateBackup(note||'수동 백업');
+                alert('✅ 백업 생성 완료');
+                _consultAdminRenderBackups();
+            }catch(e){ alert('실패: '+(e?.message||e)); }
+        }
+        async function _consultAdminRenderBackups(){
+            const el=document.getElementById('consultBackupList');
+            if(!el) return;
+            el.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            try{
+                const snap=await db.collection('consultTreeBackups')
+                    .orderBy('createdAt','desc').limit(10).get();
+                if(snap.empty){
+                    el.innerHTML='<div style="color:#888;font-size:.85rem;padding:.5rem 0;text-align:center">저장된 백업이 없습니다.</div>';
+                    return;
+                }
+                el.innerHTML=snap.docs.map(d=>{
+                    const data=d.data();
+                    const when=new Date(data.createdAt).toLocaleString('ko-KR');
+                    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.5rem .7rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;flex-wrap:wrap">
+                        <div style="flex:1;min-width:200px">
+                            <div style="font-size:.85rem;font-weight:600;color:#111827">${_esc(data.note||'백업')}</div>
+                            <div style="font-size:.72rem;color:#6b7280">${_esc(when)} · ${_esc(data.createdBy||'-')}</div>
+                        </div>
+                        <button onclick="consultRestoreBackup('${d.id}')" style="background:#eef2ff;border:1px solid #a5b4fc;color:#4338ca;padding:.35rem .8rem;font-size:.78rem;border-radius:4px;cursor:pointer;flex-shrink:0">↺ 복원</button>
+                    </div>`;
+                }).join('');
+            }catch(e){
+                el.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+e.message+'</div>';
+            }
+        }
+        async function consultRestoreBackup(id){
+            if(!confirm('이 백업으로 현재 트리를 완전히 교체합니다.\n\n계속하시겠습니까?\n(복원 전 현재 트리도 자동 백업됩니다)')) return;
+            try{
+                await _consultCreateBackup('복원 직전 자동 백업');
+                const doc=await db.collection('consultTreeBackups').doc(id).get();
+                if(!doc.exists){ alert('백업을 찾을 수 없습니다.'); return; }
+                const json=doc.data()?.json;
+                if(!json){ alert('백업 데이터가 비어있습니다.'); return; }
+                _consultTree=JSON.parse(json);
+                _saveTree();
+                alert('✅ 복원 완료');
+                _consultAdminRenderVisual();
+                _consultAdminLoadCurrentToText();
+                _consultAdminRenderBackups();
+            }catch(e){ alert('복원 실패: '+(e?.message||e)); }
         }
 
         // 오더 이름 → 수가표 매칭
