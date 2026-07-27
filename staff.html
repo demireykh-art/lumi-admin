@@ -12,6 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root{--bg:#faf9f7;--bg-card:#fff;--primary:#9a8b7a;--primary-dark:#7a6b5a;--text:#2c2c2c;--text-secondary:#6b6b6b;--text-muted:#999;--border:#e8e4df;--green:#5a7a5a;--red:#a85a5a;--orange:#c4956a;--purple:#7a6a8a}
@@ -267,6 +268,8 @@
                 </div>
                 <div class="header-user">
                     <span class="user-name" id="userName">-</span>
+                    <button id="btnAdminSettings" onclick="openAdminSettings()" title="관리자 설정"
+                        style="display:none;padding:.35rem .55rem;border:1px solid var(--border);background:transparent;font-size:1rem;cursor:pointer;border-radius:4px">⚙</button>
                     <button class="logout-btn" onclick="logout()">LOGOUT</button>
                 </div>
             </div>
@@ -1545,11 +1548,37 @@
         </div>
     </div>
 
+    <!-- 관리자 설정 모달 (bizAdmins 전용) -->
+    <div class="modal" id="adminSettingsModal">
+        <div class="modal-content" style="max-width:560px">
+            <div class="modal-header">
+                <div class="modal-title">⚙ 관리자 설정</div>
+                <button class="modal-close" onclick="closeModal('adminSettingsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="font-size:.8rem;color:#888;margin-bottom:.75rem">
+                    ※ <code>settings/bizAdmins.emails</code>에 등록된 계정만 접근 가능
+                </div>
+                <div style="font-weight:600;font-size:.95rem;margin-bottom:.5rem">🔑 공용 staff 계정 관리</div>
+                <div style="font-size:.8rem;color:#666;margin-bottom:.75rem">
+                    공용 단말(태블릿·데스크PC)에서 쓰는 계정을 추가·삭제하거나 비밀번호를 재설정합니다.
+                </div>
+                <div id="sharedStaffListStaff" style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.75rem">
+                    <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('adminSettingsModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const firebaseConfig={apiKey:"AIzaSyDnkKNXNnDVlcPd5Y1fl59YysdeEZi7uJU",authDomain:"lumiclinic-c1a95.firebaseapp.com",projectId:"lumiclinic-c1a95",storageBucket:"lumiclinic-c1a95.firebasestorage.app",messagingSenderId:"901456209944",appId:"1:901456209944:web:f287418cd0541f324d3b6d"};
         firebase.initializeApp(firebaseConfig);
         const db=firebase.firestore();
         const auth=firebase.auth();
+        const functions=(typeof firebase.functions==='function')?firebase.app().functions('asia-northeast3'):null;
         // 직원 편의: 브라우저 탭/창을 닫아도 로그인 유지 (LOCAL)
         // 보안: 미활동 12시간 후 자동 로그아웃 (autoLogoutMinutes로 admin이 조정 가능)
         auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
@@ -1687,6 +1716,113 @@
         // 개인(employee) 화이트리스트: settings/employees.emails
         const SHARED_ACCOUNT_ID='lumistaff';
         function isSharedAccount(){return currentUser?.role==='shared';}
+
+        // ===== 경영관리자(bizAdmins) 판별 & ⚙ 버튼 노출 =====
+        let isBizAdmin=false;
+        async function refreshBizAdminStatus(email){
+            const e=String(email||'').toLowerCase();
+            try{
+                const doc=await db.collection('settings').doc('bizAdmins').get();
+                const list=(doc.exists&&Array.isArray(doc.data().emails))
+                    ? doc.data().emails.map(x=>String(x).toLowerCase()) : [];
+                isBizAdmin=!!e && list.includes(e);
+            }catch(_){isBizAdmin=false;}
+            const btn=document.getElementById('btnAdminSettings');
+            if(btn) btn.style.display=isBizAdmin?'':'none';
+        }
+
+        function openAdminSettings(){
+            if(!isBizAdmin){alert('경영관리자 권한이 필요합니다.');return;}
+            document.getElementById('adminSettingsModal').classList.add('active');
+            loadSharedStaffAccountsStaff();
+        }
+
+        async function loadSharedStaffAccountsStaff(){
+            const container=document.getElementById('sharedStaffListStaff');
+            if(!container) return;
+            container.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            try{
+                const doc=await db.collection('settings').doc('staff').get();
+                const emails=(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[])
+                    .map(e=>String(e).trim()).filter(Boolean);
+                const addBtn=`<button onclick="addSharedStaffAccountStaff()" style="background:var(--accent-color,#7a5b2e);color:#fff;border:none;font-size:.85rem;padding:.5rem 1rem;font-weight:600;border-radius:6px;cursor:pointer">+ 새 공용 계정 추가</button>`;
+                if(!emails.length){
+                    container.innerHTML=`
+                        <div style="color:#888;font-size:.85rem;padding:.5rem 0;text-align:center">등록된 공용 staff 계정이 없습니다.</div>
+                        <div style="text-align:center;margin-top:.5rem">${addBtn}</div>`;
+                    return;
+                }
+                const rows=emails.map(email=>{
+                    const safe=email.replace(/'/g,"\\'");
+                    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:6px;background:#fafafa;flex-wrap:wrap">
+                        <code style="font-size:.85rem;flex:1;min-width:180px;word-break:break-all">${email}</code>
+                        <div style="display:flex;gap:.3rem;flex-shrink:0">
+                            <button onclick="resetSharedStaffPasswordStaff('${safe}')" style="background:var(--accent-color,#7a5b2e);color:#fff;border:none;font-size:.78rem;padding:.35rem .7rem;border-radius:4px;cursor:pointer">🔑 비번 재설정</button>
+                            <button onclick="removeSharedStaffFromWhitelistStaff('${safe}')" style="background:#fff;color:#d32f2f;border:1px solid #d32f2f;font-size:.78rem;padding:.35rem .55rem;border-radius:4px;cursor:pointer">화이트리스트 제거</button>
+                        </div>
+                    </div>`;
+                }).join('');
+                container.innerHTML=rows+`<div style="text-align:center;margin-top:.5rem">${addBtn}</div>`;
+            }catch(e){
+                container.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+e.message+'</div>';
+            }
+        }
+
+        async function addSharedStaffAccountStaff(){
+            if(!functions){alert('Cloud Functions 모듈이 로드되지 않았습니다. 새로고침 후 다시 시도하세요.');return;}
+            const email=prompt('추가할 공용 계정 이메일:\n\n예: nurse@lumiclinic.co.kr / desk@lumiclinic.co.kr / skin@lumiclinic.co.kr');
+            if(!email) return;
+            const cleanEmail=String(email).trim().toLowerCase();
+            if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)){alert('올바른 이메일 형식이 아닙니다.');return;}
+            const pw=prompt(`${cleanEmail} 계정의 초기 비밀번호 (6자 이상):`);
+            if(pw===null) return;
+            if(pw.length<6){alert('비밀번호는 6자 이상이어야 합니다.');return;}
+            if(!confirm(`아래 계정을 새로 생성하고 공용 staff 화이트리스트에 등록합니다.\n\n이메일: ${cleanEmail}\n초기 비밀번호: ${pw}\n\n계속하시겠습니까?`)) return;
+            try{
+                const fn=functions.httpsCallable('resetUserPassword');
+                const res=await fn({email:cleanEmail, newPassword:pw, createIfMissing:true, addToStaffWhitelist:true});
+                const d=res?.data||{};
+                const parts=[`✅ ${cleanEmail}`];
+                parts.push(d.created?'신규 계정 생성 완료':'기존 계정 비번 재설정');
+                parts.push(d.whitelistAdded?'공용 화이트리스트 등록':'(이미 화이트리스트에 있음)');
+                parts.push(`\n초기 비밀번호: ${pw}\n\n공용 단말 사용자에게 전달해 주세요.`);
+                alert(parts.join('\n'));
+                await loadSharedStaffAccountsStaff();
+            }catch(e){
+                console.error('공용 계정 추가 실패:',e);
+                alert(`계정 추가 실패: ${e?.message||e?.code||'알 수 없는 오류'}`);
+            }
+        }
+
+        async function resetSharedStaffPasswordStaff(email){
+            if(!functions){alert('Cloud Functions 모듈이 로드되지 않았습니다.');return;}
+            const pw=prompt(`${email}의 새 비밀번호 (6자 이상):`);
+            if(pw===null) return;
+            if(pw.length<6){alert('비밀번호는 6자 이상이어야 합니다.');return;}
+            if(!confirm(`${email}의 비밀번호를 다음 값으로 재설정합니다.\n\n${pw}\n\n계속?`)) return;
+            try{
+                const fn=functions.httpsCallable('resetUserPassword');
+                await fn({email, newPassword:pw});
+                alert(`✅ ${email} 비밀번호가 재설정되었습니다.\n\n새 비밀번호: ${pw}\n\n공용 단말에 전달해 주세요.`);
+            }catch(e){
+                console.error('비번 재설정 실패:',e);
+                alert(`실패: ${e?.message||e?.code||'알 수 없는 오류'}`);
+            }
+        }
+
+        async function removeSharedStaffFromWhitelistStaff(email){
+            if(!confirm(`"${email}" 을(를) 공용 staff 화이트리스트에서 제거합니다.\n\n※ Firebase Auth 계정은 삭제되지 않고, staff 앱 로그인 권한만 잃습니다.\n\n계속?`)) return;
+            try{
+                const doc=await db.collection('settings').doc('staff').get();
+                const cur=(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[]);
+                const next=cur.filter(e=>String(e).toLowerCase()!==String(email).toLowerCase());
+                await db.collection('settings').doc('staff').set({emails:next},{merge:true});
+                alert(`✅ ${email} 을(를) 화이트리스트에서 제거했습니다.`);
+                await loadSharedStaffAccountsStaff();
+            }catch(e){
+                alert('제거 실패: '+(e?.message||e));
+            }
+        }
 
         // 화이트리스트 조회 → {role:'shared'|'employee'|null}
         async function resolveRole(email){
@@ -1918,6 +2054,7 @@
                     currentUser={...emp,role:emp.role||'employee',email};
                 }
                 localStorage.setItem('lumi_staff_user',JSON.stringify(currentUser));
+                await refreshBizAdminStatus(email);
                 if(_staffAppInitialized) return;
                 // 첫 로그인(또는 admin 초기화) 시 비밀번호 변경 강제
                 if(role==='employee'&&currentUser.mustChangePassword===true){
