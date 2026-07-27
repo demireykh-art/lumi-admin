@@ -370,105 +370,7 @@ async function saveConfigPasswords(){
         setTimeout(()=>{msg.innerHTML='';},2000);
     }catch(e){msg.innerHTML='<span style="color:var(--red)">저장 실패: '+e.message+'</span>';}
 }
-// ===== 공용 staff 계정 관리 (조회·추가·비번 재설정·화이트리스트 제거) =====
-async function loadSharedStaffAccounts(){
-    const container=document.getElementById('sharedStaffList');
-    if(!container) return;
-    try{
-        const doc=await db.collection('settings').doc('staff').get();
-        const emails=(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[])
-            .map(e=>String(e).trim()).filter(Boolean);
-        const addBtn=`<button class="btn btn-sm" style="background:var(--accent-color,#7a5b2e);color:#fff;font-size:.85rem;padding:.5rem 1rem;font-weight:600" onclick="addSharedStaffAccount()">+ 새 공용 계정 추가</button>`;
-        if(!emails.length){
-            container.innerHTML=`
-                <div style="color:#888;font-size:.85rem;padding:.5rem 0;text-align:center">등록된 공용 staff 계정이 없습니다.</div>
-                <div style="text-align:center;margin-top:.5rem">${addBtn}</div>`;
-            return;
-        }
-        const rows=emails.map(email=>{
-            const safe=email.replace(/'/g,"\\'");
-            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.5rem .75rem;border:1px solid var(--border);border-radius:6px;background:#fafafa;flex-wrap:wrap">
-                <code style="font-size:.85rem;flex:1;min-width:180px;word-break:break-all">${email}</code>
-                <div style="display:flex;gap:.3rem;flex-shrink:0">
-                    <button class="btn btn-sm" style="background:var(--accent-color,#7a5b2e);color:#fff;font-size:.78rem;padding:.35rem .7rem" onclick="resetSharedStaffPassword('${safe}')">🔑 비번 재설정</button>
-                    <button class="btn btn-sm" style="background:#fff;color:#d32f2f;border:1px solid #d32f2f;font-size:.78rem;padding:.35rem .55rem" onclick="removeSharedStaffFromWhitelist('${safe}')">화이트리스트 제거</button>
-                </div>
-            </div>`;
-        }).join('');
-        container.innerHTML=rows+`<div style="text-align:center;margin-top:.5rem">${addBtn}</div>`;
-    }catch(e){
-        console.error('shared staff 로드 실패:',e);
-        container.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+e.message+'</div>';
-    }
-}
-
-async function addSharedStaffAccount(){
-    if(typeof functions==='undefined'||!functions){
-        alert('Cloud Functions 모듈이 로드되지 않았습니다. 페이지 새로고침 후 다시 시도하세요.');
-        return;
-    }
-    const email=prompt('추가할 공용 계정 이메일:\n\n예: nurse@lumiclinic.co.kr / desk@lumiclinic.co.kr / skin@lumiclinic.co.kr');
-    if(!email) return;
-    const cleanEmail=String(email).trim().toLowerCase();
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)){
-        alert('올바른 이메일 형식이 아닙니다.');
-        return;
-    }
-    const pw=prompt(`${cleanEmail} 계정의 초기 비밀번호 (6자 이상):`);
-    if(pw===null) return;
-    if(pw.length<6){ alert('비밀번호는 6자 이상이어야 합니다.'); return; }
-    if(!confirm(`아래 계정을 새로 생성하고 공용 staff 화이트리스트에 등록합니다.\n\n이메일: ${cleanEmail}\n초기 비밀번호: ${pw}\n\n계속하시겠습니까?`)) return;
-    try{
-        const fn=functions.httpsCallable('resetUserPassword');
-        const res=await fn({email:cleanEmail, newPassword:pw, createIfMissing:true, addToStaffWhitelist:true});
-        const d=res?.data||{};
-        const parts=[`✅ ${cleanEmail}`];
-        if(d.created) parts.push('신규 계정 생성 완료');
-        else parts.push('기존 계정 비번 재설정');
-        if(d.whitelistAdded) parts.push('공용 화이트리스트 등록');
-        else parts.push('(이미 화이트리스트에 있음)');
-        parts.push(`\n초기 비밀번호: ${pw}\n\n공용 단말 사용자에게 전달해 주세요.`);
-        alert(parts.join('\n'));
-        await loadSharedStaffAccounts();
-    }catch(e){
-        console.error('공용 계정 추가 실패:',e);
-        alert(`계정 추가 실패: ${e?.message||e?.code||'알 수 없는 오류'}`);
-    }
-}
-
-async function resetSharedStaffPassword(email){
-    if(typeof functions==='undefined'||!functions){
-        alert('Cloud Functions 모듈이 로드되지 않았습니다. 페이지 새로고침 후 다시 시도하세요.');
-        return;
-    }
-    const newPw=prompt(`공용 staff 계정 [${email}]의 새 비밀번호 (6자 이상):`);
-    if(newPw===null) return;
-    if(newPw.length<6){alert('비밀번호는 6자 이상이어야 합니다.');return;}
-    if(!confirm(`${email}의 비밀번호를 즉시 재설정합니다.\n\n새 비밀번호: ${newPw}\n\n` +
-                `공용 단말 사용자들에게 새 비번을 안내해 주세요.\n계속하시겠습니까?`)) return;
-    try{
-        const fn=functions.httpsCallable('resetUserPassword');
-        await fn({email, newPassword: newPw});
-        alert(`✅ ${email} 비밀번호 재설정 완료\n\n새 비번: ${newPw}\n공용 단말 사용자에게 전달해 주세요.`);
-    }catch(e){
-        console.error('공용 계정 비번 재설정 실패:',e);
-        alert(`재설정 실패: ${e?.message||e?.code||'알 수 없는 오류'}`);
-    }
-}
-
-async function removeSharedStaffFromWhitelist(email){
-    if(!confirm(`"${email}" 을(를) 공용 staff 화이트리스트에서 제거합니다.\n\n※ Firebase Auth 계정은 삭제되지 않고, staff 앱 로그인 권한만 잃습니다.\n\n계속하시겠습니까?`)) return;
-    try{
-        const doc=await db.collection('settings').doc('staff').get();
-        const cur=(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[]);
-        const next=cur.filter(e=>String(e).toLowerCase()!==String(email).toLowerCase());
-        await db.collection('settings').doc('staff').set({emails:next},{merge:true});
-        alert(`✅ ${email} 을(를) 화이트리스트에서 제거했습니다.`);
-        await loadSharedStaffAccounts();
-    }catch(e){
-        alert('제거 실패: '+(e?.message||e));
-    }
-}
+// ※ 공용 staff 계정 관리는 통합앱(staff.html)의 ⚙ 관리자 설정으로 이관됨
 
 async function saveStaffSettings(){
     const val=parseInt(document.getElementById('cfgAutoLogout')?.value)||720;
@@ -660,7 +562,6 @@ async function initApp(){
     if(typeof loadStaffSettings==='function')loadStaffSettings();
     if(typeof loadConfigForSettings==='function')loadConfigForSettings();
     if(typeof loadAdminAccounts==='function')loadAdminAccounts();
-    if(typeof loadSharedStaffAccounts==='function')loadSharedStaffAccounts();
     if(typeof initCardStatements==='function')initCardStatements();
     // 장소 자동 초기화 제거: staff 앱에서만 관리하도록 통일 (2026-06 정책)
     // 관리자 admin 은 소모품 목록의 장소 필터 표시를 위해 조회만 수행.
