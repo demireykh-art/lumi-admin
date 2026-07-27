@@ -1942,6 +1942,8 @@
             document.getElementById('loginScreen').classList.add('hidden');
             document.getElementById('appContainer').classList.add('active');
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
+            // 공지 실시간 동기화 시작 (전 기기 즉시 반영)
+            _migrateLocalNoticesToFirestore().finally(()=>_initNoticesRealtime());
 
             const shared=isSharedAccount();
             
@@ -2011,6 +2013,8 @@
         
         async function logout(){
             clearAutoLogoutTimer();
+            if(_noticeUnsub){ try{_noticeUnsub();}catch(_){}
+                _noticeUnsub=null; }
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -4153,8 +4157,8 @@
                 }else{
                     items=items.filter(i=>{
                         if(i.locations){
-                            const qty=i.locations[currentAuditLocation];
-                            return qty&&qty>0;
+                            // 재고가 0이어도 해당 장소에 등록된 품목은 유지 (재입고 편의)
+                            return currentAuditLocation in i.locations;
                         }
                         if(i.location === currentAuditLocation){
                             return true;
@@ -5177,18 +5181,25 @@
 
         // 오더 이름 → 수가표 매칭
         // ================================================================
-        //  공지 · 할일 (localStorage 'staff_notices_v1')
+        //  공지 · 할일 (Firestore 'notices' 컬렉션 — 전 기기 실시간 동기화)
+        //   · localStorage는 오프라인/첫로딩용 캐시로만 사용
         // ================================================================
         const NOTICE_LS_KEY='staff_notices_v1';
-        let _notices=null;
-        function _loadNotices(){
-            if(_notices) return _notices;
-            try{ _notices=JSON.parse(localStorage.getItem(NOTICE_LS_KEY))||[]; }catch(_){ _notices=[]; }
-            return _notices;
-        }
-        function _saveNotices(){
-            try{ localStorage.setItem(NOTICE_LS_KEY,JSON.stringify(_notices||[])); }catch(_){}
-            _renderHomeNoticeInline();
+        let _notices=[];
+        let _noticeUnsub=null;
+        // 페이지 로딩 시 캐시 먼저 (오프라인/느린 네트워크 대비)
+        try{ _notices=JSON.parse(localStorage.getItem(NOTICE_LS_KEY))||[]; }catch(_){ _notices=[]; }
+        function _loadNotices(){ return _notices; }
+        function _initNoticesRealtime(){
+            if(_noticeUnsub) return; // 이미 구독 중
+            try{
+                _noticeUnsub=db.collection('notices').onSnapshot(snap=>{
+                    _notices=snap.docs.map(d=>({id:d.id, ...d.data()}));
+                    try{ localStorage.setItem(NOTICE_LS_KEY,JSON.stringify(_notices)); }catch(_){}
+                    _renderHomeNoticeInline();
+                    if(document.getElementById('noticeList')) renderNoticeList();
+                }, err=>console.error('notices 스냅샷 실패:', err));
+            }catch(e){ console.error('notices 실시간 구독 초기화 실패:',e); }
         }
         function _todayYmd(){
             const d=new Date();
@@ -5208,45 +5219,70 @@
             const today=_todayYmd();
             return (_loadNotices()||[]).filter(n=>n.date===today).sort((a,b)=>(a.done?1:0)-(b.done?1:0));
         }
-        function addNotice(){
+        async function addNotice(){
             const dateEl=document.getElementById('noticeDateInput');
             const textEl=document.getElementById('noticeTextInput');
             const date=(dateEl?.value||_todayYmd());
             const text=(textEl?.value||'').trim();
             if(!text){ alert('공지 내용을 입력하세요.'); textEl?.focus(); return; }
-            _loadNotices();
-            _notices.push({id:_uid(),date,text,done:false,createdAt:new Date().toISOString()});
-            _saveNotices();
-            if(textEl){
-                textEl.value='';
-                textEl.style.height='auto';
-                textEl.focus();
-            }
-            renderNoticeList();
+            try{
+                await db.collection('notices').add({
+                    date, text, done:false,
+                    createdAt:new Date().toISOString(),
+                    createdBy:currentUser?.name||currentUser?.id||'staff'
+                });
+                // 스냅샷 리스너가 UI 자동 갱신
+                if(textEl){ textEl.value=''; textEl.style.height='auto'; textEl.focus(); }
+            }catch(e){ alert('공지 저장 실패: '+(e?.message||e)); }
         }
-        function toggleNoticeDone(id){
-            _loadNotices();
+        async function toggleNoticeDone(id){
             const n=_notices.find(x=>x.id===id); if(!n) return;
-            n.done=!n.done;
-            _saveNotices();
-            renderNoticeList();
+            const newDone=!n.done;
+            // 즉각 로컬 반영 (반응 속도)
+            n.done=newDone; _renderHomeNoticeInline(); if(document.getElementById('noticeList')) renderNoticeList();
+            try{ await db.collection('notices').doc(id).update({done:newDone, updatedAt:new Date().toISOString()}); }
+            catch(e){ alert('상태 변경 실패: '+(e?.message||e)); }
         }
-        function editNotice(id){
-            _loadNotices();
+        async function editNotice(id){
             const n=_notices.find(x=>x.id===id); if(!n) return;
             const t=prompt('공지 내용:',n.text); if(t==null) return;
-            n.text=t.trim()||n.text;
             const d=prompt('날짜 (YYYY-MM-DD):',n.date); if(d==null) return;
-            n.date=d.trim()||n.date;
-            _saveNotices();
-            renderNoticeList();
+            const newText=t.trim()||n.text;
+            const newDate=d.trim()||n.date;
+            try{ await db.collection('notices').doc(id).update({text:newText, date:newDate, updatedAt:new Date().toISOString()}); }
+            catch(e){ alert('수정 실패: '+(e?.message||e)); }
         }
-        function deleteNotice(id){
+        async function deleteNotice(id){
             if(!confirm('이 공지를 삭제하시겠습니까?')) return;
-            _loadNotices();
-            _notices=_notices.filter(x=>x.id!==id);
-            _saveNotices();
-            renderNoticeList();
+            try{ await db.collection('notices').doc(id).delete(); }
+            catch(e){ alert('삭제 실패: '+(e?.message||e)); }
+        }
+        // 로컬 캐시(공지)를 최초 1회 Firestore로 마이그레이션 (원 기기에서만 실행됨)
+        async function _migrateLocalNoticesToFirestore(){
+            try{
+                if(localStorage.getItem('staff_notices_migrated_v1')==='1') return;
+                const raw=localStorage.getItem(NOTICE_LS_KEY);
+                if(!raw) { localStorage.setItem('staff_notices_migrated_v1','1'); return; }
+                const arr=JSON.parse(raw)||[];
+                if(!arr.length){ localStorage.setItem('staff_notices_migrated_v1','1'); return; }
+                // 이미 Firestore에 데이터가 있으면 마이그레이션 스킵 (중복 방지)
+                const existing=await db.collection('notices').limit(1).get();
+                if(!existing.empty){ localStorage.setItem('staff_notices_migrated_v1','1'); return; }
+                const batch=db.batch();
+                arr.forEach(n=>{
+                    const ref=db.collection('notices').doc();
+                    batch.set(ref,{
+                        date:n.date||_todayYmd(),
+                        text:n.text||'',
+                        done:!!n.done,
+                        createdAt:n.createdAt||new Date().toISOString(),
+                        createdBy:'(로컬마이그레이션)'
+                    });
+                });
+                await batch.commit();
+                localStorage.setItem('staff_notices_migrated_v1','1');
+                console.info('[notices] 로컬 캐시 → Firestore 마이그레이션 완료:', arr.length, '건');
+            }catch(e){ console.warn('[notices] 마이그레이션 스킵:', e?.message||e); }
         }
         function renderNoticeList(){
             const wrap=document.getElementById('noticeList');
@@ -6190,7 +6226,8 @@
             const container = document.getElementById('receiveLocationsList');
             container.innerHTML = '';
             if(item.locations && Object.keys(item.locations).length > 0){
-                Object.keys(item.locations).filter(loc => item.locations[loc] > 0).forEach(loc => {
+                // 재고 0 장소도 유지 (재입고 시 다시 선택 안 해도 되도록)
+                Object.keys(item.locations).forEach(loc => {
                     addReceiveLocationRow(loc, 0);
                 });
             } else {
