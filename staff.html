@@ -1944,6 +1944,8 @@
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
             // 공지 실시간 동기화 시작 (전 기기 즉시 반영)
             _migrateLocalNoticesToFirestore().finally(()=>_initNoticesRealtime());
+            // 상담 트리·마취연고 실시간 동기화
+            _migrateConsultToFirestore().finally(()=>_initConsultRealtime());
 
             const shared=isSharedAccount();
             
@@ -2015,6 +2017,10 @@
             clearAutoLogoutTimer();
             if(_noticeUnsub){ try{_noticeUnsub();}catch(_){}
                 _noticeUnsub=null; }
+            if(_consultTreeUnsub){ try{_consultTreeUnsub();}catch(_){}
+                _consultTreeUnsub=null; }
+            if(_consultAnesthUnsub){ try{_consultAnesthUnsub();}catch(_){}
+                _consultAnesthUnsub=null; }
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -5001,9 +5007,89 @@
             }
             try{ _consultSaved=JSON.parse(localStorage.getItem(CONSULT_SAVED_KEY))||[]; }catch(_){ _consultSaved=[]; }
         }
-        function _saveTree(){ try{ localStorage.setItem(CONSULT_TREE_KEY,JSON.stringify(_consultTree||{})); }catch(_){} }
+        // 트리·마취연고: Firestore(settings/consultTree, settings/consultAnesth) 실시간 동기화
+        // JSON 문자열로 저장 → Firestore field-name 제약 회피
+        function _saveTree(){
+            try{ localStorage.setItem(CONSULT_TREE_KEY,JSON.stringify(_consultTree||{})); }catch(_){}
+            try{
+                if(typeof db!=='undefined')
+                    db.collection('settings').doc('consultTree').set({
+                        json:JSON.stringify(_consultTree||{}),
+                        updatedAt:new Date().toISOString(),
+                        updatedBy:currentUser?.name||currentUser?.id||'staff'
+                    });
+            }catch(_){}
+        }
         function _saveSaved(){ try{ localStorage.setItem(CONSULT_SAVED_KEY,JSON.stringify(_consultSaved||[])); }catch(_){} }
-        function _saveAnesth(){ try{ localStorage.setItem(ANESTHESIA_KEY,JSON.stringify(_consultAnesth||[])); }catch(_){} }
+        function _saveAnesth(){
+            try{ localStorage.setItem(ANESTHESIA_KEY,JSON.stringify(_consultAnesth||[])); }catch(_){}
+            try{
+                if(typeof db!=='undefined')
+                    db.collection('settings').doc('consultAnesth').set({
+                        list:_consultAnesth||[],
+                        updatedAt:new Date().toISOString(),
+                        updatedBy:currentUser?.name||currentUser?.id||'staff'
+                    });
+            }catch(_){}
+        }
+
+        // 상담 트리·마취연고 실시간 구독
+        let _consultTreeUnsub=null;
+        let _consultAnesthUnsub=null;
+        function _initConsultRealtime(){
+            if(!_consultTreeUnsub){
+                try{
+                    _consultTreeUnsub=db.collection('settings').doc('consultTree').onSnapshot(doc=>{
+                        if(!doc.exists) return;
+                        const raw=doc.data()?.json;
+                        if(!raw) return;
+                        try{
+                            const parsed=JSON.parse(raw);
+                            if(parsed && typeof parsed==='object'){
+                                _consultTree=parsed;
+                                try{ localStorage.setItem(CONSULT_TREE_KEY,JSON.stringify(_consultTree)); }catch(_){}
+                                if(document.getElementById('consultBody')) renderConsult();
+                            }
+                        }catch(_){}
+                    }, err=>console.warn('consultTree 스냅샷 실패:', err));
+                }catch(e){ console.warn('consultTree 실시간 초기화 실패:',e); }
+            }
+            if(!_consultAnesthUnsub){
+                try{
+                    _consultAnesthUnsub=db.collection('settings').doc('consultAnesth').onSnapshot(doc=>{
+                        if(!doc.exists) return;
+                        const list=doc.data()?.list;
+                        if(!Array.isArray(list)) return;
+                        _consultAnesth=list.slice();
+                        try{ localStorage.setItem(ANESTHESIA_KEY,JSON.stringify(_consultAnesth)); }catch(_){}
+                        if(document.getElementById('consultBody')) renderConsult();
+                    }, err=>console.warn('consultAnesth 스냅샷 실패:', err));
+                }catch(e){ console.warn('consultAnesth 실시간 초기화 실패:',e); }
+            }
+        }
+        // 최초 1회: Firestore doc 없으면 로컬(or SEED) 데이터 업로드
+        async function _migrateConsultToFirestore(){
+            try{
+                if(localStorage.getItem('staff_consult_migrated_v1')==='1') return;
+                const tRef=db.collection('settings').doc('consultTree');
+                const aRef=db.collection('settings').doc('consultAnesth');
+                const [tDoc,aDoc]=await Promise.all([tRef.get(), aRef.get()]);
+                if(!tDoc.exists){
+                    let tree=null;
+                    try{ tree=JSON.parse(localStorage.getItem(CONSULT_TREE_KEY)); }catch(_){}
+                    if(!tree||typeof tree!=='object') tree=JSON.parse(JSON.stringify(CONSULT_SEED_V3));
+                    await tRef.set({json:JSON.stringify(tree), updatedAt:new Date().toISOString(), updatedBy:'(초기seed)'});
+                }
+                if(!aDoc.exists){
+                    let list=null;
+                    try{ list=JSON.parse(localStorage.getItem(ANESTHESIA_KEY)); }catch(_){}
+                    if(!Array.isArray(list)||!list.length) list=ANESTHESIA_SEED.slice();
+                    await aRef.set({list, updatedAt:new Date().toISOString(), updatedBy:'(초기seed)'});
+                }
+                localStorage.setItem('staff_consult_migrated_v1','1');
+                console.info('[consult] Firestore 마이그레이션 완료');
+            }catch(e){ console.warn('[consult] 마이그레이션 스킵:', e?.message||e); }
+        }
 
         // 트리 특정 path 의 하위 객체 반환
         function _consultNodeAt(path){
