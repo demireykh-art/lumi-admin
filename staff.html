@@ -1358,6 +1358,35 @@
         </div>
     </div>
 
+    <!-- 📊 소진 추이 모달 -->
+    <div class="modal" id="consumptionModal">
+        <div class="modal-content" style="max-width:720px;max-height:92vh">
+            <div class="modal-header">
+                <div class="modal-title" id="consumptionTitle">📊 소진 추이</div>
+                <button class="modal-close" onclick="closeModal('consumptionModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex;gap:.4rem;margin-bottom:.75rem;align-items:center;flex-wrap:wrap">
+                    <span style="font-size:.8rem;color:#6b7280;font-weight:600">기간</span>
+                    <button data-gran="week" onclick="setConsumptionGranularity('week')"
+                        style="padding:.35rem .75rem;font-size:.8rem;border:1px solid #a855f7;background:#7c3aed;color:#fff;border-radius:6px;cursor:pointer;font-weight:600">주별</button>
+                    <button data-gran="month" onclick="setConsumptionGranularity('month')"
+                        style="padding:.35rem .75rem;font-size:.8rem;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:6px;cursor:pointer">월별</button>
+                    <div style="flex:1"></div>
+                    <div id="consumptionSummary" style="font-size:.78rem;color:#4b5563"></div>
+                </div>
+                <div id="consumptionChart" style="min-height:240px;padding:.75rem;background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;overflow-x:auto">
+                    <div style="text-align:center;color:#9ca3af;padding:2rem;font-size:.85rem">로딩 중...</div>
+                </div>
+                <div id="consumptionNote" style="margin-top:.5rem;font-size:.72rem;color:#9ca3af;line-height:1.5"></div>
+                <div id="consumptionTable" style="margin-top:.75rem"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('consumptionModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 장소 관리 모달 -->
     <div class="modal" id="locationManageModal">
         <div class="modal-content" style="max-width:500px">
@@ -4480,7 +4509,7 @@
                 return `<div class="inv-item-row ${isSaved?'saved':''}" id="inv-row-${item.id}" style="${lowBg}">
                     <div class="inv-item-row-header">
                         <div class="inv-item-info">
-                            <div class="inv-item-name">${item.parentName?`<span style="display:inline-block;background:#eef2ff;color:#4338ca;font-size:.6rem;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-right:4px">📂 ${item.parentName}</span>`:''}${item.name}${primaryAction?' '+primaryAction:''}${dcBadge}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':'' }</div>
+                            <div class="inv-item-name">${item.parentName?`<span style="display:inline-block;background:#eef2ff;color:#4338ca;font-size:.6rem;padding:1px 6px;border-radius:8px;vertical-align:middle;margin-right:4px">📂 ${item.parentName}</span>`:''}<span onclick="openConsumptionModal('${item.id}')" title="클릭 → 소진 추이" style="cursor:pointer;text-decoration:underline;text-decoration-color:#c4b5fd;text-underline-offset:2px">${item.name}</span>${primaryAction?' '+primaryAction:''}${dcBadge}${isLow?' <span style="display:inline-block;background:var(--red);color:#fff;font-size:.6rem;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px">발주필요</span>':'' }</div>
                             <div class="inv-item-meta">
                                 <span>${catLabel}</span>
                                 <span>총 재고: <strong>${sysStock}</strong> ${item.unit||'개'}</span>
@@ -4490,6 +4519,7 @@
                                 ${item.lastReceiveDate?`<span style="color:var(--green)">최근입고: ${item.lastReceiveDate}</span>`:''}
                                 <button onclick="openReceiveItemModal('${item.id}')" style="background:none;border:1px solid var(--green);color:var(--green);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">📥 입고</button>
                                 <button onclick="openMoveStockModal('${item.id}')" style="background:none;border:1px solid #3b82f6;color:#3b82f6;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🔄 이동</button>
+                                <button onclick="openConsumptionModal('${item.id}')" style="background:none;border:1px solid #a855f7;color:#7c3aed;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">📊 소진</button>
                                 <button onclick="openEditItemModal('${item.id}')" style="background:none;border:1px solid #ccc;color:#666;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">✏️ 수정</button>
                                 <button onclick="deleteInventoryItem('${item.id}','${item.name.replace(/'/g,"\\'")}' )" style="background:none;border:1px solid var(--red);color:var(--red);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🗑️ 삭제</button>
                             </div>
@@ -7621,6 +7651,177 @@
                 console.error('이동 실패:',e);
                 alert('이동 실패: '+(e.message||e));
             }
+        }
+
+        // ================================================================
+        //  📊 재고 소진 추이 (audit + receiveHistory 조합 → 주별/월별)
+        // ================================================================
+        let _consumptionCtx=null; // {itemId, itemName, unit, events, granularity}
+
+        async function openConsumptionModal(itemId){
+            const item=(typeof invItems!=='undefined'?invItems:[]).find(i=>i.id===itemId);
+            const name=item?.name||itemId;
+            const unit=item?.unit||'개';
+            document.getElementById('consumptionTitle').textContent=`📊 ${name} — 소진 추이`;
+            document.getElementById('consumptionChart').innerHTML='<div style="text-align:center;color:#9ca3af;padding:2rem;font-size:.85rem">데이터 집계 중...</div>';
+            document.getElementById('consumptionSummary').textContent='';
+            document.getElementById('consumptionTable').innerHTML='';
+            document.getElementById('consumptionNote').innerHTML='';
+            openModal('consumptionModal');
+            try{
+                const events=await _computeItemConsumption(itemId);
+                _consumptionCtx={itemId, itemName:name, unit, events, granularity:'week'};
+                _renderConsumption();
+            }catch(e){
+                document.getElementById('consumptionChart').innerHTML=
+                    '<div style="text-align:center;color:var(--red);padding:2rem;font-size:.85rem">집계 실패: '+_esc(e.message||e)+'</div>';
+            }
+        }
+        function setConsumptionGranularity(g){
+            if(!_consumptionCtx) return;
+            _consumptionCtx.granularity=g;
+            document.querySelectorAll('#consumptionModal button[data-gran]').forEach(b=>{
+                const active=b.dataset.gran===g;
+                b.style.background=active?'#7c3aed':'#fff';
+                b.style.color=active?'#fff':'#374151';
+                b.style.border=active?'1px solid #a855f7':'1px solid #d1d5db';
+                b.style.fontWeight=active?'600':'400';
+            });
+            _renderConsumption();
+        }
+
+        // audits + receives → 각 audit 구간마다 순소비량 계산 (attribute to end date)
+        async function _computeItemConsumption(itemId){
+            const [auditSnap, recvSnap]=await Promise.all([
+                db.collection('inventoryAudits').where('itemId','==',itemId).get().catch(()=>null),
+                db.collection('receiveHistory').where('itemId','==',itemId).get().catch(()=>null)
+            ]);
+            // 감사(audit): 같은 날짜에 여러 장소 감사가 있을 수 있음 → 그날의 마지막 actualStock 사용
+            // actualStock 은 그 감사 세션에서 입력한 전체 위치 합
+            const dayStock={}; // 'YYYY-MM-DD' → {stock, ts}
+            (auditSnap?.docs||[]).forEach(d=>{
+                const a=d.data();
+                const iso=String(a.createdAt||'');
+                const date=iso.slice(0,10);
+                if(!date) return;
+                const cur=dayStock[date];
+                if(!cur || iso>cur.ts){
+                    dayStock[date]={stock:Number(a.actualStock)||0, ts:iso};
+                }
+            });
+            const auditDates=Object.keys(dayStock).sort();
+
+            // 입고량: receiveDate 별로 합산
+            const recvByDate={};
+            (recvSnap?.docs||[]).forEach(d=>{
+                const r=d.data();
+                let date=r.receiveDate||'';
+                if(!date && r.createdAt){
+                    try{ date=(r.createdAt.toDate?r.createdAt.toDate():new Date(r.createdAt)).toISOString().slice(0,10); }catch(_){}
+                }
+                if(!date) return;
+                recvByDate[date]=(recvByDate[date]||0)+(Number(r.totalQty)||0);
+            });
+
+            // 인접한 감사 사이 소비량 = 이전재고 + (그 사이 입고) - 현재재고
+            const events=[]; // [{date, qty, from, to, received}]
+            for(let i=1;i<auditDates.length;i++){
+                const prev=auditDates[i-1], curr=auditDates[i];
+                const prevStock=dayStock[prev].stock;
+                const currStock=dayStock[curr].stock;
+                let received=0;
+                Object.keys(recvByDate).forEach(dt=>{
+                    if(dt>prev && dt<=curr) received+=recvByDate[dt];
+                });
+                const consumption=prevStock+received-currStock;
+                if(consumption>0){
+                    events.push({date:curr, qty:consumption, from:prev, to:curr, received});
+                }
+            }
+            return events;
+        }
+
+        function _bucketConsumption(events, granularity){
+            const buckets={}; // key -> {qty}
+            events.forEach(e=>{
+                let key;
+                if(granularity==='month'){
+                    key=(e.date||'').slice(0,7); // YYYY-MM
+                }else{
+                    // 주별: 그 주의 월요일 (ISO)
+                    const d=new Date(e.date);
+                    const day=d.getDay(); // 0=Sun..6=Sat
+                    const diff=(day===0?-6:1-day);
+                    const mon=new Date(d); mon.setDate(d.getDate()+diff);
+                    key=mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');
+                }
+                if(!key) return;
+                buckets[key]=(buckets[key]||0)+e.qty;
+            });
+            return buckets;
+        }
+
+        function _renderConsumption(){
+            const ctx=_consumptionCtx;
+            if(!ctx) return;
+            const chart=document.getElementById('consumptionChart');
+            const summary=document.getElementById('consumptionSummary');
+            const note=document.getElementById('consumptionNote');
+            const table=document.getElementById('consumptionTable');
+            if(!ctx.events.length){
+                chart.innerHTML=`<div style="text-align:center;color:#9ca3af;padding:2.5rem;font-size:.85rem">
+                    아직 소진 데이터가 부족합니다.<br>
+                    <span style="font-size:.75rem">최소 2회 이상의 실사 기록이 필요합니다.</span>
+                </div>`;
+                summary.textContent='';
+                note.innerHTML='';
+                table.innerHTML='';
+                return;
+            }
+            const buckets=_bucketConsumption(ctx.events, ctx.granularity);
+            const keys=Object.keys(buckets).sort();
+            // 최근 12구간만
+            const shown=keys.slice(-12);
+            const maxQty=Math.max(...shown.map(k=>buckets[k]), 1);
+
+            // 요약
+            const total=ctx.events.reduce((s,e)=>s+e.qty,0);
+            const avg=shown.length?(shown.reduce((s,k)=>s+buckets[k],0)/shown.length):0;
+            const unitLabel=ctx.unit;
+            const gLabel=ctx.granularity==='month'?'월':'주';
+            summary.innerHTML=`총 소진 <strong>${Math.round(total*100)/100}</strong> ${unitLabel} · 평균 ${gLabel}당 <strong>${Math.round(avg*100)/100}</strong> ${unitLabel}`;
+
+            // 차트 (CSS 바)
+            const barsHtml=shown.map(k=>{
+                const q=buckets[k];
+                const heightPct=Math.max(2, Math.round(q/maxQty*90)); // 최대 90% (숫자 라벨 자리)
+                const shortLabel=ctx.granularity==='month' ? k.slice(2) /* 26-04 */ : k.slice(5) /* 04-05 */;
+                const displayQty=(Math.round(q*100)/100);
+                return `<div style="flex:1;min-width:38px;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end">
+                    <div style="font-size:.72rem;font-weight:700;color:#4338ca">${displayQty}</div>
+                    <div style="width:70%;background:linear-gradient(180deg,#a855f7 0%,#7c3aed 100%);height:${heightPct}%;border-radius:5px 5px 0 0;box-shadow:0 -1px 3px rgba(124,58,237,.15);min-height:4px"></div>
+                    <div style="font-size:.65rem;color:#6b7280;white-space:nowrap">${shortLabel}</div>
+                </div>`;
+            }).join('');
+            chart.innerHTML=`<div style="display:flex;align-items:stretch;gap:6px;height:220px;min-width:${shown.length*46}px">${barsHtml}</div>`;
+
+            // 노트: 산정 방식 안내
+            note.innerHTML=`※ 소진량 = 이전 실사 재고 + 사이 입고량 − 현재 실사 재고 (${ctx.events.length}개 구간, 최근 ${shown.length}${gLabel} 표시)`;
+
+            // 상세 표 (하단 최근 6구간)
+            const detail=shown.slice(-6).reverse().map(k=>{
+                const q=buckets[k];
+                return `<tr>
+                    <td style="padding:.35rem .5rem;border-bottom:1px solid #f3f4f6;font-size:.78rem;color:#374151">${k}</td>
+                    <td style="padding:.35rem .5rem;border-bottom:1px solid #f3f4f6;font-size:.78rem;color:#111827;text-align:right;font-weight:600">${Math.round(q*100)/100} ${unitLabel}</td>
+                </tr>`;
+            }).join('');
+            table.innerHTML=detail?`<div style="margin-top:.5rem">
+                <div style="font-size:.75rem;font-weight:600;color:#4b5563;margin-bottom:.3rem">최근 ${gLabel} 소진량</div>
+                <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+                    <tbody>${detail}</tbody>
+                </table>
+            </div>`:'';
         }
 
         function openEditItemModal(itemId){
