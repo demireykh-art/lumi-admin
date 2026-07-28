@@ -2075,6 +2075,8 @@
             _migrateConsultToFirestore().finally(()=>_initConsultRealtime());
             // 거래처(vendors) 실시간 동기화
             _migrateVendorsToFirestore().finally(()=>_initVendorsRealtime());
+            // 시술 수가표 실시간 동기화
+            _migrateFeeToFirestore().finally(()=>_initFeeRealtime());
             // 상담 차팅: 개인계정에만 홈 버튼 노출
             const chartBtn=document.getElementById('topHomeChartingBtn');
             if(chartBtn) chartBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
@@ -2157,6 +2159,8 @@
                 _consultAnesthUnsub=null; }
             if(_vendorUnsub){ try{_vendorUnsub();}catch(_){}
                 _vendorUnsub=null; }
+            if(_feeUnsub){ try{_feeUnsub();}catch(_){}
+                _feeUnsub=null; }
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -4817,35 +4821,98 @@
             }
         }
 
-        // ---- 시술 수가표: seed + localStorage ----
+        // ---- 시술 수가표: Firestore 'settings/feeSchedule' 실시간 동기화 (localStorage 캐시) ----
+        let _feeUnsub=null;
         async function ensureFeeData(){
             if(_feeData) return _feeData;
+            // 1) 로컬 캐시 우선 (오프라인·빠른 첫 렌더)
             const saved=localStorage.getItem(FEE_LS_KEY);
             if(saved){
-                try{ _feeData=JSON.parse(saved); return _feeData; }catch(_){ /* fallthrough */ }
+                try{ _feeData=JSON.parse(saved); }catch(_){ _feeData=null; }
             }
-            try{
-                const r=await fetch('treatments-seed.json?v=20260725c');
-                const d=await r.json();
-                _feeData=(d.categories||[]).map(c=>({
-                    id:c.id||_uid(), name:c.name, note:c.note||'',
-                    treatments:(c.treatments||[]).map(t=>({
-                        id:_uid(), name:t.name, note:t.note||'',
-                        variants:(t.variants||[]).map(v=>({
-                            id:_uid(),
-                            label:[v.product,v.dose,v.sessions,v.size,v.qty,v.region,v.label].filter(Boolean).join(' · ')||'기본',
-                            price:Number(v.price)||0
+            // 2) Firestore 우선순위 — 없으면 seed 로 초기화 후 업로드
+            if(!_feeData){
+                try{
+                    const doc=await db.collection('settings').doc('feeSchedule').get();
+                    if(doc.exists && doc.data()?.json){
+                        _feeData=JSON.parse(doc.data().json);
+                    }
+                }catch(_){}
+            }
+            if(!_feeData){
+                try{
+                    const r=await fetch('treatments-seed.json?v=20260725c');
+                    const d=await r.json();
+                    _feeData=(d.categories||[]).map(c=>({
+                        id:c.id||_uid(), name:c.name, note:c.note||'',
+                        treatments:(c.treatments||[]).map(t=>({
+                            id:_uid(), name:t.name, note:t.note||'',
+                            variants:(t.variants||[]).map(v=>({
+                                id:_uid(),
+                                label:[v.product,v.dose,v.sessions,v.size,v.qty,v.region,v.label].filter(Boolean).join(' · ')||'기본',
+                                price:Number(v.price)||0
+                            }))
                         }))
-                    }))
-                }));
-            }catch(e){
-                console.warn('시술 seed 로드 실패:',e);
-                _feeData=[];
+                    }));
+                }catch(e){
+                    console.warn('시술 seed 로드 실패:',e);
+                    _feeData=[];
+                }
+                saveFeeData(); // seed 를 Firestore + localStorage 로 초기 저장
             }
-            saveFeeData();
             return _feeData;
         }
-        function saveFeeData(){ try{ localStorage.setItem(FEE_LS_KEY, JSON.stringify(_feeData)); }catch(_){ } }
+        function saveFeeData(){
+            try{ localStorage.setItem(FEE_LS_KEY, JSON.stringify(_feeData)); }catch(_){}
+            // Firestore 동기화 (fire-and-forget)
+            try{
+                if(typeof db!=='undefined')
+                    db.collection('settings').doc('feeSchedule').set({
+                        json: JSON.stringify(_feeData||[]),
+                        updatedAt: new Date().toISOString(),
+                        updatedBy: currentUser?.name||currentUser?.id||'staff'
+                    });
+            }catch(_){}
+        }
+        function _initFeeRealtime(){
+            if(_feeUnsub) return;
+            try{
+                _feeUnsub=db.collection('settings').doc('feeSchedule').onSnapshot(doc=>{
+                    if(!doc.exists) return;
+                    const raw=doc.data()?.json;
+                    if(!raw) return;
+                    try{
+                        const parsed=JSON.parse(raw);
+                        if(Array.isArray(parsed)){
+                            _feeData=parsed;
+                            try{ localStorage.setItem(FEE_LS_KEY, JSON.stringify(_feeData)); }catch(_){}
+                            if(document.getElementById('feeList')) renderFeeList();
+                        }
+                    }catch(_){}
+                }, err=>console.warn('feeSchedule 스냅샷 실패:', err));
+            }catch(e){ console.warn('feeSchedule 실시간 초기화 실패:',e); }
+        }
+        async function _migrateFeeToFirestore(){
+            try{
+                if(localStorage.getItem('staff_fee_migrated_v1')==='1') return;
+                const doc=await db.collection('settings').doc('feeSchedule').get();
+                if(doc.exists && doc.data()?.json){
+                    localStorage.setItem('staff_fee_migrated_v1','1');
+                    return; // 이미 서버에 있으면 스킵
+                }
+                const raw=localStorage.getItem(FEE_LS_KEY);
+                if(!raw){ localStorage.setItem('staff_fee_migrated_v1','1'); return; }
+                const parsed=JSON.parse(raw);
+                if(!Array.isArray(parsed)||!parsed.length){ localStorage.setItem('staff_fee_migrated_v1','1'); return; }
+                await db.collection('settings').doc('feeSchedule').set({
+                    json: JSON.stringify(parsed),
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: '(로컬마이그레이션)'
+                });
+                localStorage.setItem('staff_fee_migrated_v1','1');
+                console.info('[feeSchedule] Firestore 마이그레이션 완료: 카테고리', parsed.length,'개');
+            }catch(e){ console.warn('[feeSchedule] 마이그레이션 스킵:', e?.message||e); }
+        }
 
         // 접힘 상태 (id → bool). category / treatment 공용 저장소
         const FEE_COLLAPSED_KEY='staff_fee_collapsed_v1';
