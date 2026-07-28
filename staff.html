@@ -2073,6 +2073,8 @@
             _migrateLocalNoticesToFirestore().finally(()=>_initNoticesRealtime());
             // 상담 트리·마취연고 실시간 동기화
             _migrateConsultToFirestore().finally(()=>_initConsultRealtime());
+            // 거래처(vendors) 실시간 동기화
+            _migrateVendorsToFirestore().finally(()=>_initVendorsRealtime());
             // 상담 차팅: 개인계정에만 홈 버튼 노출
             const chartBtn=document.getElementById('topHomeChartingBtn');
             if(chartBtn) chartBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
@@ -2153,6 +2155,8 @@
                 _consultTreeUnsub=null; }
             if(_consultAnesthUnsub){ try{_consultAnesthUnsub();}catch(_){}
                 _consultAnesthUnsub=null; }
+            if(_vendorUnsub){ try{_vendorUnsub();}catch(_){}
+                _vendorUnsub=null; }
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -6367,10 +6371,12 @@
         }
 
         // ================================================================
-        //  거래처 관리 (localStorage 'staff_vendors_v1')
+        //  거래처 관리 (Firestore 'vendors' 컬렉션 — 전 기기 실시간 동기화)
+        //  · localStorage는 오프라인/첫로딩용 캐시로만 사용
         // ================================================================
         const VENDOR_LS_KEY='staff_vendors_v1';
         let _vendors=null;
+        let _vendorUnsub=null;
         function _loadVendors(){
             if(_vendors) return _vendors;
             try{
@@ -6379,7 +6385,49 @@
             }catch(_){ _vendors=[]; }
             return _vendors;
         }
+        // _saveVendors: 로컬 캐시 + UI 갱신만. Firestore 쓰기는 _upsertVendorFirestore/_deleteVendorFirestore 로 명시적 호출.
         function _saveVendors(){ try{ localStorage.setItem(VENDOR_LS_KEY,JSON.stringify(_vendors||[])); }catch(_){ } _updateVendorHomeCount(); _refreshVendorPickerDatalist(); }
+        async function _upsertVendorFirestore(v){
+            if(!v||!v.id) return;
+            try{
+                const payload={...v, updatedAt:new Date().toISOString()};
+                await db.collection('vendors').doc(v.id).set(payload,{merge:true});
+            }catch(e){ console.warn('vendor Firestore 저장 실패:', e); }
+        }
+        async function _deleteVendorFirestore(id){
+            if(!id) return;
+            try{ await db.collection('vendors').doc(id).delete(); }
+            catch(e){ console.warn('vendor Firestore 삭제 실패:', e); }
+        }
+        function _initVendorsRealtime(){
+            if(_vendorUnsub) return;
+            try{
+                _vendorUnsub=db.collection('vendors').onSnapshot(snap=>{
+                    _vendors=snap.docs.map(d=>({...d.data(), id:d.id}));
+                    _saveVendors();
+                    if(document.getElementById('vendorList')) renderVendorList();
+                }, err=>console.warn('vendors 스냅샷 실패:', err));
+            }catch(e){ console.warn('vendors 실시간 초기화 실패:',e); }
+        }
+        async function _migrateVendorsToFirestore(){
+            try{
+                if(localStorage.getItem('staff_vendors_migrated_v1')==='1') return;
+                const raw=localStorage.getItem(VENDOR_LS_KEY);
+                if(!raw){ localStorage.setItem('staff_vendors_migrated_v1','1'); return; }
+                const arr=JSON.parse(raw)||[];
+                if(!arr.length){ localStorage.setItem('staff_vendors_migrated_v1','1'); return; }
+                const existing=await db.collection('vendors').limit(1).get();
+                if(!existing.empty){ localStorage.setItem('staff_vendors_migrated_v1','1'); return; }
+                const batch=db.batch();
+                arr.forEach(v=>{
+                    if(!v.id) return;
+                    batch.set(db.collection('vendors').doc(v.id), v);
+                });
+                await batch.commit();
+                localStorage.setItem('staff_vendors_migrated_v1','1');
+                console.info('[vendors] Firestore 마이그레이션 완료:', arr.length,'건');
+            }catch(e){ console.warn('[vendors] 마이그레이션 스킵:', e?.message||e); }
+        }
         function _updateVendorHomeCount(){
             const el=document.getElementById('vendorCount');
             if(el) el.textContent=(_loadVendors()||[]).length;
@@ -6471,17 +6519,19 @@
                 updatedAt:new Date().toISOString()
             };
             const list=_loadVendors();
+            let target;
             if(id){
-                const v=list.find(x=>x.id===id);
-                if(v){ Object.assign(v,data); }
+                target=list.find(x=>x.id===id);
+                if(target){ Object.assign(target,data); }
             }else{
-                // 이름 중복 방지
                 if(list.some(x=>x.name===name)){
                     if(!confirm(`'${name}' 이미 있는 거래처 이름입니다. 그대로 저장할까요?`)) return;
                 }
-                list.push({id:_uid(),createdAt:new Date().toISOString(),...data});
+                target={id:_uid(),createdAt:new Date().toISOString(),...data};
+                list.push(target);
             }
             _saveVendors();
+            if(target) _upsertVendorFirestore(target); // Firestore 동기화 (fire-and-forget)
             renderVendorList();
             closeVendorForm();
         }
@@ -6490,6 +6540,7 @@
             if(!confirm(`거래처 "${v.name}" 삭제?`)) return;
             _vendors=(_loadVendors()||[]).filter(x=>x.id!==id);
             _saveVendors();
+            _deleteVendorFirestore(id); // Firestore 동기화
             renderVendorList();
         }
 
@@ -6519,18 +6570,17 @@
                 updatedAt:new Date().toISOString()
             };
             if(v){
-                // 기존 거래처 정보 갱신 (하지만 사용자가 명시적으로 바꾸지 않았다면 그대로)
-                // → 폼 값과 기존 값이 다르면 update (transparent)
                 let changed=false;
                 ['contactName','contactPhone','purchaseLink','contactMethod'].forEach(k=>{
                     if((v[k]||'')!==(data[k]||'')) changed=true;
                 });
-                if(changed){ Object.assign(v,data); _saveVendors(); }
+                if(changed){ Object.assign(v,data); _saveVendors(); _upsertVendorFirestore(v); }
                 return v.id;
             }else{
                 const nv={id:_uid(),createdAt:new Date().toISOString(),...data};
                 (_loadVendors()||[]).push(nv);
                 _saveVendors();
+                _upsertVendorFirestore(nv);
                 return nv.id;
             }
         }
