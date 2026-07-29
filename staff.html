@@ -5031,21 +5031,40 @@
                     const collapsed=!!_feeCollapsed[t.id];
                     const vsBody=(t.variants||[]).map(v=>{
                         const priceWon=(Number(v.price)||0)*10000;
-                        return `<div style="display:flex;align-items:center;gap:.35rem;padding:.4rem .55rem;border-top:1px solid #f3f4f6;background:#fff;flex-wrap:wrap">
-                            <div style="flex:1 1 45%;min-width:0;font-size:.8rem;color:#4b5563;word-break:break-word">
+                        const isEditing=(_feeEditingVariantId===v.id);
+                        if(isEditing){
+                            // ── 편집 모드 ──
+                            return `<div style="border-top:1px solid #f3f4f6;background:#fffbeb">
+                                <div style="display:flex;align-items:center;gap:.35rem;padding:.5rem .55rem;flex-wrap:wrap">
+                                    <input type="text" id="feeVarLabel-${v.id}" value="${_esc(v.label)}" placeholder="시술명"
+                                        style="flex:1 1 60%;min-width:120px;padding:.35rem .5rem;font-size:.85rem;border:1px solid #f59e0b;border-radius:5px;background:#fff">
+                                    <div style="display:flex;align-items:center;gap:.2rem;flex-shrink:0">
+                                        <input type="number" id="feeVarPrice-${v.id}" value="${v.price||0}" step="0.1"
+                                            style="width:60px;text-align:right;padding:.35rem .3rem;font-size:.85rem;border:1px solid #f59e0b;border-radius:5px;background:#fff">
+                                        <span style="font-size:.78rem;color:#92400e;font-weight:600">만</span>
+                                        <span style="font-size:.72rem;color:#a16207;min-width:65px;text-align:right">= ₩${priceWon.toLocaleString()}</span>
+                                    </div>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:.25rem;padding:.35rem .55rem;flex-wrap:wrap;border-top:1px dashed #fde68a">
+                                    <div style="flex:1;min-width:0">${_feeTagsHtml(v.tags)}</div>
+                                    <button onclick="feeEditVariantTags('${c.id}','${t.id}','${v.id}')" style="background:none;border:1px solid #a5b4fc;color:#4338ca;padding:.25rem .55rem;border-radius:5px;font-size:.72rem;cursor:pointer">태그</button>
+                                    <button onclick="feeDeleteVariant('${c.id}','${t.id}','${v.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.25rem .55rem;border-radius:5px;font-size:.72rem;cursor:pointer">🗑 삭제</button>
+                                    <button onclick="_feeCancelVariantEdit()" style="background:#fff;border:1px solid #d1d5db;color:#6b7280;padding:.25rem .6rem;border-radius:5px;font-size:.72rem;cursor:pointer">취소</button>
+                                    <button onclick="feeSaveVariantInline('${c.id}','${t.id}','${v.id}')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.25rem .7rem;border-radius:5px;font-size:.75rem;cursor:pointer;font-weight:600">✓ 저장</button>
+                                </div>
+                            </div>`;
+                        }
+                        // ── 보기 모드 (깔끔) ──
+                        return `<div class="fee-var-row" data-vid="${v.id}"
+                            onclick="feeOpenVariantEdit('${v.id}')"
+                            ontouchstart="_feeVarTouchStart(event)"
+                            ontouchend="_feeVarTouchEnd(event,'${v.id}')"
+                            style="display:flex;align-items:center;gap:.5rem;padding:.55rem .7rem;border-top:1px solid #f3f4f6;background:#fff;cursor:pointer;user-select:none">
+                            <div style="flex:1;min-width:0;font-size:.85rem;color:#374151;word-break:break-word;line-height:1.4">
                                 ${_esc(v.label)}
                                 ${_feeTagsHtml(v.tags)}
                             </div>
-                            <div style="flex:0 0 auto;display:flex;align-items:center;gap:.15rem">
-                                <input type="number" value="${v.price||0}" onchange="feeSetVariantPrice('${c.id}','${t.id}','${v.id}',this.value)" style="width:52px;text-align:right;padding:.15rem .3rem;font-size:.8rem;border:1px solid #e5e7eb;border-radius:4px">
-                                <span style="font-size:.75rem;color:#6b7280">만</span>
-                            </div>
-                            <div style="flex:0 0 auto;font-size:.72rem;color:#9ca3af;min-width:60px;text-align:right">₩${priceWon.toLocaleString()}</div>
-                            <div style="flex:0 0 auto;display:flex;gap:.15rem">
-                                <button onclick="feeEditVariantTags('${c.id}','${t.id}','${v.id}')" title="상담 태그" style="background:none;border:1px solid #a5b4fc;color:#4338ca;padding:.1rem .35rem;border-radius:4px;font-size:.65rem;cursor:pointer">태그</button>
-                                <button onclick="feeEditVariant('${c.id}','${t.id}','${v.id}')" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.1rem .35rem;border-radius:4px;font-size:.65rem;cursor:pointer">이름</button>
-                                <button onclick="feeDeleteVariant('${c.id}','${t.id}','${v.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.1rem .35rem;border-radius:4px;font-size:.65rem;cursor:pointer">×</button>
-                            </div>
+                            <div style="font-size:.85rem;color:#111827;font-weight:600;flex-shrink:0">₩${priceWon.toLocaleString()}</div>
                         </div>`;
                     }).join('');
                     const varCount=(t.variants||[]).length;
@@ -5086,6 +5105,60 @@
                     ${catCollapsed?'':(treatsHtml||'<div style="padding:1rem;text-align:center;color:#9ca3af;font-size:.85rem">시술이 없습니다.</div>')}
                 </div>`;
             }).filter(Boolean).join('')||'<div style="padding:1.5rem;text-align:center;color:#9ca3af">검색 결과가 없습니다.</div>';
+        }
+
+        // ---- 옵션 인라인 편집 상태 (탭 or 좌스와이프로 진입) ----
+        let _feeEditingVariantId=null;
+        let _feeSwipeStart=null;
+        function feeOpenVariantEdit(vid){
+            _feeEditingVariantId=(_feeEditingVariantId===vid)?null:vid;
+            renderFeeList();
+            // 편집 모드 진입 시 이름 input 포커스
+            if(_feeEditingVariantId===vid){
+                setTimeout(()=>{
+                    const inp=document.getElementById('feeVarLabel-'+vid);
+                    if(inp) inp.focus();
+                },50);
+            }
+        }
+        function _feeCancelVariantEdit(){
+            _feeEditingVariantId=null;
+            renderFeeList();
+        }
+        function feeSaveVariantInline(cid,tid,vid){
+            const {v}=_feeFind(cid,tid,vid); if(!v) return;
+            const label=(document.getElementById('feeVarLabel-'+vid)?.value||'').trim();
+            const priceRaw=document.getElementById('feeVarPrice-'+vid)?.value;
+            const price=priceRaw===''?0:(Number(priceRaw)||0);
+            if(!label){ alert('시술명을 입력하세요.'); return; }
+            v.label=label;
+            v.price=price;
+            _feeEditingVariantId=null;
+            saveFeeData();
+            renderFeeList();
+        }
+        // 좌로 스와이프 감지 (모바일) → 같은 편집 모드로 진입
+        function _feeVarTouchStart(e){
+            const t=e.touches[0];
+            _feeSwipeStart={x:t.clientX, y:t.clientY, at:Date.now()};
+        }
+        function _feeVarTouchEnd(e, vid){
+            if(!_feeSwipeStart) return;
+            const t=e.changedTouches[0];
+            const dx=t.clientX-_feeSwipeStart.x;
+            const dy=t.clientY-_feeSwipeStart.y;
+            const dt=Date.now()-_feeSwipeStart.at;
+            _feeSwipeStart=null;
+            // 좌로 40px 이상 · 수평 우세 · 700ms 이내 → 스와이프로 편집 열기
+            if(dx<-40 && Math.abs(dx)>Math.abs(dy)*1.5 && dt<700){
+                _feeEditingVariantId=vid;
+                renderFeeList();
+                setTimeout(()=>{
+                    const inp=document.getElementById('feeVarLabel-'+vid);
+                    if(inp) inp.focus();
+                },50);
+                e.preventDefault();
+            }
         }
 
         // ---- 수가표 CRUD ----
