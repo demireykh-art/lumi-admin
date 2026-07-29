@@ -7,7 +7,7 @@
  *   - employees doc(같은 이메일)에 mustChangePassword:true 플래그 설정 →
  *     직원이 임시 비번으로 첫 로그인 시 본인이 직접 새 비번 설정 강제
  */
-const {onCall, HttpsError} = require('firebase-functions/v2/https');
+const {onCall, onRequest, HttpsError} = require('firebase-functions/v2/https');
 const {logger} = require('firebase-functions');
 const admin = require('firebase-admin');
 
@@ -113,5 +113,128 @@ exports.resetUserPassword = onCall(
 
     logger.info(`Password reset by ${callerEmail} for ${targetEmail} (uid=${user.uid}, created=${created}, whitelistAdded=${whitelistAdded})`);
     return {success: true, email: targetEmail, uid: user.uid, mustChangePasswordSet: flagSet, created, whitelistAdded};
+  }
+);
+
+// ================================================================
+//  💬 고객 채팅 웹훅 (카카오 상담톡 · 네이버 톡톡)
+//   · 실제 페이로드 구조는 심사 통과 후 각 플랫폼 문서로 확정
+//   · 아래는 예상 필드 기준 스텁 — 심사 통과 시 필드 매핑만 조정
+// ================================================================
+
+// 스레드 찾거나 생성
+async function _findOrCreateThread(provider, externalId, displayName, text) {
+  const q = await admin.firestore().collection('chatThreads')
+    .where('provider', '==', provider)
+    .where('externalThreadId', '==', externalId).limit(1).get();
+  const now = new Date().toISOString();
+  if (!q.empty) {
+    const ref = q.docs[0].ref;
+    await ref.update({
+      unreadCount: admin.firestore.FieldValue.increment(1),
+      lastMessageAt: now,
+      lastMessagePreview: String(text || '').slice(0, 60),
+      updatedAt: now,
+    });
+    return ref;
+  }
+  const ref = admin.firestore().collection('chatThreads').doc();
+  await ref.set({
+    provider,
+    externalThreadId: externalId,
+    displayName: displayName || externalId,
+    status: 'active',
+    unreadCount: 1,
+    lastMessageAt: now,
+    lastMessagePreview: String(text || '').slice(0, 60),
+    createdAt: now,
+  });
+  return ref;
+}
+
+// 카카오 상담톡 웹훅
+// 실제 payload 예시(심사 통과 시 확정): { user_key, content, message_id, user_name, ... }
+exports.webhookKakao = onRequest(
+  {region: 'asia-northeast3', cors: false},
+  async (req, res) => {
+    try {
+      // TODO: 서명 검증 — 심사 통과 후 카카오 시크릿으로 HMAC 확인
+      // const signature = req.headers['x-kakao-signature'];
+      // if (!_verifyKakaoSig(req.rawBody, signature)) return res.status(401).send('bad sig');
+
+      const body = req.body || {};
+      const externalId = body.user_key || body.userId || body.senderId;
+      const text = body.content || body.text || body.message;
+      if (!externalId || !text) {
+        logger.warn('Kakao webhook missing fields', body);
+        return res.status(400).send('missing fields');
+      }
+      const ref = await _findOrCreateThread('kakao', externalId, body.user_name || body.senderName, text);
+      await ref.collection('messages').add({
+        direction: 'in',
+        text: String(text),
+        externalMsgId: body.message_id || null,
+        createdAt: new Date().toISOString(),
+      });
+      // TODO: 자동응답 (오프타임) — settings/chatConfig 참고
+      res.status(200).send('ok');
+    } catch (e) {
+      logger.error('webhookKakao error', e);
+      res.status(500).send('error');
+    }
+  }
+);
+
+// 네이버 톡톡 웹훅
+// 실제 payload 예시(심사 통과 시 확정): { event, user, textContent, ... }
+exports.webhookNaver = onRequest(
+  {region: 'asia-northeast3', cors: false},
+  async (req, res) => {
+    try {
+      const body = req.body || {};
+      // 네이버는 event 종류가 여러가지 — send 만 처리
+      if (body.event && body.event !== 'send') {
+        return res.status(200).send('ignored');
+      }
+      const externalId = body.user || body.userId;
+      const text = (body.textContent && body.textContent.text) || body.text || body.message;
+      if (!externalId || !text) {
+        logger.warn('Naver webhook missing fields', body);
+        return res.status(400).send('missing fields');
+      }
+      const ref = await _findOrCreateThread('naver', externalId, body.userName || externalId, text);
+      await ref.collection('messages').add({
+        direction: 'in',
+        text: String(text),
+        externalMsgId: body.messageId || null,
+        createdAt: new Date().toISOString(),
+      });
+      res.status(200).send('ok');
+    } catch (e) {
+      logger.error('webhookNaver error', e);
+      res.status(500).send('error');
+    }
+  }
+);
+
+// 스태프 답변 전송 (통합앱 → 카카오/네이버)
+exports.sendChatReply = onCall(
+  {region: 'asia-northeast3', cors: true},
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', '로그인 필요');
+    const {threadId, text} = request.data || {};
+    if (!threadId || !text) throw new HttpsError('invalid-argument', 'threadId·text 필요');
+
+    const doc = await admin.firestore().collection('chatThreads').doc(threadId).get();
+    if (!doc.exists) throw new HttpsError('not-found', '스레드 없음');
+    const thread = doc.data();
+
+    // TODO: 심사 통과 후 실제 API 호출로 대체
+    // if (thread.provider === 'kakao') { await _kakaoSendReply(thread.externalThreadId, text); }
+    // else if (thread.provider === 'naver') { await _naverSendReply(thread.externalThreadId, text); }
+    // else { logger.info('mock provider — skip real send'); }
+
+    logger.info(`sendChatReply stub: provider=${thread.provider} thread=${threadId} text.len=${text.length}`);
+    return {ok: true, provider: thread.provider, sent: false, stub: true};
   }
 );

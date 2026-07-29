@@ -485,6 +485,16 @@
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
+                        <button type="button" onclick="showTop('chat')" id="topHomeChatBtn"
+                            style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06);position:relative">
+                            <span style="font-size:2.25rem">💬</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1rem;color:#1f2937">고객 채팅</div>
+                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">카카오·네이버 문의 통합 상담</div>
+                            </div>
+                            <span id="chatUnreadBadge" style="display:none;background:#dc2626;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:12px;min-width:22px;text-align:center">0</span>
+                            <span style="color:#9ca3af;margin-left:.35rem">→</span>
+                        </button>
                         <!-- 공지 블록: 헤더 클릭 → 관리 뷰, 아래는 오늘 공지 인라인 -->
                         <div style="border:1px solid #e5e7eb;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <button type="button" onclick="showTop('notice')" id="topHomeNoticeHeader"
@@ -601,6 +611,98 @@
                         <button class="btn btn-primary" style="font-size:.75rem;padding:.35rem .7rem;flex-shrink:0" onclick="chartingTimelineNewVisit()">+ 새 방문</button>
                     </div>
                     <div id="chartingTimelineBody" style="margin-top:.6rem"></div>
+                </div>
+            </div>
+
+            <!-- === 💬 고객 채팅 목록 === -->
+            <div class="tab-content" id="tab-chat">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTopHome()">← 홈</button>
+                        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">💬 고객 채팅</span>
+                        <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTop('chatSettings')" title="설정">⚙</button>
+                    </div>
+                    <!-- 필터 탭 -->
+                    <div style="display:flex;gap:.3rem;margin-top:.6rem;border-bottom:1px solid #e5e7eb">
+                        <button id="chatFilter-active" onclick="setChatFilter('active')"
+                            style="background:none;border:none;padding:.5rem .85rem;font-size:.85rem;font-weight:600;color:#4338ca;border-bottom:2px solid #4338ca;cursor:pointer">진행 중</button>
+                        <button id="chatFilter-done" onclick="setChatFilter('done')"
+                            style="background:none;border:none;padding:.5rem .85rem;font-size:.85rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer">완료</button>
+                        <button id="chatFilter-important" onclick="setChatFilter('important')"
+                            style="background:none;border:none;padding:.5rem .85rem;font-size:.85rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer">⭐ 중요</button>
+                    </div>
+                    <!-- 검색·정렬 -->
+                    <div style="display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap">
+                        <select id="chatSort" onchange="_renderChatList()"
+                            style="flex:0 0 auto;padding:.4rem .5rem;font-size:.8rem;border:1px solid #d1d5db;border-radius:6px">
+                            <option value="latest">최신 대화 순</option>
+                            <option value="unread">미읽음 우선</option>
+                        </select>
+                        <input type="text" id="chatSearch" placeholder="🔍 이름·차트번호·내용 검색"
+                            oninput="_renderChatList()"
+                            style="flex:1;min-width:120px;padding:.4rem .55rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box">
+                    </div>
+                    <div id="chatList" style="margin-top:.6rem;display:flex;flex-direction:column;gap:.4rem">
+                        <div style="text-align:center;color:#9ca3af;padding:1.5rem;font-size:.85rem">로딩 중...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === 💬 채팅 대화 뷰 === -->
+            <div class="tab-content" id="tab-chatThread">
+                <div class="card" style="margin-bottom:0;display:flex;flex-direction:column;height:calc(100vh - 130px);max-height:calc(100vh - 130px)">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap;flex-shrink:0">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTop('chat')">← 목록</button>
+                        <span id="chatThreadTitle" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">대화</span>
+                        <button onclick="_chatThreadMenu()" title="더보기" style="background:none;border:1px solid #d1d5db;color:#6b7280;padding:.3rem .55rem;border-radius:4px;font-size:.85rem;cursor:pointer;flex-shrink:0">⋯</button>
+                    </div>
+                    <div id="chatThreadHeader" style="margin-top:.5rem;padding:.5rem .6rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;font-size:.75rem;color:#4b5563;flex-shrink:0"></div>
+                    <div id="chatMessages" style="flex:1;overflow-y:auto;padding:.6rem .3rem;margin-top:.4rem;display:flex;flex-direction:column;gap:.5rem"></div>
+                    <div style="display:flex;gap:.3rem;padding-top:.4rem;border-top:1px solid #e5e7eb;flex-shrink:0">
+                        <textarea id="chatReplyInput" rows="1" placeholder="답변 입력 (Enter=전송, Shift+Enter=줄바꿈)"
+                            oninput="this.style.height='auto';this.style.height=Math.min(120,this.scrollHeight)+'px'"
+                            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatReply();}"
+                            style="flex:1;padding:.55rem .7rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:8px;resize:none;font-family:inherit;line-height:1.4;min-height:44px;max-height:120px;box-sizing:border-box"></textarea>
+                        <button onclick="sendChatReply()" style="background:#4338ca;color:#fff;border:none;padding:0 1rem;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;flex-shrink:0">전송</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === 💬 채팅 설정 === -->
+            <div class="tab-content" id="tab-chatSettings">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTop('chat')">← 목록</button>
+                        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">⚙ 채팅 설정</span>
+                    </div>
+                    <div style="margin-top:.75rem;font-size:.8rem;color:#666;line-height:1.6">
+                        <div style="padding:.7rem;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;margin-bottom:.6rem">
+                            <div style="font-weight:600;color:#4338ca;margin-bottom:.35rem">📡 연동 상태</div>
+                            <div>· 카카오 상담톡: <span id="chatKakaoStatus" style="color:#9ca3af">미연결</span></div>
+                            <div>· 네이버 톡톡: <span id="chatNaverStatus" style="color:#9ca3af">미연결</span></div>
+                            <div style="font-size:.72rem;color:#6b7280;margin-top:.3rem">심사 통과 후 Cloud Function 배포·API 키 등록 필요</div>
+                        </div>
+                        <div style="padding:.7rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:.6rem">
+                            <div style="font-weight:600;color:#111827;margin-bottom:.35rem">🔕 자동응답 (오프타임)</div>
+                            <label style="display:flex;gap:.5rem;align-items:center;margin-bottom:.4rem">
+                                <input type="checkbox" id="chatOffHoursEnabled" onchange="_saveChatSettings()"> 활성화
+                            </label>
+                            <div style="display:flex;gap:.5rem;margin-bottom:.4rem;align-items:center">
+                                <span>시간대:</span>
+                                <input type="time" id="chatOffHoursStart" onchange="_saveChatSettings()" style="padding:.3rem;border:1px solid #d1d5db;border-radius:5px;font-size:.85rem">
+                                <span>~</span>
+                                <input type="time" id="chatOffHoursEnd" onchange="_saveChatSettings()" style="padding:.3rem;border:1px solid #d1d5db;border-radius:5px;font-size:.85rem">
+                            </div>
+                            <textarea id="chatOffHoursMessage" rows="3" placeholder="안녕하세요. 지금은 루미의원의 채팅 가능한 시간이 아닙니다..."
+                                onchange="_saveChatSettings()"
+                                style="width:100%;padding:.5rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:5px;box-sizing:border-box;font-family:inherit;line-height:1.4;resize:vertical"></textarea>
+                        </div>
+                        <div style="padding:.7rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px">
+                            <div style="font-weight:600;color:#111827;margin-bottom:.35rem">🧪 테스트</div>
+                            <button onclick="_chatCreateMockThread()" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.4rem .8rem;font-size:.8rem;border-radius:5px;cursor:pointer">가짜 채팅 만들기 (개발 테스트용)</button>
+                            <div style="font-size:.72rem;color:#6b7280;margin-top:.3rem">실제 카카오/네이버 연동 전 UI 확인용. 생성된 대화는 completed 후 삭제 가능.</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2111,6 +2213,10 @@
             if(chartBtn) chartBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
             // 이전 태그 캐시 로드 (자동완성용)
             _chartingLoadRecentTags();
+            // 고객채팅: 개인계정에만 노출 + 실시간 스레드 구독
+            const chatBtn=document.getElementById('topHomeChatBtn');
+            if(chatBtn) chatBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
+            _initChatRealtime();
 
             const shared=isSharedAccount();
             
@@ -2190,6 +2296,10 @@
                 _vendorUnsub=null; }
             if(_feeUnsub){ try{_feeUnsub();}catch(_){}
                 _feeUnsub=null; }
+            if(_chatUnsub){ try{_chatUnsub();}catch(_){}
+                _chatUnsub=null; }
+            if(_chatMsgsUnsub){ try{_chatMsgsUnsub();}catch(_){}
+                _chatMsgsUnsub=null; }
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -4833,6 +4943,12 @@
                 // chartingOpenEdit 에서 이미 렌더링 처리
             }else if(view==='chartingTimeline'){
                 // chartingOpenTimeline 에서 이미 렌더링 처리
+            }else if(view==='chat'){
+                _renderChatList();
+            }else if(view==='chatThread'){
+                // openChatThread 에서 처리
+            }else if(view==='chatSettings'){
+                _loadChatSettingsUI();
             }
         }
         function _feeBack(){
@@ -6532,6 +6648,296 @@
                 await db.collection('visits').doc(visitId).collection('followups').doc(fuId).delete();
                 await _chartingRenderTimeline();
             }catch(e){ alert('삭제 실패: '+(e?.message||e)); }
+        }
+
+        // ================================================================
+        //  💬 고객 채팅 (카카오 상담톡 · 네이버 톡톡 통합)
+        //   · Firestore: chatThreads/{id} + /messages/{id}
+        //   · Cloud Function 웹훅으로 카카오/네이버 수신 (심사 통과 후 실 연동)
+        //   · 답변: sendChatReply CF 호출
+        // ================================================================
+        let _chatUnsub=null;
+        let _chatMsgsUnsub=null;
+        let _chatThreads=[];             // 캐시된 스레드
+        let _chatMessages=[];            // 현재 스레드 메시지
+        let _chatCurrentThreadId=null;
+        let _chatFilter='active';        // active|done|important
+        let _chatSettings=null;
+
+        function _initChatRealtime(){
+            if(_chatUnsub) return;
+            try{
+                _chatUnsub=db.collection('chatThreads')
+                    .orderBy('lastMessageAt','desc').limit(200)
+                    .onSnapshot(snap=>{
+                        _chatThreads=snap.docs.map(d=>({id:d.id, ...d.data()}));
+                        _updateChatUnreadBadge();
+                        if(document.getElementById('tab-chat')?.classList.contains('active')){
+                            _renderChatList();
+                        }
+                    }, err=>console.warn('chatThreads 스냅샷 실패:', err));
+            }catch(e){ console.warn('chat 실시간 초기화 실패:',e); }
+        }
+        function _updateChatUnreadBadge(){
+            const unread=_chatThreads.filter(t=>t.status!=='done').reduce((s,t)=>s+(t.unreadCount||0),0);
+            const badge=document.getElementById('chatUnreadBadge');
+            if(!badge) return;
+            if(unread>0){
+                badge.textContent=unread>99?'99+':unread;
+                badge.style.display='inline-block';
+            }else{
+                badge.style.display='none';
+            }
+        }
+        function setChatFilter(f){
+            _chatFilter=f;
+            ['active','done','important'].forEach(k=>{
+                const btn=document.getElementById('chatFilter-'+k);
+                if(!btn) return;
+                const active=(k===f);
+                btn.style.color=active?'#4338ca':'#6b7280';
+                btn.style.fontWeight=active?'600':'500';
+                btn.style.borderBottom=active?'2px solid #4338ca':'2px solid transparent';
+            });
+            _renderChatList();
+        }
+        function _renderChatList(){
+            const el=document.getElementById('chatList');
+            if(!el) return;
+            const q=(document.getElementById('chatSearch')?.value||'').trim().toLowerCase();
+            const sortBy=document.getElementById('chatSort')?.value||'latest';
+            let list=_chatThreads.filter(t=>{
+                if(_chatFilter==='active') return t.status!=='done' && t.status!=='important';
+                if(_chatFilter==='done') return t.status==='done';
+                if(_chatFilter==='important') return t.status==='important';
+                return true;
+            });
+            if(q){
+                list=list.filter(t=>{
+                    return (t.displayName||'').toLowerCase().includes(q)
+                        || (t.patientName||'').toLowerCase().includes(q)
+                        || (t.chartNo||'').toLowerCase().includes(q)
+                        || (t.lastMessagePreview||'').toLowerCase().includes(q);
+                });
+            }
+            if(sortBy==='unread'){
+                list.sort((a,b)=>(b.unreadCount||0)-(a.unreadCount||0) || String(b.lastMessageAt||'').localeCompare(String(a.lastMessageAt||'')));
+            }else{
+                list.sort((a,b)=>String(b.lastMessageAt||'').localeCompare(String(a.lastMessageAt||'')));
+            }
+            if(!list.length){
+                el.innerHTML='<div style="text-align:center;color:#9ca3af;padding:1.5rem;font-size:.85rem">'+
+                    (q?'검색 결과 없음':(_chatFilter==='active'?'진행 중 대화 없음':'해당 필터의 대화 없음'))+'</div>';
+                return;
+            }
+            el.innerHTML=list.map(t=>{
+                const providerBadge = t.provider==='kakao'?'<span style="background:#fee500;color:#3c1e1e;font-size:.65rem;font-weight:700;padding:1px 5px;border-radius:4px">TALK</span>':
+                    t.provider==='naver'?'<span style="background:#03c75a;color:#fff;font-size:.65rem;font-weight:700;padding:1px 5px;border-radius:4px">N</span>':
+                    '<span style="background:#e5e7eb;color:#4b5563;font-size:.65rem;font-weight:700;padding:1px 5px;border-radius:4px">?</span>';
+                const unread=t.unreadCount||0;
+                const timeShort=t.lastMessageAt?String(t.lastMessageAt).slice(11,16):'';
+                const star=t.status==='important'?'⭐':'';
+                return `<div onclick="openChatThread('${t.id}')"
+                    style="padding:.7rem .85rem;background:#fff;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;position:relative">
+                    ${unread>0?`<span style="position:absolute;top:.5rem;right:.6rem;background:#dc2626;color:#fff;font-size:.65rem;font-weight:700;padding:1px 6px;border-radius:10px;min-width:18px;text-align:center">${unread>99?'99+':unread}</span>`:''}
+                    <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem">
+                        ${providerBadge}
+                        <div style="flex:1;min-width:0;font-weight:700;font-size:.9rem;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                            ${_esc(t.displayName||'-')} ${star}
+                        </div>
+                        <div style="font-size:.7rem;color:#6b7280;flex-shrink:0">${_esc(timeShort)}</div>
+                    </div>
+                    ${(t.chartNo||t.patientName)?`<div style="font-size:.7rem;color:#4338ca;margin-bottom:.2rem">${_esc(t.patientName||'')} ${t.chartNo?'#'+_esc(t.chartNo):''}</div>`:''}
+                    <div style="font-size:.78rem;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(t.lastMessagePreview||'-')}</div>
+                </div>`;
+            }).join('');
+        }
+
+        // ---- 대화 뷰 ----
+        function openChatThread(threadId){
+            _chatCurrentThreadId=threadId;
+            const t=_chatThreads.find(x=>x.id===threadId);
+            document.getElementById('chatThreadTitle').textContent=t?.displayName||'대화';
+            const headerParts=[];
+            if(t?.provider) headerParts.push(t.provider==='kakao'?'💛 카카오':(t.provider==='naver'?'💚 네이버':t.provider));
+            if(t?.patientName) headerParts.push(_esc(t.patientName)+(t.chartNo?' #'+t.chartNo:''));
+            if(t?.assignedTo) headerParts.push('담당: '+t.assignedTo);
+            document.getElementById('chatThreadHeader').innerHTML=headerParts.join(' · ')||'-';
+            // 이전 구독 해제 후 새 스레드 메시지 구독
+            if(_chatMsgsUnsub){ try{_chatMsgsUnsub();}catch(_){} _chatMsgsUnsub=null; }
+            _chatMessages=[];
+            document.getElementById('chatMessages').innerHTML='<div style="text-align:center;color:#9ca3af;padding:1rem;font-size:.8rem">로딩 중...</div>';
+            _chatMsgsUnsub=db.collection('chatThreads').doc(threadId).collection('messages')
+                .orderBy('createdAt','asc').limit(500)
+                .onSnapshot(snap=>{
+                    _chatMessages=snap.docs.map(d=>({id:d.id, ...d.data()}));
+                    _renderChatMessages();
+                }, err=>console.warn('messages 스냅샷 실패:', err));
+            // 미읽음 리셋
+            db.collection('chatThreads').doc(threadId).update({
+                unreadCount:0, lastReadAt:new Date().toISOString()
+            }).catch(()=>{});
+            showTop('chatThread');
+        }
+        function _renderChatMessages(){
+            const el=document.getElementById('chatMessages');
+            if(!el) return;
+            if(!_chatMessages.length){
+                el.innerHTML='<div style="text-align:center;color:#9ca3af;padding:1rem;font-size:.8rem">메시지 없음</div>';
+                return;
+            }
+            let lastDate='';
+            el.innerHTML=_chatMessages.map(m=>{
+                const iso=m.createdAt||'';
+                const date=String(iso).slice(0,10);
+                const time=String(iso).slice(11,16);
+                let dateSep='';
+                if(date && date!==lastDate){
+                    dateSep=`<div style="text-align:center;color:#9ca3af;font-size:.7rem;padding:.3rem 0">${date}</div>`;
+                    lastDate=date;
+                }
+                const isOut=m.direction==='out';
+                const bubbleStyle=isOut
+                    ? 'align-self:flex-end;background:#4338ca;color:#fff;border-radius:12px 12px 4px 12px'
+                    : 'align-self:flex-start;background:#f3f4f6;color:#111827;border-radius:12px 12px 12px 4px';
+                const senderLabel = isOut && m.senderName
+                    ? `<div style="font-size:.65rem;color:#c7d2fe;margin-bottom:2px">${_esc(m.senderName)}</div>`
+                    : '';
+                const statusIcon = isOut ? (m.status==='sending'?' <span style="opacity:.6">…</span>':m.status==='failed'?' <span style="color:#fecaca">✕</span>':'') : '';
+                return dateSep + `<div style="max-width:78%;padding:.5rem .7rem;${bubbleStyle};font-size:.85rem;line-height:1.4;word-break:break-word;white-space:pre-wrap">
+                    ${senderLabel}${_esc(m.text||'')}
+                    <div style="font-size:.65rem;opacity:.7;margin-top:2px;text-align:right">${time}${statusIcon}</div>
+                </div>`;
+            }).join('');
+            // 스크롤 맨 아래
+            setTimeout(()=>{ el.scrollTop=el.scrollHeight; },50);
+        }
+        async function sendChatReply(){
+            const inp=document.getElementById('chatReplyInput');
+            const text=(inp?.value||'').trim();
+            if(!text || !_chatCurrentThreadId) return;
+            const now=new Date().toISOString();
+            // 낙관적 UI: 로컬 메시지 즉시 추가
+            const optMsg={
+                direction:'out', text,
+                senderName: currentUser?.name||currentUser?.id||'staff',
+                status:'sending',
+                createdAt: now
+            };
+            let ref;
+            try{
+                ref=await db.collection('chatThreads').doc(_chatCurrentThreadId)
+                    .collection('messages').add(optMsg);
+                inp.value=''; inp.style.height='auto';
+            }catch(e){
+                alert('저장 실패: '+(e?.message||e));
+                return;
+            }
+            // 스레드 lastMessage 갱신
+            db.collection('chatThreads').doc(_chatCurrentThreadId).update({
+                lastMessageAt: now,
+                lastMessagePreview: text.slice(0,60),
+                updatedAt: now
+            }).catch(()=>{});
+            // Cloud Function 호출 (실제 카카오/네이버로 전송) — 스텁이므로 실 연동 전엔 mark sent
+            try{
+                if(functions){
+                    const fn=functions.httpsCallable('sendChatReply');
+                    await fn({threadId: _chatCurrentThreadId, text});
+                }
+                await ref.update({status:'sent'});
+            }catch(e){
+                console.warn('sendChatReply 실패(개발 중일 수 있음):', e);
+                // 실 연동 전까진 sent 로 처리 (스텁 없을 때도 UI 정상 동작)
+                await ref.update({status:'sent', devNote:'CF 미배포/미연동'});
+            }
+        }
+        function _chatThreadMenu(){
+            if(!_chatCurrentThreadId) return;
+            const t=_chatThreads.find(x=>x.id===_chatCurrentThreadId);
+            const options=['⭐ 중요 표시 토글','✅ 완료 처리','🔄 진행 중으로 돌리기','👤 담당자 지정','🗑 대화 삭제','취소'];
+            const choice=prompt(options.map((o,i)=>`${i+1}. ${o}`).join('\n')+'\n\n번호 입력:');
+            if(!choice) return;
+            const idx=parseInt(choice)-1;
+            const updates={};
+            if(idx===0){ updates.status=(t?.status==='important'?'active':'important'); }
+            else if(idx===1){ updates.status='done'; }
+            else if(idx===2){ updates.status='active'; }
+            else if(idx===3){
+                const who=prompt('담당자 이름:', t?.assignedTo||currentUser?.name||'');
+                if(who===null) return;
+                updates.assignedTo=who.trim();
+            }
+            else if(idx===4){
+                if(!confirm('이 대화를 삭제하시겠습니까? 복구 불가.')) return;
+                _chatDeleteThread(_chatCurrentThreadId); return;
+            }
+            else return;
+            db.collection('chatThreads').doc(_chatCurrentThreadId).update(updates)
+                .then(()=>openChatThread(_chatCurrentThreadId))
+                .catch(e=>alert('실패: '+(e?.message||e)));
+        }
+        async function _chatDeleteThread(tid){
+            try{
+                const msgs=await db.collection('chatThreads').doc(tid).collection('messages').get();
+                const batch=db.batch();
+                msgs.forEach(d=>batch.delete(d.ref));
+                batch.delete(db.collection('chatThreads').doc(tid));
+                await batch.commit();
+                showTop('chat');
+            }catch(e){ alert('삭제 실패: '+(e?.message||e)); }
+        }
+
+        // ---- 설정 ----
+        async function _loadChatSettingsUI(){
+            try{
+                const doc=await db.collection('settings').doc('chatConfig').get();
+                _chatSettings=doc.exists?doc.data():{};
+            }catch(_){ _chatSettings={}; }
+            const s=_chatSettings||{};
+            const el=document.getElementById('chatOffHoursEnabled'); if(el) el.checked=!!s.offHoursEnabled;
+            const st=document.getElementById('chatOffHoursStart'); if(st) st.value=s.offHoursStart||'18:00';
+            const en=document.getElementById('chatOffHoursEnd'); if(en) en.value=s.offHoursEnd||'09:00';
+            const msg=document.getElementById('chatOffHoursMessage');
+            if(msg) msg.value=s.offHoursMessage||'안녕하세요. 지금은 루미의원의 채팅 가능한 시간이 아닙니다. 진료 시간(09:00~18:00) 이후에 순차적으로 답변드리겠습니다.';
+        }
+        async function _saveChatSettings(){
+            const payload={
+                offHoursEnabled: !!document.getElementById('chatOffHoursEnabled')?.checked,
+                offHoursStart: document.getElementById('chatOffHoursStart')?.value||'',
+                offHoursEnd: document.getElementById('chatOffHoursEnd')?.value||'',
+                offHoursMessage: document.getElementById('chatOffHoursMessage')?.value||'',
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser?.name||currentUser?.id||'staff'
+            };
+            try{
+                await db.collection('settings').doc('chatConfig').set(payload,{merge:true});
+            }catch(e){ console.warn('chat 설정 저장 실패:', e); }
+        }
+        // 개발 테스트: 가짜 인바운드 대화 생성
+        async function _chatCreateMockThread(){
+            const name=prompt('테스트 고객명:','테스트고객'+Math.floor(Math.random()*100));
+            if(!name) return;
+            const now=new Date().toISOString();
+            try{
+                const ref=await db.collection('chatThreads').add({
+                    provider:'mock',
+                    externalThreadId:'mock-'+_uid(),
+                    displayName:name,
+                    status:'active',
+                    unreadCount:1,
+                    lastMessageAt:now,
+                    lastMessagePreview:'안녕하세요, 문의드립니다.',
+                    createdAt:now
+                });
+                await ref.collection('messages').add({
+                    direction:'in',
+                    text:'안녕하세요, 문의드립니다.',
+                    createdAt:now
+                });
+                alert('✅ 테스트 대화 생성됨. 채팅 목록에서 확인.');
+                showTop('chat');
+            }catch(e){ alert('실패: '+(e?.message||e)); }
         }
 
         // ================================================================
