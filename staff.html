@@ -7275,41 +7275,54 @@
             }catch(e){ alert('실패: '+(e?.message||e)); }
         }
 
+        // 근태·OT·급여 공통 월 이동 헤더
+        function _staffMonthHeader(){
+            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.6rem;background:#eef2ff;padding:.5rem .7rem;border-radius:6px">
+                <button onclick="_staffChangePayrollMonth(-1)" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.3rem .7rem;border-radius:5px;font-size:.8rem;cursor:pointer">◀ 이전달</button>
+                <div style="font-weight:700;font-size:.95rem;color:#4338ca">${_staffPayrollYm}</div>
+                <button onclick="_staffChangePayrollMonth(1)" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.3rem .7rem;border-radius:5px;font-size:.8rem;cursor:pointer">다음달 ▶</button>
+            </div>`;
+        }
+
         // ─────────────────────────────
         // 🕐 근태 현황
         // ─────────────────────────────
         function _renderStaffAttendance(el){
             const today=_todayYmd();
-            const monthPrefix=today.slice(0,7);
+            const monthPrefix=_staffPayrollYm;
             const active=_staffAdminEmployees.filter(e=>!e.status||e.status==='active');
             // 오늘 출근한 직원
             const todayAtt=_staffAdminAttendance.filter(a=>a.date===today);
-            // 이번 달 근태 합계
+            // 선택 월 근태
             const monthAtt=_staffAdminAttendance.filter(a=>String(a.date||'').startsWith(monthPrefix));
 
-            let html='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">🕐 오늘 ('+today+')</div>';
-            html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.35rem;margin-bottom:.8rem">';
-            active.forEach(e=>{
-                const rec=todayAtt.find(a=>a.employeeId===e.id||a.empId===e.id);
-                let statusHtml, bg='#f9fafb', color='#6b7280';
-                if(rec){
-                    if(rec.clockOut||rec.checkOut){ bg='#dcfce7'; color='#166534'; statusHtml=`퇴근 ${_esc(rec.clockOut||rec.checkOut||'')}`; }
-                    else { bg='#dbeafe'; color='#1e40af'; statusHtml=`출근 ${_esc(rec.clockIn||rec.checkIn||'')}`; }
-                }else{
-                    // 오프 확인
-                    const off=_staffAdminLeaves.find(r=>r.employeeId===e.id && r.status==='approved' && (r.dates||[]).includes(today));
-                    if(off){ bg='#fee2e2'; color='#991b1b'; statusHtml='오프 · '+_esc(off.type||''); }
-                    else { statusHtml='미출근'; }
-                }
-                html+=`<div style="padding:.5rem;background:${bg};color:${color};border-radius:6px;font-size:.8rem">
-                    <div style="font-weight:700">${_esc(e.name||e.id)}</div>
-                    <div style="font-size:.7rem;margin-top:.15rem">${statusHtml}</div>
-                </div>`;
-            });
-            html+='</div>';
+            let html=_staffMonthHeader();
+            // '오늘' 섹션은 현재 월 조회 시만 의미 있음
+            const showToday=(monthPrefix===today.slice(0,7));
+            if(showToday){
+                html+='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">🕐 오늘 ('+today+')</div>';
+                html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.35rem;margin-bottom:.8rem">';
+                active.forEach(e=>{
+                    const rec=todayAtt.find(a=>a.employeeId===e.id||a.empId===e.id);
+                    let statusHtml, bg='#f9fafb', color='#6b7280';
+                    if(rec){
+                        if(rec.clockOut||rec.checkOut){ bg='#dcfce7'; color='#166534'; statusHtml=`퇴근 ${_esc(rec.clockOut||rec.checkOut||'')}`; }
+                        else { bg='#dbeafe'; color='#1e40af'; statusHtml=`출근 ${_esc(rec.clockIn||rec.checkIn||'')}`; }
+                    }else{
+                        const off=_staffAdminLeaves.find(r=>r.employeeId===e.id && r.status==='approved' && (r.dates||[]).includes(today));
+                        if(off){ bg='#fee2e2'; color='#991b1b'; statusHtml='오프 · '+_esc(off.type||''); }
+                        else { statusHtml='미출근'; }
+                    }
+                    html+=`<div style="padding:.5rem;background:${bg};color:${color};border-radius:6px;font-size:.8rem">
+                        <div style="font-weight:700">${_esc(e.name||e.id)}</div>
+                        <div style="font-size:.7rem;margin-top:.15rem">${statusHtml}</div>
+                    </div>`;
+                });
+                html+='</div>';
+            }
 
-            // 이번 달 요약
-            html+='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">📊 이번 달 ('+monthPrefix+') 요약</div>';
+            // 선택 월 요약
+            html+='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">📊 '+monthPrefix+' 근태 요약</div>';
             html+='<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;font-size:.78rem">';
             html+='<thead><tr style="background:#f9fafb"><th style="padding:.4rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">직원</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">근무</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">지각</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">조퇴</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">OT분</th></tr></thead><tbody>';
             active.forEach(e=>{
@@ -7335,12 +7348,12 @@
         // ⏰ OT · 식사
         // ─────────────────────────────
         function _renderStaffOT(el){
-            const today=_todayYmd();
-            const monthPrefix=today.slice(0,7);
+            const monthPrefix=_staffPayrollYm;
             const active=_staffAdminEmployees.filter(e=>!e.status||e.status==='active');
             const monthOT=_staffAdminLunchOT.filter(o=>String(o.date||'').startsWith(monthPrefix));
 
-            let html='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">⏰ 이번 달 점심 OT ('+monthPrefix+')</div>';
+            let html=_staffMonthHeader();
+            html+='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">⏰ '+monthPrefix+' 점심 OT</div>';
             if(!monthOT.length){
                 html+='<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:6px">이번 달 신청 없음</div>';
             }else{
@@ -7358,8 +7371,8 @@
                 });
                 html+='</tbody></table></div>';
             }
-            // 직원별 이번달 OT 합계
-            html+='<div style="margin:.9rem 0 .4rem;font-weight:700;font-size:.9rem;color:#111827">📊 직원별 이번 달 OT 합계</div>';
+            // 직원별 선택 월 OT 합계
+            html+='<div style="margin:.9rem 0 .4rem;font-weight:700;font-size:.9rem;color:#111827">📊 직원별 '+monthPrefix+' OT 합계</div>';
             html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.35rem">';
             active.forEach(e=>{
                 const sum=monthOT.filter(o=>(o.employeeId||o.empId)===e.id).reduce((s,o)=>s+(Number(o.minutes||o.otMinutes||0)),0);
@@ -7450,13 +7463,7 @@
         function _renderStaffPayroll(el){
             const ym=_staffPayrollYm;
             const active=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&!String(e.id||'').startsWith('lumi'));
-
-            // 헤더 (월 이동)
-            let html=`<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.6rem;background:#eef2ff;padding:.5rem .7rem;border-radius:6px">
-                <button onclick="_staffChangePayrollMonth(-1)" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.3rem .7rem;border-radius:5px;font-size:.8rem;cursor:pointer">◀ 이전달</button>
-                <div style="font-weight:700;font-size:1rem;color:#4338ca">${ym} 급여·인센티브</div>
-                <button onclick="_staffChangePayrollMonth(1)" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.3rem .7rem;border-radius:5px;font-size:.8rem;cursor:pointer">다음달 ▶</button>
-            </div>`;
+            let html=_staffMonthHeader();
 
             // 1) 매출 인센티브 입력 (총매출·개인매출)
             const personalEmps=active.filter(e=>e.incType==='personal');
