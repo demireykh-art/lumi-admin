@@ -65,9 +65,15 @@
   - 📋 승인: 대기 leaveRequests 승인/반려 + 최근 이력
   - 🕐 근태: 오늘 출근 현황 + 이번 달 근태 요약 표
   - ⏰ OT·식사: 이번달 lunchOT 목록 + 직원별 합계
-  - 💰 급여: 임시로 index.html 링크 (완전 이관은 후속)
-- 데이터: `employees`, `leaveRequests`, `attendance`, `lunchOT` 조회
+  - 💰 급여·인센티브 (통합앱 완전 이관):
+    - 년월 선택기 (이전달/다음달)
+    - 🎯 매출 인센티브 입력: 총매출 + 개인매출(수동/자동 소스) → 저장
+    - 📋 인센티브 요약: 매출·일본·건별 합계 표 + [⚙ 항목 관리] 모달
+    - 📊 사전 급여 대장: 직원별 연봉·OT·인센티브 합계
+- 데이터: `employees`, `leaveRequests`, `attendance`, `lunchOT`,
+  `incentiveItems`, `incentiveRecords`, `monthlyIncentiveInput/{ym}`, `revenue/{ym}`
 - 승인 시 `leaveRequests` 상태 업데이트 → 캘린더 즉시 갱신
+- 급여 명세서 발행·복잡한 급여 산정은 여전히 index.html에서 (다음 단계)
 
 ### 홈 카드 라우팅
 개인계정만 노출:
