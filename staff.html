@@ -495,6 +495,16 @@
                             <span id="chatUnreadBadge" style="display:none;background:#dc2626;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:12px;min-width:22px;text-align:center">0</span>
                             <span style="color:#9ca3af;margin-left:.35rem">→</span>
                         </button>
+                        <button type="button" onclick="showTop('staffAdmin')" id="topHomeStaffAdminBtn"
+                            style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06);position:relative">
+                            <span style="font-size:2.25rem">👥</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1rem;color:#1f2937">STAFF <span style="font-size:.68rem;color:#7c3aed;font-weight:600;margin-left:.25rem">원장 전용</span></div>
+                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">직원 근태·연차 승인·오프 캘린더·급여</div>
+                            </div>
+                            <span id="staffAdminPendingBadge" style="display:none;background:#f59e0b;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:12px;min-width:22px;text-align:center">0</span>
+                            <span style="color:#9ca3af;margin-left:.35rem">→</span>
+                        </button>
                         <!-- 공지 블록: 헤더 클릭 → 관리 뷰, 아래는 오늘 공지 인라인 -->
                         <div style="border:1px solid #e5e7eb;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <button type="button" onclick="showTop('notice')" id="topHomeNoticeHeader"
@@ -665,6 +675,30 @@
                             style="flex:1;padding:.55rem .7rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:8px;resize:none;font-family:inherit;line-height:1.4;min-height:44px;max-height:120px;box-sizing:border-box"></textarea>
                         <button onclick="sendChatReply()" style="background:#4338ca;color:#fff;border:none;padding:0 1rem;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;flex-shrink:0">전송</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- === 👥 STAFF 관리 (원장 전용) === -->
+            <div class="tab-content" id="tab-staffAdmin">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTopHome()">← 홈</button>
+                        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">👥 STAFF 관리</span>
+                    </div>
+                    <!-- 서브탭 -->
+                    <div style="display:flex;gap:.2rem;margin-top:.5rem;overflow-x:auto;border-bottom:1px solid #e5e7eb;padding-bottom:0">
+                        <button id="staffAdminTab-calendar" onclick="setStaffAdminTab('calendar')"
+                            style="background:none;border:none;padding:.5rem .7rem;font-size:.8rem;font-weight:600;color:#7c3aed;border-bottom:2px solid #7c3aed;cursor:pointer;white-space:nowrap">📅 캘린더</button>
+                        <button id="staffAdminTab-pending" onclick="setStaffAdminTab('pending')"
+                            style="background:none;border:none;padding:.5rem .7rem;font-size:.8rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap">📋 승인 <span id="staffAdminPendingBadge2" style="background:#f59e0b;color:#fff;font-size:.65rem;padding:1px 5px;border-radius:8px;margin-left:.2rem;display:none">0</span></button>
+                        <button id="staffAdminTab-attendance" onclick="setStaffAdminTab('attendance')"
+                            style="background:none;border:none;padding:.5rem .7rem;font-size:.8rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap">🕐 근태</button>
+                        <button id="staffAdminTab-ot" onclick="setStaffAdminTab('ot')"
+                            style="background:none;border:none;padding:.5rem .7rem;font-size:.8rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap">⏰ OT·식사</button>
+                        <button id="staffAdminTab-payroll" onclick="setStaffAdminTab('payroll')"
+                            style="background:none;border:none;padding:.5rem .7rem;font-size:.8rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap">💰 급여</button>
+                    </div>
+                    <div id="staffAdminBody" style="margin-top:.6rem"></div>
                 </div>
             </div>
 
@@ -1977,16 +2011,25 @@
 
         // ===== 경영관리자(bizAdmins) 판별 & ⚙ 버튼 노출 =====
         let isBizAdmin=false;
+        let isAdminHigh=false; // 대표원장급 (settings/adminHigh.emails)
         async function refreshBizAdminStatus(email){
             const e=String(email||'').toLowerCase();
             try{
-                const doc=await db.collection('settings').doc('bizAdmins').get();
-                const list=(doc.exists&&Array.isArray(doc.data().emails))
-                    ? doc.data().emails.map(x=>String(x).toLowerCase()) : [];
-                isBizAdmin=!!e && list.includes(e);
-            }catch(_){isBizAdmin=false;}
+                const [bizDoc, highDoc]=await Promise.all([
+                    db.collection('settings').doc('bizAdmins').get(),
+                    db.collection('settings').doc('adminHigh').get()
+                ]);
+                const bizList=(bizDoc.exists&&Array.isArray(bizDoc.data().emails))
+                    ? bizDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
+                const highList=(highDoc.exists&&Array.isArray(highDoc.data().emails))
+                    ? highDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
+                isBizAdmin=!!e && bizList.includes(e);
+                isAdminHigh=!!e && highList.includes(e);
+            }catch(_){isBizAdmin=false; isAdminHigh=false;}
             const btn=document.getElementById('btnAdminSettings');
             if(btn) btn.style.display=isBizAdmin?'':'none';
+            const staffBtn=document.getElementById('topHomeStaffAdminBtn');
+            if(staffBtn) staffBtn.style.display=isAdminHigh?'flex':'none';
         }
 
         function openAdminSettings(){
@@ -2217,6 +2260,8 @@
             const chatBtn=document.getElementById('topHomeChatBtn');
             if(chatBtn) chatBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
             _initChatRealtime();
+            // STAFF 관리: adminHigh 이면 대기 배지 실시간 구독
+            if(isAdminHigh) _initStaffAdminBadge();
 
             const shared=isSharedAccount();
             
@@ -2300,6 +2345,10 @@
                 _chatUnsub=null; }
             if(_chatMsgsUnsub){ try{_chatMsgsUnsub();}catch(_){}
                 _chatMsgsUnsub=null; }
+            if(_staffAdminUnsubs){
+                _staffAdminUnsubs.forEach(fn=>{ try{fn();}catch(_){}});
+                _staffAdminUnsubs=[];
+            }
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -4949,6 +4998,8 @@
                 // openChatThread 에서 처리
             }else if(view==='chatSettings'){
                 _loadChatSettingsUI();
+            }else if(view==='staffAdmin'){
+                _initStaffAdmin();
             }
         }
         function _feeBack(){
@@ -6938,6 +6989,387 @@
                 alert('✅ 테스트 대화 생성됨. 채팅 목록에서 확인.');
                 showTop('chat');
             }catch(e){ alert('실패: '+(e?.message||e)); }
+        }
+
+        // ================================================================
+        //  👥 STAFF 관리 (대표원장급 전용 · settings/adminHigh.emails)
+        //    · 캘린더 · 승인 · 근태 · OT·식사 · 급여
+        // ================================================================
+        let _staffAdminUnsubs=[];
+        let _staffAdminCurTab='calendar';
+        let _staffAdminEmployees=[];
+        let _staffAdminLeaves=[];      // leaveRequests 캐시
+        let _staffAdminAttendance=[];  // attendance 캐시
+        let _staffAdminLunchOT=[];     // lunchOT 캐시
+        let _staffCalMonth=(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
+
+        // 대기 배지 (홈 카드에 노란 뱃지)
+        let _staffAdminBadgeUnsub=null;
+        function _initStaffAdminBadge(){
+            if(_staffAdminBadgeUnsub) return;
+            try{
+                _staffAdminBadgeUnsub=db.collection('leaveRequests').where('status','==','pending')
+                    .onSnapshot(snap=>{
+                        const n=snap.size;
+                        const b1=document.getElementById('staffAdminPendingBadge');
+                        const b2=document.getElementById('staffAdminPendingBadge2');
+                        [b1,b2].forEach(el=>{
+                            if(!el) return;
+                            if(n>0){ el.textContent=n>99?'99+':n; el.style.display='inline-block'; }
+                            else{ el.style.display='none'; }
+                        });
+                    }, err=>console.warn('pending 배지 실패:',err));
+                _staffAdminUnsubs.push(()=>{ if(_staffAdminBadgeUnsub){_staffAdminBadgeUnsub();_staffAdminBadgeUnsub=null;} });
+            }catch(e){ console.warn('pending 배지 초기화 실패:',e); }
+        }
+
+        // 진입 시 데이터 로드 + 현재 탭 렌더
+        async function _initStaffAdmin(){
+            if(!isAdminHigh){ alert('대표원장급 권한이 필요합니다. settings/adminHigh.emails 등록 확인.'); showTopHome(); return; }
+            document.getElementById('staffAdminBody').innerHTML=
+                '<div style="text-align:center;color:#9ca3af;padding:1.5rem;font-size:.85rem">데이터 로딩 중...</div>';
+            try{
+                // 병렬 조회
+                const [empS, leaveS, attS, otS]=await Promise.all([
+                    db.collection('employees').get(),
+                    db.collection('leaveRequests').get(),
+                    db.collection('attendance').get(),
+                    db.collection('lunchOT').get().catch(()=>({docs:[]}))
+                ]);
+                _staffAdminEmployees=empS.docs.map(d=>({id:d.id,...d.data()}))
+                    .filter(e=>e.id!==SHARED_ACCOUNT_ID)
+                    .sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+                _staffAdminLeaves=leaveS.docs.map(d=>({id:d.id,...d.data()}));
+                _staffAdminAttendance=attS.docs.map(d=>({id:d.id,...d.data()}));
+                _staffAdminLunchOT=otS.docs.map(d=>({id:d.id,...d.data()}));
+                _renderStaffAdminBody();
+            }catch(e){
+                document.getElementById('staffAdminBody').innerHTML=
+                    '<div style="color:var(--red);padding:1rem;font-size:.85rem">로드 실패: '+_esc(e.message)+'</div>';
+            }
+        }
+        function setStaffAdminTab(t){
+            _staffAdminCurTab=t;
+            ['calendar','pending','attendance','ot','payroll'].forEach(k=>{
+                const btn=document.getElementById('staffAdminTab-'+k);
+                if(!btn) return;
+                const active=(k===t);
+                btn.style.color=active?'#7c3aed':'#6b7280';
+                btn.style.fontWeight=active?'600':'500';
+                btn.style.borderBottom=active?'2px solid #7c3aed':'2px solid transparent';
+            });
+            _renderStaffAdminBody();
+        }
+        function _renderStaffAdminBody(){
+            const el=document.getElementById('staffAdminBody');
+            if(!el) return;
+            switch(_staffAdminCurTab){
+                case 'calendar':   _renderStaffCalendar(el); break;
+                case 'pending':    _renderStaffPending(el); break;
+                case 'attendance': _renderStaffAttendance(el); break;
+                case 'ot':         _renderStaffOT(el); break;
+                case 'payroll':    _renderStaffPayroll(el); break;
+            }
+        }
+
+        // ─────────────────────────────
+        // 📅 캘린더 (월별 · 셀 하단에 오프자 이름)
+        // ─────────────────────────────
+        function _renderStaffCalendar(el){
+            const [y,m]=_staffCalMonth.split('-').map(Number);
+            const firstDay=new Date(y, m-1, 1);
+            const lastDay=new Date(y, m, 0);
+            const daysInMonth=lastDay.getDate();
+            const startDow=firstDay.getDay(); // 0=Sun
+            const monthLabel=y+'년 '+m+'월';
+            // 오프/연차 데이터 그날 매핑
+            const offByDate={}; // 'YYYY-MM-DD' -> [{empName, type, status}]
+            _staffAdminLeaves.forEach(r=>{
+                if(r.status==='rejected') return;
+                const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
+                const name=emp?.name||r.employeeName||r.employeeId||'?';
+                const type=r.type||'연차';
+                (r.dates||[]).forEach(d=>{
+                    const [dy,dm]=String(d).split('-');
+                    if(dy!=String(y) || dm!=String(m).padStart(2,'0')) return;
+                    (offByDate[d]=offByDate[d]||[]).push({empName:name, type, status:r.status||'pending'});
+                });
+            });
+            // 헤더 (월 이동)
+            let html=`<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.5rem">
+                <button onclick="_staffCalMove(-1)" style="background:#f3f4f6;border:1px solid #d1d5db;padding:.3rem .7rem;border-radius:6px;font-size:.85rem;cursor:pointer">◀ 이전달</button>
+                <div style="font-weight:700;font-size:1rem;color:#111827">${monthLabel}</div>
+                <button onclick="_staffCalMove(1)" style="background:#f3f4f6;border:1px solid #d1d5db;padding:.3rem .7rem;border-radius:6px;font-size:.85rem;cursor:pointer">다음달 ▶</button>
+            </div>`;
+            // 요일 헤더
+            html+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:.7rem;color:#6b7280;font-weight:600;text-align:center;padding:.25rem 0">';
+            ['일','월','화','수','목','금','토'].forEach((d,i)=>{
+                const color=i===0?'#dc2626':(i===6?'#2563eb':'#6b7280');
+                html+=`<div style="color:${color}">${d}</div>`;
+            });
+            html+='</div>';
+            // 날짜 셀
+            html+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;background:#e5e7eb;padding:2px;border-radius:6px">';
+            // 앞부분 빈 셀
+            for(let i=0;i<startDow;i++){
+                html+='<div style="background:#f9fafb;min-height:76px;border-radius:3px"></div>';
+            }
+            const today=_todayYmd();
+            for(let d=1;d<=daysInMonth;d++){
+                const dateStr=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dow=(startDow+d-1)%7;
+                const dowColor=dow===0?'#dc2626':(dow===6?'#2563eb':'#111827');
+                const isToday=dateStr===today;
+                const offs=offByDate[dateStr]||[];
+                const namesHtml=offs.slice(0,4).map(o=>{
+                    const bg=o.status==='pending'?'#fef3c7':(o.type==='연차'?'#fee2e2':'#e0e7ff');
+                    const color=o.status==='pending'?'#92400e':(o.type==='연차'?'#991b1b':'#3730a3');
+                    return `<div style="font-size:.62rem;background:${bg};color:${color};padding:1px 4px;margin-top:1px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_esc(o.empName)} ${_esc(o.type)} (${o.status==='pending'?'대기':'승인'})">${_esc(o.empName)}</div>`;
+                }).join('');
+                const more=offs.length>4?`<div style="font-size:.6rem;color:#9ca3af">+${offs.length-4}</div>`:'';
+                html+=`<div onclick="_staffCalDayClick('${dateStr}')" style="background:#fff;min-height:76px;border-radius:3px;padding:3px;cursor:pointer;position:relative;${isToday?'outline:2px solid #7c3aed;outline-offset:-1px':''}">
+                    <div style="font-size:.75rem;font-weight:${isToday?'700':'500'};color:${dowColor}">${d}</div>
+                    <div>${namesHtml}${more}</div>
+                </div>`;
+            }
+            html+='</div>';
+            // 범례
+            html+=`<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.6rem;font-size:.7rem;color:#6b7280">
+                <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px">대기</span>
+                <span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:3px">연차</span>
+                <span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:3px">오프</span>
+            </div>`;
+            el.innerHTML=html;
+        }
+        function _staffCalMove(delta){
+            let [y,m]=_staffCalMonth.split('-').map(Number);
+            m+=delta;
+            if(m<1){m=12;y--;} else if(m>12){m=1;y++;}
+            _staffCalMonth=y+'-'+String(m).padStart(2,'0');
+            _renderStaffAdminBody();
+        }
+        function _staffCalDayClick(dateStr){
+            const offs=[];
+            _staffAdminLeaves.forEach(r=>{
+                if(r.status==='rejected') return;
+                if(!(r.dates||[]).includes(dateStr)) return;
+                const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
+                offs.push({name:emp?.name||r.employeeId, type:r.type||'연차', status:r.status||'pending', reason:r.reason||'', reqId:r.id});
+            });
+            const on=_staffAdminEmployees.filter(e=>{
+                if(e.status && e.status!=='active') return false;
+                return !offs.some(o=>o.name===e.name);
+            });
+            const lines=[];
+            lines.push('=== '+dateStr+' ===\n');
+            lines.push('■ 오프/연차 ('+offs.length+'명)');
+            offs.forEach(o=>{
+                lines.push(`  · ${o.name} - ${o.type} [${o.status==='pending'?'대기':'승인'}]${o.reason?' '+o.reason:''}`);
+            });
+            lines.push('\n■ 근무 예정 ('+on.length+'명)');
+            on.forEach(e=>lines.push('  · '+(e.name||e.id)));
+            alert(lines.join('\n'));
+        }
+
+        // ─────────────────────────────
+        // 📋 승인 대기
+        // ─────────────────────────────
+        function _renderStaffPending(el){
+            const pending=_staffAdminLeaves.filter(r=>r.status==='pending')
+                .sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+            const recent=_staffAdminLeaves.filter(r=>r.status==='approved'||r.status==='rejected')
+                .sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))
+                .slice(0,10);
+            let html='<div style="font-weight:700;font-size:.9rem;color:#92400e;margin-bottom:.4rem">📋 승인 대기 ('+pending.length+')</div>';
+            if(!pending.length){
+                html+='<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:6px">대기 중인 신청 없음</div>';
+            }else{
+                html+=pending.map(r=>_staffLeaveCard(r,true)).join('');
+            }
+            html+='<div style="font-weight:700;font-size:.9rem;color:#4b5563;margin:.9rem 0 .4rem">📁 최근 처리 이력</div>';
+            if(!recent.length){
+                html+='<div style="color:#9ca3af;font-size:.85rem;padding:.5rem;text-align:center">이력 없음</div>';
+            }else{
+                html+=recent.map(r=>_staffLeaveCard(r,false)).join('');
+            }
+            el.innerHTML=html;
+        }
+        function _staffLeaveCard(r, showActions){
+            const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
+            const name=emp?.name||r.employeeName||r.employeeId||'?';
+            const dates=(r.dates||[]).slice().sort();
+            const dateLabel=dates.length===1?dates[0]:(dates[0]+' ~ '+dates[dates.length-1]+' ('+dates.length+'일)');
+            const statusBadge={
+                pending:'<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">대기</span>',
+                approved:'<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">승인</span>',
+                rejected:'<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">반려</span>'
+            }[r.status||'pending'];
+            return `<div style="padding:.6rem .75rem;border:1px solid ${showActions?'#fbbf24':'#e5e7eb'};background:${showActions?'#fffbeb':'#fff'};border-radius:8px;margin-bottom:.4rem">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.25rem">
+                    <div style="font-weight:700;font-size:.9rem">${_esc(name)} · <span style="color:#6b7280;font-weight:500">${_esc(r.type||'연차')}</span></div>
+                    ${statusBadge}
+                </div>
+                <div style="font-size:.78rem;color:#374151">${_esc(dateLabel)}</div>
+                ${r.reason?`<div style="font-size:.72rem;color:#6b7280;margin-top:.2rem;white-space:pre-wrap">${_esc(r.reason)}</div>`:''}
+                ${showActions?`<div style="display:flex;gap:.35rem;margin-top:.4rem;justify-content:flex-end">
+                    <button onclick="_staffApproveLeave('${r.id}','rejected')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">반려</button>
+                    <button onclick="_staffApproveLeave('${r.id}','approved')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.75rem;border-radius:5px;cursor:pointer;font-weight:600">✓ 승인</button>
+                </div>`:''}
+            </div>`;
+        }
+        async function _staffApproveLeave(id, next){
+            const label=next==='approved'?'승인':'반려';
+            if(!confirm(`이 신청을 ${label}하시겠습니까?`)) return;
+            try{
+                await db.collection('leaveRequests').doc(id).update({
+                    status: next,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: currentUser?.name||currentUser?.id||'admin'
+                });
+                // 로컬 캐시 갱신
+                const r=_staffAdminLeaves.find(x=>x.id===id);
+                if(r){ r.status=next; r.updatedAt=new Date().toISOString(); }
+                _renderStaffAdminBody();
+            }catch(e){ alert('실패: '+(e?.message||e)); }
+        }
+
+        // ─────────────────────────────
+        // 🕐 근태 현황
+        // ─────────────────────────────
+        function _renderStaffAttendance(el){
+            const today=_todayYmd();
+            const monthPrefix=today.slice(0,7);
+            const active=_staffAdminEmployees.filter(e=>!e.status||e.status==='active');
+            // 오늘 출근한 직원
+            const todayAtt=_staffAdminAttendance.filter(a=>a.date===today);
+            // 이번 달 근태 합계
+            const monthAtt=_staffAdminAttendance.filter(a=>String(a.date||'').startsWith(monthPrefix));
+
+            let html='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">🕐 오늘 ('+today+')</div>';
+            html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.35rem;margin-bottom:.8rem">';
+            active.forEach(e=>{
+                const rec=todayAtt.find(a=>a.employeeId===e.id||a.empId===e.id);
+                let statusHtml, bg='#f9fafb', color='#6b7280';
+                if(rec){
+                    if(rec.clockOut||rec.checkOut){ bg='#dcfce7'; color='#166534'; statusHtml=`퇴근 ${_esc(rec.clockOut||rec.checkOut||'')}`; }
+                    else { bg='#dbeafe'; color='#1e40af'; statusHtml=`출근 ${_esc(rec.clockIn||rec.checkIn||'')}`; }
+                }else{
+                    // 오프 확인
+                    const off=_staffAdminLeaves.find(r=>r.employeeId===e.id && r.status==='approved' && (r.dates||[]).includes(today));
+                    if(off){ bg='#fee2e2'; color='#991b1b'; statusHtml='오프 · '+_esc(off.type||''); }
+                    else { statusHtml='미출근'; }
+                }
+                html+=`<div style="padding:.5rem;background:${bg};color:${color};border-radius:6px;font-size:.8rem">
+                    <div style="font-weight:700">${_esc(e.name||e.id)}</div>
+                    <div style="font-size:.7rem;margin-top:.15rem">${statusHtml}</div>
+                </div>`;
+            });
+            html+='</div>';
+
+            // 이번 달 요약
+            html+='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">📊 이번 달 ('+monthPrefix+') 요약</div>';
+            html+='<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;font-size:.78rem">';
+            html+='<thead><tr style="background:#f9fafb"><th style="padding:.4rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">직원</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">근무</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">지각</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">조퇴</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">OT분</th></tr></thead><tbody>';
+            active.forEach(e=>{
+                const recs=monthAtt.filter(a=>a.employeeId===e.id||a.empId===e.id);
+                const workDays=recs.filter(r=>r.clockIn||r.checkIn).length;
+                const late=recs.filter(r=>r.late||r.isLate).length;
+                const early=recs.filter(r=>(r.earlyLeave||r.isEarly||(r.otMinutes||r.ot)&&Number(r.otMinutes||r.ot)<0)).length;
+                const otSum=recs.reduce((s,r)=>s+(Number(r.otMinutes||r.ot||0)),0);
+                html+=`<tr>
+                    <td style="padding:.35rem .5rem;border-bottom:1px solid #f3f4f6">${_esc(e.name||e.id)}</td>
+                    <td style="padding:.35rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right">${workDays}</td>
+                    <td style="padding:.35rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right;color:${late?'#dc2626':'#6b7280'}">${late}</td>
+                    <td style="padding:.35rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right;color:${early?'#dc2626':'#6b7280'}">${early}</td>
+                    <td style="padding:.35rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right">${otSum}</td>
+                </tr>`;
+            });
+            html+='</tbody></table>';
+            html+='<div style="font-size:.7rem;color:#9ca3af;margin-top:.4rem">※ 상세 편집·수정은 경영관리 앱(index.html) 근태 화면에서.</div>';
+            el.innerHTML=html;
+        }
+
+        // ─────────────────────────────
+        // ⏰ OT · 식사
+        // ─────────────────────────────
+        function _renderStaffOT(el){
+            const today=_todayYmd();
+            const monthPrefix=today.slice(0,7);
+            const active=_staffAdminEmployees.filter(e=>!e.status||e.status==='active');
+            const monthOT=_staffAdminLunchOT.filter(o=>String(o.date||'').startsWith(monthPrefix));
+
+            let html='<div style="margin-bottom:.5rem;font-weight:700;font-size:.9rem;color:#111827">⏰ 이번 달 점심 OT ('+monthPrefix+')</div>';
+            if(!monthOT.length){
+                html+='<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:6px">이번 달 신청 없음</div>';
+            }else{
+                html+='<div style="max-height:280px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px">';
+                html+='<table style="width:100%;border-collapse:collapse;font-size:.78rem;background:#fff">';
+                html+='<thead style="position:sticky;top:0;background:#f9fafb"><tr><th style="padding:.4rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">날짜</th><th style="padding:.4rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">직원</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">분</th><th style="padding:.4rem .5rem;border-bottom:1px solid #e5e7eb">사유</th></tr></thead><tbody>';
+                monthOT.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).forEach(o=>{
+                    const emp=_staffAdminEmployees.find(e=>e.id===(o.employeeId||o.empId));
+                    html+=`<tr>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6">${_esc(o.date||'')}</td>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6">${_esc(emp?.name||o.empName||'?')}</td>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right">${o.minutes||o.otMinutes||0}</td>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6">${_esc(o.reason||'')}</td>
+                    </tr>`;
+                });
+                html+='</tbody></table></div>';
+            }
+            // 직원별 이번달 OT 합계
+            html+='<div style="margin:.9rem 0 .4rem;font-weight:700;font-size:.9rem;color:#111827">📊 직원별 이번 달 OT 합계</div>';
+            html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.35rem">';
+            active.forEach(e=>{
+                const sum=monthOT.filter(o=>(o.employeeId||o.empId)===e.id).reduce((s,o)=>s+(Number(o.minutes||o.otMinutes||0)),0);
+                html+=`<div style="padding:.5rem;background:${sum>0?'#eef2ff':'#f9fafb'};color:${sum>0?'#3730a3':'#6b7280'};border-radius:6px;font-size:.78rem">
+                    <div style="font-weight:700">${_esc(e.name||e.id)}</div>
+                    <div>${sum} 분</div>
+                </div>`;
+            });
+            html+='</div>';
+            html+='<div style="font-size:.7rem;color:#9ca3af;margin-top:.4rem">※ 상세 편집·삭제는 경영관리 앱(index.html)에서.</div>';
+            el.innerHTML=html;
+        }
+
+        // ─────────────────────────────
+        // 💰 급여 (임시: 경영관리 링크)
+        // ─────────────────────────────
+        function _renderStaffPayroll(el){
+            const monthPrefix=_todayYmd().slice(0,7);
+            el.innerHTML=`
+                <div style="padding:1rem;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;margin-bottom:.5rem">
+                    <div style="font-weight:700;color:#4338ca;margin-bottom:.35rem">💰 급여·인센티브</div>
+                    <div style="font-size:.85rem;color:#4338ca;line-height:1.5">
+                        상세 급여 산정·인센티브 계산·명세서 발행은 경영관리(index.html)에서
+                        기존 로직 유지. 다음 단계에서 통합앱으로 완전 이관 예정.
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:.4rem">
+                    <a href="./index.html#tab-attendance" target="_blank" style="text-decoration:none">
+                        <div style="padding:.7rem;background:#fff;border:1px solid #e5e7eb;border-radius:6px;color:#111827;font-size:.85rem;display:flex;justify-content:space-between;align-items:center">
+                            <span>🕐 상세 근태 관리</span><span style="color:#6b7280">→</span>
+                        </div>
+                    </a>
+                    <a href="./index.html#tab-overtime" target="_blank" style="text-decoration:none">
+                        <div style="padding:.7rem;background:#fff;border:1px solid #e5e7eb;border-radius:6px;color:#111827;font-size:.85rem;display:flex;justify-content:space-between;align-items:center">
+                            <span>⏰ OT·저녁 OT 관리</span><span style="color:#6b7280">→</span>
+                        </div>
+                    </a>
+                    <a href="./index.html#tab-incentive" target="_blank" style="text-decoration:none">
+                        <div style="padding:.7rem;background:#fff;border:1px solid #e5e7eb;border-radius:6px;color:#111827;font-size:.85rem;display:flex;justify-content:space-between;align-items:center">
+                            <span>🎯 인센티브 산정</span><span style="color:#6b7280">→</span>
+                        </div>
+                    </a>
+                    <a href="./index.html#tab-salary" target="_blank" style="text-decoration:none">
+                        <div style="padding:.7rem;background:#fff;border:1px solid #e5e7eb;border-radius:6px;color:#111827;font-size:.85rem;display:flex;justify-content:space-between;align-items:center">
+                            <span>💰 급여 산정·명세서</span><span style="color:#6b7280">→</span>
+                        </div>
+                    </a>
+                </div>
+                <div style="margin-top:.6rem;font-size:.72rem;color:#6b7280;line-height:1.5">
+                    현재 이번 달 (${monthPrefix}) 데이터는 경영관리 앱에서 조회·산정 가능합니다.
+                </div>
+            `;
         }
 
         // ================================================================
