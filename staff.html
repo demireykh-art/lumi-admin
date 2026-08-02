@@ -7550,24 +7550,40 @@
             }
             html+='</tbody></table></div></div>';
 
-            // 3) 사전 급여 대장
+            // 3) 사전 급여 대장 — OT 분해 (저녁·점심·조퇴·총)
             html+=`<div style="border:1px solid #e5e7eb;border-radius:8px;padding:.75rem;background:#fff">
                 <div style="font-weight:700;font-size:.9rem;color:#111827;margin-bottom:.4rem">📊 사전 급여 대장</div>
                 <div style="overflow-x:auto">
-                <table style="width:100%;border-collapse:collapse;font-size:.78rem;min-width:560px">
+                <table style="width:100%;border-collapse:collapse;font-size:.78rem;min-width:660px">
                     <thead><tr style="background:#f9fafb">
-                        <th style="padding:.35rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">직원</th>
-                        <th style="padding:.35rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">직급</th>
-                        <th style="padding:.35rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">연봉</th>
-                        <th style="padding:.35rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">OT</th>
-                        <th style="padding:.35rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">인센티브</th>
+                        <th style="padding:.35rem .4rem;text-align:left;border-bottom:1px solid #e5e7eb">직원</th>
+                        <th style="padding:.35rem .4rem;text-align:left;border-bottom:1px solid #e5e7eb">직급</th>
+                        <th style="padding:.35rem .4rem;text-align:left;border-bottom:1px solid #e5e7eb">연봉</th>
+                        <th style="padding:.35rem .4rem;text-align:right;border-bottom:1px solid #e5e7eb">저녁OT</th>
+                        <th style="padding:.35rem .4rem;text-align:right;border-bottom:1px solid #e5e7eb">점심OT</th>
+                        <th style="padding:.35rem .4rem;text-align:right;border-bottom:1px solid #e5e7eb;color:#dc2626">조퇴</th>
+                        <th style="padding:.35rem .4rem;text-align:right;border-bottom:1px solid #e5e7eb;font-weight:700">총OT</th>
+                        <th style="padding:.35rem .4rem;text-align:right;border-bottom:1px solid #e5e7eb">인센티브</th>
                     </tr></thead><tbody>`;
+            const _cellOt=(v,neg)=>{
+                if(v===0) return '<span style="color:#9ca3af">-</span>';
+                const color=neg?'color:#dc2626;font-weight:600':'';
+                const sign=v>0?'+':'';
+                return `<span style="${color}">${sign}${v}m</span>`;
+            };
             active.forEach(emp=>{
                 const empAtt=_staffAdminAttendance.filter(a=>(a.employeeId===emp.id||a.empId===emp.id)&&String(a.date||'').startsWith(ym));
-                let otMin=0;
-                empAtt.forEach(a=>{ if(a.checkOut) otMin+=_staffCalcEveningOt(a.checkOut, a.date); });
+                let eveningPos=0, earlyNeg=0;
+                empAtt.forEach(a=>{
+                    if(a.checkOut){
+                        const v=_staffCalcEveningOt(a.checkOut, a.date);
+                        if(v>0) eveningPos+=v;
+                        else if(v<0) earlyNeg+=v;
+                    }
+                });
                 const lot=_staffAdminLunchOT.filter(o=>(o.employeeId===emp.id||o.empId===emp.id)&&String(o.date||'').startsWith(ym));
-                otMin+=lot.reduce((s,o)=>s+(Number(o.minutes||o.otMinutes||0)),0);
+                const lunchMin=lot.reduce((s,o)=>s+(Number(o.minutes||o.otMinutes||0)),0);
+                const totalOt=eveningPos+lunchMin+earlyNeg;
                 const {sales, japan}=_staffCalcIncentive(emp);
                 const recs=_staffIncRecords.filter(r=>r.employeeId===emp.id && r.yearMonth===ym);
                 let perCase=0;
@@ -7578,12 +7594,16 @@
                 const incTotal=sales+japan+perCase;
                 let salaryTxt=emp.salary?emp.salary+'만원':'-';
                 if(emp.role==='doctor'&&emp.salaryType==='afterTax') salaryTxt+='(세후)';
+                const totalStyle=totalOt<0?'color:#dc2626;font-weight:700':(totalOt>0?'font-weight:700':'color:#9ca3af');
                 html+=`<tr>
-                    <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;font-weight:600">${_esc(emp.name)}</td>
-                    <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;color:#6b7280">${_staffRoleLabel(emp.role)}</td>
-                    <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6">${salaryTxt}</td>
-                    <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right;color:${otMin<0?'#dc2626':'#111827'};font-weight:${otMin!==0?'600':'400'}">${_staffFormatOtMinutes(otMin)}</td>
-                    <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right">${incTotal>0?_staffFormatMoney(incTotal):'-'}</td>
+                    <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;font-weight:600">${_esc(emp.name)}</td>
+                    <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;color:#6b7280">${_staffRoleLabel(emp.role)}</td>
+                    <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6">${salaryTxt}</td>
+                    <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;text-align:right">${_cellOt(eveningPos)}</td>
+                    <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;text-align:right">${_cellOt(lunchMin)}</td>
+                    <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;text-align:right">${_cellOt(earlyNeg, true)}</td>
+                    <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;text-align:right;${totalStyle}">${totalOt===0?'-':(totalOt>0?'+':'')+totalOt+'m'}</td>
+                    <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;text-align:right">${incTotal>0?_staffFormatMoney(incTotal):'-'}</td>
                 </tr>`;
             });
             html+='</tbody></table></div>';

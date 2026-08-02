@@ -183,13 +183,14 @@ function calculateAfterOT(att){
 function renderStaffOTTable(){
     const tbody=document.getElementById('staffOTTable');
     if(!tbody) return;
+    const ym=getYM();
     const activeEmps=employees.filter(e=>e.status==='active');
     const rows=activeEmps.map(emp=>{
         let afterMin=0;
-        attendance.filter(a=>a.employeeId===emp.id && a.checkOut).forEach(a=>{
+        attendance.filter(a=>a.employeeId===emp.id && a.checkOut && String(a.date||'').startsWith(ym)).forEach(a=>{
             afterMin+=calcEveningOtMinutes(a.checkOut,a.date);
         });
-        const lunchMin=lunchOT.filter(ot=>ot.employeeId===emp.id).reduce((s,ot)=>s+(ot.minutes||0),0);
+        const lunchMin=lunchOT.filter(ot=>ot.employeeId===emp.id && String(ot.date||'').startsWith(ym)).reduce((s,ot)=>s+(ot.minutes||0),0);
         return {name:emp.name, afterMin, lunchMin, totalMin:afterMin+lunchMin};
     }).sort((a,b)=>b.totalMin-a.totalMin);
     const cell=(v)=>{
@@ -237,13 +238,14 @@ function calculateWorkHours(checkIn,checkOut){
 }
 
 function renderOvertime(){
+    const ym=getYM();
     let eveningMinutes=0;
-    attendance.forEach(a=>{
+    attendance.filter(a=>String(a.date||'').startsWith(ym)).forEach(a=>{
         if(a.checkOut){
             eveningMinutes+=calcEveningOtMinutes(a.checkOut,a.date);
         }
     });
-    const lunchMinutes=lunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+    const lunchMinutes=lunchOT.filter(ot=>String(ot.date||'').startsWith(ym)).reduce((sum,ot)=>sum+(ot.minutes||0),0);
     const totalMinutes=eveningMinutes+lunchMinutes;
     const avgHourly=employees.length?employees.reduce((sum,e)=>sum+(e.hourly||12000),0)/employees.length:12000;
     const totalPay=Math.round(totalMinutes/60*avgHourly*1.5);
@@ -504,16 +506,19 @@ function renderSalary(){
     const realEmployees=employees.filter(e=>e.status==='active'&&!e.id.startsWith('lumi'));
     
     document.getElementById('prePayrollTable').innerHTML=realEmployees.map(emp=>{
-        // OT 시간 계산
+        // OT 분해: 저녁OT(양수만) · 조퇴(음수만) · 점심OT
         const empAttendance=attendance.filter(a=>a.employeeId===emp.id&&a.date?.startsWith(ym));
-        let otMinutes=0;
+        let eveningPos=0, earlyNeg=0;
         empAttendance.forEach(a=>{
             if(a.checkOut){
-                otMinutes+=calcEveningOtMinutes(a.checkOut,a.date);
+                const v=calcEveningOtMinutes(a.checkOut,a.date);
+                if(v>0) eveningPos+=v;
+                else if(v<0) earlyNeg+=v; // 음수 누적
             }
         });
         const empLunchOT=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym));
-        otMinutes+=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+        const lunchMin=empLunchOT.reduce((sum,ot)=>sum+(ot.minutes||0),0);
+        const totalOt=eveningPos+lunchMin+earlyNeg; // 조퇴 음수 반영
 
         // 인센티브 계산 (동적 v2)
         const {salesIncentive, japanIncentive}=calculateIncentiveForEmp(emp);
@@ -524,20 +529,26 @@ function renderSalary(){
             if(item&&item.type==='perCase') perCaseIncentive+=item.price||0;
         });
         const incentiveAmount=salesIncentive+japanIncentive+perCaseIncentive;
-        
+
         // 연봉 표시: 부원장은 "세후" 표기
         let salaryDisplay=emp.salary?emp.salary+'만원':'-';
         if(emp.role==='doctor'&&emp.salaryType==='afterTax') salaryDisplay=emp.salary+'만원(세후)';
-        
+
+        const cellOt=(v,neg)=>v===0?'<span style="color:#9ca3af">-</span>':`<span style="${neg?'color:#dc2626;font-weight:600':''}">${v>=0?'+':''}${v}분</span>`;
+        const totalStyle=totalOt<0?'color:#dc2626;font-weight:700':(totalOt>0?'font-weight:700':'color:#9ca3af');
+
         return `<tr>
             <td><strong>${emp.name}</strong></td>
             <td>${roleLabelsLocal[emp.role]||emp.role}</td>
             <td>${salaryDisplay}</td>
-            <td class="text-right" style="${otMinutes<0?'color:#dc2626;font-weight:600':''}">${otMinutes>=0?otMinutes:otMinutes}분</td>
+            <td class="text-right">${cellOt(eveningPos)}</td>
+            <td class="text-right">${cellOt(lunchMin)}</td>
+            <td class="text-right">${cellOt(earlyNeg, true)}</td>
+            <td class="text-right" style="${totalStyle}">${totalOt===0?'-':(totalOt>0?'+':'')+totalOt+'분'}</td>
             <td class="text-right">${incentiveAmount>0?formatCurrency(incentiveAmount):''}</td>
             <td><input type="text" class="form-input" style="font-size:.8rem;padding:.25rem .5rem;border:1px solid var(--border)" placeholder="" value="${emp._payrollMemo||''}" onchange="updatePayrollMemo('${emp.id}',this.value)"></td>
         </tr>`;
-    }).join('')||'<tr><td colspan="6" class="text-center">직원 없음</td></tr>';
+    }).join('')||'<tr><td colspan="9" class="text-center">직원 없음</td></tr>';
 }
 
 // 기타 메모 임시 저장 (세션 내)
