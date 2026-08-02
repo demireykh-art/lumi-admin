@@ -69,7 +69,14 @@
     - 년월 선택기 (이전달/다음달)
     - 🎯 매출 인센티브 입력: 총매출 + 개인매출(수동/자동 소스) → 저장
     - 📋 인센티브 요약: 매출·일본·건별 합계 표 + [⚙ 항목 관리] 모달
-    - 📊 사전 급여 대장: 직원별 연봉·OT·인센티브 합계
+    - 📊 사전 급여 대장: 직원별 연봉·저녁OT·점심OT·조퇴·총OT·인센티브
+  - 📊 매출 (Google Drive 자동 파싱):
+    - 폴더(1BLz...) 파일 목록 조회
+    - 오더판매내역및환자내역_YYYYMM.xlsx 파싱
+    - Firestore revenue/{ym} 저장 → 급여 탭 인센티브 자동 반영
+    - 총매출·일본인 방문객·원장별·직원별·대분류별 표시
+    - Cloud Functions: listRevenueFiles, parseRevenueFile
+    - Service Account 인증 (DRIVE_SERVICE_KEY secret)
 - 데이터: `employees`, `leaveRequests`, `attendance`, `lunchOT`,
   `incentiveItems`, `incentiveRecords`, `monthlyIncentiveInput/{ym}`, `revenue/{ym}`
 - 승인 시 `leaveRequests` 상태 업데이트 → 캘린더 즉시 갱신
