@@ -157,12 +157,11 @@ function formatOTMinutes(min){
 }
 
 // 저녁 퇴근 기준 OT 산출 (조기퇴근 10분 grace, 초과분은 음수 OT 로 차감)
-// - checkOutMin > endMin           : (checkOutMin - endMin)  // 늦게 퇴근 = 양수
-// - status='early' 이면 grace 무시 (사용자가 명시적으로 조퇴 처리)
-// - endMin - 10 <= checkOutMin    : 0                        // grace 이내
-// - checkOutMin < endMin - 10     : checkOutMin - (endMin-10)  // 음수 (조기퇴근)
+// - checkOutMin > endMin        : (checkOutMin - endMin)  // 늦게 퇴근 = 양수
+// - endMin - 10 <= checkOutMin  : 0                       // grace 이내 (정상 처리)
+// - checkOutMin < endMin - 10   : checkOutMin - (endMin - 10)  // 음수 (조기퇴근)
 const EARLY_LEAVE_GRACE_MIN=10;
-function calcEveningOtMinutes(checkOut, dateStr, status){
+function calcEveningOtMinutes(checkOut, dateStr){
     if(!checkOut||!dateStr) return 0;
     const parts=String(checkOut).split(':');
     if(parts.length<2) return 0;
@@ -171,10 +170,6 @@ function calcEveningOtMinutes(checkOut, dateStr, status){
     const checkOutMin=h*60+m;
     const endMin=getAdminWorkEndMin(dateStr);
     if(checkOutMin>endMin) return checkOutMin-endMin;
-    // status='early' 로 명시된 경우 grace 무시하고 실제 차이 반환
-    if(status==='early'){
-        return Math.min(0, checkOutMin-endMin);
-    }
     const graceMin=endMin-EARLY_LEAVE_GRACE_MIN;
     if(checkOutMin>=graceMin) return 0;
     return checkOutMin-graceMin; // 항상 음수
@@ -182,7 +177,7 @@ function calcEveningOtMinutes(checkOut, dateStr, status){
 
 function calculateAfterOT(att){
     if(!att.checkOut||!att.date) return '-';
-    const mins=calcEveningOtMinutes(att.checkOut, att.date, att.status);
+    const mins=calcEveningOtMinutes(att.checkOut, att.date);
     if(mins===0) return '-';
     return formatOTMinutes(mins);
 }
@@ -195,7 +190,7 @@ function renderStaffOTTable(){
     const rows=activeEmps.map(emp=>{
         let afterMin=0;
         attendance.filter(a=>a.employeeId===emp.id && a.checkOut && String(a.date||'').startsWith(ym)).forEach(a=>{
-            afterMin+=calcEveningOtMinutes(a.checkOut,a.date,a.status);
+            afterMin+=calcEveningOtMinutes(a.checkOut,a.date);
         });
         const lunchMin=lunchOT.filter(ot=>ot.employeeId===emp.id && String(ot.date||'').startsWith(ym)).reduce((s,ot)=>s+(ot.minutes||0),0);
         return {name:emp.name, afterMin, lunchMin, totalMin:afterMin+lunchMin};
@@ -249,7 +244,7 @@ function renderOvertime(){
     let eveningMinutes=0;
     attendance.filter(a=>String(a.date||'').startsWith(ym)).forEach(a=>{
         if(a.checkOut){
-            eveningMinutes+=calcEveningOtMinutes(a.checkOut,a.date,a.status);
+            eveningMinutes+=calcEveningOtMinutes(a.checkOut,a.date);
         }
     });
     const lunchMinutes=lunchOT.filter(ot=>String(ot.date||'').startsWith(ym)).reduce((sum,ot)=>sum+(ot.minutes||0),0);
@@ -518,7 +513,7 @@ function renderSalary(){
         let eveningPos=0, earlyNeg=0;
         empAttendance.forEach(a=>{
             if(a.checkOut){
-                const v=calcEveningOtMinutes(a.checkOut,a.date,a.status);
+                const v=calcEveningOtMinutes(a.checkOut,a.date);
                 if(v>0) eveningPos+=v;
                 else if(v<0) earlyNeg+=v; // 음수 누적
             }
@@ -1027,7 +1022,7 @@ function exportPrePayroll(){
         let otMin=0;
         empAtt.forEach(a=>{
             if(a.checkOut){
-                otMin+=calcEveningOtMinutes(a.checkOut,a.date,a.status);
+                otMin+=calcEveningOtMinutes(a.checkOut,a.date);
             }
         });
         otMin+=lunchOT.filter(ot=>ot.employeeId===emp.id&&ot.date?.startsWith(ym)).reduce((s,ot)=>s+(ot.minutes||0),0);
