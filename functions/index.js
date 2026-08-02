@@ -238,3 +238,230 @@ exports.sendChatReply = onCall(
     return {ok: true, provider: thread.provider, sent: false, stub: true};
   }
 );
+
+// ================================================================
+//  📊 Google Drive 매출 파일 자동 파싱
+//   · Service Account (secrets: DRIVE_SERVICE_KEY) 로 인증
+//   · 폴더 내 '오더판매내역및환자내역_YYYYMM.xlsx' 파일 목록/파싱
+//   · 파싱 결과 → Firestore revenue/{YYYY-MM} 저장
+// ================================================================
+const {defineSecret} = require('firebase-functions/params');
+const DRIVE_SERVICE_KEY = defineSecret('DRIVE_SERVICE_KEY');
+const REVENUE_FOLDER_ID = '1BLzrDhy8mvWUa27RsKlwhYV9sOYhG5iI';
+
+async function _getDriveClient() {
+  const {google} = require('googleapis');
+  const raw = process.env.DRIVE_SERVICE_KEY;
+  if (!raw) throw new HttpsError('failed-precondition', 'DRIVE_SERVICE_KEY 시크릿 미설정');
+  let key;
+  try { key = JSON.parse(raw); }
+  catch (e) { throw new HttpsError('failed-precondition', 'DRIVE_SERVICE_KEY JSON 파싱 실패'); }
+  const auth = new google.auth.JWT({
+    email: key.client_email,
+    key: key.private_key,
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
+  await auth.authorize();
+  return google.drive({version: 'v3', auth});
+}
+
+async function _checkAdminHigh(email) {
+  const e = String(email || '').toLowerCase();
+  if (!e) return false;
+  try {
+    const doc = await admin.firestore().collection('settings').doc('adminHigh').get();
+    const list = (doc.exists && Array.isArray(doc.data().emails))
+      ? doc.data().emails.map(x => String(x).toLowerCase()) : [];
+    return list.includes(e);
+  } catch (_) { return false; }
+}
+
+// 폴더 파일 목록 (오더판매내역및환자내역_YYYYMM.xlsx)
+exports.listRevenueFiles = onCall(
+  {region: 'asia-northeast3', cors: true, secrets: [DRIVE_SERVICE_KEY]},
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', '로그인 필요');
+    const email = String(request.auth.token.email || '').toLowerCase();
+    if (!(await _checkAdminHigh(email))) {
+      throw new HttpsError('permission-denied', '대표원장 권한 필요');
+    }
+    const drive = await _getDriveClient();
+    const res = await drive.files.list({
+      q: `'${REVENUE_FOLDER_ID}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: 'files(id,name,modifiedTime,size,mimeType)',
+      pageSize: 100,
+      orderBy: 'name desc',
+    });
+    const files = (res.data.files || []).map(f => {
+      const m = String(f.name || '').match(/오더판매내역및환자내역_(\d{6})\.xlsx/);
+      return {
+        id: f.id,
+        name: f.name,
+        modifiedTime: f.modifiedTime,
+        size: Number(f.size || 0),
+        ym: m ? `${m[1].slice(0,4)}-${m[1].slice(4,6)}` : null,
+      };
+    }).filter(f => f.ym);
+    return {files};
+  }
+);
+
+// 특정 파일 다운로드 + 파싱 + Firestore 저장
+exports.parseRevenueFile = onCall(
+  {region: 'asia-northeast3', cors: true, timeoutSeconds: 300, memory: '1GiB', secrets: [DRIVE_SERVICE_KEY]},
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', '로그인 필요');
+    const email = String(request.auth.token.email || '').toLowerCase();
+    if (!(await _checkAdminHigh(email))) {
+      throw new HttpsError('permission-denied', '대표원장 권한 필요');
+    }
+    const {fileId, ym} = request.data || {};
+    if (!fileId || !ym) throw new HttpsError('invalid-argument', 'fileId·ym 필요');
+
+    // Drive 파일 다운로드 (버퍼)
+    const drive = await _getDriveClient();
+    const fileRes = await drive.files.get(
+      {fileId, alt: 'media'},
+      {responseType: 'arraybuffer'}
+    );
+    const buffer = Buffer.from(fileRes.data);
+
+    // xlsx 파싱
+    const XLSX = require('xlsx');
+    const wb = XLSX.read(buffer, {type: 'buffer'});
+    const sheetName = wb.SheetNames.find(n => n.includes('오더별환자')) || wb.SheetNames[1] || wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    // 2행이 헤더, 3행부터 데이터
+    const rows = XLSX.utils.sheet_to_json(sheet, {header: 1, range: 1, defval: ''});
+    if (!rows || rows.length < 2) {
+      throw new HttpsError('failed-precondition', '시트에서 데이터를 찾지 못했습니다.');
+    }
+    const header = rows[0];
+    const colIdx = (label) => header.findIndex(h => String(h || '').trim() === label);
+    const COL = {
+      chartNo: colIdx('차트번호'),
+      name: colIdx('이름'),
+      doctor: colIdx('진료의명'),
+      staff: colIdx('담당직원'),
+      code: colIdx('코드'),
+      orderName: colIdx('오더명'),
+      amount: colIdx('금액'),
+      nationality: colIdx('국적'),
+      division: colIdx('구분'),
+    };
+    if (COL.amount < 0) throw new HttpsError('failed-precondition', "'금액' 컬럼 미발견");
+
+    // 데이터 행 (마지막 '합계' 행 제외)
+    const dataRows = [];
+    let totalFromSum = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const chartVal = String(r[COL.chartNo] || '').trim();
+      const first = String(r[0] || '').trim();
+      // 합계행: 첫 컬럼 or 이름 컬럼에 '합계' 포함
+      if (String(r[COL.name] || '').includes('합') || first === '합계') {
+        totalFromSum = Number(r[COL.amount]) || 0;
+        continue;
+      }
+      if (!chartVal && !r[COL.name]) continue;
+      dataRows.push(r);
+    }
+
+    // 집계
+    let totalRevenue = 0;
+    const staffSales = {};      // {name: {amount, count}}
+    const japanStaffSales = {}; // {name: {amount, count}}
+    const doctorSales = {};     // {name: {amount, count}}
+    const codeSales = {};       // {code: {amount, count}} — 대분류 매핑 원천
+    const japanChartsSet = new Set();
+    let visitorRows = 0;
+
+    for (const r of dataRows) {
+      const amt = Number(r[COL.amount]) || 0;
+      totalRevenue += amt;
+      visitorRows++;
+
+      const staff = String(r[COL.staff] || '').trim();
+      const doctor = String(r[COL.doctor] || '').trim();
+      const nation = String(r[COL.nationality] || '').trim();
+      const chart = String(r[COL.chartNo] || '').trim();
+      const code = String(r[COL.code] || '').trim();
+
+      if (staff) {
+        staffSales[staff] = staffSales[staff] || {amount: 0, count: 0};
+        staffSales[staff].amount += amt;
+        staffSales[staff].count += 1;
+      }
+      if (doctor) {
+        doctorSales[doctor] = doctorSales[doctor] || {amount: 0, count: 0};
+        doctorSales[doctor].amount += amt;
+        doctorSales[doctor].count += 1;
+      }
+      if (nation === '일본') {
+        if (chart) japanChartsSet.add(chart);
+        if (staff) {
+          japanStaffSales[staff] = japanStaffSales[staff] || {amount: 0, count: 0};
+          japanStaffSales[staff].amount += amt;
+          japanStaffSales[staff].count += 1;
+        }
+      }
+      if (code) {
+        codeSales[code] = codeSales[code] || {amount: 0, count: 0};
+        codeSales[code].amount += amt;
+        codeSales[code].count += 1;
+      }
+    }
+
+    // 오더 대분류 매핑 (초기 룰) — settings/orderCategoryMap 문서에서 오버라이드 가능
+    const defaultMap = {
+      '색소': ['색소', '흑자', '검버섯', '기미', '잡티', '오타모반'],
+      '톤':   ['톤', 'BB토닝', 'BBL', '라라BBL', '피코토닝', '라비앙', '라라필'],
+      '주름': ['주름', '보톡스', '리투오PN'],
+      '리프팅': ['리프팅', '실리프팅', '쥬브젠', '리투오볼륨'],
+      '스킨부스터': ['리쥬란', '리투오물광', '엑소좀', '스킨부스터'],
+      '모공': ['모공', '실펌'],
+      '여드름': ['여드름', '클리어밸런스'],
+      '돌출': ['돌출', '편평사마귀', '피지선증식증', '한관종', '모낭상피종'],
+      '흉터': ['흉터', '흉터01'],
+      '리팟': ['리팟'],
+      '제모': ['제모'],
+      '진료': ['진료', '보험진료'],
+      '약품': ['670', '657'],
+    };
+    let mapDoc;
+    try { mapDoc = await admin.firestore().collection('settings').doc('orderCategoryMap').get(); } catch (_) {}
+    const catMap = (mapDoc && mapDoc.exists && mapDoc.data() && mapDoc.data().map) || defaultMap;
+
+    const categorySales = {};
+    for (const [code, val] of Object.entries(codeSales)) {
+      let matched = null;
+      for (const [cat, keywords] of Object.entries(catMap)) {
+        if (keywords.some(k => code.includes(k))) { matched = cat; break; }
+      }
+      const cat = matched || '기타';
+      categorySales[cat] = categorySales[cat] || {amount: 0, count: 0};
+      categorySales[cat].amount += val.amount;
+      categorySales[cat].count += val.count;
+    }
+
+    const payload = {
+      totalRevenue: totalFromSum || totalRevenue, // 합계행 우선
+      totalRevenueByRows: totalRevenue,           // 행합계 (검증용)
+      japanVisitors: japanChartsSet.size,
+      visitorRows,
+      salesDetail: {
+        staffSales,
+        japanStaffSales,
+        codeSales,
+      },
+      doctorSales,
+      categorySales,
+      sourceFile: {fileId, ym},
+      parsedAt: new Date().toISOString(),
+      parsedBy: email,
+    };
+    await admin.firestore().collection('revenue').doc(ym).set(payload, {merge: true});
+    logger.info(`parseRevenueFile ${ym}: totalRevenue=${payload.totalRevenue} japanVisitors=${payload.japanVisitors} staff=${Object.keys(staffSales).length}`);
+    return {ok: true, ...payload};
+  }
+);
