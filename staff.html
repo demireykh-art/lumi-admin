@@ -7394,7 +7394,7 @@
             const f=Math.pow(10, Math.abs(digits));
             return Math.ceil(v/f)*f;
         }
-        function _staffCalcEveningOt(checkOut, dateStr){
+        function _staffCalcEveningOt(checkOut, dateStr, status){
             if(!checkOut||!dateStr) return 0;
             const [h,m]=String(checkOut).split(':').map(Number);
             if(isNaN(h)||isNaN(m)) return 0;
@@ -7402,6 +7402,8 @@
             const dow=new Date(dateStr).getDay();
             const endMin=_STAFF_END_MIN[dow]??1080;
             if(co>endMin) return co-endMin;
+            // status='early' 이면 grace 무시하고 실제 차이 반환
+            if(status==='early') return Math.min(0, co-endMin);
             const graceMin=endMin-_STAFF_EARLY_GRACE;
             if(co>=graceMin) return 0;
             return co-graceMin; // 음수 (조기퇴근)
@@ -7576,7 +7578,7 @@
                 let eveningPos=0, earlyNeg=0;
                 empAtt.forEach(a=>{
                     if(a.checkOut){
-                        const v=_staffCalcEveningOt(a.checkOut, a.date);
+                        const v=_staffCalcEveningOt(a.checkOut, a.date, a.status);
                         if(v>0) eveningPos+=v;
                         else if(v<0) earlyNeg+=v;
                     }
