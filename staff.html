@@ -7081,6 +7081,23 @@
                 _staffIncRecords=recS.docs.map(d=>({id:d.id,...d.data()}));
                 _staffRevenueMap={};
                 revS.docs.forEach(d=>{ _staffRevenueMap[d.id]=d.data(); });
+                // salesDetail/{ym} 을 병렬 병합 (admin 저장 스키마)
+                try{
+                    const sdS=await db.collection('salesDetail').get();
+                    sdS.docs.forEach(d=>{
+                        const ex=_staffRevenueMap[d.id]||{};
+                        const sd=d.data()||{};
+                        _staffRevenueMap[d.id]={
+                            ...ex,
+                            doctorSales: ex.doctorSales||sd.doctorSales,
+                            categorySales: ex.categorySales||sd.categorySales,
+                            salesDetail: {
+                                staffSales: sd.staffSales,
+                                japanStaffSales: sd.japanStaffSales,
+                            },
+                        };
+                    });
+                }catch(_){}
                 await _staffLoadMonthIncInput(_staffPayrollYm);
                 _renderStaffAdminBody();
             }catch(e){
@@ -7771,18 +7788,20 @@
             if(!rev || !rev.parsedAt){
                 html+='<div style="color:#9ca3af;font-size:.85rem;padding:1rem;text-align:center;background:#f9fafb;border-radius:6px">이 월의 파싱 데이터가 없습니다. 위에서 파일 파싱 실행하세요.</div>';
             }else{
-                html+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;margin-bottom:.6rem">
+                html+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.5rem;margin-bottom:.6rem">
                     <div style="padding:.6rem;background:#eef2ff;border-radius:6px">
                         <div style="font-size:.72rem;color:#4338ca;font-weight:600">총매출</div>
-                        <div style="font-size:1.05rem;font-weight:700;color:#4338ca;margin-top:.15rem">${_staffFormatMoney(rev.totalRevenue||0)}</div>
+                        <div style="font-size:1.05rem;font-weight:700;color:#4338ca;margin-top:.15rem">${_staffFormatMoney(rev.total||rev.totalRevenue||0)}</div>
                     </div>
                     <div style="padding:.6rem;background:#fef3c7;border-radius:6px">
-                        <div style="font-size:.72rem;color:#92400e;font-weight:600">일본인 방문객</div>
-                        <div style="font-size:1.05rem;font-weight:700;color:#92400e;margin-top:.15rem">${rev.japanVisitors||0}명</div>
+                        <div style="font-size:.72rem;color:#92400e;font-weight:600">일본인 매출</div>
+                        <div style="font-size:1.05rem;font-weight:700;color:#92400e;margin-top:.15rem">${_staffFormatMoney(rev.japan||0)}</div>
+                        <div style="font-size:.7rem;color:#a16207;margin-top:.1rem">${rev.japanVisitors||0}명 방문</div>
                     </div>
                     <div style="padding:.6rem;background:#dcfce7;border-radius:6px">
-                        <div style="font-size:.72rem;color:#166534;font-weight:600">오더 행수</div>
-                        <div style="font-size:1.05rem;font-weight:700;color:#166534;margin-top:.15rem">${rev.visitorRows||0}건</div>
+                        <div style="font-size:.72rem;color:#166534;font-weight:600">총 환자</div>
+                        <div style="font-size:1.05rem;font-weight:700;color:#166534;margin-top:.15rem">${rev.patients||0}명</div>
+                        <div style="font-size:.7rem;color:#166534;margin-top:.1rem">거래 ${rev.transactions||rev.visitorRows||0}건</div>
                     </div>
                 </div>`;
 
@@ -7878,18 +7897,24 @@
                 const fn=functions.httpsCallable('parseRevenueFile');
                 const res=await fn({fileId, ym});
                 const d=res.data||{};
-                // 로컬 캐시 갱신
+                // 로컬 캐시 갱신 (admin 스키마: total/japan/japanVisitors + salesDetail 별도)
                 _staffRevenueMap[ym]={
-                    totalRevenue: d.totalRevenue, japanVisitors: d.japanVisitors,
-                    visitorRows: d.visitorRows, salesDetail: d.salesDetail,
-                    doctorSales: d.doctorSales, categorySales: d.categorySales,
+                    totalRevenue: d.totalRevenue||d.total, total: d.total,
+                    japan: d.japan, japanVisitors: d.japanVisitors,
+                    nonInsurance: d.nonInsurance, patients: d.patients,
+                    transactions: d.transactions,
+                    salesDetail: {
+                        staffSales: d.staffSales,
+                        japanStaffSales: d.japanStaffSales,
+                    },
+                    doctorSales: d.doctorSales,
+                    categorySales: d.categorySales,
                     parsedAt: d.parsedAt, parsedBy: d.parsedBy,
                     sourceFile: d.sourceFile
                 };
-                // 현재 조회 월이 이 ym 이면 인센티브·급여 계산 즉시 반영
                 _staffPayrollYm=ym;
                 await _staffLoadMonthIncInput(ym);
-                alert(`✅ ${ym} 파싱 완료\n· 총매출: ${(d.totalRevenue||0).toLocaleString()}원\n· 일본인 방문객: ${d.japanVisitors||0}명\n· 오더 행: ${d.visitorRows||0}건`);
+                alert(`✅ ${ym} 파싱 완료\n· 총매출: ${(d.total||0).toLocaleString()}원\n· 일본인 매출: ${(d.japan||0).toLocaleString()}원\n· 일본인 방문객: ${d.japanVisitors||0}명\n· 총 환자수: ${d.patients||0}명\n· 오더 행: ${d.transactions||0}건`);
                 _renderStaffAdminBody();
             }catch(e){
                 alert('파싱 실패: '+(e?.message||e?.details?.message||e));

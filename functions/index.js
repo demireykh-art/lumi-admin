@@ -347,6 +347,7 @@ exports.parseRevenueFile = onCall(
       orderName: colIdx('오더명'),
       amount: colIdx('금액'),
       nationality: colIdx('국적'),
+      vat: colIdx('부가세'),
       division: colIdx('구분'),
     };
     if (COL.amount < 0) throw new HttpsError('failed-precondition', "'금액' 컬럼 미발견");
@@ -358,7 +359,6 @@ exports.parseRevenueFile = onCall(
       const r = rows[i];
       const chartVal = String(r[COL.chartNo] || '').trim();
       const first = String(r[0] || '').trim();
-      // 합계행: 첫 컬럼 or 이름 컬럼에 '합계' 포함
       if (String(r[COL.name] || '').includes('합') || first === '합계') {
         totalFromSum = Number(r[COL.amount]) || 0;
         continue;
@@ -367,47 +367,77 @@ exports.parseRevenueFile = onCall(
       dataRows.push(r);
     }
 
-    // 집계
+    // 집계 — admin(revenue.js) 스키마 그대로
     let totalRevenue = 0;
-    const staffSales = {};      // {name: {amount, count}}
-    const japanStaffSales = {}; // {name: {amount, count}}
-    const doctorSales = {};     // {name: {amount, count}}
-    const codeSales = {};       // {code: {amount, count}} — 대분류 매핑 원천
-    const japanChartsSet = new Set();
-    let visitorRows = 0;
+    let totalJapan = 0;
+    let totalNonInsurance = 0;
+    let transactions = 0;
+    const patientsSet = new Set();
+    const nonInsurancePatientsSet = new Set();
+    const japanPatientsSet = new Set();
+    const doctorSales = {};       // {name: {count, amount, patients:Set}}
+    const staffSales = {};        // {name: {count, amount, patients:Set, niAmount, niPatients:Set}}
+    const japanStaffSales = {};   // {name: {amount}} — patients 는 나중에 총 일본인 방문객으로 채움
+    const treatmentCounts = {};   // {orderName: count}
+    const codeSales = {};         // {code: {amount, count}} — 대분류 매핑 원천 (통합앱 신규)
 
     for (const r of dataRows) {
       const amt = Number(r[COL.amount]) || 0;
-      // admin 로직과 일치: 금액 0 이하 행은 스킵 (통계에서 제외)
-      if (amt <= 0) continue;
+      if (amt <= 0) continue; // admin 과 동일: 0 이하 스킵
+
       totalRevenue += amt;
-      visitorRows++;
+      transactions++;
 
       const staff = String(r[COL.staff] || '').trim();
       const doctor = String(r[COL.doctor] || '').trim();
       const nation = String(r[COL.nationality] || '').trim();
       const chart = String(r[COL.chartNo] || '').trim();
       const code = String(r[COL.code] || '').trim();
+      const vat = COL.vat >= 0 ? String(r[COL.vat] || '').trim() : '';
+      const isNonInsurance = (vat === 'O');
+      const orderName = COL.orderName >= 0 ? String(r[COL.orderName] || '').trim() : '';
 
-      if (staff) {
-        staffSales[staff] = staffSales[staff] || {amount: 0, count: 0};
-        staffSales[staff].amount += amt;
-        staffSales[staff].count += 1;
+      if (chart) patientsSet.add(chart);
+      if (isNonInsurance) {
+        totalNonInsurance += amt;
+        if (chart) nonInsurancePatientsSet.add(chart);
       }
-      if (doctor) {
-        doctorSales[doctor] = doctorSales[doctor] || {amount: 0, count: 0};
+
+      // 진료의별
+      if (doctor && doctor !== '빠른예약') {
+        doctorSales[doctor] = doctorSales[doctor] || {count: 0, amount: 0, patients: new Set()};
+        doctorSales[doctor].count++;
         doctorSales[doctor].amount += amt;
-        doctorSales[doctor].count += 1;
+        if (chart) doctorSales[doctor].patients.add(chart);
       }
-      // 국적 매칭: admin 과 동일하게 '일본' 포함 (재일본, 일본인 등 표기 흡수)
-      if (nation.includes('일본')) {
-        if (chart) japanChartsSet.add(chart);
-        if (staff) {
-          japanStaffSales[staff] = japanStaffSales[staff] || {amount: 0, count: 0};
-          japanStaffSales[staff].amount += amt;
-          japanStaffSales[staff].count += 1;
+
+      // 담당직원별
+      if (staff) {
+        staffSales[staff] = staffSales[staff] || {count: 0, amount: 0, patients: new Set(), niAmount: 0, niPatients: new Set()};
+        staffSales[staff].count++;
+        staffSales[staff].amount += amt;
+        if (chart) staffSales[staff].patients.add(chart);
+        if (isNonInsurance) {
+          staffSales[staff].niAmount += amt;
+          if (chart) staffSales[staff].niPatients.add(chart);
         }
       }
+
+      // 일본인 매출 (admin 과 동일 로직)
+      if (nation.includes('일본')) {
+        totalJapan += amt;
+        if (chart) japanPatientsSet.add(chart);
+        const staffKey = staff || '미지정';
+        japanStaffSales[staffKey] = japanStaffSales[staffKey] || {amount: 0};
+        japanStaffSales[staffKey].amount += amt;
+      }
+
+      // 오더명별 카운트 (재고 차감·손익 계산용)
+      if (orderName) {
+        treatmentCounts[orderName] = (treatmentCounts[orderName] || 0) + 1;
+      }
+
+      // 코드별 (대분류 매핑용 - 통합앱 신규)
       if (code) {
         codeSales[code] = codeSales[code] || {amount: 0, count: 0};
         codeSales[code].amount += amt;
@@ -447,24 +477,74 @@ exports.parseRevenueFile = onCall(
       categorySales[cat].count += val.count;
     }
 
-    const payload = {
-      totalRevenue: totalFromSum || totalRevenue, // 합계행 우선
-      totalRevenueByRows: totalRevenue,           // 행합계 (검증용)
-      japanVisitors: japanChartsSet.size,
-      visitorRows,
-      salesDetail: {
-        staffSales,
-        japanStaffSales,
-        codeSales,
-      },
-      doctorSales,
-      categorySales,
+    // Set → size 변환 (Firestore 저장용)
+    const doctorSalesForDB = {};
+    for (const [d, v] of Object.entries(doctorSales)) {
+      doctorSalesForDB[d] = {count: v.count, amount: v.amount, patients: v.patients.size};
+    }
+    const staffSalesForDB = {};
+    for (const [s, v] of Object.entries(staffSales)) {
+      staffSalesForDB[s] = {
+        count: v.count, amount: v.amount, patients: v.patients.size,
+        niAmount: v.niAmount || 0, niPatients: v.niPatients ? v.niPatients.size : 0
+      };
+    }
+    // japanStaffSales: 모든 staff 에 총 일본인 방문객 수 저장 (admin 동일)
+    const japanVisitors = japanPatientsSet.size;
+    const japanStaffSalesForDB = {};
+    for (const [s, v] of Object.entries(japanStaffSales)) {
+      japanStaffSalesForDB[s] = {patients: japanVisitors, amount: v.amount};
+    }
+
+    // ─── revenue/{ym} : 요약 ─── (admin 스키마와 동일)
+    const revenueDoc = {
+      total: totalRevenue,
+      japan: totalJapan,
+      nonInsurance: totalNonInsurance,
+      nonInsurancePatients: nonInsurancePatientsSet.size,
+      japanVisitors,
+      transactions,
+      patients: patientsSet.size,
+      // 통합앱 전용 추가 필드
+      totalRevenue: totalFromSum || totalRevenue,
+      totalRevenueByRows: totalRevenue,
       sourceFile: {fileId, ym},
       parsedAt: new Date().toISOString(),
       parsedBy: email,
     };
-    await admin.firestore().collection('revenue').doc(ym).set(payload, {merge: true});
-    logger.info(`parseRevenueFile ${ym}: totalRevenue=${payload.totalRevenue} japanVisitors=${payload.japanVisitors} staff=${Object.keys(staffSales).length}`);
-    return {ok: true, ...payload};
+    await admin.firestore().collection('revenue').doc(ym).set(revenueDoc, {merge: true});
+
+    // ─── salesDetail/{ym} : 상세 ─── (admin 스키마와 동일 + 통합앱 신규 필드)
+    const salesDetailDoc = {
+      doctorSales: doctorSalesForDB,
+      staffSales: staffSalesForDB,
+      japanStaffSales: japanStaffSalesForDB,
+      treatmentCounts,
+      totalTreatments: transactions,
+      // 통합앱 신규
+      codeSales,
+      categorySales,
+      updatedAt: new Date().toISOString(),
+    };
+    await admin.firestore().collection('salesDetail').doc(ym).set(salesDetailDoc, {merge: true});
+
+    logger.info(`parseRevenueFile ${ym}: total=${totalRevenue} japan=${totalJapan} japanVisitors=${japanVisitors} staff=${Object.keys(staffSales).length}`);
+    return {
+      ok: true,
+      totalRevenue: revenueDoc.totalRevenue,
+      total: totalRevenue,
+      japan: totalJapan,
+      japanVisitors,
+      nonInsurance: totalNonInsurance,
+      patients: patientsSet.size,
+      transactions,
+      doctorSales: doctorSalesForDB,
+      staffSales: staffSalesForDB,
+      japanStaffSales: japanStaffSalesForDB,
+      categorySales,
+      parsedAt: revenueDoc.parsedAt,
+      parsedBy: email,
+      sourceFile: revenueDoc.sourceFile,
+    };
   }
 );
