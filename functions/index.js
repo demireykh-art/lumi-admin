@@ -378,6 +378,8 @@ exports.parseRevenueFile = onCall(
 
     for (const r of dataRows) {
       const amt = Number(r[COL.amount]) || 0;
+      // admin 로직과 일치: 금액 0 이하 행은 스킵 (통계에서 제외)
+      if (amt <= 0) continue;
       totalRevenue += amt;
       visitorRows++;
 
@@ -397,7 +399,8 @@ exports.parseRevenueFile = onCall(
         doctorSales[doctor].amount += amt;
         doctorSales[doctor].count += 1;
       }
-      if (nation === '일본') {
+      // 국적 매칭: admin 과 동일하게 '일본' 포함 (재일본, 일본인 등 표기 흡수)
+      if (nation.includes('일본')) {
         if (chart) japanChartsSet.add(chart);
         if (staff) {
           japanStaffSales[staff] = japanStaffSales[staff] || {amount: 0, count: 0};
