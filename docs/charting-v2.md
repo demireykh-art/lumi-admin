@@ -334,13 +334,28 @@ function _migrateVisit(v) {
 
 ## 8. 구현 페이즈
 
-### Phase 1 — 역할 분리 + procedures 파생 (2~3일)
-- [ ] `employees.chartRole` 필드 (managers 수동 설정)
-- [ ] `visits` 새 스키마 read/write + 마이그레이션 헬퍼
-- [ ] `chartingEdit` 화면 3-섹션 탭 재구성
-- [ ] chartRole 기반 탭 자동 선택 · 편집 제한
-- [ ] `procedures` 컬렉션 자동 파생 (feeSchedule 스냅샷 리스너에서 upsert)
-- [ ] 원장 진단·플랜, 실장 오더에서 procedures 자동완성
+### Phase 1 — 역할 분리 + procedures 파생 (2~3일) ✅ 구현 완료 (2026-08)
+- [x] `employees.chartRole` 필드 (⚙ 관리자 설정 → 🩺 차팅 역할 관리에서 수동 설정)
+- [x] `visits` 새 스키마 read/write + 마이그레이션 헬퍼 (`_migrateVisit`, 읽기 시점 fallback)
+- [x] `chartingEdit` 화면 3-섹션 탭 재구성 (원장/실장/스탭)
+- [x] chartRole 기반 탭 자동 선택 · 편집 제한 (`_chartMyRole`/`_chartCanEdit`/`_chartDefaultTab`)
+- [x] `procedures` 컬렉션 자동 파생 (feeSchedule 스냅샷 리스너에서 upsert, `_deriveProceduresFromFee`/`_syncProceduresToFirestore`)
+- [x] 원장 진단·플랜, 실장 오더에서 procedures 자동완성 (`ceProcDL` datalist)
+
+**구현 메모**
+- **미지정 chartRole 처리**: 스펙(§2)은 "미지정 = 읽기 전용"이나, 라이브 롤아웃 안전을
+  위해 **미지정은 전체 편집 허용**으로 구현(기존 동작 유지). 역할이 배정된 사용자만
+  자기 섹션으로 편집 제한. adminHigh 는 자동 multi. → 역할 배정 후 제한이 활성화됨.
+- **procedures Firestore 동기화**: 쓰기 충돌·비용을 줄이려 **adminHigh 계정에서만** upsert.
+  전 계정은 in-memory `_procCache` 로 자동완성 사용. recipe·needsAnesthesia·code(사용자
+  부여) 등 편집 필드는 파생 시 덮어쓰지 않음. 삭제된 variant 는 `active:false`.
+- **저장 스코프**: 기존 방문 저장 시 헤더 + 편집 가능한 섹션만 갱신(섹션별 클로버 최소화).
+  신규 방문은 3-섹션 전체 기록. `status` 는 내용 기반 자동 계산(기존 상태보다 낮추지 않음).
+- **레거시 호환**: 저장 시 새 스키마로만 기록(강제 백필 없음). 목록·타임라인·복사·최근태그
+  등 읽기 경로는 모두 `_migrateVisit` 로 승격 후 렌더. Phase 1 은 legacy 필드를 더 이상
+  쓰지 않음(읽기 fallback 으로만 참조).
+- **스탭 탭(Phase 1)**: 확정 오더 미리보기 + 진단사진 기록 + 일반 메모까지. 준비 카드
+  자동 생성·재고 자동 차감은 Phase 2·3 에서.
 
 ### Phase 2 — 시술 마스터 편집 + 스탭 뷰 (2~3일)
 - [ ] ⚙ 관리자 설정 → 시술 마스터 관리 UI

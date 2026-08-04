@@ -26,14 +26,17 @@
 - 접기/펼치기·순서 이동
 - 상담 태그(피부/쳐짐/꺼짐/전문)
 
-### 📋 상담 차팅 (Vegas Chart 보조)
-- `visits` 컬렉션 (환자별 방문)
-- 자유 태그 chip 입력 + 자동완성 (이전 태그 빈도순)
-- 의사·상담 섹션 분리 (색상 구분)
-- 오더(시술명·가격) + 메모
-- 환자 타임라인 (방문 시간순 카드)
-- 방문별 경과(별점 1-5 + 메모) 다건
-- 📋 복사 (Vegas 붙여넣기용 포맷)
+### 📋 상담 차팅 (Vegas Chart 보조) — v2 Phase 1 반영 (2026-08)
+- `visits` 컬렉션 (환자별 방문) — 3-섹션 스키마(doctorSection/consultSection/staffSection)
+  · 읽기 시점 마이그레이션(`_migrateVisit`)으로 legacy 필드 자동 승격
+- **역할(chartRole) 분리**: 원장/실장/스탭 3탭, chartRole 로 기본 탭 자동선택·편집 제한
+  · ⚙ 관리자 설정 → 🩺 차팅 역할 관리에서 직원별 지정 (미지정=전체 편집, adminHigh=multi)
+- 원장: 진단 태그 + 플랜/오늘시행(시술 자동완성) + 경과/자유메모
+- 실장: 상담 메모 + 확정 오더(시술 자동완성·orderType·결제상태·Vegas 참조)
+- 스탭: 확정 오더 미리보기 + 진단사진 기록 + 일반 메모 (준비카드·재고차감은 Phase 2·3)
+- `procedures` 자동 파생: feeSchedule variants → 시술 마스터 (자동완성·오더 매칭)
+- 환자 타임라인 (방문 시간순 카드) · 방문별 경과(별점 1-5 + 메모) 다건
+- 📋 복사 (Vegas 붙여넣기용 포맷) · 상세 스펙: `docs/charting-v2.md`
 
 ### 🌳 상담 트리 관리
 - `settings/consultTree` (JSON 문자열) Firestore 동기화
