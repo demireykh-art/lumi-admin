@@ -7023,7 +7023,7 @@
 
                 <label style="display:block;font-size:.72rem;color:#166534;font-weight:600;margin:.25rem 0 .35rem">준비 카드</label>
                 <div id="cePrepCards" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.3rem">${cardsHtml}</div>
-                <div style="font-size:.68rem;color:#16a34a;margin-bottom:.5rem">※ [준비 완료] 시 재고 자동차감은 다음 단계(Phase 3)에서 제공됩니다.</div>
+                <div style="font-size:.68rem;color:#16a34a;margin-bottom:.5rem">※ [준비 완료] 시 레시피 수량만큼 재고가 자동 차감됩니다. [되돌리기]로 복구됩니다.</div>
 
                 <label style="display:block;font-size:.72rem;color:#166534;font-weight:600;margin:.25rem 0 .15rem">진단사진 기록</label>
                 <div id="cePhotoList" style="margin-bottom:.3rem">${photoList}</div>
@@ -7054,17 +7054,22 @@
             // 상태 전환 버튼
             let actions='';
             if(!ro){
-                const btn=(label,to,bg)=>`<button onclick="chartingPrepSetStatus('${pc.cardId}','${to}')" style="background:${bg};color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.74rem;font-weight:600;cursor:pointer">${label}</button>`;
-                const ghost=(label,to)=>`<button onclick="chartingPrepSetStatus('${pc.cardId}','${to}')" style="background:#fff;border:1px solid #d1d5db;color:#6b7280;padding:.3rem .6rem;border-radius:5px;font-size:.74rem;cursor:pointer">${label}</button>`;
+                // fn: 재고 차감/복구 트리거 or 단순 상태전환
+                const solid=(label,call,bg)=>`<button onclick="${call}" style="background:${bg};color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.74rem;font-weight:600;cursor:pointer">${label}</button>`;
+                const ghost=(label,call)=>`<button onclick="${call}" style="background:#fff;border:1px solid #d1d5db;color:#6b7280;padding:.3rem .6rem;border-radius:5px;font-size:.74rem;cursor:pointer">${label}</button>`;
+                const setS=to=>`chartingPrepSetStatus('${pc.cardId}','${to}')`;
+                const complete=`chartingPrepComplete('${pc.cardId}')`;   // 재고 차감
+                const revert=`chartingPrepRevert('${pc.cardId}')`;       // 재고 복구
                 const s=pc.status||'waiting';
-                if(s==='waiting')   actions=btn('준비 시작','preparing','#f59e0b')+btn('준비 완료','prepared','#2563eb');
-                else if(s==='preparing') actions=btn('준비 완료','prepared','#2563eb')+ghost('대기로','waiting');
-                else if(s==='prepared')  actions=btn('시술 완료','done','#16a34a')+ghost('되돌리기','preparing');
-                else if(s==='done')      actions=ghost('되돌리기','prepared');
+                if(s==='waiting')   actions=solid('준비 시작',setS('preparing'),'#f59e0b')+solid('준비 완료',complete,'#2563eb');
+                else if(s==='preparing') actions=solid('준비 완료',complete,'#2563eb')+ghost('대기로',setS('waiting'));
+                else if(s==='prepared')  actions=solid('시술 완료',setS('done'),'#16a34a')+ghost('되돌리기',revert);
+                else if(s==='done')      actions=ghost('되돌리기',setS('prepared'));
             }
             return `<div style="border:1px solid #bbf7d0;border-radius:8px;background:#fff;padding:.5rem .6rem">
                 <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.35rem">
                     <span style="flex:1;min-width:0;font-weight:700;font-size:.82rem;color:#111827">${_esc(pc.procName||'(시술)')}</span>
+                    ${(pc.deductionTxIds||[]).length?'<span title="재고 차감됨" style="font-size:.62rem;color:#166534">📦차감</span>':(pc.deductionSkipped?'<span title="재고 미차감" style="font-size:.62rem;color:#b45309">📦미차감</span>':'')}
                     <span style="font-size:.68rem;font-weight:700;color:${st.color};background:${st.bg};border-radius:8px;padding:1px 8px">${st.label}</span>
                 </div>
                 <div style="border-top:1px dashed #d1fae5;border-bottom:1px dashed #d1fae5;padding:.25rem 0;margin-bottom:.35rem">${recipeHtml}</div>
@@ -7170,6 +7175,15 @@
             o[field]=val;
         }
         function _chartingRemoveOrder(i){
+            const o=(_chartingDraft.consultSection.confirmedOrders||[])[i];
+            // 재고 차감된 준비 카드가 걸린 오더는 삭제 차단 (먼저 되돌리기 필요)
+            if(o){
+                const pc=(_chartingDraft.staffSection?.prepCards||[]).find(c=>c.orderId===o.orderId);
+                if(pc && (pc.deductionTxIds||[]).length){
+                    alert('이 오더는 준비 완료(재고 차감)된 카드가 있습니다.\n스탭 탭에서 [되돌리기]로 재고 복구 후 삭제하세요.');
+                    return;
+                }
+            }
             (_chartingDraft.consultSection.confirmedOrders||[]).splice(i,1);
             _ceRefreshOrders();
         }
@@ -7257,6 +7271,192 @@
             chartingSetTab('staff');
         }
 
+        // ================================================================
+        //  📦 재고 자동 차감 엔진 (charting v2 Phase 3)
+        //   · 준비 완료 → recipeSnapshot.actualQty 만큼 inventory.locations 차감
+        //   · Firestore transaction (원자적) · 음수 방지 · inventoryTransactions 로그
+        //   · 되돌리기/삭제 시 복구 (type='refund')
+        // ================================================================
+        // 필요 수량을 재고 많은 장소부터 그리디 차감 계획
+        function _planDeduction(locations, need){
+            const locs=Object.entries(locations||{}).map(([loc,q])=>({loc,q:Number(q)||0})).filter(x=>x.q>0);
+            const total=locs.reduce((s,x)=>s+x.q,0);
+            if(need>total+1e-9) return {ok:false, total, breakdown:{}};
+            locs.sort((a,b)=>b.q-a.q);
+            const breakdown={}; let rem=need;
+            for(const x of locs){ if(rem<=1e-9) break; const take=Math.min(x.q, rem); breakdown[x.loc]=take; rem-=take; }
+            return {ok:true, total, breakdown};
+        }
+        function _sumLoc(locations){ return Object.values(locations||{}).reduce((s,q)=>s+(Number(q)||0),0); }
+        // 준비 완료 + 재고 차감
+        async function chartingPrepComplete(cardId){
+            const draft=_chartingDraft;
+            const card=(draft?.staffSection?.prepCards||[]).find(c=>c.cardId===cardId);
+            if(!card) return;
+            if((card.deductionTxIds||[]).length){ card.status='prepared'; chartingSetTab('staff'); return; } // 이미 차감됨
+            if(!_chartingCurrent){ alert('재고 차감 전에 먼저 💾 저장하세요.'); return; }
+            const now=new Date().toISOString();
+            const by=currentUser?.name||currentUser?.id||'staff';
+            // 재료 집계 (동일 itemId 합산)
+            const agg={};
+            (card.recipeSnapshot||[]).forEach(r=>{
+                if(!r.itemId) return; const q=Number(r.actualQty)||0; if(q<=0) return;
+                agg[r.itemId]=agg[r.itemId]||{itemName:r.itemName,need:0}; agg[r.itemId].need+=q;
+            });
+            const items=Object.entries(agg).map(([itemId,x])=>({itemId,...x}));
+            const visitRef=db.collection('visits').doc(_chartingCurrent);
+            let skipDeduction=false;
+            const applied=[]; const txIds=[];
+            try{
+                await db.runTransaction(async t=>{
+                    // ── 읽기 (모든 read 를 write 보다 먼저) ──
+                    const vdoc=await t.get(visitRef);
+                    const vdata=vdoc.exists?(vdoc.data()||{}):{};
+                    const fcard=(vdata.staffSection?.prepCards||[]).find(c=>c.cardId===cardId);
+                    if(fcard && (fcard.deductionTxIds||[]).length) throw new Error('ALREADY');
+                    const invRefs=items.map(it=>db.collection('inventory').doc(it.itemId));
+                    const invDocs=[]; for(const r of invRefs) invDocs.push(await t.get(r));
+                    // ── 계획 & 검증 ──
+                    const plans=[];
+                    items.forEach((it,idx)=>{
+                        const doc=invDocs[idx];
+                        if(!doc.exists) throw new Error('NOITEM:'+(it.itemName||it.itemId));
+                        const data=doc.data()||{};
+                        const plan=_planDeduction(data.locations, it.need);
+                        if(!plan.ok) throw new Error('SHORT:'+(data.name||it.itemName)+':'+plan.total+':'+it.need);
+                        plans.push({ref:invRefs[idx], data, plan, it});
+                    });
+                    // ── 쓰기 ──
+                    plans.forEach(({ref,data,plan,it})=>{
+                        const newLoc={...(data.locations||{})};
+                        Object.entries(plan.breakdown).forEach(([loc,q])=>{ newLoc[loc]=(Number(newLoc[loc])||0)-q; });
+                        const newTotal=_sumLoc(newLoc);
+                        t.update(ref,{locations:newLoc, currentStock:newTotal, updatedAt:now});
+                        const txRef=db.collection('inventoryTransactions').doc();
+                        txIds.push(txRef.id);
+                        t.set(txRef,{ itemId:it.itemId, itemName:data.name||it.itemName, type:'procedure_use',
+                            qty:-it.need, balanceAfter:newTotal, locBreakdown:plan.breakdown,
+                            visitId:_chartingCurrent, procId:card.procId||'', cardId, createdBy:by, createdAt:now });
+                        applied.push({itemId:it.itemId, newLoc, newTotal});
+                    });
+                    const newCards=(draft.staffSection.prepCards||[]).map(c=> c.cardId===cardId
+                        ? {...c, status:'prepared', preparedBy:by, preparedAt:now, deductionTxIds:txIds, deductionSkipped:false} : c);
+                    const st=_chartComputeStatus({...draft, staffSection:{...draft.staffSection, prepCards:newCards}});
+                    t.update(visitRef, {'staffSection.prepCards':newCards, status:st, updatedAt:now, updatedBy:by});
+                });
+            }catch(e){
+                const m=String(e?.message||e);
+                if(m==='ALREADY'){ card.status='prepared'; chartingSetTab('staff'); return; }
+                if(m.startsWith('SHORT:')){
+                    const parts=m.split(':'); const name=parts[1], have=parts[2], need=parts[3];
+                    if(confirm(`재고 부족: ${name} (보유 ${have} / 필요 ${need})\n재고 차감 없이 준비 완료로 표시할까요?`)){ skipDeduction=true; }
+                    else return;
+                }else if(m.startsWith('NOITEM:')){
+                    if(confirm(`재고 항목을 찾을 수 없습니다: ${m.slice(7)}\n재고 차감 없이 준비 완료로 표시할까요?`)){ skipDeduction=true; }
+                    else return;
+                }else{ alert('재고 차감 실패: '+m); return; }
+            }
+            if(skipDeduction){
+                // 차감 없이 상태만 (별도 저장 write)
+                card.status='prepared'; card.preparedBy=by; card.preparedAt=now; card.deductionSkipped=true; card.deductionTxIds=[];
+                try{
+                    const newCards=draft.staffSection.prepCards;
+                    const st=_chartComputeStatus(draft);
+                    await visitRef.update({'staffSection.prepCards':newCards, status:st, updatedAt:now, updatedBy:by});
+                }catch(e){ alert('상태 저장 실패: '+(e?.message||e)); }
+                chartingSetTab('staff'); _chartToast('준비 완료 (재고 미차감)');
+                return;
+            }
+            // 성공: 메모리·재고 캐시 반영
+            card.status='prepared'; card.preparedBy=by; card.preparedAt=now; card.deductionTxIds=txIds; card.deductionSkipped=false;
+            applied.forEach(a=>{ const it=invItems.find(i=>i.id===a.itemId); if(it){ it.locations=a.newLoc; it.currentStock=a.newTotal; } });
+            chartingSetTab('staff'); _chartToast('준비 완료 · 재고 차감됨');
+        }
+        // 준비 완료 되돌리기 + 차감 재고 복구 (refund)
+        async function chartingPrepRevert(cardId){
+            const draft=_chartingDraft;
+            const card=(draft?.staffSection?.prepCards||[]).find(c=>c.cardId===cardId);
+            if(!card) return;
+            const txIds=(card.deductionTxIds||[]).slice();
+            const now=new Date().toISOString();
+            const by=currentUser?.name||currentUser?.id||'staff';
+            if(!txIds.length){
+                // 차감 없이(스킵) 준비완료였던 경우 → 상태만 되돌림
+                card.status='waiting'; card.deductionSkipped=false; card.preparedBy=''; card.preparedAt='';
+                if(_chartingCurrent){ try{ await db.collection('visits').doc(_chartingCurrent).update({'staffSection.prepCards':draft.staffSection.prepCards, status:_chartComputeStatus(draft), updatedAt:now, updatedBy:by}); }catch(_){} }
+                chartingSetTab('staff'); return;
+            }
+            if(!confirm('준비 완료를 되돌리고 차감된 재고를 복구합니다. 계속하시겠습니까?')) return;
+            const visitRef=db.collection('visits').doc(_chartingCurrent);
+            const applied=[];
+            try{
+                await db.runTransaction(async t=>{
+                    // ── 읽기 ──
+                    await t.get(visitRef);
+                    const txRefs=txIds.map(id=>db.collection('inventoryTransactions').doc(id));
+                    const txDocs=[]; for(const r of txRefs) txDocs.push(await t.get(r));
+                    // itemId 별 복구량 집계
+                    const restore={}; // itemId → {loc: amt}
+                    const names={};
+                    txDocs.forEach(d=>{ if(!d.exists) return; const x=d.data()||{};
+                        if(x.type!=='procedure_use') return; names[x.itemId]=x.itemName||'';
+                        restore[x.itemId]=restore[x.itemId]||{};
+                        Object.entries(x.locBreakdown||{}).forEach(([loc,q])=>{ restore[x.itemId][loc]=(restore[x.itemId][loc]||0)+Number(q); });
+                    });
+                    const ids=Object.keys(restore);
+                    const invRefs={}; const invDocs={};
+                    for(const id of ids){ invRefs[id]=db.collection('inventory').doc(id); invDocs[id]=await t.get(invRefs[id]); }
+                    // ── 쓰기 ──
+                    ids.forEach(id=>{
+                        const doc=invDocs[id]; if(!doc.exists) return;
+                        const data=doc.data()||{}; const newLoc={...(data.locations||{})};
+                        let add=0; Object.entries(restore[id]).forEach(([loc,amt])=>{ newLoc[loc]=(Number(newLoc[loc])||0)+amt; add+=amt; });
+                        const newTotal=_sumLoc(newLoc);
+                        t.update(invRefs[id],{locations:newLoc, currentStock:newTotal, updatedAt:now});
+                        const rref=db.collection('inventoryTransactions').doc();
+                        t.set(rref,{ itemId:id, itemName:data.name||names[id]||'', type:'refund', qty:add, balanceAfter:newTotal,
+                            locBreakdown:restore[id], visitId:_chartingCurrent, procId:card.procId||'', cardId,
+                            refundedFrom:txIds.join(','), createdBy:by, createdAt:now });
+                        applied.push({itemId:id, newLoc, newTotal});
+                    });
+                    const newCards=(draft.staffSection.prepCards||[]).map(c=> c.cardId===cardId
+                        ? {...c, status:'waiting', deductionTxIds:[], deductionSkipped:false, preparedBy:'', preparedAt:'', doneBy:'', doneAt:''} : c);
+                    const st=_chartComputeStatus({...draft, staffSection:{...draft.staffSection, prepCards:newCards}});
+                    t.update(visitRef, {'staffSection.prepCards':newCards, status:st, updatedAt:now, updatedBy:by});
+                });
+            }catch(e){ alert('재고 복구 실패: '+(e?.message||e)); return; }
+            // 성공 반영
+            card.status='waiting'; card.deductionTxIds=[]; card.preparedBy=''; card.preparedAt=''; card.doneBy=''; card.doneAt='';
+            applied.forEach(a=>{ const it=invItems.find(i=>i.id===a.itemId); if(it){ it.locations=a.newLoc; it.currentStock=a.newTotal; } });
+            chartingSetTab('staff'); _chartToast('되돌림 · 재고 복구됨');
+        }
+        // 방문 삭제 시 남은 차감 전량 복구 (transaction)
+        async function _refundVisitDeductions(visitId, prepCards){
+            const cards=(prepCards||[]).filter(c=>(c.deductionTxIds||[]).length);
+            if(!cards.length) return;
+            const now=new Date().toISOString();
+            const by=currentUser?.name||currentUser?.id||'staff';
+            const allTxIds=[]; cards.forEach(c=>c.deductionTxIds.forEach(id=>allTxIds.push({id, procId:c.procId||'', cardId:c.cardId})));
+            await db.runTransaction(async t=>{
+                const txDocs=[]; for(const x of allTxIds){ txDocs.push({meta:x, doc:await t.get(db.collection('inventoryTransactions').doc(x.id))}); }
+                const restore={}; const names={};
+                txDocs.forEach(({doc})=>{ if(!doc.exists) return; const d=doc.data()||{}; if(d.type!=='procedure_use') return;
+                    names[d.itemId]=d.itemName||''; restore[d.itemId]=restore[d.itemId]||{};
+                    Object.entries(d.locBreakdown||{}).forEach(([loc,q])=>{ restore[d.itemId][loc]=(restore[d.itemId][loc]||0)+Number(q); });
+                });
+                const ids=Object.keys(restore); const invRefs={}; const invDocs={};
+                for(const id of ids){ invRefs[id]=db.collection('inventory').doc(id); invDocs[id]=await t.get(invRefs[id]); }
+                ids.forEach(id=>{ const doc=invDocs[id]; if(!doc.exists) return; const data=doc.data()||{}; const newLoc={...(data.locations||{})};
+                    let add=0; Object.entries(restore[id]).forEach(([loc,amt])=>{ newLoc[loc]=(Number(newLoc[loc])||0)+amt; add+=amt; });
+                    const newTotal=_sumLoc(newLoc);
+                    t.update(invRefs[id],{locations:newLoc, currentStock:newTotal, updatedAt:now});
+                    const rref=db.collection('inventoryTransactions').doc();
+                    t.set(rref,{ itemId:id, itemName:data.name||names[id]||'', type:'refund', qty:add, balanceAfter:newTotal,
+                        locBreakdown:restore[id], visitId, procId:'', cardId:'', refundedFrom:'(visit-delete)', createdBy:by, createdAt:now });
+                });
+            });
+        }
+
         // 방문 상태 자동 계산 (기존 상태보다 낮추지 않음)
         const _CHART_RANK={draft:0,in_progress:1,consult_done:2,prep_done:3,done:4};
         function _chartComputeStatus(v){
@@ -7323,8 +7523,14 @@
         }
         async function chartingDeleteVisit(){
             if(!_chartingCurrent) return;
-            if(!confirm('이 방문 기록을 삭제합니다. (경과 기록도 함께 삭제)\n계속?')) return;
+            const _hasDeduct=(_chartingDraft?.staffSection?.prepCards||[]).some(c=>(c.deductionTxIds||[]).length);
+            if(!confirm('이 방문 기록을 삭제합니다. (경과 기록도 함께 삭제'+(_hasDeduct?', 차감된 재고는 복구':'')+')\n계속?')) return;
             try{
+                // 차감된 재고 복구 (있으면)
+                if(_hasDeduct){
+                    try{ await _refundVisitDeductions(_chartingCurrent, _chartingDraft.staffSection.prepCards); }
+                    catch(re){ if(!confirm('재고 복구 실패: '+(re?.message||re)+'\n그래도 삭제할까요?')) return; }
+                }
                 // 하위 followups 삭제
                 const fu=await db.collection('visits').doc(_chartingCurrent).collection('followups').get();
                 const batch=db.batch();

@@ -377,11 +377,29 @@ function _migrateVisit(v) {
   차감(`inventoryTransactions`, 음수 방지, 취소 복구)은 Phase 3.
 - **방문 status 확장**: 준비 카드 상태 반영 — 일부 prepared → `prep_done`, 전부 done → `done`.
 
-### Phase 3 — 재고 자동 차감 엔진 (1~2일)
-- [ ] Firestore transaction 안전 차감
-- [ ] `inventoryTransactions` 로그
-- [ ] 재고 부족 방지 (음수 방지)
-- [ ] 취소·환불 시 복구
+### Phase 3 — 재고 자동 차감 엔진 (1~2일) ✅ 구현 완료 (2026-08)
+- [x] Firestore transaction 안전 차감 (`chartingPrepComplete`) — 모든 read 후 write
+- [x] `inventoryTransactions` 로그 (type='procedure_use'/'refund', locBreakdown 포함)
+- [x] 재고 부족 방지 (음수 방지) — `_planDeduction` 그리디, 부족 시 트랜잭션 실패
+- [x] 취소·환불 시 복구 (`chartingPrepRevert` 되돌리기, `_refundVisitDeductions` 방문 삭제)
+
+**구현 메모**
+- **차감 로직**: [준비 완료] → transaction. 재료를 itemId 별 합산 → 재고 많은 장소부터
+  그리디 차감(`_planDeduction`). `inventory.locations` + `currentStock`(합계) 갱신,
+  `inventoryTransactions` 로그(qty 음수, balanceAfter, locBreakdown), 방문 `prepCards`에
+  `deductionTxIds`·status='prepared' 를 **한 트랜잭션**에 원자적 기록.
+- **저장 선행 필요**: 차감은 방문이 저장된 상태(`_chartingCurrent`)에서만. 신규 미저장이면 안내.
+- **부족 시 폴백**: 재고 부족(음수)·항목 없음이면 트랜잭션 실패 → 사용자에게 "차감 없이 준비완료
+  표시" 확인. 수락 시 `deductionSkipped=true`(📦미차감 표시)로 워크플로우 차단 방지.
+- **복구**: [되돌리기](prepared→waiting)는 `deductionTxIds`의 `locBreakdown`을 역산해 재고
+  원복 + refund tx 기록. 방문 삭제 시 남은 차감 전량 복구(`_refundVisitDeductions`).
+- **가드**: 차감된 준비 카드가 걸린 오더는 삭제 차단(먼저 되돌리기 유도).
+- **상태 전환**: 대기→준비중(메모리), →준비완료(**차감**), →시술완료(메모리),
+  준비완료→되돌리기(**복구**). 시술완료→되돌리기는 메모리(차감 유지).
+- **⚠️ Firestore 규칙**: `inventoryTransactions` 컬렉션 신규. 저장소에 rules 파일이 없어
+  런타임 규칙에 client write 허용이 필요할 수 있음(기존 inventory 쓰기와 동일 권한이면 OK).
+- **집계 컬렉션 유보**: 기존 `inventoryLogs`·`inventoryAudits`·`receiveHistory`와의 통합은
+  스펙 §9 미결 이슈로 남김. 이번엔 스펙대로 `inventoryTransactions` 신설.
 
 ### Phase 4 — 바우처 (2일)
 - [ ] `vouchers` 컬렉션 CRUD
