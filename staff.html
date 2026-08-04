@@ -1806,9 +1806,44 @@
                         차팅 역할 편집 열기 →
                     </button>
                 </div>
+
+                <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
+                    <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">🔧 시술 마스터 관리</div>
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
+                        수가표에서 자동 파생된 시술에 레시피(재고 소모)·마취·촬영 설정을 편집합니다.
+                    </div>
+                    <button onclick="openProcMaster()"
+                        style="width:100%;background:#166534;color:#fff;border:none;padding:.6rem;border-radius:6px;font-weight:600;font-size:.85rem;cursor:pointer">
+                        시술 마스터 편집 열기 →
+                    </button>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('adminSettingsModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 시술 마스터 관리 모달 (bizAdmin 전용) -->
+    <div class="modal" id="procMasterModal">
+        <div class="modal-content" style="max-width:640px;max-height:90vh">
+            <div class="modal-header">
+                <div class="modal-title">🔧 시술 마스터 관리</div>
+                <button class="modal-close" onclick="closeModal('procMasterModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="font-size:.78rem;color:#666;margin-bottom:.5rem">
+                    시술은 <code>수가표</code>에서 자동 파생됩니다. 각 시술에 레시피(재고 아이템·수량)를 등록하면
+                    실장이 오더 확정 시 스탭 뷰에 준비 카드가 자동 생성됩니다.
+                </div>
+                <input type="text" id="procMasterSearch" placeholder="🔍 시술명·카테고리 검색" oninput="_renderProcMasterList()"
+                    style="width:100%;padding:.55rem .7rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:8px;box-sizing:border-box;margin-bottom:.6rem">
+                <div id="procMasterList" style="display:flex;flex-direction:column;gap:.4rem">
+                    <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('procMasterModal')" style="flex:1">닫기</button>
             </div>
         </div>
     </div>
@@ -2144,6 +2179,153 @@
             }catch(e){ alert('저장 실패: '+(e?.message||e)); }
         }
 
+        // ── 🔧 시술 마스터 관리 (bizAdmin 전용, charting v2 Phase 2) ──
+        let _procMasterEditingId=null;
+        async function openProcMaster(){
+            if(!isBizAdmin){ alert('경영관리자 권한이 필요합니다.'); return; }
+            _procMasterEditingId=null;
+            document.getElementById('procMasterModal').classList.add('active');
+            const list=document.getElementById('procMasterList');
+            if(list) list.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            try{
+                await ensureFeeData();               // _procCache 파생
+                await _loadProcedureMeta(true);      // recipe 등 메타
+                if(!invItems.length){                // 재고 아이템 (레시피 재료 선택용)
+                    try{ const s=await db.collection('inventory').orderBy('name').get(); invItems=s.docs.map(d=>({id:d.id,...d.data()})); }catch(_){}
+                }
+                _renderProcMasterList();
+            }catch(e){
+                if(list) list.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+_esc(e?.message||String(e))+'</div>';
+            }
+        }
+        function _procInvOptions(){
+            return (invItems||[]).map(i=>`<option value="${_esc(i.name||'')}"></option>`).join('');
+        }
+        function _findInvByName(name){
+            const s=String(name||'').trim();
+            return (invItems||[]).find(i=>String(i.name||'').trim()===s)||null;
+        }
+        function _procMetaEnsure(procId){
+            if(!_procMeta[procId]) _procMeta[procId]={ recipe:[], needsAnesthesia:false, needsPhoto:true, minutes:0, code:'' };
+            if(!Array.isArray(_procMeta[procId].recipe)) _procMeta[procId].recipe=[];
+            return _procMeta[procId];
+        }
+        function _renderProcMasterList(){
+            const wrap=document.getElementById('procMasterList');
+            if(!wrap) return;
+            const q=(document.getElementById('procMasterSearch')?.value||'').toLowerCase().trim();
+            let procs=(_procCache||[]).filter(p=>p.active!==false);
+            if(q) procs=procs.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.category||'').toLowerCase().includes(q)||(p.treatmentName||'').toLowerCase().includes(q));
+            if(!procs.length){ wrap.innerHTML='<div style="color:#9ca3af;font-size:.85rem;padding:1rem;text-align:center">'+(q?'검색 결과 없음':'수가표에서 파생된 시술이 없습니다.')+'</div>'; return; }
+            // 카테고리 그룹
+            const groups={};
+            procs.forEach(p=>{ const k=p.category||'(미분류)'; (groups[k]=groups[k]||[]).push(p); });
+            wrap.innerHTML=Object.keys(groups).map(cat=>{
+                const rows=groups[cat].map(p=>_procMasterRow(p)).join('');
+                return `<div style="margin-bottom:.3rem">
+                    <div style="font-weight:700;font-size:.8rem;color:#166534;padding:.2rem 0">${_esc(cat)}</div>
+                    <div style="display:flex;flex-direction:column;gap:.35rem">${rows}</div>
+                </div>`;
+            }).join('');
+        }
+        function _procMasterRow(p){
+            const meta=_procMeta[p.procId]||{recipe:[],needsAnesthesia:false,needsPhoto:true,minutes:0};
+            const rc=(meta.recipe||[]).length;
+            const flags=[ meta.needsAnesthesia?'💉':'', (meta.needsPhoto!==false)?'📷':'' ].filter(Boolean).join(' ');
+            const editing=(_procMasterEditingId===p.procId);
+            const head=`<div style="display:flex;align-items:center;gap:.5rem;padding:.45rem .55rem;background:${editing?'#f0fdf4':'#fff'};border:1px solid ${editing?'#86efac':'#e5e7eb'};border-radius:8px">
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:.85rem;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(p.name||'')} ${flags?`<span style="font-size:.72rem">${flags}</span>`:''}</div>
+                    <div style="font-size:.7rem;color:#9ca3af">₩${Number(p.price||0).toLocaleString()} · 레시피 ${rc}종</div>
+                </div>
+                <button onclick="procMasterEditRecipe('${p.procId}')" style="background:${editing?'#166534':'#eef2ff'};color:${editing?'#fff':'#4338ca'};border:1px solid ${editing?'#166534':'#a5b4fc'};padding:.3rem .7rem;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;flex-shrink:0">${editing?'닫기':'레시피'}</button>
+            </div>`;
+            return head + (editing ? _procRecipeEditor(p) : '');
+        }
+        function _procRecipeEditor(p){
+            const meta=_procMetaEnsure(p.procId);
+            const rows=(meta.recipe||[]).map((r,i)=>`<div style="display:flex;align-items:center;gap:.35rem">
+                <span style="flex:1;min-width:0;font-size:.78rem;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(r.itemName||'(재료)')}</span>
+                <input type="number" value="${r.qty??0}" step="0.1" onchange="procRecipeUpdate('${p.procId}',${i},'qty',this.value)"
+                    style="width:56px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
+                <span style="font-size:.72rem;color:#6b7280;min-width:22px">${_esc(r.unit||'')}</span>
+                <input type="text" value="${_esc(r.memo||'')}" placeholder="메모" onchange="procRecipeUpdate('${p.procId}',${i},'memo',this.value)"
+                    style="width:80px;padding:.25rem .3rem;font-size:.75rem;border:1px solid #d1d5db;border-radius:4px">
+                <button onclick="procRecipeRemove('${p.procId}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.2rem .45rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
+            </div>`).join('') || '<div style="font-size:.75rem;color:#9ca3af;padding:.2rem 0">등록된 재료 없음</div>';
+            return `<div style="border:1px solid #86efac;border-top:none;border-radius:0 0 8px 8px;background:#f0fdf4;padding:.55rem .6rem;margin-top:-.35rem">
+                <div style="font-size:.72rem;font-weight:700;color:#166534;margin-bottom:.3rem">레시피 (재고 소모)</div>
+                <div style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:.4rem">${rows}</div>
+                <div style="display:flex;gap:.35rem;align-items:center;margin-bottom:.5rem">
+                    <input type="text" id="procRecipeAddName-${p.procId}" list="procInvDL" placeholder="재고 아이템 검색"
+                        style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.78rem;border:1px solid #86efac;border-radius:5px;background:#fff">
+                    <input type="number" id="procRecipeAddQty-${p.procId}" placeholder="수량" step="0.1"
+                        style="width:60px;padding:.3rem .4rem;font-size:.78rem;border:1px solid #86efac;border-radius:5px;background:#fff">
+                    <button onclick="procRecipeAddItem('${p.procId}')" style="background:#166534;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer">+ 추가</button>
+                </div>
+                <div style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
+                    <label style="font-size:.76rem;color:#374151;display:flex;align-items:center;gap:.25rem;cursor:pointer">
+                        <input type="checkbox" ${meta.needsAnesthesia?'checked':''} onchange="procToggleFlag('${p.procId}','needsAnesthesia')"> 💉 마취 필요</label>
+                    <label style="font-size:.76rem;color:#374151;display:flex;align-items:center;gap:.25rem;cursor:pointer">
+                        <input type="checkbox" ${meta.needsPhoto!==false?'checked':''} onchange="procToggleFlag('${p.procId}','needsPhoto')"> 📷 촬영 필요</label>
+                    <label style="font-size:.76rem;color:#374151;display:flex;align-items:center;gap:.25rem">
+                        소요 <input type="number" value="${meta.minutes||0}" onchange="procSetMinutes('${p.procId}',this.value)" style="width:52px;padding:.2rem .3rem;font-size:.76rem;border:1px solid #d1d5db;border-radius:4px"> 분</label>
+                </div>
+                <button onclick="procRecipeSave('${p.procId}')" style="width:100%;background:#4338ca;color:#fff;border:none;padding:.5rem;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">💾 이 시술 저장</button>
+                <datalist id="procInvDL">${_procInvOptions()}</datalist>
+            </div>`;
+        }
+        function procMasterEditRecipe(procId){
+            _procMasterEditingId=(_procMasterEditingId===procId)?null:procId;
+            if(_procMasterEditingId) _procMetaEnsure(procId);
+            _renderProcMasterList();
+        }
+        function procRecipeAddItem(procId){
+            const nameEl=document.getElementById('procRecipeAddName-'+procId);
+            const qtyEl=document.getElementById('procRecipeAddQty-'+procId);
+            const name=(nameEl?.value||'').trim();
+            if(!name){ alert('재고 아이템을 선택하세요.'); return; }
+            const inv=_findInvByName(name);
+            const meta=_procMetaEnsure(procId);
+            meta.recipe.push({
+                itemId: inv?inv.id:'', itemName: inv?inv.name:name,
+                qty: Number(qtyEl?.value)||0, unit: inv?.unit||'개', memo:''
+            });
+            _renderProcMasterList();
+        }
+        function procRecipeUpdate(procId, idx, field, val){
+            const meta=_procMetaEnsure(procId); const r=meta.recipe[idx]; if(!r) return;
+            if(field==='qty') r.qty=Number(String(val).replace(/[^\d.]/g,''))||0;
+            else r[field]=val;
+        }
+        function procRecipeRemove(procId, idx){
+            const meta=_procMetaEnsure(procId); meta.recipe.splice(idx,1); _renderProcMasterList();
+        }
+        function procToggleFlag(procId, flag){
+            const meta=_procMetaEnsure(procId); meta[flag]=!(flag==='needsPhoto'?meta.needsPhoto!==false:meta[flag]);
+        }
+        function procSetMinutes(procId, val){
+            const meta=_procMetaEnsure(procId); meta.minutes=Number(String(val).replace(/[^\d]/g,''))||0;
+        }
+        async function procRecipeSave(procId){
+            const meta=_procMetaEnsure(procId);
+            const p=_procById[procId]||{};
+            try{
+                const now=new Date().toISOString();
+                const by=currentUser?.name||currentUser?.id||'staff';
+                // 파생 필드 + 사용자 편집 필드 함께 upsert (문서 없을 때도 생성)
+                const payload={
+                    code: meta.code||p.code||'', name: p.name||'', category: p.category||'',
+                    treatmentName: p.treatmentName||'', price: Number(p.price)||0, vatIncluded:true,
+                    recipe: (meta.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'',memo:r.memo||''})),
+                    needsAnesthesia: !!meta.needsAnesthesia, needsPhoto: meta.needsPhoto!==false,
+                    minutes: Number(meta.minutes)||0, active:true, updatedAt:now, updatedBy:by
+                };
+                await db.collection('procedures').doc(procId).set(payload, {merge:true});
+                _chartToast('시술 레시피 저장됨');
+            }catch(e){ alert('저장 실패: '+(e?.message||e)); }
+        }
+
         async function loadSharedStaffAccountsStaff(){
             const container=document.getElementById('sharedStaffListStaff');
             if(!container) return;
@@ -2360,6 +2542,8 @@
                 _initFeeRealtime();
                 ensureFeeData().then(()=>{ _deriveProceduresFromFee(); _scheduleProcSync(); }).catch(()=>{});
             });
+            // 시술 레시피 등 메타 로드 (준비 카드 자동 생성용)
+            if(currentUser?.role!=='shared') _loadProcedureMeta().catch(()=>{});
             // 상담 차팅: 개인계정에만 홈 버튼 노출
             const chartBtn=document.getElementById('topHomeChartingBtn');
             if(chartBtn) chartBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
@@ -5331,6 +5515,35 @@
             _procSyncTimer=setTimeout(()=>{ _syncProceduresToFirestore(); }, 2500);
         }
 
+        // ── charting v2 Phase 2: 시술 메타(레시피 등) 로더 ──
+        // Firestore procedures/{procId} 의 사용자 편집 필드(recipe·마취·촬영·소요시간·code)를
+        // procId → meta 로 캐시. 준비 카드 자동 생성·시술 마스터 UI 에서 사용.
+        let _procMeta={};          // procId → {recipe:[], needsAnesthesia, needsPhoto, minutes, code}
+        let _procMetaLoaded=false;
+        async function _loadProcedureMeta(force){
+            if(_procMetaLoaded && !force) return _procMeta;
+            try{
+                const snap=await db.collection('procedures').get();
+                const m={};
+                snap.forEach(d=>{
+                    const x=d.data()||{};
+                    m[d.id]={
+                        recipe: Array.isArray(x.recipe)?x.recipe:[],
+                        needsAnesthesia: !!x.needsAnesthesia,
+                        needsPhoto: x.needsPhoto!==false,
+                        minutes: Number(x.minutes)||0,
+                        code: x.code||''
+                    };
+                });
+                _procMeta=m; _procMetaLoaded=true;
+            }catch(e){ console.warn('[procedures] 메타 로드 스킵:', e?.message||e); }
+            return _procMeta;
+        }
+        function _procRecipeOf(procId){
+            const r=_procMeta[procId]?.recipe;
+            return Array.isArray(r)?r:[];
+        }
+
         // 접힘 상태 (id → bool). category / treatment 공용 저장소
         const FEE_COLLAPSED_KEY='staff_fee_collapsed_v1';
         const FEE_CAT_COLLAPSED_KEY='staff_fee_cat_collapsed_v1';
@@ -6633,8 +6846,9 @@
                     if(doc.exists){ visit={...visit, ...doc.data()}; _chartingCurrent=visitId; }
                 }catch(e){ alert('로드 실패: '+e.message); return; }
             }
-            // procedures 자동완성 소스 준비 (캐시되어 있으면 즉시)
+            // procedures 자동완성 소스 + 레시피 메타 준비 (캐시되어 있으면 즉시)
             try{ await ensureFeeData(); }catch(_){}
+            try{ await _loadProcedureMeta(); }catch(_){}
             // 읽기 시점 마이그레이션 → 3-섹션 draft
             _chartingDraft=_migrateVisit(visit);
             _chartingActiveTab=_chartDefaultTab();
@@ -6780,14 +6994,23 @@
             </div>`;
         }
 
-        // ─── 스탭 섹션 (Phase 1: 사진·메모. 준비카드/재고차감은 Phase 2·3) ───
+        // ─── 스탭 섹션 (Phase 2: 준비 카드 리스트. 재고 자동차감은 Phase 3) ───
+        const _PREP_STATUS={
+            waiting:{label:'대기', bg:'#f3f4f6', color:'#6b7280'},
+            preparing:{label:'준비중', bg:'#fef3c7', color:'#92400e'},
+            prepared:{label:'준비완료', bg:'#dbeafe', color:'#1e40af'},
+            done:{label:'시술완료', bg:'#dcfce7', color:'#166534'}
+        };
+        const _ANES_LABEL={none:'마취없음', topical:'연고마취', local:'국소마취'};
         function _ceStaffSectionHtml(v, ro){
             const s=v.staffSection||{};
             const dis=ro?'disabled':'';
-            const orders=(v.consultSection?.confirmedOrders)||[];
-            const orderPreview=orders.length
-                ? orders.map(o=>`<div style="font-size:.8rem;color:#374151">· ${_esc(o.procName||'(시술)')} ${o.price?'<strong>'+Number(o.price).toLocaleString()+'원</strong>':''}</div>`).join('')
-                : '<div style="color:#9ca3af;font-size:.8rem">확정 오더 없음 (실장 탭에서 오더 입력)</div>';
+            // 확정 오더 ↔ 준비 카드 동기화 (표시 시점 reconcile)
+            _reconcilePrepCards(v);
+            const cards=(s.prepCards||[]);
+            const cardsHtml=cards.length
+                ? cards.map(pc=>_cePrepCardHtml(pc, ro)).join('')
+                : '<div style="color:#9ca3af;font-size:.8rem;padding:.3rem 0">확정 오더가 없습니다. 실장 탭에서 오더를 입력하면 준비 카드가 자동 생성됩니다.</div>';
             const photos=(s.photos||[]);
             const photoList=photos.length
                 ? photos.map((p,i)=>`<div style="display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:#374151;padding:.25rem 0">
@@ -6798,9 +7021,9 @@
             return `<div style="padding:.7rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px">
                 <div style="font-weight:700;font-size:.85rem;color:#166534;margin-bottom:.35rem">🧑‍⚕️ 스탭 준비</div>
 
-                <label style="display:block;font-size:.72rem;color:#166534;font-weight:600;margin:.25rem 0 .15rem">확정 오더 (준비 대상)</label>
-                <div style="background:#fff;border:1px solid #bbf7d0;border-radius:6px;padding:.5rem .6rem;margin-bottom:.4rem">${orderPreview}</div>
-                <div style="font-size:.68rem;color:#16a34a;margin-bottom:.5rem">※ 준비 카드·재고 자동차감은 다음 단계(Phase 2·3)에서 제공됩니다.</div>
+                <label style="display:block;font-size:.72rem;color:#166534;font-weight:600;margin:.25rem 0 .35rem">준비 카드</label>
+                <div id="cePrepCards" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:.3rem">${cardsHtml}</div>
+                <div style="font-size:.68rem;color:#16a34a;margin-bottom:.5rem">※ [준비 완료] 시 재고 자동차감은 다음 단계(Phase 3)에서 제공됩니다.</div>
 
                 <label style="display:block;font-size:.72rem;color:#166534;font-weight:600;margin:.25rem 0 .15rem">진단사진 기록</label>
                 <div id="cePhotoList" style="margin-bottom:.3rem">${photoList}</div>
@@ -6809,6 +7032,48 @@
                 <label style="display:block;font-size:.72rem;color:#166534;font-weight:600;margin:.5rem 0 .15rem">일반 메모</label>
                 <textarea id="ceGeneralMemo" rows="2" ${dis} placeholder="준비 관련 메모" onchange="_chartingDraft.staffSection.generalMemo=this.value"
                     style="width:100%;padding:.5rem;font-size:.85rem;border:1px solid #86efac;border-radius:6px;box-sizing:border-box;font-family:inherit;line-height:1.4;resize:vertical">${_esc(s.generalMemo||'')}</textarea>
+            </div>`;
+        }
+        // 준비 카드 1개 렌더
+        function _cePrepCardHtml(pc, ro){
+            const st=_PREP_STATUS[pc.status||'waiting']||_PREP_STATUS.waiting;
+            const locked=(pc.status==='prepared'||pc.status==='done'); // 준비완료 후 수량 잠금
+            const qtyDis=(ro||locked)?'disabled':'';
+            const recipe=(pc.recipeSnapshot||[]);
+            const recipeHtml=recipe.length
+                ? recipe.map((r,ri)=>`<div style="display:flex;align-items:center;gap:.35rem;font-size:.76rem;color:#374151;padding:.15rem 0">
+                        <span style="flex:1;min-width:0">${_esc(r.itemName||'(재료)')}</span>
+                        <span style="color:#9ca3af;font-size:.7rem">계획 ${r.plannedQty??0}</span>
+                        <input type="number" ${qtyDis} value="${r.actualQty??r.plannedQty??0}" step="0.1"
+                            onchange="chartingPrepUpdateQty('${pc.cardId}',${ri},this.value)"
+                            style="width:52px;text-align:right;padding:.2rem .3rem;font-size:.76rem;border:1px solid #d1d5db;border-radius:4px">
+                        <span style="font-size:.7rem;color:#6b7280;min-width:22px">${_esc(r.unit||'')}</span>
+                   </div>`).join('')
+                : '<div style="font-size:.72rem;color:#9ca3af">레시피 없음 — ⚙ 관리자 설정 → 🔧 시술 마스터에서 등록</div>';
+            const anesSel=['none','topical','local'].map(k=>`<option value="${k}" ${(pc.anesthesia||'none')===k?'selected':''}>${_ANES_LABEL[k]}</option>`).join('');
+            // 상태 전환 버튼
+            let actions='';
+            if(!ro){
+                const btn=(label,to,bg)=>`<button onclick="chartingPrepSetStatus('${pc.cardId}','${to}')" style="background:${bg};color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.74rem;font-weight:600;cursor:pointer">${label}</button>`;
+                const ghost=(label,to)=>`<button onclick="chartingPrepSetStatus('${pc.cardId}','${to}')" style="background:#fff;border:1px solid #d1d5db;color:#6b7280;padding:.3rem .6rem;border-radius:5px;font-size:.74rem;cursor:pointer">${label}</button>`;
+                const s=pc.status||'waiting';
+                if(s==='waiting')   actions=btn('준비 시작','preparing','#f59e0b')+btn('준비 완료','prepared','#2563eb');
+                else if(s==='preparing') actions=btn('준비 완료','prepared','#2563eb')+ghost('대기로','waiting');
+                else if(s==='prepared')  actions=btn('시술 완료','done','#16a34a')+ghost('되돌리기','preparing');
+                else if(s==='done')      actions=ghost('되돌리기','prepared');
+            }
+            return `<div style="border:1px solid #bbf7d0;border-radius:8px;background:#fff;padding:.5rem .6rem">
+                <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.35rem">
+                    <span style="flex:1;min-width:0;font-weight:700;font-size:.82rem;color:#111827">${_esc(pc.procName||'(시술)')}</span>
+                    <span style="font-size:.68rem;font-weight:700;color:${st.color};background:${st.bg};border-radius:8px;padding:1px 8px">${st.label}</span>
+                </div>
+                <div style="border-top:1px dashed #d1fae5;border-bottom:1px dashed #d1fae5;padding:.25rem 0;margin-bottom:.35rem">${recipeHtml}</div>
+                <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
+                    <select ${ro?'disabled':''} onchange="chartingPrepSetAnesthesia('${pc.cardId}',this.value)" style="font-size:.74rem;padding:.25rem .3rem;border:1px solid #d1d5db;border-radius:5px">${anesSel}</select>
+                    <input type="text" ${ro?'disabled':''} value="${_esc(pc.prepMemo||'')}" placeholder="준비 메모" onchange="chartingPrepSetMemo('${pc.cardId}',this.value)"
+                        style="flex:1;min-width:90px;padding:.25rem .4rem;font-size:.74rem;border:1px solid #d1d5db;border-radius:5px">
+                    ${actions}
+                </div>
             </div>`;
         }
 
@@ -6927,15 +7192,83 @@
             chartingSetTab('staff');
         }
 
+        // ── 준비 카드 (Phase 2) ──
+        // 시술 레시피 → recipeSnapshot (계획/실사용 수량)
+        function _makeRecipeSnapshot(procId){
+            return _procRecipeOf(procId).map(r=>({
+                itemId: r.itemId||'', itemName: r.itemName||'',
+                plannedQty: Number(r.qty)||0, actualQty: Number(r.qty)||0,
+                unit: r.unit||'', memo: r.memo||''
+            }));
+        }
+        // 확정 오더 ↔ 준비 카드 동기화 (orderId 링크). 대기중 카드만 레시피 갱신, 나머지는 보존.
+        function _reconcilePrepCards(draft){
+            const s=draft.staffSection=draft.staffSection||{};
+            s.prepCards=Array.isArray(s.prepCards)?s.prepCards:[];
+            const orders=(draft.consultSection?.confirmedOrders||[]).filter(o=>o && (o.procName||o.procId));
+            const byOrder={};
+            s.prepCards.forEach(pc=>{ if(pc && pc.orderId) byOrder[pc.orderId]=pc; });
+            const result=[];
+            orders.forEach(o=>{
+                const pc=byOrder[o.orderId];
+                if(pc){
+                    if(pc.procId!==o.procId && (pc.status==='waiting'||!pc.status)){
+                        pc.procId=o.procId||null; pc.procName=o.procName||'';
+                        pc.recipeSnapshot=_makeRecipeSnapshot(o.procId);
+                        pc.anesthesia=_procMeta[o.procId]?.needsAnesthesia?'topical':(pc.anesthesia||'none');
+                    }else{
+                        pc.procName=o.procName||pc.procName; // 이름은 항상 최신
+                    }
+                    result.push(pc);
+                }else{
+                    result.push({
+                        cardId:_uid(), orderId:o.orderId, procId:o.procId||null, procName:o.procName||'',
+                        recipeSnapshot:_makeRecipeSnapshot(o.procId),
+                        anesthesia:_procMeta[o.procId]?.needsAnesthesia?'topical':'none',
+                        status:'waiting', preparedBy:'', preparedAt:'', doneBy:'', doneAt:'',
+                        deductionTxIds:[], prepMemo:''
+                    });
+                }
+            });
+            s.prepCards=result;
+            return result;
+        }
+        function _findPrepCard(cardId){
+            return (_chartingDraft?.staffSection?.prepCards||[]).find(pc=>pc.cardId===cardId);
+        }
+        function chartingPrepUpdateQty(cardId, idx, val){
+            const pc=_findPrepCard(cardId); if(!pc||!pc.recipeSnapshot[idx]) return;
+            pc.recipeSnapshot[idx].actualQty=Number(String(val).replace(/[^\d.]/g,''))||0;
+        }
+        function chartingPrepSetAnesthesia(cardId, val){
+            const pc=_findPrepCard(cardId); if(pc) pc.anesthesia=val;
+        }
+        function chartingPrepSetMemo(cardId, val){
+            const pc=_findPrepCard(cardId); if(pc) pc.prepMemo=val;
+        }
+        function chartingPrepSetStatus(cardId, to){
+            const pc=_findPrepCard(cardId); if(!pc) return;
+            const now=new Date().toISOString();
+            const by=currentUser?.name||currentUser?.id||'staff';
+            pc.status=to;
+            // Phase 2: 상태·담당자만 기록. 재고 차감(deductionTxIds)은 Phase 3.
+            if(to==='prepared'){ pc.preparedBy=by; pc.preparedAt=now; }
+            if(to==='done'){ pc.doneBy=by; pc.doneAt=now; if(!pc.preparedAt){ pc.preparedBy=by; pc.preparedAt=now; } }
+            chartingSetTab('staff');
+        }
+
         // 방문 상태 자동 계산 (기존 상태보다 낮추지 않음)
         const _CHART_RANK={draft:0,in_progress:1,consult_done:2,prep_done:3,done:4};
         function _chartComputeStatus(v){
             const d=v.doctorSection||{}, c=v.consultSection||{};
             const doctorHas=(d.diagnosis||[]).length||(d.treatmentPlan||[]).length||(d.todayProcedures||[]).length||(d.progressNote||'').trim()||(d.freeNote||'').trim();
             const consultHas=(c.confirmedOrders||[]).length||(c.consultNote||'').trim();
+            const prep=(v.staffSection?.prepCards||[]);
             let base=_CHART_RANK[v.status||'draft']||0;
             if(doctorHas) base=Math.max(base,1);
             if(consultHas) base=Math.max(base,2);
+            if(prep.length && prep.every(p=>p.status==='done')) base=Math.max(base,4);
+            else if(prep.some(p=>p.status==='prepared'||p.status==='done')) base=Math.max(base,3);
             return ({0:'draft',1:'in_progress',2:'consult_done',3:'prep_done',4:'done'})[base];
         }
         function chartingSaveVisit(){ return _chartingSaveVisit(); }
@@ -6952,6 +7285,8 @@
             d.patientName=(document.getElementById('ceName')?.value||d.patientName||'').trim();
             d.date=(document.getElementById('ceDate')?.value||d.date||_chartFmtToday()).trim();
             if(!d.chartNo && !d.patientName){ alert('차트번호나 환자 이름 중 하나는 입력해주세요.'); return; }
+            // 확정 오더 → 준비 카드 자동 생성/동기화 (누가 저장하든 반영)
+            _reconcilePrepCards(d);
             const now=new Date().toISOString();
             const by=currentUser?.name||currentUser?.id||'staff';
             const status=_chartComputeStatus(d);
@@ -6961,7 +7296,12 @@
                     const payload={ chartNo:d.chartNo, patientName:d.patientName, date:d.date, status, updatedAt:now, updatedBy:by };
                     if(_chartCanEdit('doctor')) payload.doctorSection={ ...d.doctorSection, updatedBy:by, updatedAt:now };
                     if(_chartCanEdit('consult')) payload.consultSection={ ...d.consultSection, updatedBy:by, updatedAt:now };
-                    if(_chartCanEdit('staff'))  payload.staffSection={ ...d.staffSection, updatedBy:by, updatedAt:now };
+                    if(_chartCanEdit('staff')){
+                        payload.staffSection={ ...d.staffSection, updatedBy:by, updatedAt:now };
+                    }else{
+                        // 스탭 섹션 편집 권한이 없어도 준비 카드(오더 파생)는 영속화
+                        payload['staffSection.prepCards']=d.staffSection.prepCards||[];
+                    }
                     await db.collection('visits').doc(_chartingCurrent).update(payload);
                 }else{
                     // 신규: 전체 3-섹션 기록
@@ -7113,6 +7453,13 @@
             const orderLines=(c.confirmedOrders||[]).filter(o=>o.procName||o.price).map(o=>
                 `<div style="font-size:.8rem;color:#374151">· ${_esc(o.procName||'')} ${o.price?'<strong>'+Number(o.price).toLocaleString()+'원</strong>':''}</div>`
             ).join('');
+            const prepCards=(s.prepCards||[]);
+            let prepSummary='';
+            if(prepCards.length){
+                const cnt={}; prepCards.forEach(pc=>{ const k=pc.status||'waiting'; cnt[k]=(cnt[k]||0)+1; });
+                prepSummary=['waiting','preparing','prepared','done'].filter(k=>cnt[k])
+                    .map(k=>{ const st=_PREP_STATUS[k]; return `<span style="font-size:.68rem;font-weight:700;color:${st.color};background:${st.bg};border-radius:8px;padding:1px 7px;margin-right:3px">${st.label} ${cnt[k]}</span>`; }).join('');
+            }
             const fuHtml=(v._followups||[]).map(f=>`
                 <div style="margin-top:.35rem;padding:.4rem .6rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;font-size:.78rem">
                     <div style="display:flex;justify-content:space-between;align-items:center">
@@ -7134,6 +7481,7 @@
                 ${doctorNote?`<div style="font-size:.78rem;color:#4b5563;margin-bottom:.3rem;white-space:pre-wrap"><strong style="color:#0369a1">원장:</strong> ${_esc(doctorNote)}</div>`:''}
                 ${c.consultNote?`<div style="font-size:.78rem;color:#4b5563;margin-bottom:.3rem;white-space:pre-wrap"><strong style="color:#92400e">상담:</strong> ${_esc(c.consultNote)}</div>`:''}
                 ${orderLines?`<div style="margin-bottom:.3rem">${orderLines}</div>`:''}
+                ${prepSummary?`<div style="margin-bottom:.3rem"><span style="font-size:.7rem;color:#166534;font-weight:600;margin-right:4px">준비:</span>${prepSummary}</div>`:''}
                 ${c.extraMemo?`<div style="font-size:.78rem;color:#4b5563;margin-bottom:.3rem;white-space:pre-wrap"><strong>메모:</strong> ${_esc(c.extraMemo)}</div>`:''}
                 ${s.generalMemo?`<div style="font-size:.78rem;color:#4b5563;margin-bottom:.3rem;white-space:pre-wrap"><strong style="color:#166534">스탭:</strong> ${_esc(s.generalMemo)}</div>`:''}
                 ${fuHtml}

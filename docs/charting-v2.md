@@ -357,11 +357,25 @@ function _migrateVisit(v) {
 - **스탭 탭(Phase 1)**: 확정 오더 미리보기 + 진단사진 기록 + 일반 메모까지. 준비 카드
   자동 생성·재고 자동 차감은 Phase 2·3 에서.
 
-### Phase 2 — 시술 마스터 편집 + 스탭 뷰 (2~3일)
-- [ ] ⚙ 관리자 설정 → 시술 마스터 관리 UI
-- [ ] 레시피 편집 (재고 아이템 선택 + 수량)
-- [ ] 스탭 뷰 준비 카드 리스트
-- [ ] 오더 확정 시 준비 카드 자동 생성
+### Phase 2 — 시술 마스터 편집 + 스탭 뷰 (2~3일) ✅ 구현 완료 (2026-08)
+- [x] ⚙ 관리자 설정 → 🔧 시술 마스터 관리 UI (`openProcMaster`, 카테고리 그룹·검색)
+- [x] 레시피 편집 (재고 아이템 datalist 선택 + 수량·단위·메모, 마취/촬영 플래그, 소요분)
+      → `procedures/{procId}` merge 저장 (파생 필드 + recipe 함께 upsert)
+- [x] 스탭 뷰 준비 카드 리스트 (`_cePrepCardHtml`) — 레시피 actualQty 편집·마취 선택·
+      상태 전환(대기→준비중→준비완료→시술완료)·준비 메모
+- [x] 오더 확정 시 준비 카드 자동 생성 (`_reconcilePrepCards`, orderId 링크)
+
+**구현 메모**
+- **준비 카드 영속화**: `staffSection.prepCards` 에 저장. 실장(스탭 섹션 편집권 없음)이
+  오더를 저장해도 준비 카드가 반영되도록, 스탭 섹션 편집권이 없으면 `staffSection.prepCards`
+  필드 경로만 부분 업데이트(사진·일반메모 보존). 저장 시 항상 `_reconcilePrepCards` 실행.
+- **레시피 스냅샷**: 준비 카드는 생성 시점의 `procedures.recipe` 를 `recipeSnapshot`(계획/실사용
+  수량)으로 복사. 이후 마스터에서 레시피가 바뀌어도 대기(waiting) 카드만 재동기화, 준비중 이후는 보존.
+- **_procMeta 캐시**: `procedures` 문서의 recipe·마취·촬영·소요분·code 를 procId→meta 로 로드
+  (`_loadProcedureMeta`). 준비 카드 생성·마스터 UI 공용. 로그인·차팅 진입 시 로드.
+- **재고 차감 없음(Phase 2)**: [준비 완료]는 상태·담당자(preparedBy/At)만 기록. 실제 재고
+  차감(`inventoryTransactions`, 음수 방지, 취소 복구)은 Phase 3.
+- **방문 status 확장**: 준비 카드 상태 반영 — 일부 prepared → `prep_done`, 전부 done → `done`.
 
 ### Phase 3 — 재고 자동 차감 엔진 (1~2일)
 - [ ] Firestore transaction 안전 차감
