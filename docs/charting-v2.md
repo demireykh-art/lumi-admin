@@ -401,11 +401,26 @@ function _migrateVisit(v) {
 - **집계 컬렉션 유보**: 기존 `inventoryLogs`·`inventoryAudits`·`receiveHistory`와의 통합은
   스펙 §9 미결 이슈로 남김. 이번엔 스펙대로 `inventoryTransactions` 신설.
 
-### Phase 4 — 바우처 (2일)
-- [ ] `vouchers` 컬렉션 CRUD
-- [ ] ⚙ 관리자 설정 바우처 관리
-- [ ] 실장 오더 시 바우처 선택 · 자동 차감
-- [ ] 환자 타임라인에 바우처 잔여 표시
+### Phase 4 — 바우처 (2일) ✅ 구현 완료 (2026-08)
+- [x] `vouchers` 컬렉션 CRUD (발급 `voucherIssue`, 조회, 환불 `voucherRefund`)
+- [x] ⚙ 관리자 설정 → 🎫 바우처 관리 (검색·발급 폼·잔여/상태·환불)
+- [x] 실장 오더 시 바우처 선택 · 자동 차감 (`chartingApplyVoucher`/`chartingCancelVoucher`)
+- [x] 환자 타임라인에 바우처 잔여 표시 (`_voucherSummaryHtml`)
+
+**구현 메모**
+- **타입**: `sessions`(회차권, −1회), `amount`(금액권, −오더가), `sv`(S/V, 회차 방식).
+  잔여 = 회차: totalSessions−usedSessions / 금액: totalAmount−usedAmount.
+- **적용**: orderType 이 single 이 아니면 오더에 바우처 select 노출. 선택 시
+  `chartingApplyVoucher` → **transaction**으로 voucher 차감(usedSessions++/usedAmount+=)
+  + status(소진 시 exhausted) + 오더(voucherRef·voucherConsumed·price=0·paymentStatus=paid)
+  를 원자적 기록. 저장된 방문(`_chartingCurrent`)에서만.
+- **취소·복구**: 오더 [취소](`chartingCancelVoucher`) → voucher 잔여 원복 + 오더 플래그 해제.
+  방문 삭제 시 사용중 바우처 전량 복구(`_restoreVisitVouchers`). 바우처 사용 오더는
+  삭제·유형변경 차단(먼저 취소 유도).
+- **사용성 가드**: 만료·소진·환불 바우처는 선택 불가(`_voucherIsUsable`), procId 지정
+  바우처는 해당 시술 오더에만 매칭(미지정은 전체 허용).
+- **매출**: 회차권/SV 오더는 price=0(패키지 선결제). 통합앱은 매출 원천 아님(Vegas).
+- **⚠️ Firestore 규칙**: `vouchers` 컬렉션 신규 — client read/write 권한 필요.
 
 ### Phase 5 — Vegas 매핑 · 통계 (1~2일)
 - [ ] `vegasPaymentRef` 필드 UI (수기)

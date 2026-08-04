@@ -1817,9 +1817,45 @@
                         시술 마스터 편집 열기 →
                     </button>
                 </div>
+
+                <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
+                    <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">🎫 바우처 관리</div>
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
+                        회차권·금액권을 발급·조회·환불합니다. 실장이 오더 시 선택하면 잔여가 자동 차감됩니다.
+                    </div>
+                    <button onclick="openVoucherAdmin()"
+                        style="width:100%;background:#7c3aed;color:#fff;border:none;padding:.6rem;border-radius:6px;font-weight:600;font-size:.85rem;cursor:pointer">
+                        바우처 관리 열기 →
+                    </button>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('adminSettingsModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 바우처 관리 모달 (bizAdmin 전용) -->
+    <div class="modal" id="voucherAdminModal">
+        <div class="modal-content" style="max-width:640px;max-height:90vh">
+            <div class="modal-header">
+                <div class="modal-title">🎫 바우처 관리</div>
+                <button class="modal-close" onclick="closeModal('voucherAdminModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex;gap:.4rem;margin-bottom:.6rem">
+                    <input type="text" id="voucherSearch" placeholder="🔍 차트번호·환자·상품 검색" oninput="_renderVoucherList()"
+                        style="flex:1;padding:.5rem .7rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:8px;box-sizing:border-box">
+                    <button onclick="_voucherToggleIssueForm()" id="voucherIssueToggle"
+                        style="background:#7c3aed;color:#fff;border:none;padding:.5rem .9rem;border-radius:8px;font-weight:600;font-size:.85rem;cursor:pointer;flex-shrink:0">+ 발급</button>
+                </div>
+                <div id="voucherIssueForm" style="display:none;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:.7rem;margin-bottom:.6rem"></div>
+                <div id="voucherList" style="display:flex;flex-direction:column;gap:.4rem">
+                    <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('voucherAdminModal')" style="flex:1">닫기</button>
             </div>
         </div>
     </div>
@@ -2324,6 +2360,164 @@
                 await db.collection('procedures').doc(procId).set(payload, {merge:true});
                 _chartToast('시술 레시피 저장됨');
             }catch(e){ alert('저장 실패: '+(e?.message||e)); }
+        }
+
+        // ================================================================
+        //  🎫 바우처 (회차권/금액권) — charting v2 Phase 4
+        // ================================================================
+        const _VOUCHER_TYPE={ sessions:'회차권', amount:'금액권', sv:'S/V' };
+        const _VOUCHER_STATUS={ active:{label:'사용가능',color:'#166534',bg:'#dcfce7'}, exhausted:{label:'소진',color:'#6b7280',bg:'#f3f4f6'},
+            expired:{label:'만료',color:'#b45309',bg:'#fef3c7'}, refunded:{label:'환불',color:'#dc2626',bg:'#fee2e2'} };
+        // 잔여량 (회차 or 금액)
+        function _voucherRemaining(v){
+            if(!v) return 0;
+            if(v.type==='amount') return Math.max(0,(Number(v.totalAmount)||0)-(Number(v.usedAmount)||0));
+            return Math.max(0,(Number(v.totalSessions)||0)-(Number(v.usedSessions)||0)); // sessions·sv
+        }
+        function _voucherRemainingLabel(v){
+            if(!v) return '';
+            return v.type==='amount' ? '₩'+_voucherRemaining(v).toLocaleString() : _voucherRemaining(v)+'회';
+        }
+        function _voucherLabel(v){
+            const t=_VOUCHER_TYPE[v.type]||v.type;
+            const tot=v.type==='amount' ? '₩'+(Number(v.totalAmount)||0).toLocaleString() : (Number(v.totalSessions)||0)+'회';
+            return `${v.productName||'(상품)'} · ${t} ${tot}`;
+        }
+        function _voucherIsUsable(v){
+            if(!v || v.status==='refunded' || v.status==='exhausted') return false;
+            if(v.status==='expired') return false;
+            if(v.expiresAt && String(v.expiresAt) < _chartFmtToday()) return false;
+            return _voucherRemaining(v) > 0;
+        }
+
+        // ── 바우처 관리 (bizAdmin) ──
+        let _voucherCache=[];
+        async function openVoucherAdmin(){
+            if(!isBizAdmin){ alert('경영관리자 권한이 필요합니다.'); return; }
+            document.getElementById('voucherAdminModal').classList.add('active');
+            document.getElementById('voucherIssueForm').style.display='none';
+            const list=document.getElementById('voucherList');
+            if(list) list.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            try{
+                await ensureFeeData(); // 상품 procId 선택용
+                const snap=await db.collection('vouchers').orderBy('purchasedAt','desc').limit(200).get();
+                _voucherCache=snap.docs.map(d=>({id:d.id,...d.data()}));
+                _renderVoucherList();
+            }catch(e){
+                // orderBy 실패(색인 등) 시 정렬 없이 재시도
+                try{ const snap=await db.collection('vouchers').limit(200).get(); _voucherCache=snap.docs.map(d=>({id:d.id,...d.data()})); _renderVoucherList(); }
+                catch(e2){ if(list) list.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+_esc(e2?.message||String(e2))+'</div>'; }
+            }
+        }
+        function _voucherEffectiveStatus(v){
+            if(v.status==='refunded') return 'refunded';
+            if(_voucherRemaining(v)<=0) return 'exhausted';
+            if(v.expiresAt && String(v.expiresAt) < _chartFmtToday()) return 'expired';
+            return 'active';
+        }
+        function _renderVoucherList(){
+            const wrap=document.getElementById('voucherList'); if(!wrap) return;
+            const q=(document.getElementById('voucherSearch')?.value||'').toLowerCase().trim();
+            let list=_voucherCache.slice();
+            if(q) list=list.filter(v=>[v.chartNo,v.patientName,v.productName].some(x=>String(x||'').toLowerCase().includes(q)));
+            if(!list.length){ wrap.innerHTML='<div style="color:#9ca3af;font-size:.85rem;padding:1rem;text-align:center">'+(q?'검색 결과 없음':'발급된 바우처가 없습니다.')+'</div>'; return; }
+            wrap.innerHTML=list.map(v=>{
+                const eff=_voucherEffectiveStatus(v); const st=_VOUCHER_STATUS[eff]||_VOUCHER_STATUS.active;
+                const rem=_voucherRemainingLabel(v);
+                const used=v.type==='amount' ? `₩${(Number(v.usedAmount)||0).toLocaleString()} 사용` : `${(Number(v.usedSessions)||0)}회 사용`;
+                return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:.5rem .6rem;background:#fff">
+                    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.2rem">
+                        <span style="flex:1;min-width:0;font-weight:700;font-size:.85rem;color:#111827">${_esc(v.productName||'(상품)')}</span>
+                        <span style="font-size:.66rem;font-weight:700;color:${st.color};background:${st.bg};border-radius:8px;padding:1px 8px">${st.label}</span>
+                    </div>
+                    <div style="font-size:.72rem;color:#6b7280;display:flex;gap:.6rem;flex-wrap:wrap">
+                        <span>${_esc(v.patientName||'-')}${v.chartNo?' #'+_esc(v.chartNo):''}</span>
+                        <span>${_VOUCHER_TYPE[v.type]||v.type}</span>
+                        <span>잔여 <strong style="color:#7c3aed">${rem}</strong></span>
+                        <span>${used}</span>
+                        ${v.expiresAt?`<span>~${_esc(v.expiresAt)}</span>`:''}
+                    </div>
+                    ${eff!=='refunded'?`<div style="text-align:right;margin-top:.3rem"><button onclick="voucherRefund('${v.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.2rem .6rem;font-size:.72rem;border-radius:5px;cursor:pointer">환불</button></div>`:''}
+                </div>`;
+            }).join('');
+        }
+        function _voucherToggleIssueForm(){
+            const f=document.getElementById('voucherIssueForm');
+            if(f.style.display==='none'){ f.style.display='block'; _renderVoucherIssueForm(); }
+            else f.style.display='none';
+        }
+        function _renderVoucherIssueForm(){
+            const f=document.getElementById('voucherIssueForm'); if(!f) return;
+            const procOpts=(_procCache||[]).filter(p=>p.active!==false).map(p=>`<option value="${_esc(_procDisplayName(p))}"></option>`).join('');
+            f.innerHTML=`
+                <div style="font-weight:700;font-size:.82rem;color:#6d28d9;margin-bottom:.4rem">🎫 바우처 발급</div>
+                <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.4rem">
+                    <input id="vfChartNo" placeholder="차트번호" style="flex:1;min-width:90px;padding:.4rem;font-size:.82rem;border:1px solid #d1d5db;border-radius:5px">
+                    <input id="vfName" placeholder="환자 이름" style="flex:1;min-width:90px;padding:.4rem;font-size:.82rem;border:1px solid #d1d5db;border-radius:5px">
+                </div>
+                <input id="vfProduct" list="vfProcDL" placeholder="상품명 (예: BB토닝 5회권 / 시술 검색)" style="width:100%;padding:.4rem;font-size:.82rem;border:1px solid #d1d5db;border-radius:5px;box-sizing:border-box;margin-bottom:.4rem">
+                <datalist id="vfProcDL">${procOpts}</datalist>
+                <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.4rem;align-items:center">
+                    <select id="vfType" onchange="_voucherIssueTypeChange()" style="padding:.4rem;font-size:.82rem;border:1px solid #d1d5db;border-radius:5px">
+                        <option value="sessions">회차권</option>
+                        <option value="amount">금액권</option>
+                        <option value="sv">S/V</option>
+                    </select>
+                    <input id="vfTotal" type="number" placeholder="총 회차" style="width:90px;padding:.4rem;font-size:.82rem;border:1px solid #d1d5db;border-radius:5px">
+                    <span id="vfTotalUnit" style="font-size:.78rem;color:#6b7280">회</span>
+                    <input id="vfPrice" type="number" placeholder="결제 금액(원)" style="flex:1;min-width:110px;padding:.4rem;font-size:.82rem;border:1px solid #d1d5db;border-radius:5px">
+                </div>
+                <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;align-items:center">
+                    <label style="font-size:.76rem;color:#6b7280">만료일</label>
+                    <input id="vfExpires" type="date" style="padding:.35rem;font-size:.82rem;border:1px solid #d1d5db;border-radius:5px">
+                    <input id="vfVegas" placeholder="Vegas 결제참조(선택)" style="flex:1;min-width:120px;padding:.4rem;font-size:.82rem;border:1px solid #d1d5db;border-radius:5px">
+                </div>
+                <button onclick="voucherIssue()" style="width:100%;background:#7c3aed;color:#fff;border:none;padding:.5rem;border-radius:6px;font-size:.85rem;font-weight:700;cursor:pointer">발급하기</button>`;
+        }
+        function _voucherIssueTypeChange(){
+            const t=document.getElementById('vfType')?.value;
+            const unit=document.getElementById('vfTotalUnit'); const tot=document.getElementById('vfTotal');
+            if(t==='amount'){ if(unit) unit.textContent='원'; if(tot) tot.placeholder='총 금액'; }
+            else{ if(unit) unit.textContent='회'; if(tot) tot.placeholder='총 회차'; }
+        }
+        async function voucherIssue(){
+            const chartNo=(document.getElementById('vfChartNo')?.value||'').trim();
+            const patientName=(document.getElementById('vfName')?.value||'').trim();
+            const productName=(document.getElementById('vfProduct')?.value||'').trim();
+            const type=document.getElementById('vfType')?.value||'sessions';
+            const totalRaw=Number(document.getElementById('vfTotal')?.value)||0;
+            const price=Number(document.getElementById('vfPrice')?.value)||0;
+            const expiresAt=(document.getElementById('vfExpires')?.value||'').trim();
+            const vegas=(document.getElementById('vfVegas')?.value||'').trim();
+            if(!chartNo && !patientName){ alert('차트번호나 환자 이름을 입력하세요.'); return; }
+            if(!productName){ alert('상품명을 입력하세요.'); return; }
+            if(totalRaw<=0){ alert(type==='amount'?'총 금액을 입력하세요.':'총 회차를 입력하세요.'); return; }
+            const proc=_procFind(productName);
+            const now=new Date().toISOString();
+            const by=currentUser?.name||currentUser?.id||'staff';
+            const doc={ chartNo, patientName, type, productName,
+                procId: proc?proc.procId:null,
+                totalSessions: type==='amount'?0:totalRaw, usedSessions:0,
+                totalAmount: type==='amount'?totalRaw:0, usedAmount:0,
+                price, purchasedAt: now, expiresAt: expiresAt||'',
+                vegasPaymentRef: vegas, status:'active', createdBy:by, updatedAt:now };
+            try{
+                const ref=await db.collection('vouchers').add(doc);
+                _voucherCache.unshift({id:ref.id, ...doc});
+                document.getElementById('voucherIssueForm').style.display='none';
+                _renderVoucherList();
+                _chartToast('바우처 발급됨');
+            }catch(e){ alert('발급 실패: '+(e?.message||e)); }
+        }
+        async function voucherRefund(id){
+            const v=_voucherCache.find(x=>x.id===id); if(!v) return;
+            if(!confirm(`이 바우처를 환불 처리합니다.\n${v.productName||''} (${v.patientName||''})\n계속?`)) return;
+            try{
+                await db.collection('vouchers').doc(id).update({ status:'refunded', updatedAt:new Date().toISOString() });
+                v.status='refunded';
+                _renderVoucherList();
+                _chartToast('환불 처리됨');
+            }catch(e){ alert('환불 실패: '+(e?.message||e)); }
         }
 
         async function loadSharedStaffAccountsStaff(){
@@ -6679,6 +6873,40 @@
         let _chartingCurrent=null;    // 편집 중 방문 (visitId or null)
         let _chartingCurrentPatient=null; // 타임라인 열람 중 환자 {chartNo, patientName}
         let _chartingActiveTab='doctor';  // 편집 화면 활성 섹션 탭
+        let _chartVouchers=[];            // 현재 환자(chartNo) 바우처 캐시 (Phase 4)
+        // 현재 환자의 바우처 로드 (chartNo 기준)
+        async function _loadPatientVouchers(chartNo){
+            _chartVouchers=[];
+            const cn=String(chartNo||'').trim();
+            if(!cn) return _chartVouchers;
+            try{
+                const snap=await db.collection('vouchers').where('chartNo','==',cn).get();
+                _chartVouchers=snap.docs.map(d=>({id:d.id,...d.data()}));
+            }catch(e){ console.warn('바우처 로드 스킵:', e?.message||e); }
+            return _chartVouchers;
+        }
+        // procId 매칭 + 사용가능한 바우처 (procId 미지정 바우처는 전체 허용)
+        function _usableVouchersFor(procId){
+            return (_chartVouchers||[]).filter(v=>_voucherIsUsable(v) && (!v.procId || !procId || v.procId===procId));
+        }
+        // 타임라인 상단 바우처 잔여 요약
+        function _voucherSummaryHtml(){
+            const vs=(_chartVouchers||[]).filter(v=>v.status!=='refunded');
+            if(!vs.length) return '';
+            const chips=vs.map(v=>{
+                const eff=_voucherEffectiveStatus(v); const st=_VOUCHER_STATUS[eff]||_VOUCHER_STATUS.active;
+                const rem=_voucherRemainingLabel(v);
+                const dim=(eff!=='active');
+                return `<div style="display:flex;align-items:center;gap:.35rem;background:${dim?'#f9fafb':'#faf5ff'};border:1px solid ${dim?'#e5e7eb':'#e9d5ff'};border-radius:8px;padding:.3rem .5rem;opacity:${dim?'.65':'1'}">
+                    <span style="font-size:.74rem;font-weight:600;color:${dim?'#6b7280':'#6d28d9'}">🎫 ${_esc(v.productName||'바우처')}</span>
+                    <span style="font-size:.7rem;color:#6b7280">${_VOUCHER_TYPE[v.type]||v.type}</span>
+                    <span style="font-size:.72rem;font-weight:700;color:${st.color}">잔여 ${rem}</span>
+                    <span style="font-size:.62rem;color:${st.color};background:${st.bg};border-radius:6px;padding:0 5px">${st.label}</span>
+                </div>`;
+            }).join('');
+            return `<div style="margin-bottom:.6rem"><div style="font-size:.7rem;color:#6b7280;font-weight:600;margin-bottom:.25rem">보유 바우처</div>
+                <div style="display:flex;flex-wrap:wrap;gap:.35rem">${chips}</div></div>`;
+        }
 
         // ── charting v2: 역할(chartRole) 권한 헬퍼 ──
         // employees.chartRole: 'doctor'|'consultant'|'staff'|'multi'|(미지정)
@@ -6849,6 +7077,7 @@
             // procedures 자동완성 소스 + 레시피 메타 준비 (캐시되어 있으면 즉시)
             try{ await ensureFeeData(); }catch(_){}
             try{ await _loadProcedureMeta(); }catch(_){}
+            try{ await _loadPatientVouchers(visit.chartNo); }catch(_){}
             // 읽기 시점 마이그레이션 → 3-섹션 draft
             _chartingDraft=_migrateVisit(visit);
             _chartingActiveTab=_chartDefaultTab();
@@ -7106,6 +7335,30 @@
                     <input type="text" value="${_esc(o.vegasPaymentRef||'')}" placeholder="Vegas 결제참조" ${dis} onchange="_chartingUpdateOrder(${i},'vegasPaymentRef',this.value)"
                         style="flex:1;padding:.25rem .4rem;font-size:.75rem;border:1px solid #d1d5db;border-radius:5px;min-width:100px">
                 </div>
+                ${_chartOrderVoucherRow(o,i,ro)}
+            </div>`;
+        }
+        // 오더 바우처 UI (orderType 이 회차권/금액권/S/V 일 때)
+        function _chartOrderVoucherRow(o,i,ro){
+            const ot=o.orderType||'single';
+            if(ot==='single') return '';
+            if(o.voucherConsumed && o.voucherRef){
+                const v=(_chartVouchers||[]).find(x=>x.id===o.voucherRef);
+                const rem=v?_voucherRemainingLabel(v):'';
+                return `<div style="display:flex;align-items:center;gap:.4rem;background:#faf5ff;border:1px solid #e9d5ff;border-radius:6px;padding:.3rem .5rem">
+                    <span style="flex:1;min-width:0;font-size:.74rem;color:#6d28d9">🎫 ${_esc(o.voucherProductName||v?.productName||'바우처')} 사용중${rem?` · 잔여 ${rem}`:''}</span>
+                    ${ro?'':`<button onclick="chartingCancelVoucher(${i})" style="background:#fff;border:1px solid #a855f7;color:#7c3aed;padding:.2rem .55rem;font-size:.72rem;border-radius:4px;cursor:pointer">취소</button>`}
+                </div>`;
+            }
+            if(ro) return '';
+            const usable=_usableVouchersFor(o.procId);
+            if(!usable.length){
+                return `<div style="font-size:.72rem;color:#a855f7;background:#faf5ff;border:1px dashed #e9d5ff;border-radius:6px;padding:.3rem .5rem">🎫 사용 가능한 바우처 없음 (⚙ 바우처 관리에서 발급)</div>`;
+            }
+            const opts=['<option value="">🎫 바우처 선택…</option>'].concat(
+                usable.map(v=>`<option value="${v.id}">${_esc(v.productName||'상품')} · 잔여 ${_voucherRemainingLabel(v)}</option>`)).join('');
+            return `<div style="display:flex;align-items:center;gap:.4rem">
+                <select onchange="chartingApplyVoucher(${i}, this.value)" style="flex:1;font-size:.74rem;padding:.28rem;border:1px solid #c4b5fd;border-radius:5px;background:#faf5ff;color:#6d28d9">${opts}</select>
             </div>`;
         }
 
@@ -7168,8 +7421,14 @@
             if(field==='procName'){
                 o.procName=val;
                 const proc=_procFind(val);
-                if(proc){ o.procId=proc.procId; if(!o.price) { o.price=proc.price; _ceRefreshOrders(); } }
+                if(proc){ o.procId=proc.procId; if(!o.price) { o.price=proc.price; } }
                 else { o.procId=null; }
+                _ceRefreshOrders(); // 바우처 매칭 갱신
+                return;
+            }
+            if(field==='orderType'){
+                if(o.voucherConsumed){ alert('바우처 사용중 오더입니다. 먼저 [취소] 후 유형을 변경하세요.'); _ceRefreshOrders(); return; }
+                o.orderType=val; _ceRefreshOrders(); // 바우처 선택 UI 토글
                 return;
             }
             o[field]=val;
@@ -7183,6 +7442,10 @@
                     alert('이 오더는 준비 완료(재고 차감)된 카드가 있습니다.\n스탭 탭에서 [되돌리기]로 재고 복구 후 삭제하세요.');
                     return;
                 }
+                if(o.voucherConsumed){
+                    alert('이 오더는 바우처를 사용 중입니다.\n오더의 [취소]로 바우처를 복구한 후 삭제하세요.');
+                    return;
+                }
             }
             (_chartingDraft.consultSection.confirmedOrders||[]).splice(i,1);
             _ceRefreshOrders();
@@ -7191,6 +7454,98 @@
             const el=document.getElementById('ceOrders'); if(!el) return;
             const ro=!_chartCanEdit('consult');
             el.innerHTML=(_chartingDraft.consultSection.confirmedOrders||[]).map((o,i)=>_chartOrderRow(o,i,ro)).join('') || '<div style="color:#9ca3af;font-size:.8rem;padding:.3rem 0">아직 오더 없음</div>';
+        }
+        // ── 오더 바우처 적용/취소 (Phase 4, transaction) ──
+        async function chartingApplyVoucher(i, voucherId){
+            const o=(_chartingDraft.consultSection.confirmedOrders||[])[i];
+            if(!o || !voucherId){ _ceRefreshOrders(); return; }
+            if(o.voucherConsumed){ _ceRefreshOrders(); return; }
+            if(!_chartingCurrent){ alert('바우처 적용 전에 먼저 💾 저장하세요.'); _ceRefreshOrders(); return; }
+            const now=new Date().toISOString();
+            const by=currentUser?.name||currentUser?.id||'staff';
+            const vRef=db.collection('vouchers').doc(voucherId);
+            const visitRef=db.collection('visits').doc(_chartingCurrent);
+            const isAmount=(o.orderType==='amount');
+            const useAmount=isAmount?(Number(o.price)||0):0;
+            try{
+                let appliedV=null;
+                await db.runTransaction(async t=>{
+                    const vdoc=await t.get(vRef); const vv=await t.get(visitRef);
+                    if(!vdoc.exists) throw new Error('바우처를 찾을 수 없습니다.');
+                    const v={id:voucherId,...vdoc.data()};
+                    if(!_voucherIsUsable(v)) throw new Error('사용할 수 없는 바우처입니다(만료/소진/환불).');
+                    if(isAmount && useAmount>_voucherRemaining(v)) throw new Error('금액권 잔액 부족: 잔여 ₩'+_voucherRemaining(v).toLocaleString());
+                    // 차감
+                    const upd={updatedAt:now};
+                    if(isAmount) upd.usedAmount=(Number(v.usedAmount)||0)+useAmount;
+                    else upd.usedSessions=(Number(v.usedSessions)||0)+1;
+                    const after={...v,...upd};
+                    if(_voucherRemaining(after)<=0) upd.status='exhausted';
+                    t.update(vRef, upd);
+                    // 오더 반영
+                    const orders=((vv.exists?vv.data():{}).consultSection?.confirmedOrders)|| _chartingDraft.consultSection.confirmedOrders||[];
+                    const newOrders=(_chartingDraft.consultSection.confirmedOrders||[]).map((x,idx)=> idx===i
+                        ? {...x, voucherRef:voucherId, voucherProductName:v.productName||'', voucherConsumed:true,
+                           voucherAmountUsed:isAmount?useAmount:0, price:isAmount?x.price:0, paymentStatus:'paid'} : x);
+                    t.update(visitRef, {'consultSection.confirmedOrders':newOrders, updatedAt:now, updatedBy:by});
+                    appliedV={...after, ...upd};
+                });
+                // 메모리 반영
+                o.voucherRef=voucherId; o.voucherProductName=(_chartVouchers.find(v=>v.id===voucherId)?.productName)||''; o.voucherConsumed=true;
+                o.voucherAmountUsed=isAmount?useAmount:0; if(!isAmount) o.price=0; o.paymentStatus='paid';
+                const vc=_chartVouchers.find(v=>v.id===voucherId);
+                if(vc){ if(isAmount) vc.usedAmount=(Number(vc.usedAmount)||0)+useAmount; else vc.usedSessions=(Number(vc.usedSessions)||0)+1; if(_voucherRemaining(vc)<=0) vc.status='exhausted'; }
+                _ceRefreshOrders(); _chartToast('바우처 적용됨');
+            }catch(e){ alert('바우처 적용 실패: '+(e?.message||e)); _ceRefreshOrders(); }
+        }
+        async function chartingCancelVoucher(i){
+            const o=(_chartingDraft.consultSection.confirmedOrders||[])[i];
+            if(!o || !o.voucherConsumed || !o.voucherRef) return;
+            if(!confirm('이 오더의 바우처 사용을 취소하고 잔여를 복구합니다. 계속?')) return;
+            const now=new Date().toISOString();
+            const by=currentUser?.name||currentUser?.id||'staff';
+            const vRef=db.collection('vouchers').doc(o.voucherRef);
+            const visitRef=db.collection('visits').doc(_chartingCurrent);
+            const isAmount=(o.orderType==='amount');
+            const backAmount=isAmount?(Number(o.voucherAmountUsed)||0):0;
+            try{
+                await db.runTransaction(async t=>{
+                    const vdoc=await t.get(vRef); await t.get(visitRef);
+                    if(vdoc.exists){
+                        const v={id:o.voucherRef,...vdoc.data()};
+                        const upd={updatedAt:now, status:'active'};
+                        if(isAmount) upd.usedAmount=Math.max(0,(Number(v.usedAmount)||0)-backAmount);
+                        else upd.usedSessions=Math.max(0,(Number(v.usedSessions)||0)-1);
+                        t.update(vRef, upd);
+                    }
+                    const newOrders=(_chartingDraft.consultSection.confirmedOrders||[]).map((x,idx)=> idx===i
+                        ? {...x, voucherRef:null, voucherProductName:'', voucherConsumed:false, voucherAmountUsed:0, paymentStatus:'unknown'} : x);
+                    t.update(visitRef, {'consultSection.confirmedOrders':newOrders, updatedAt:now, updatedBy:by});
+                });
+                const vc=_chartVouchers.find(v=>v.id===o.voucherRef);
+                if(vc){ if(isAmount) vc.usedAmount=Math.max(0,(Number(vc.usedAmount)||0)-backAmount); else vc.usedSessions=Math.max(0,(Number(vc.usedSessions)||0)-1); if(vc.status==='exhausted') vc.status='active'; }
+                o.voucherRef=null; o.voucherProductName=''; o.voucherConsumed=false; o.voucherAmountUsed=0; o.paymentStatus='unknown';
+                _ceRefreshOrders(); _chartToast('바우처 사용 취소됨');
+            }catch(e){ alert('바우처 취소 실패: '+(e?.message||e)); }
+        }
+        // 방문 삭제 시 사용중 바우처 복구
+        async function _restoreVisitVouchers(orders){
+            const used=(orders||[]).filter(o=>o.voucherConsumed && o.voucherRef);
+            if(!used.length) return;
+            const now=new Date().toISOString();
+            for(const o of used){
+                try{
+                    const vRef=db.collection('vouchers').doc(o.voucherRef);
+                    await db.runTransaction(async t=>{
+                        const d=await t.get(vRef); if(!d.exists) return;
+                        const v={...d.data()}; const isAmount=(o.orderType==='amount');
+                        const upd={updatedAt:now, status:'active'};
+                        if(isAmount) upd.usedAmount=Math.max(0,(Number(v.usedAmount)||0)-(Number(o.voucherAmountUsed)||0));
+                        else upd.usedSessions=Math.max(0,(Number(v.usedSessions)||0)-1);
+                        t.update(vRef, upd);
+                    });
+                }catch(e){ console.warn('바우처 복구 실패:', e?.message||e); }
+            }
         }
         // ── 스탭: 진단사진 기록 ──
         function chartingAddPhoto(){
@@ -7531,6 +7886,8 @@
                     try{ await _refundVisitDeductions(_chartingCurrent, _chartingDraft.staffSection.prepCards); }
                     catch(re){ if(!confirm('재고 복구 실패: '+(re?.message||re)+'\n그래도 삭제할까요?')) return; }
                 }
+                // 사용중 바우처 복구 (있으면)
+                try{ await _restoreVisitVouchers(_chartingDraft.consultSection?.confirmedOrders); }catch(_){}
                 // 하위 followups 삭제
                 const fu=await db.collection('visits').doc(_chartingCurrent).collection('followups').get();
                 const batch=db.batch();
@@ -7621,6 +7978,7 @@
             if(!body) return;
             body.innerHTML='<div style="text-align:center;color:#9ca3af;padding:1rem;font-size:.85rem">로딩 중...</div>';
             const p=_chartingCurrentPatient||{};
+            try{ await _loadPatientVouchers(p.chartNo); }catch(_){}
             try{
                 let query=db.collection('visits');
                 if(p.chartNo) query=query.where('chartNo','==',p.chartNo);
@@ -7643,7 +8001,7 @@
                 const totalCopyBtn=`<div style="text-align:right;margin-bottom:.5rem">
                     <button onclick="chartingCopyAllTimeline()" style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;padding:.35rem .8rem;font-size:.75rem;border-radius:6px;cursor:pointer">📋 전체 타임라인 복사</button>
                 </div>`;
-                body.innerHTML=totalCopyBtn+withFu.map(v=>_chartingRenderVisitCard(v)).join('');
+                body.innerHTML=_voucherSummaryHtml()+totalCopyBtn+withFu.map(v=>_chartingRenderVisitCard(v)).join('');
                 _chartingLastRendered=withFu;
             }catch(e){
                 body.innerHTML='<div style="color:var(--red);padding:1rem;font-size:.85rem">로드 실패: '+e.message+'</div>';
