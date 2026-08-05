@@ -1585,6 +1585,9 @@ async function handlePayslipZip(input){
                 ym,
                 employeeId:emp.id,
                 name:emp.name,
+                // 본인 인증용 로그인 이메일 — Firestore 보안 규칙이 이 값과
+                // request.auth.token.email 을 비교해 타인 조회를 차단한다.
+                authEmail:(emp.email||'').toLowerCase(),
                 fileName:fname,
                 dataUrl,
                 size,

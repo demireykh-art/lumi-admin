@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ─────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    // 관리자 = settings/bizAdmins.emails 화이트리스트에 포함된 로그인 이메일
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/settings/bizAdmins)
+        && (request.auth.token.email in get(/databases/$(database)/documents/settings/bizAdmins).data.emails);
+    }
+
+    // ── 급여명세서: 본인 또는 관리자만 조회, 관리자만 쓰기 ──
+    // ⚠️ 절대 catch-all(`match /{document=**}`) 아래에 두지 말 것.
+    //    catch-all 이 있으면 아래 제한이 무력화되어 타인 명세서가 노출됨.
+    match /payslips/{doc} {
+      // 본인 이메일 우선 평가(get() 호출 없음) → 관리자는 fallback 으로 전체 조회
+      allow read: if isSignedIn()
+        && (resource.data.authEmail == request.auth.token.email || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ── 그 외 컬렉션: 로그인한 사용자만 (기존 `if true` 대체) ──
+    //    앱은 모든 Firestore 접근 전에 로그인하므로 안전하며,
+    //    recursive catch-all 을 없애 payslips 격리를 보장한다.
+    match /admins/{document=**}                 { allow read, write: if isSignedIn(); }
+    match /attendance/{document=**}             { allow read, write: if isSignedIn(); }
+    match /cards/{document=**}                   { allow read, write: if isSignedIn(); }
+    match /categoryRules/{document=**}          { allow read, write: if isSignedIn(); }
+    match /channels/{document=**}               { allow read, write: if isSignedIn(); }
+    match /chatThreads/{document=**}            { allow read, write: if isSignedIn(); }
+    match /config/{document=**}                  { allow read, write: if isSignedIn(); }
+    match /consultTreeBackups/{document=**}     { allow read, write: if isSignedIn(); }
+    match /employees/{document=**}              { allow read, write: if isSignedIn(); }
+    match /feeSchedule/{document=**}            { allow read, write: if isSignedIn(); }
+    match /fixedExpenses/{document=**}          { allow read, write: if isSignedIn(); }
+    match /followups/{document=**}              { allow read, write: if isSignedIn(); }
+    match /incentiveItems/{document=**}         { allow read, write: if isSignedIn(); }
+    match /incentiveRecords/{document=**}       { allow read, write: if isSignedIn(); }
+    match /incomeTaxes/{document=**}            { allow read, write: if isSignedIn(); }
+    match /inventory/{document=**}              { allow read, write: if isSignedIn(); }
+    match /inventoryAudits/{document=**}        { allow read, write: if isSignedIn(); }
+    match /inventoryLogs/{document=**}          { allow read, write: if isSignedIn(); }
+    match /inventoryTransactions/{document=**}  { allow read, write: if isSignedIn(); }
+    match /leaveRequests/{document=**}          { allow read, write: if isSignedIn(); }
+    match /locations/{document=**}              { allow read, write: if isSignedIn(); }
+    match /lunchOT/{document=**}                 { allow read, write: if isSignedIn(); }
+    match /mealRecords/{document=**}            { allow read, write: if isSignedIn(); }
+    match /messages/{document=**}               { allow read, write: if isSignedIn(); }
+    match /monthlyIncentiveInput/{document=**}  { allow read, write: if isSignedIn(); }
+    match /notices/{document=**}                 { allow read, write: if isSignedIn(); }
+    match /patients/{document=**}               { allow read, write: if isSignedIn(); }
+    match /payroll/{document=**}                 { allow read, write: if isSignedIn(); }
+    match /procedures/{document=**}             { allow read, write: if isSignedIn(); }
+    match /purchaseRequests/{document=**}       { allow read, write: if isSignedIn(); }
+    match /receiveHistory/{document=**}         { allow read, write: if isSignedIn(); }
+    match /receivingHistory/{document=**}       { allow read, write: if isSignedIn(); }
+    match /recipes/{document=**}                 { allow read, write: if isSignedIn(); }
+    match /revenue/{document=**}                 { allow read, write: if isSignedIn(); }
+    match /salesDetail/{document=**}            { allow read, write: if isSignedIn(); }
+    match /settings/{document=**}               { allow read, write: if isSignedIn(); }
+    match /treatments/{document=**}             { allow read, write: if isSignedIn(); }
+    match /variableExpenses/{document=**}       { allow read, write: if isSignedIn(); }
+    match /vatTaxes/{document=**}                { allow read, write: if isSignedIn(); }
+    match /vendors/{document=**}                 { allow read, write: if isSignedIn(); }
+    match /visits/{document=**}                  { allow read, write: if isSignedIn(); }
+    match /vouchers/{document=**}                { allow read, write: if isSignedIn(); }
+    match /withholdingTaxes/{document=**}       { allow read, write: if isSignedIn(); }
+  }
+}
