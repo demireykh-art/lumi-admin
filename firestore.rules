@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 로그인한(직원) 사용자만 접근 — 비로그인/공개 접근 전면 차단
+    function signedIn() { return request.auth != null; }
+
+    // 관리자 판별 — settings/bizAdmins.emails 화이트리스트에 포함된 로그인 이메일
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/settings/bizAdmins)
+        && (request.auth.token.email in get(/databases/$(database)/documents/settings/bizAdmins).data.emails);
+    }
+
+    // ── 상담 차팅 v2 (신규 포함) ──
+    match /visits/{id}                        { allow read, write: if signedIn(); }
+    match /visits/{visitId}/followups/{fu}    { allow read, write: if signedIn(); }
+    match /procedures/{id}                    { allow read, write: if signedIn(); }
+    match /vouchers/{id}                       { allow read, write: if signedIn(); }
+    match /inventoryTransactions/{id}         { allow read, write: if signedIn(); }
+    match /recipes/{id}                        { allow read, write: if signedIn(); }
+
+    // ── 재고 ──
+    match /inventory/{id}                      { allow read, write: if signedIn(); }
+    match /inventoryLogs/{id}                  { allow read, write: if signedIn(); }
+    match /inventoryAudits/{id}                { allow read, write: if signedIn(); }
+    match /receiveHistory/{id}                 { allow read, write: if signedIn(); }
+    match /receivingHistory/{id}               { allow read, write: if signedIn(); }
+    match /locations/{id}                      { allow read, write: if signedIn(); }
+    match /vendors/{id}                        { allow read, write: if signedIn(); }
+    match /purchaseRequests/{id}               { allow read, write: if signedIn(); }
+    match /categoryRules/{id}                  { allow read, write: if signedIn(); }
+
+    // ── 인사·근태·급여 ──
+    match /employees/{id}                      { allow read, write: if signedIn(); }
+    match /attendance/{id}                     { allow read, write: if signedIn(); }
+    match /leaveRequests/{id}                  { allow read, write: if signedIn(); }
+    match /lunchOT/{id}                         { allow read, write: if signedIn(); }
+    match /mealRecords/{id}                     { allow read, write: if signedIn(); }
+    match /payroll/{id}                         { allow read, write: if signedIn(); }
+    match /incentiveItems/{id}                 { allow read, write: if signedIn(); }
+    match /incentiveRecords/{id}               { allow read, write: if signedIn(); }
+    match /monthlyIncentiveInput/{id}          { allow read, write: if signedIn(); }
+
+    // ── 급여명세서: 본인 또는 관리자만 조회, 관리자만 쓰기 ──
+    //    ⚠️ signedIn() 만으로 열면 타인 명세서가 노출되므로 반드시 소유자 검사.
+    //    authEmail(업로드 시 저장한 직원 로그인 이메일) == 로그인 토큰 이메일 인 문서만 읽기.
+    match /payslips/{id} {
+      allow read: if signedIn()
+        && (resource.data.authEmail == request.auth.token.email || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ── 매출·비용·세무 ──
+    match /revenue/{id}                        { allow read, write: if signedIn(); }
+    match /salesDetail/{id}                     { allow read, write: if signedIn(); }
+    match /fixedExpenses/{id}                   { allow read, write: if signedIn(); }
+    match /variableExpenses/{id}                { allow read, write: if signedIn(); }
+    match /cards/{id}                           { allow read, write: if signedIn(); }
+    match /incomeTaxes/{id}                     { allow read, write: if signedIn(); }
+    match /vatTaxes/{id}                        { allow read, write: if signedIn(); }
+    match /withholdingTaxes/{id}                { allow read, write: if signedIn(); }
+
+    // ── 공지·상담 트리·설정·관리자 ──
+    match /notices/{id}                         { allow read, write: if signedIn(); }
+    match /consultTreeBackups/{id}              { allow read, write: if signedIn(); }
+    match /settings/{id}                        { allow read, write: if signedIn(); }
+    match /config/{id}                          { allow read, write: if signedIn(); }
+    match /admins/{id}                          { allow read, write: if signedIn(); }
+
+    // ── 고객 채팅 (카카오·네이버) ──
+    match /chatThreads/{id}                     { allow read, write: if signedIn(); }
+    match /chatThreads/{threadId}/messages/{m}  { allow read, write: if signedIn(); }
+
+    // ── 레거시/호환 (기존 규칙 유지) ──
+    match /patients/{id}                        { allow read, write: if signedIn(); }
+    match /channels/{id}                        { allow read, write: if signedIn(); }
+    match /treatments/{id}                       { allow read, write: if signedIn(); }
+    match /feeSchedule/{id}                      { allow read, write: if signedIn(); }
+
+    // 위 화이트리스트에 없는 모든 경로는 기본 거부(명시적으로 차단)
+    match /{document=**}                        { allow read, write: if false; }
+  }
+}
