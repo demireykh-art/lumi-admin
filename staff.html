@@ -476,6 +476,15 @@
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
+                        <button type="button" onclick="showTop('handover')"
+                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <span style="font-size:2.25rem">📚</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1rem;color:#1f2937">직원 교육 · 인계</div>
+                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">부서별(원장·데스크·피부·간호·공통) 교육자료 · 인수인계 메모</div>
+                            </div>
+                            <span style="color:#9ca3af">→</span>
+                        </button>
                         <button type="button" onclick="showTop('charting')" id="topHomeChartingBtn"
                             style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <span style="font-size:2.25rem">📋</span>
@@ -568,6 +577,32 @@
                         </select>
                     </div>
                     <div id="noticeList" style="margin-top:.6rem"></div>
+                </div>
+            </div>
+
+            <!-- === 직원 교육 · 인계 (부서별 메모 보드, Firestore 'handovers' 실시간 동기화) === -->
+            <div class="tab-content" id="tab-handover">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTopHome()">← 홈</button>
+                        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📚 직원 교육 · 인계</span>
+                    </div>
+                    <!-- 부서 탭 -->
+                    <div id="handoverDeptButtons" style="margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap"></div>
+                    <!-- 새 메모 작성 -->
+                    <div style="margin-top:.7rem;padding:.65rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px">
+                        <input type="text" id="handoverTitleInput" placeholder="제목 (선택)"
+                            style="display:block;width:100%;padding:.45rem .6rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;margin-bottom:.4rem">
+                        <textarea id="handoverBodyInput" placeholder="메모 내용 (메모장처럼 붙여넣기 · 여러 줄 가능)" rows="3"
+                            oninput="this.style.height='auto';this.style.height=(this.scrollHeight)+'px'"
+                            style="display:block;width:100%;padding:.5rem .6rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;resize:vertical;min-height:64px;font-family:inherit;line-height:1.45;margin-bottom:.4rem"></textarea>
+                        <input type="url" id="handoverNotionInput" placeholder="🔗 노션 링크 (긴 내용·이미지, 선택)"
+                            style="display:block;width:100%;padding:.45rem .6rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;margin-bottom:.4rem">
+                        <div style="text-align:right">
+                            <button type="button" onclick="addHandover()" style="display:inline-block;padding:.45rem 1.1rem;font-size:.85rem;font-weight:700;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer">+ 추가</button>
+                        </div>
+                    </div>
+                    <div id="handoverList" style="margin-top:.7rem;display:flex;flex-direction:column;gap:.5rem"></div>
                 </div>
             </div>
 
@@ -2727,6 +2762,8 @@
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
             // 공지 실시간 동기화 시작 (전 기기 즉시 반영)
             _migrateLocalNoticesToFirestore().finally(()=>_initNoticesRealtime());
+            // 직원 교육·인계 실시간 동기화
+            _initHandoverRealtime();
             // 상담 트리·마취연고 실시간 동기화
             _migrateConsultToFirestore().finally(()=>_initConsultRealtime());
             // 거래처(vendors) 실시간 동기화
@@ -2820,6 +2857,8 @@
             clearAutoLogoutTimer();
             if(_noticeUnsub){ try{_noticeUnsub();}catch(_){}
                 _noticeUnsub=null; }
+            if(_handoverUnsub){ try{_handoverUnsub();}catch(_){}
+                _handoverUnsub=null; }
             if(_consultTreeUnsub){ try{_consultTreeUnsub();}catch(_){}
                 _consultTreeUnsub=null; }
             if(_consultAnesthUnsub){ try{_consultAnesthUnsub();}catch(_){}
@@ -5475,6 +5514,8 @@
                 const di=document.getElementById('noticeDateInput');
                 if(di) di.value=_todayYmd();
                 renderNoticeList();
+            }else if(view==='handover'){
+                _openHandover();
             }else if(view==='charting'){
                 renderChartingList();
             }else if(view==='chartingEdit'){
@@ -6860,6 +6901,181 @@
                 return;
             }
             box.innerHTML=today.map(n=>_noticeRowHtml(n,true)).join('');
+        }
+
+        // ================================================================
+        //  📚 직원 교육 · 인계 (Firestore 'handovers' 컬렉션 — 전 기기 실시간 동기화)
+        //   · 부서별(원장/데스크/피부/간호/공통) 메모 보드
+        //   · 텍스트 메모(간단 편집) + 노션 링크(긴 내용·이미지)
+        //   · 로그인 계정에 맞는 부서를 기본 선택, 부서 탭으로 자유 열람
+        // ================================================================
+        const HANDOVER_DEPTS=[
+            {key:'doctor',  label:'원장',   icon:'🩺'},
+            {key:'desk',    label:'데스크', icon:'🖥️'},
+            {key:'skin',    label:'피부',   icon:'✨'},
+            {key:'nursing', label:'간호',   icon:'💉'},
+            {key:'common',  label:'공통',   icon:'📎'}
+        ];
+        const HANDOVER_LS_KEY='staff_handovers_v1';
+        let _handovers=[];
+        let _handoverUnsub=null;
+        let _handoverDept='common';   // 현재 선택된 부서
+        let _handoverEditId=null;     // 인라인 편집 중인 메모 id
+        try{ _handovers=JSON.parse(localStorage.getItem(HANDOVER_LS_KEY))||[]; }catch(_){ _handovers=[]; }
+
+        function _initHandoverRealtime(){
+            if(_handoverUnsub) return; // 이미 구독 중
+            try{
+                _handoverUnsub=db.collection('handovers').onSnapshot(snap=>{
+                    _handovers=snap.docs.map(d=>({id:d.id, ...d.data()}));
+                    try{ localStorage.setItem(HANDOVER_LS_KEY,JSON.stringify(_handovers)); }catch(_){}
+                    if(document.getElementById('tab-handover')?.classList.contains('active')) renderHandoverList();
+                }, err=>console.error('handovers 스냅샷 실패:', err));
+            }catch(e){ console.error('handovers 실시간 구독 초기화 실패:',e); }
+        }
+        // 로그인 계정 → 기본 부서 추정
+        //   공용계정: 이메일 local-part (nurse/desk/skin/doctor/director …)
+        //   개인계정: employees.role(직급) 매핑, 없으면 chartRole 참고
+        function _myHandoverDept(){
+            try{
+                const local=String(currentUser?.email||'').toLowerCase().split('@')[0];
+                const emailMap={nurse:'nursing', nursing:'nursing', desk:'desk', reception:'desk',
+                                skin:'skin', esthetic:'skin', doctor:'doctor', director:'doctor', wonjang:'doctor'};
+                if(emailMap[local]) return emailMap[local];
+            }catch(_){}
+            const roleMap={doctor:'doctor', esthetician:'skin', nurse:'nursing',
+                           coordinator:'desk', manager:'desk', marketing:'desk'};
+            const r=currentUser?.role;
+            if(roleMap[r]) return roleMap[r];
+            // 차팅 역할 참고 (consultant=실장→데스크, staff→간호 기본)
+            const cr=currentUser?.chartRole;
+            if(cr==='doctor') return 'doctor';
+            if(cr==='consultant') return 'desk';
+            return 'common';
+        }
+        function _openHandover(){
+            _handoverEditId=null;
+            _handoverDept=_myHandoverDept();
+            renderHandoverDeptButtons();
+            renderHandoverList();
+        }
+        function selectHandoverDept(key){
+            if(!HANDOVER_DEPTS.some(d=>d.key===key)) return;
+            _handoverDept=key;
+            _handoverEditId=null;
+            renderHandoverDeptButtons();
+            renderHandoverList();
+        }
+        function renderHandoverDeptButtons(){
+            const box=document.getElementById('handoverDeptButtons');
+            if(!box) return;
+            box.innerHTML=HANDOVER_DEPTS.map(d=>{
+                const active=(_handoverDept===d.key);
+                const cnt=_handovers.filter(h=>h.dept===d.key).length;
+                return `<button type="button" onclick="selectHandoverDept('${d.key}')"
+                    style="display:inline-flex;align-items:center;gap:.3rem;padding:.4rem .7rem;font-size:.82rem;font-weight:600;border-radius:999px;cursor:pointer;border:1px solid ${active?'#2563eb':'#d1d5db'};background:${active?'#2563eb':'#fff'};color:${active?'#fff':'#374151'}">
+                    <span>${d.icon}</span>${d.label}<span style="font-size:.7rem;opacity:.75">${cnt}</span>
+                </button>`;
+            }).join('');
+        }
+        function _handoverDeptLabel(key){
+            const d=HANDOVER_DEPTS.find(x=>x.key===key); return d?d.label:key;
+        }
+        function _handoverFmtTs(iso){
+            if(!iso) return '';
+            try{
+                const d=new Date(iso);
+                return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')
+                    +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+            }catch(_){ return ''; }
+        }
+        async function addHandover(){
+            const titleEl=document.getElementById('handoverTitleInput');
+            const bodyEl=document.getElementById('handoverBodyInput');
+            const notionEl=document.getElementById('handoverNotionInput');
+            const title=(titleEl?.value||'').trim();
+            const body=(bodyEl?.value||'').trim();
+            let notionUrl=(notionEl?.value||'').trim();
+            if(!body && !title && !notionUrl){ alert('메모 내용 또는 노션 링크를 입력하세요.'); bodyEl?.focus(); return; }
+            if(notionUrl && !/^https?:\/\//i.test(notionUrl)) notionUrl='https://'+notionUrl;
+            try{
+                await db.collection('handovers').add({
+                    dept:_handoverDept, title, body, notionUrl,
+                    createdAt:new Date().toISOString(),
+                    updatedAt:new Date().toISOString(),
+                    authorName:currentUser?.name||currentUser?.id||'staff'
+                });
+                if(titleEl) titleEl.value='';
+                if(bodyEl){ bodyEl.value=''; bodyEl.style.height='auto'; }
+                if(notionEl) notionEl.value='';
+                bodyEl?.focus();
+            }catch(e){ alert('저장 실패: '+(e?.message||e)); }
+        }
+        function handoverStartEdit(id){ _handoverEditId=id; renderHandoverList(); }
+        function handoverCancelEdit(){ _handoverEditId=null; renderHandoverList(); }
+        async function handoverSaveEdit(id){
+            const title=(document.getElementById('handoverEditTitle_'+id)?.value||'').trim();
+            const body=(document.getElementById('handoverEditBody_'+id)?.value||'').trim();
+            let notionUrl=(document.getElementById('handoverEditNotion_'+id)?.value||'').trim();
+            if(notionUrl && !/^https?:\/\//i.test(notionUrl)) notionUrl='https://'+notionUrl;
+            try{
+                await db.collection('handovers').doc(id).update({
+                    title, body, notionUrl, updatedAt:new Date().toISOString(),
+                    updatedBy:currentUser?.name||currentUser?.id||'staff'
+                });
+                _handoverEditId=null;
+                renderHandoverList();
+            }catch(e){ alert('수정 실패: '+(e?.message||e)); }
+        }
+        async function deleteHandover(id){
+            if(!confirm('이 메모를 삭제하시겠습니까?')) return;
+            try{ await db.collection('handovers').doc(id).delete(); }
+            catch(e){ alert('삭제 실패: '+(e?.message||e)); }
+        }
+        function renderHandoverList(){
+            const wrap=document.getElementById('handoverList');
+            if(!wrap) return;
+            const list=_handovers.filter(h=>h.dept===_handoverDept)
+                .sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+            if(!list.length){
+                wrap.innerHTML=`<div style="padding:1.25rem;text-align:center;color:#9ca3af;font-size:.85rem">
+                    ${_handoverDeptLabel(_handoverDept)} 부서에 등록된 교육·인계 메모가 없습니다.</div>`;
+                return;
+            }
+            wrap.innerHTML=list.map(h=>_handoverCardHtml(h)).join('');
+        }
+        function _handoverCardHtml(h){
+            if(_handoverEditId===h.id){
+                return `<div style="border:1px solid #93c5fd;background:#eff6ff;border-radius:10px;padding:.6rem">
+                    <input type="text" id="handoverEditTitle_${h.id}" value="${_esc(h.title||'')}" placeholder="제목 (선택)"
+                        style="display:block;width:100%;padding:.4rem .55rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;margin-bottom:.4rem">
+                    <textarea id="handoverEditBody_${h.id}" rows="4"
+                        oninput="this.style.height='auto';this.style.height=(this.scrollHeight)+'px'"
+                        style="display:block;width:100%;padding:.5rem .6rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;resize:vertical;min-height:64px;font-family:inherit;line-height:1.45;margin-bottom:.4rem">${_esc(h.body||'')}</textarea>
+                    <input type="url" id="handoverEditNotion_${h.id}" value="${_esc(h.notionUrl||'')}" placeholder="🔗 노션 링크 (선택)"
+                        style="display:block;width:100%;padding:.4rem .55rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;margin-bottom:.4rem">
+                    <div style="display:flex;gap:.35rem;justify-content:flex-end">
+                        <button onclick="handoverCancelEdit()" style="padding:.35rem .8rem;font-size:.8rem;background:#fff;color:#4b5563;border:1px solid #d1d5db;border-radius:6px;cursor:pointer">취소</button>
+                        <button onclick="handoverSaveEdit('${h.id}')" style="padding:.35rem .9rem;font-size:.8rem;font-weight:700;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer">저장</button>
+                    </div>
+                </div>`;
+            }
+            const titleHtml=h.title?`<div style="font-weight:700;font-size:.9rem;color:#111827;margin-bottom:.25rem;word-break:break-word">${_esc(h.title)}</div>`:'';
+            const bodyHtml=h.body?`<div style="font-size:.86rem;color:#374151;word-break:break-word;white-space:pre-wrap;line-height:1.5">${_esc(h.body)}</div>`:'';
+            const notionHtml=h.notionUrl?`<a href="${_esc(h.notionUrl)}" target="_blank" rel="noopener"
+                style="display:inline-flex;align-items:center;gap:.3rem;margin-top:.45rem;padding:.3rem .6rem;font-size:.78rem;font-weight:600;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;text-decoration:none">🔗 노션에서 자세히 보기 ↗</a>`:'';
+            const who=h.authorName?_esc(h.authorName):'';
+            const when=_handoverFmtTs(h.updatedAt||h.createdAt);
+            const meta=(who||when)?`<div style="font-size:.68rem;color:#9ca3af;margin-top:.5rem">${who}${who&&when?' · ':''}${when}</div>`:'';
+            return `<div style="border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:.65rem .75rem;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                <div style="display:flex;align-items:flex-start;gap:.5rem">
+                    <div style="flex:1;min-width:0">${titleHtml}${bodyHtml}${notionHtml}${meta}</div>
+                    <div style="display:flex;flex-direction:column;gap:.2rem;flex-shrink:0">
+                        <button onclick="handoverStartEdit('${h.id}')" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">수정</button>
+                        <button onclick="deleteHandover('${h.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">삭제</button>
+                    </div>
+                </div>
+            </div>`;
         }
 
         // ================================================================
