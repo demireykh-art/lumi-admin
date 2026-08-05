@@ -3238,14 +3238,19 @@
             myPayslips=[];
             // 공용/재고 전용 계정은 조회하지 않음
             if(!currentUser||!currentUser.id||currentUser.role==='shared'||currentUser.id===SHARED_ACCOUNT_ID) return;
+            // 로그인 이메일(=request.auth.token.email). Firestore 규칙은 payslips.authEmail 과 이 값을
+            // 비교해 격리한다. "규칙은 필터가 아니다" — 쿼리 필터도 반드시 authEmail 이어야 한다.
+            // (employeeId 로 걸면 규칙 조건과 달라 본인 것조차 permission-denied 로 전체 거부됨)
+            const myEmail=((auth&&auth.currentUser&&auth.currentUser.email)||currentUser.email||'').toLowerCase();
+            if(!myEmail) return;
             try{
-                // 반드시 본인 employeeId 로만 조회 → 타인 명세서 노출 원천 차단
-                const snapshot=await db.collection('payslips').where('employeeId','==',currentUser.id).get();
+                // 반드시 본인 authEmail 로만 조회(규칙과 동일 조건) → 타인 명세서 노출 원천 차단
+                const snapshot=await db.collection('payslips').where('authEmail','==',myEmail).get();
                 const today=getToday();
                 myPayslips=snapshot.docs
                     .map(d=>({id:d.id,...d.data()}))
                     // 방어적 재확인: 본인 것만 + 노출 시작일(deliverAt) 도래분만
-                    .filter(p=>p.employeeId===currentUser.id)
+                    .filter(p=>(p.authEmail||'').toLowerCase()===myEmail)
                     .filter(p=>!p.deliverAt||p.deliverAt<=today)
                     .sort((a,b)=>(b.ym||'').localeCompare(a.ym||''));
             }catch(e){console.error('급여명세서 로드 오류:',e);myPayslips=[];}
@@ -3273,8 +3278,9 @@
 
         function openMyPayslip(docId){
             const p=myPayslips.find(x=>x.id===docId);
-            // 재확인: 메모리에 없거나 타인 것이면 차단
-            if(!p||p.employeeId!==currentUser.id){ alert('명세서를 열 수 없습니다.'); return; }
+            // 재확인: 메모리에 없거나 타인 것이면 차단(authEmail 기준 — 규칙/쿼리와 동일)
+            const myEmail=((auth&&auth.currentUser&&auth.currentUser.email)||(currentUser&&currentUser.email)||'').toLowerCase();
+            if(!p||(p.authEmail||'').toLowerCase()!==myEmail){ alert('명세서를 열 수 없습니다.'); return; }
             try{
                 const arr=(p.dataUrl||'').split(',');
                 const mime=(arr[0].match(/:(.*?);/)||[])[1]||'application/pdf';
