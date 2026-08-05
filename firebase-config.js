@@ -403,6 +403,10 @@ function initNavigation(){
             if(tab.dataset.sub==='category-settings'&&typeof renderCategorySettings==='function'){
                 renderCategorySettings();
             }
+            // 인건비 탭 진입 시 급여명세서 목록 렌더링
+            if(tab.dataset.sub==='payroll'&&typeof renderPayslipList==='function'){
+                renderPayslipList();
+            }
         });
     });
 }

@@ -424,6 +424,11 @@
                     <div class="info-row"><span class="info-label">근속기간</span><span class="info-value" id="infoTenure">-</span></div>
                 </div>
                 <div class="card">
+                    <div class="card-title">💰 급여명세서</div>
+                    <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:.75rem">매월 5일에 전월 급여명세서가 전달됩니다. 본인 명세서만 조회됩니다.</p>
+                    <div id="payslipList"><div style="text-align:center;color:var(--text-muted);padding:1rem;font-size:.85rem">불러오는 중…</div></div>
+                </div>
+                <div class="card">
                     <div class="card-title">🔑 비밀번호 변경</div>
                     <p style="font-size:.85rem;color:var(--text-secondary);margin-bottom:1rem">본인 비밀번호를 직접 변경합니다.</p>
                     <button class="btn btn-primary" onclick="openChangePassword()">비밀번호 변경</button>
@@ -3044,7 +3049,8 @@
                     loadLeaveRequests(),
                     loadTeamLeave(),
                     loadPayrollData(),
-                    loadSalesData()
+                    loadSalesData(),
+                    loadPayslips()
                 ]);
                 renderAll();
             }catch(e){console.error('데이터 로드 오류:',e);}
@@ -3121,6 +3127,66 @@
                 const snapshot=await db.collection('payroll').get();
                 payrollData=snapshot.docs.map(d=>({id:d.id,...d.data()}));
             }catch(e){console.error('급여 로드 오류:',e);payrollData=[];}
+        }
+
+        // ═══ 급여명세서 (본인 것만) ═══
+        let myPayslips=[];
+        async function loadPayslips(){
+            myPayslips=[];
+            // 공용/재고 전용 계정은 조회하지 않음
+            if(!currentUser||!currentUser.id||currentUser.role==='shared'||currentUser.id===SHARED_ACCOUNT_ID) return;
+            try{
+                // 반드시 본인 employeeId 로만 조회 → 타인 명세서 노출 원천 차단
+                const snapshot=await db.collection('payslips').where('employeeId','==',currentUser.id).get();
+                const today=getToday();
+                myPayslips=snapshot.docs
+                    .map(d=>({id:d.id,...d.data()}))
+                    // 방어적 재확인: 본인 것만 + 노출 시작일(deliverAt) 도래분만
+                    .filter(p=>p.employeeId===currentUser.id)
+                    .filter(p=>!p.deliverAt||p.deliverAt<=today)
+                    .sort((a,b)=>(b.ym||'').localeCompare(a.ym||''));
+            }catch(e){console.error('급여명세서 로드 오류:',e);myPayslips=[];}
+        }
+
+        function renderPayslips(){
+            const el=document.getElementById('payslipList');
+            if(!el) return;
+            if(!myPayslips||myPayslips.length===0){
+                el.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1rem;font-size:.85rem">아직 전달된 급여명세서가 없습니다.</div>';
+                return;
+            }
+            el.innerHTML=myPayslips.map(p=>{
+                const [y,m]=(p.ym||'').split('-');
+                const label=y&&m?`${y}년 ${parseInt(m,10)}월분`:(p.ym||'급여명세서');
+                return `<div class="list-item" style="cursor:pointer" onclick="openMyPayslip('${p.id}')">
+                    <div>
+                        <div class="list-item-title">${label}</div>
+                        <div class="list-item-sub">급여명세서 PDF</div>
+                    </div>
+                    <span class="badge badge-green">📄 열기</span>
+                </div>`;
+            }).join('');
+        }
+
+        function openMyPayslip(docId){
+            const p=myPayslips.find(x=>x.id===docId);
+            // 재확인: 메모리에 없거나 타인 것이면 차단
+            if(!p||p.employeeId!==currentUser.id){ alert('명세서를 열 수 없습니다.'); return; }
+            try{
+                const arr=(p.dataUrl||'').split(',');
+                const mime=(arr[0].match(/:(.*?);/)||[])[1]||'application/pdf';
+                const bstr=atob(arr[1]);
+                let n=bstr.length; const u8=new Uint8Array(n);
+                while(n--) u8[n]=bstr.charCodeAt(n);
+                const blob=new Blob([u8],{type:mime});
+                const url=URL.createObjectURL(blob);
+                const w=window.open(url,'_blank');
+                if(!w){
+                    const a=document.createElement('a');
+                    a.href=url; a.download=p.fileName||'급여명세서.pdf'; a.click();
+                }
+                setTimeout(()=>URL.revokeObjectURL(url),60000);
+            }catch(e){ alert('PDF 열기 실패: '+(e.message||e)); }
         }
         
         // Render
@@ -3668,6 +3734,8 @@
             }else{
                 bioStatus.textContent='미등록';
             }
+
+            renderPayslips();
         }
         
         function removeBiometric(){

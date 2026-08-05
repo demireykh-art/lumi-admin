@@ -15,6 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -162,6 +163,23 @@
                     </div>
                     <div class="section-header"><div class="section-title">월별 급여 내역 (노무사 급여대장)</div><div><select class="form-select" id="payrollMonth" onchange="renderPayroll()" style="width:auto"><option value="">전체</option></select></div></div>
                     <div class="table-container"><table><thead><tr><th>지급월</th><th>직원명</th><th class="text-right">OT수당</th><th class="text-right">인센티브</th><th class="text-right">실수령액</th><th>관리</th></tr></thead><tbody id="payrollTable"></tbody></table></div>
+
+                    <!-- ===== 급여명세서 (개인별 PDF) 업로드 ===== -->
+                    <div class="section-header" style="margin-top:32px"><div class="section-title">💰 급여명세서 배포 (개인별 PDF)</div>
+                        <div><label class="form-label" style="display:inline;margin-right:6px">귀속월</label><input type="month" class="form-input" id="payslipMonth" style="width:auto;display:inline-block" onchange="renderPayslipList()"></div>
+                    </div>
+                    <div style="background:#f0f4ff;border:1px solid #d6e0ff;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:.82rem;color:#334">
+                        직원 이름으로 된 PDF들을 하나의 <b>ZIP</b>으로 올리면, 각 직원의 Staff App(루미앱) &gt; 내정보 &gt; 급여명세서에 <b>본인 것만</b> 노출됩니다.
+                        <br>파일명은 직원 이름과 같아야 매칭됩니다. (예: <b>윤소영.pdf</b>) · 위에서 선택한 <b>귀속월</b>의 명세서로 저장되며, 다음 달 <b>5일</b>부터 직원에게 노출됩니다.
+                    </div>
+                    <div class="upload-area" onclick="document.getElementById('payslipZip').click()" style="margin-bottom:16px">
+                        <div class="upload-icon">🗜️</div>
+                        <div class="upload-text">급여명세서 ZIP 파일 업로드</div>
+                        <div class="upload-hint">ZIP 안에 직원 이름별 PDF (예: 윤소영.pdf, 김민정.pdf …)</div>
+                        <input type="file" id="payslipZip" accept=".zip" style="display:none" onchange="handlePayslipZip(this)">
+                    </div>
+                    <div id="payslipUploadResult" style="margin-bottom:16px"></div>
+                    <div class="table-container"><table><thead><tr><th>귀속월</th><th>직원명</th><th>파일명</th><th class="text-right">크기</th><th>노출 시작일</th><th>상태</th><th>관리</th></tr></thead><tbody id="payslipTable"></tbody></table></div>
                 </div>
                 <div class="sub-content" id="sub-tax">
                     <div class="expense-summary">

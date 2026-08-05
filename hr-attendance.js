@@ -1482,4 +1482,214 @@ async function cancelLeave(id){
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+// 급여명세서 배포 (개인별 PDF ZIP 업로드 → Firestore payslips)
+//   - ZIP 안의 "직원이름.pdf" 를 파싱하여 직원별로 저장
+//   - 각 직원은 Staff App(내정보 > 급여명세서)에서 "본인 것만" 조회
+//   - 귀속월(ym)의 명세서는 다음 달 5일부터 직원에게 노출(deliverAt)
+// ═══════════════════════════════════════════════════════════
+
+// 귀속월(YYYY-MM) → 노출 시작일(다음 달 5일, YYYY-MM-DD)
+function _payslipDeliverDate(ym){
+    const [y,m]=ym.split('-').map(Number);
+    // 다음 달
+    let ny=y, nm=m+1;
+    if(nm>12){nm=1;ny++;}
+    return `${ny}-${String(nm).padStart(2,'0')}-05`;
+}
+
+// 기본 귀속월 = 지난달 (오늘이 8/5 이면 07)
+function _defaultPayslipYM(){
+    const now=new Date();
+    let y=now.getFullYear(), m=now.getMonth(); // getMonth()=0-based → 이미 "지난달"
+    if(m<1){m=12;y--;}else{/* m 은 1~12 중 지난달 */}
+    return `${y}-${String(m).padStart(2,'0')}`;
+}
+
+// 파일(Blob) → dataURL(base64)
+function _fileToDataUrl(blob){
+    return new Promise((resolve,reject)=>{
+        const r=new FileReader();
+        r.onload=()=>resolve(r.result);
+        r.onerror=reject;
+        r.readAsDataURL(blob);
+    });
+}
+
+// 파일명(확장자·경로 제거) → 직원 매칭
+function _matchEmployeeByFileName(baseName){
+    const clean=baseName.trim();
+    // 1) 이름 정확 일치
+    let emp=employees.find(e=>e.name&&e.name.trim()===clean);
+    if(emp) return emp;
+    // 2) matchName 일치
+    emp=employees.find(e=>e.matchName&&e.matchName.trim()===clean);
+    if(emp) return emp;
+    // 3) 공백 제거 후 일치
+    const nospace=clean.replace(/\s/g,'');
+    emp=employees.find(e=>e.name&&e.name.replace(/\s/g,'')===nospace);
+    return emp||null;
+}
+
+async function handlePayslipZip(input){
+    const file=input&&input.files&&input.files[0];
+    if(!file) return;
+    const resultEl=document.getElementById('payslipUploadResult');
+    const ymInput=document.getElementById('payslipMonth');
+    const ym=(ymInput&&ymInput.value)||_defaultPayslipYM();
+    if(ymInput&&!ymInput.value) ymInput.value=ym;
+
+    if(typeof JSZip==='undefined'){
+        alert('ZIP 라이브러리(JSZip)를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.');
+        input.value=''; return;
+    }
+    if(!employees||employees.length===0){
+        try{ await loadEmployees(); }catch(_){}
+    }
+
+    const deliverAt=_payslipDeliverDate(ym);
+    resultEl.innerHTML='<div style="color:#555;font-size:.85rem">📦 ZIP 파일을 읽는 중…</div>';
+
+    try{
+        const zip=await JSZip.loadAsync(file);
+        const pdfEntries=[];
+        zip.forEach((path,entry)=>{
+            if(entry.dir) return;
+            const lower=path.toLowerCase();
+            if(!lower.endsWith('.pdf')) return;
+            // __MACOSX 등 시스템 경로 제외
+            if(path.split('/').some(p=>p.startsWith('.')||p==='__MACOSX')) return;
+            pdfEntries.push({path,entry});
+        });
+
+        if(pdfEntries.length===0){
+            resultEl.innerHTML='<div style="color:#9b1c1c;font-size:.85rem">ZIP 안에 PDF 파일이 없습니다.</div>';
+            input.value=''; return;
+        }
+
+        const matched=[], unmatched=[];
+        let done=0;
+        for(const {path,entry} of pdfEntries){
+            done++;
+            resultEl.innerHTML=`<div style="color:#555;font-size:.85rem">⏳ 처리 중… (${done}/${pdfEntries.length})</div>`;
+            // 파일명(경로/확장자 제거)
+            const fname=path.split('/').pop();
+            const base=fname.replace(/\.pdf$/i,'');
+            const emp=_matchEmployeeByFileName(base);
+            if(!emp){ unmatched.push(fname); continue; }
+            const blob=await entry.async('blob');
+            const dataUrl=await _fileToDataUrl(blob);
+            const size=blob.size;
+            const docId=`${ym}__${emp.id}`;
+            await db.collection('payslips').doc(docId).set({
+                ym,
+                employeeId:emp.id,
+                name:emp.name,
+                fileName:fname,
+                dataUrl,
+                size,
+                deliverAt,
+                uploadedAt:firebase.firestore.FieldValue.serverTimestamp(),
+                uploadedBy:(currentAdmin&&(currentAdmin.name||currentAdmin.email))||'admin'
+            },{merge:true});
+            matched.push({name:emp.name,fname});
+        }
+
+        let html='';
+        html+=`<div style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;padding:10px 14px;font-size:.85rem;color:#1b5e20;margin-bottom:8px">`;
+        html+=`✅ <b>${matched.length}명</b> 급여명세서 저장 완료 (귀속월 ${ym} · ${deliverAt}부터 노출)`;
+        if(matched.length) html+=`<div style="margin-top:6px;color:#33691e">${matched.map(m=>m.name).join(', ')}</div>`;
+        html+=`</div>`;
+        if(unmatched.length){
+            html+=`<div style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:8px;padding:10px 14px;font-size:.85rem;color:#e65100">`;
+            html+=`⚠️ 매칭 실패 <b>${unmatched.length}건</b> — 파일명이 직원 이름과 다릅니다:<br>${unmatched.join(', ')}`;
+            html+=`<div style="margin-top:4px;color:#bf360c;font-size:.78rem">직원관리에서 이름/매칭이름을 확인하거나 파일명을 수정 후 다시 업로드하세요.</div></div>`;
+        }
+        resultEl.innerHTML=html;
+        renderPayslipList();
+    }catch(e){
+        console.error('급여명세서 업로드 오류:',e);
+        resultEl.innerHTML=`<div style="color:#9b1c1c;font-size:.85rem">업로드 실패: ${e.message||e}</div>`;
+    }finally{
+        input.value='';
+    }
+}
+
+async function renderPayslipList(){
+    const tbody=document.getElementById('payslipTable');
+    if(!tbody) return;
+    const ymInput=document.getElementById('payslipMonth');
+    if(ymInput&&!ymInput.value) ymInput.value=_defaultPayslipYM();
+    const ym=(ymInput&&ymInput.value)||_defaultPayslipYM();
+    tbody.innerHTML='<tr><td colspan="7" class="text-center" style="color:#888">불러오는 중…</td></tr>';
+    try{
+        const snap=await db.collection('payslips').where('ym','==',ym).get();
+        const rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+        rows.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+        const today=new Date().toISOString().split('T')[0];
+        if(rows.length===0){
+            tbody.innerHTML='<tr><td colspan="7" class="text-center" style="color:#aaa">해당 귀속월에 업로드된 급여명세서가 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML=rows.map(r=>{
+            const kb=r.size?Math.round(r.size/1024)+' KB':'-';
+            const visible=r.deliverAt&&r.deliverAt<=today;
+            const status=visible
+                ?'<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:4px;font-size:.78rem">노출중</span>'
+                :`<span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:4px;font-size:.78rem">대기 (${r.deliverAt||'-'})</span>`;
+            return `<tr>
+                <td>${r.ym||'-'}</td>
+                <td><strong>${r.name||'-'}</strong></td>
+                <td style="font-size:.85rem;color:#555">${r.fileName||'-'}</td>
+                <td class="text-right">${kb}</td>
+                <td>${r.deliverAt||'-'}</td>
+                <td>${status}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="viewPayslip('${r.id}')">보기</button>
+                    <button class="btn btn-sm btn-danger" onclick="deletePayslip('${r.id}','${(r.name||'').replace(/'/g,"")}')">삭제</button>
+                </td>
+            </tr>`;
+        }).join('');
+    }catch(e){
+        console.error('급여명세서 목록 오류:',e);
+        tbody.innerHTML=`<tr><td colspan="7" class="text-center" style="color:#9b1c1c">불러오기 실패: ${e.message||e}</td></tr>`;
+    }
+}
+
+async function viewPayslip(docId){
+    try{
+        const doc=await db.collection('payslips').doc(docId).get();
+        if(!doc.exists){ alert('명세서를 찾을 수 없습니다.'); return; }
+        const data=doc.data();
+        _openDataUrlPdf(data.dataUrl, data.fileName||'payslip.pdf');
+    }catch(e){ alert('열기 실패: '+(e.message||e)); }
+}
+
+// dataURL(base64 PDF) → Blob → 새 창으로 열기
+function _openDataUrlPdf(dataUrl, fileName){
+    try{
+        const arr=dataUrl.split(',');
+        const mime=(arr[0].match(/:(.*?);/)||[])[1]||'application/pdf';
+        const bstr=atob(arr[1]);
+        let n=bstr.length; const u8=new Uint8Array(n);
+        while(n--) u8[n]=bstr.charCodeAt(n);
+        const blob=new Blob([u8],{type:mime});
+        const url=URL.createObjectURL(blob);
+        const w=window.open(url,'_blank');
+        if(!w){ // 팝업 차단 시 다운로드
+            const a=document.createElement('a');
+            a.href=url; a.download=fileName; a.click();
+        }
+        setTimeout(()=>URL.revokeObjectURL(url), 60000);
+    }catch(e){ alert('PDF 열기 실패: '+(e.message||e)); }
+}
+
+async function deletePayslip(docId, name){
+    if(!confirm(`${name||''} 급여명세서를 삭제하시겠습니까?`)) return;
+    try{
+        await db.collection('payslips').doc(docId).delete();
+        renderPayslipList();
+    }catch(e){ alert('삭제 실패: '+(e.message||e)); }
+}
+
 checkAuth();
