@@ -116,6 +116,126 @@ exports.resetUserPassword = onCall(
   }
 );
 
+/**
+ * updateUserEmail (HTTPS Callable):
+ *   직원의 로그인 이메일(Firebase Auth email)을 변경한다.
+ *   예) lee@lumi.local → kilno2@naver.com (본인 실제 이메일로 로그인)
+ *   - 호출자가 settings/bizAdmins 화이트리스트의 관리자인지 검증
+ *   - Auth 사용자 email 변경 (비밀번호는 그대로 유지)
+ *   - settings/employees(개인) · settings/staff(공용) 화이트리스트 갱신
+ *   - employees 문서(email==old)의 email 필드 갱신
+ *   - payslips 문서(authEmail==old)의 authEmail 갱신 → 본인 급여명세서 조회 유지
+ */
+exports.updateUserEmail = onCall(
+  {region: 'asia-northeast3', cors: true},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
+    }
+    const callerEmail = String(request.auth.token.email || '').toLowerCase();
+    if (!callerEmail) {
+      throw new HttpsError('permission-denied', '이메일이 확인되지 않습니다.');
+    }
+    const adminsDoc = await admin.firestore().collection('settings').doc('bizAdmins').get();
+    const allowed = (adminsDoc.exists && Array.isArray(adminsDoc.data().emails))
+      ? adminsDoc.data().emails.map((e) => String(e).toLowerCase())
+      : [];
+    if (!allowed.includes(callerEmail)) {
+      logger.warn(`Unauthorized email change attempt by ${callerEmail}`);
+      throw new HttpsError('permission-denied', '경영관리자 권한이 없습니다.');
+    }
+
+    const oldEmail = String((request.data && request.data.oldEmail) || '').trim().toLowerCase();
+    const newEmail = String((request.data && request.data.newEmail) || '').trim().toLowerCase();
+    if (!oldEmail || !newEmail) {
+      throw new HttpsError('invalid-argument', '기존/신규 이메일이 모두 필요합니다.');
+    }
+    if (oldEmail === newEmail) {
+      throw new HttpsError('failed-precondition', '기존 이메일과 신규 이메일이 동일합니다.');
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) {
+      throw new HttpsError('invalid-argument', '신규 이메일 형식이 올바르지 않습니다.');
+    }
+
+    // 신규 이메일이 이미 다른 Auth 계정에서 사용 중이면 거부
+    try {
+      const existing = await admin.auth().getUserByEmail(newEmail);
+      if (existing) {
+        throw new HttpsError('already-exists', `${newEmail} 은 이미 사용 중인 계정입니다.`);
+      }
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      // auth/user-not-found → 사용 가능. 그 외는 통과시키되 아래 update에서 처리.
+    }
+
+    // 대상 Auth 계정 조회 + 이메일 변경
+    let user;
+    try {
+      user = await admin.auth().getUserByEmail(oldEmail);
+    } catch (e) {
+      throw new HttpsError('not-found', `Firebase Auth에 ${oldEmail} 계정이 없습니다.`);
+    }
+    try {
+      await admin.auth().updateUser(user.uid, {email: newEmail});
+    } catch (e) {
+      logger.error('updateUser email failed:', e);
+      throw new HttpsError('internal', '이메일 변경 실패: ' + (e.message || e.code || String(e)));
+    }
+
+    const dbx = admin.firestore();
+    const FieldValue = admin.firestore.FieldValue;
+
+    // 화이트리스트 갱신 (개인/공용 모두: old 제거, new 추가)
+    for (const docId of ['employees', 'staff']) {
+      try {
+        await dbx.collection('settings').doc(docId).set(
+          {emails: FieldValue.arrayRemove(oldEmail)}, {merge: true});
+        // 기존에 old가 있었던 화이트리스트에만 new 추가 (개인계정이면 employees에)
+      } catch (we) {
+        logger.warn(`whitelist ${docId} arrayRemove failed:`, we);
+      }
+    }
+    // 개인계정 화이트리스트에 new 추가
+    try {
+      await dbx.collection('settings').doc('employees').set(
+        {emails: FieldValue.arrayUnion(newEmail)}, {merge: true});
+    } catch (we) {
+      logger.warn('whitelist employees arrayUnion failed:', we);
+    }
+
+    // employees 문서 email 필드 갱신 (old로 등록된 모든 문서)
+    let empUpdated = 0;
+    try {
+      const empSnap = await dbx.collection('employees').where('email', '==', oldEmail).get();
+      const batch = dbx.batch();
+      empSnap.forEach((d) => {
+        batch.update(d.ref, {email: newEmail});
+        empUpdated++;
+      });
+      if (empUpdated > 0) await batch.commit();
+    } catch (e) {
+      logger.warn('employees email update failed:', e);
+    }
+
+    // payslips 문서 authEmail 갱신 (본인 급여명세서 조회 규칙 유지)
+    let payslipUpdated = 0;
+    try {
+      const psSnap = await dbx.collection('payslips').where('authEmail', '==', oldEmail).get();
+      const batch = dbx.batch();
+      psSnap.forEach((d) => {
+        batch.update(d.ref, {authEmail: newEmail});
+        payslipUpdated++;
+      });
+      if (payslipUpdated > 0) await batch.commit();
+    } catch (e) {
+      logger.warn('payslips authEmail update failed:', e);
+    }
+
+    logger.info(`Email changed by ${callerEmail}: ${oldEmail} → ${newEmail} (uid=${user.uid}, emp=${empUpdated}, payslip=${payslipUpdated})`);
+    return {success: true, oldEmail, newEmail, uid: user.uid, empUpdated, payslipUpdated};
+  }
+);
+
 // ================================================================
 //  💬 고객 채팅 웹훅 (카카오 상담톡 · 네이버 톡톡)
 //   · 실제 페이로드 구조는 심사 통과 후 각 플랫폼 문서로 확정

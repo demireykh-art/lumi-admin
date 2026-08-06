@@ -622,8 +622,10 @@ function openEmployeeModal(id=null){
     // 신규: 입력 가능. 수정: staffId 이미 있으면 비활성화, 없으면 입력 가능 (기존 직원 마이그레이션)
     const sidEl=document.getElementById('empStaffId');
     const initPwEl=document.getElementById('empInitPw');
+    const emailEl=document.getElementById('empEmail');
     if(sidEl){sidEl.value='';sidEl.disabled=false;}
     if(initPwEl){initPwEl.value='';initPwEl.disabled=false;}
+    if(emailEl){emailEl.value='';}
     // 인센티브 설정 초기화
     document.getElementById('empIncType').value='none';
     document.getElementById('empIncPercent').value='0';
@@ -646,6 +648,12 @@ function openEmployeeModal(id=null){
             if(initPw2){
                 // staffId 이미 있으면 초기비번 입력 불필요
                 initPw2.disabled=!!(emp.staffId||emp.email);
+            }
+            const email2=document.getElementById('empEmail');
+            if(email2){
+                // 실제 이메일(@lumi.local 이 아닌)만 표시 → 관리자가 실제 이메일로 교체 가능
+                const cur=String(emp.email||'');
+                email2.value=(cur&&!cur.endsWith('@lumi.local'))?cur:'';
             }
             document.getElementById('empName').value=emp.name||'';
             document.getElementById('empMatchName').value=emp.matchName||'';
@@ -728,6 +736,12 @@ async function saveEmployee(){
     // 신규 등록 시: 로그인 ID(staffId)와 초기 비밀번호로 Firebase Auth 계정 자동 생성
     const staffIdRaw=(document.getElementById('empStaffId')?.value||'').trim().toLowerCase();
     const initialPw=(document.getElementById('empInitPw')?.value||'').trim();
+    // 실제 로그인 이메일 (입력 시 <staffId>@lumi.local 대신 이 이메일로 로그인)
+    const empEmailRaw=(document.getElementById('empEmail')?.value||'').trim().toLowerCase();
+    if(empEmailRaw && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(empEmailRaw)){
+        alert('로그인 이메일 형식이 올바르지 않습니다. (예: name@naver.com)');
+        return;
+    }
     let staffId='', email='';
     if(staffIdRaw){
         if(!/^[a-z0-9._-]{2,}$/.test(staffIdRaw)){
@@ -737,6 +751,8 @@ async function saveEmployee(){
         staffId=staffIdRaw;
         email=staffId+'@lumi.local';
     }
+    // 실제 이메일이 입력되면 그것을 최종 로그인 이메일로 사용
+    if(empEmailRaw){ email=empEmailRaw; }
 
     // ID 결정: 수정 시 기존 ID, 신규 시 이름을 ID로 사용
     let empId=editId||name;
@@ -750,18 +766,35 @@ async function saveEmployee(){
         }
     }
 
-    // staffId가 새로 입력되는 경우(신규 등록 or 기존 직원 마이그레이션) Auth 계정 생성 필요
+    // 기존 직원의 현재 로그인 이메일
     const existingEmp=editId?employees.find(e=>e.id===editId):null;
-    const isNewStaffId=!!staffId&&!(existingEmp&&existingEmp.staffId);
-    if(isNewStaffId){
+    const oldEmail=(existingEmp&&existingEmp.email)?String(existingEmp.email).toLowerCase():'';
+    // 로그인 계정을 새로 생성해야 하는 경우 (신규 등록 or 로그인 정보가 없던 기존 직원)
+    const needNewAuth=!!email&&!oldEmail;
+    // 기존 로그인 이메일을 다른 이메일로 변경(마이그레이션)하는 경우
+    const emailMigrate=!!email&&!!oldEmail&&email!==oldEmail;
+
+    if(needNewAuth||emailMigrate){
         // staffId 중복 체크 (본인 제외)
+        if(staffId){
+            try{
+                const dup=await db.collection('employees').where('staffId','==',staffId).limit(1).get();
+                if(!dup.empty&&dup.docs[0].id!==empId){
+                    alert('이미 사용 중인 로그인 ID입니다: '+staffId);
+                    return;
+                }
+            }catch(_){}
+        }
+        // 이메일 중복 체크 (본인 제외)
         try{
-            const dup=await db.collection('employees').where('staffId','==',staffId).limit(1).get();
-            if(!dup.empty&&dup.docs[0].id!==empId){
-                alert('이미 사용 중인 로그인 ID입니다: '+staffId);
+            const dupE=await db.collection('employees').where('email','==',email).limit(1).get();
+            if(!dupE.empty&&dupE.docs[0].id!==empId){
+                alert('이미 사용 중인 로그인 이메일입니다: '+email);
                 return;
             }
         }catch(_){}
+    }
+    if(needNewAuth){
         if(!initialPw||initialPw.length<6){
             alert('초기 비밀번호는 6자 이상이어야 합니다 (Firebase Auth 요구사항).');
             return;
@@ -809,13 +842,14 @@ async function saveEmployee(){
         isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
         visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
     };
-    if(staffId){ data.staffId=staffId; data.email=email; }
-    // 새 staffId가 부여되는 경우 → 첫 로그인 시 비밀번호 변경 강제 플래그 설정
-    if(isNewStaffId){ data.mustChangePassword=true; }
+    if(staffId){ data.staffId=staffId; }
+    if(email){ data.email=email; }
+    // 새 로그인 계정이 생성되는 경우 → 첫 로그인 시 비밀번호 변경 강제 플래그 설정
+    if(needNewAuth){ data.mustChangePassword=true; }
 
     try{
-        // 신규 staffId 부여 시 Firebase Auth 계정 생성 (신규 등록 + 기존 직원 마이그레이션 모두)
-        if(isNewStaffId){
+        // 신규 계정 생성 (신규 등록 + 로그인 정보 없던 기존 직원)
+        if(needNewAuth){
             try{
                 await createAuthAccountForEmployee(email,initialPw);
             }catch(authErr){
@@ -828,10 +862,26 @@ async function saveEmployee(){
                     return;
                 }
             }
+        }else if(emailMigrate){
+            // 로그인 이메일 변경: Admin SDK Cloud Function 으로 Auth 이메일 교체
+            // (화이트리스트/employees.email/payslips.authEmail 도 서버에서 함께 갱신)
+            if(!functions){
+                alert('서버 함수(functions) 연결이 필요합니다. 새로고침 후 다시 시도해주세요.');
+                return;
+            }
+            try{
+                const fn=functions.httpsCallable('updateUserEmail');
+                const res=await fn({oldEmail:oldEmail,newEmail:email});
+                console.log('updateUserEmail:',res&&res.data);
+            }catch(mErr){
+                console.error('로그인 이메일 변경 실패:',mErr);
+                alert('로그인 이메일 변경 실패: '+(mErr.message||mErr.code||mErr)+'\n\n(Cloud Function 배포 여부를 확인하세요: firebase deploy --only functions:updateUserEmail)');
+                return;
+            }
         }
         await db.collection('employees').doc(empId).set(data,{merge:true});
-        // 새 staffId 부여 시: settings/employees.emails 화이트리스트에 자동 추가
-        if(isNewStaffId&&email){
+        // 신규 계정 생성 시: settings/employees.emails 화이트리스트에 자동 추가
+        if(needNewAuth&&email){
             try{
                 await db.collection('settings').doc('employees').set(
                     {emails:firebase.firestore.FieldValue.arrayUnion(email)},
@@ -858,10 +908,12 @@ async function saveEmployee(){
         await loadEmployees();
         if(typeof loadLeaveRequests==='function') await loadLeaveRequests();
         renderAll();
-        if(isNewStaffId){
+        if(needNewAuth){
             const titlePrefix=editId?'기존 직원에게 로그인 정보가 부여되었습니다.':'직원 정보가 저장되었습니다.';
-            alert(`${titlePrefix}\n\n로그인 ID: ${staffId}\n로그인 이메일: ${email}\n초기 비밀번호: ${initialPw}\n\n` +
+            alert(`${titlePrefix}\n\n로그인 이메일: ${email}\n초기 비밀번호: ${initialPw}\n\n` +
                   `직원에게 위 정보를 안내해 주세요.\n첫 로그인 시 비밀번호를 본인이 직접 변경하도록 자동 안내됩니다. (화이트리스트 자동 등록 완료)`+leaveCleanupMsg);
+        }else if(emailMigrate){
+            alert(`로그인 이메일이 변경되었습니다.\n\n변경 전: ${oldEmail}\n변경 후: ${email}\n\n비밀번호는 그대로 유지됩니다. 직원에게 새 로그인 이메일을 안내해 주세요.`+leaveCleanupMsg);
         }else{
             alert('직원 정보가 저장되었습니다.'+leaveCleanupMsg);
         }
@@ -1480,6 +1532,292 @@ async function cancelLeave(id){
     }catch(e){
         alert('취소 실패: ' + e.message);
     }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 급여명세서 배포 (개인별 PDF ZIP 업로드 → Firestore payslips)
+//   - ZIP 안의 "직원이름.pdf" 를 파싱하여 직원별로 저장
+//   - 각 직원은 Staff App(내정보 > 급여명세서)에서 "본인 것만" 조회
+//   - 귀속월(ym)의 명세서는 다음 달 5일부터 직원에게 노출(deliverAt)
+// ═══════════════════════════════════════════════════════════
+
+// 귀속월(YYYY-MM) → 노출 시작일(다음 달 5일, YYYY-MM-DD)
+function _payslipDeliverDate(ym){
+    const [y,m]=ym.split('-').map(Number);
+    // 다음 달
+    let ny=y, nm=m+1;
+    if(nm>12){nm=1;ny++;}
+    return `${ny}-${String(nm).padStart(2,'0')}-05`;
+}
+
+// 기본 귀속월 = 지난달 (오늘이 8/5 이면 07)
+function _defaultPayslipYM(){
+    const now=new Date();
+    let y=now.getFullYear(), m=now.getMonth(); // getMonth()=0-based → 이미 "지난달"
+    if(m<1){m=12;y--;}else{/* m 은 1~12 중 지난달 */}
+    return `${y}-${String(m).padStart(2,'0')}`;
+}
+
+// 파일(Blob) → dataURL(base64)
+function _fileToDataUrl(blob){
+    return new Promise((resolve,reject)=>{
+        const r=new FileReader();
+        r.onload=()=>resolve(r.result);
+        r.onerror=reject;
+        r.readAsDataURL(blob);
+    });
+}
+
+// 파일명(확장자·경로 제거) → 직원 매칭
+function _matchEmployeeByFileName(baseName){
+    const clean=baseName.trim();
+    // 1) 이름 정확 일치
+    let emp=employees.find(e=>e.name&&e.name.trim()===clean);
+    if(emp) return emp;
+    // 2) matchName 일치
+    emp=employees.find(e=>e.matchName&&e.matchName.trim()===clean);
+    if(emp) return emp;
+    // 3) 공백 제거 후 일치
+    const nospace=clean.replace(/\s/g,'');
+    emp=employees.find(e=>e.name&&e.name.replace(/\s/g,'')===nospace);
+    return emp||null;
+}
+
+// 급여명세서 1건 저장 (ZIP·개별PDF 공용)
+//   emp: 이름으로 매칭된 직원 레코드 / fname: 원본 파일명 / blob: PDF Blob(File 포함)
+//   격리 키(authEmail)는 매칭된 직원의 로그인 이메일 — 규칙이 이 값으로 본인 검증.
+async function _savePayslipDoc(emp, fname, blob, ym, deliverAt){
+    const dataUrl=await _fileToDataUrl(blob);
+    const size=blob.size;
+    const docId=`${ym}__${emp.id}`;
+    await db.collection('payslips').doc(docId).set({
+        ym,
+        employeeId:emp.id,
+        name:emp.name,
+        // 본인 인증용 로그인 이메일 — Firestore 보안 규칙이 이 값과
+        // request.auth.token.email 을 비교해 타인 조회를 차단한다.
+        authEmail:(emp.email||'').toLowerCase(),
+        fileName:fname,
+        dataUrl,
+        size,
+        deliverAt,
+        uploadedAt:firebase.firestore.FieldValue.serverTimestamp(),
+        uploadedBy:(currentAdmin&&(currentAdmin.name||currentAdmin.email))||'admin'
+    },{merge:true});
+}
+
+// 업로드 결과 HTML (ZIP·개별PDF 공용)
+function _payslipResultHtml(matched, unmatched, noEmail, ym, deliverAt){
+    let html='';
+    html+=`<div style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;padding:10px 14px;font-size:.85rem;color:#1b5e20;margin-bottom:8px">`;
+    html+=`✅ <b>${matched.length}명</b> 급여명세서 저장 완료 (귀속월 ${ym} · ${deliverAt}부터 노출)`;
+    if(matched.length) html+=`<div style="margin-top:6px;color:#33691e">${matched.map(m=>m.name).join(', ')}</div>`;
+    html+=`</div>`;
+    if(noEmail&&noEmail.length){
+        html+=`<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:10px 14px;font-size:.85rem;color:#8d6e00;margin-bottom:8px">`;
+        html+=`🔑 <b>${noEmail.length}명</b>은 저장됐지만 <b>로그인 이메일이 없어 본인 조회가 불가</b>합니다: ${noEmail.join(', ')}`;
+        html+=`<div style="margin-top:4px;font-size:.78rem">직원관리에서 해당 직원의 <b>로그인 이메일</b>을 등록한 뒤 다시 업로드하세요.</div></div>`;
+    }
+    if(unmatched.length){
+        html+=`<div style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:8px;padding:10px 14px;font-size:.85rem;color:#e65100">`;
+        html+=`⚠️ 매칭 실패 <b>${unmatched.length}건</b> — 파일명이 직원 이름과 다릅니다:<br>${unmatched.join(', ')}`;
+        html+=`<div style="margin-top:4px;color:#bf360c;font-size:.78rem">직원관리에서 이름/매칭이름을 확인하거나 파일명을 수정 후 다시 업로드하세요.</div></div>`;
+    }
+    return html;
+}
+
+// 개별 PDF 파일 업로드 (ZIP 없이 "이름.pdf" 여러 개 직접 선택 — 테스트/소량 배포용)
+async function handlePayslipPdfs(input){
+    const files=input&&input.files?Array.from(input.files):[];
+    if(!files.length) return;
+    const resultEl=document.getElementById('payslipUploadResult');
+    const ymInput=document.getElementById('payslipMonth');
+    const ym=(ymInput&&ymInput.value)||_defaultPayslipYM();
+    if(ymInput&&!ymInput.value) ymInput.value=ym;
+    if(!employees||employees.length===0){
+        try{ await loadEmployees(); }catch(_){}
+    }
+    const deliverAt=_payslipDeliverDate(ym);
+    const pdfs=files.filter(f=>/\.pdf$/i.test(f.name||''));
+    if(pdfs.length===0){
+        resultEl.innerHTML='<div style="color:#9b1c1c;font-size:.85rem">PDF 파일이 없습니다. (.pdf 파일을 선택하세요)</div>';
+        input.value=''; return;
+    }
+    const matched=[], unmatched=[], noEmail=[];
+    let done=0;
+    try{
+        for(const f of pdfs){
+            done++;
+            resultEl.innerHTML=`<div style="color:#555;font-size:.85rem">⏳ 처리 중… (${done}/${pdfs.length})</div>`;
+            const base=(f.name||'').replace(/\.pdf$/i,'');
+            const emp=_matchEmployeeByFileName(base);
+            if(!emp){ unmatched.push(f.name); continue; }
+            await _savePayslipDoc(emp, f.name, f, ym, deliverAt);
+            if(!(emp.email||'').trim()) noEmail.push(emp.name);
+            matched.push({name:emp.name,fname:f.name});
+        }
+        resultEl.innerHTML=_payslipResultHtml(matched, unmatched, noEmail, ym, deliverAt);
+        renderPayslipList();
+    }catch(e){
+        console.error('급여명세서(PDF) 업로드 오류:',e);
+        resultEl.innerHTML=`<div style="color:#9b1c1c;font-size:.85rem">업로드 실패: ${e.message||e}</div>`;
+    }finally{
+        input.value='';
+    }
+}
+
+async function handlePayslipZip(input){
+    const file=input&&input.files&&input.files[0];
+    if(!file) return;
+    const resultEl=document.getElementById('payslipUploadResult');
+    const ymInput=document.getElementById('payslipMonth');
+    const ym=(ymInput&&ymInput.value)||_defaultPayslipYM();
+    if(ymInput&&!ymInput.value) ymInput.value=ym;
+
+    if(typeof JSZip==='undefined'){
+        alert('ZIP 라이브러리(JSZip)를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.');
+        input.value=''; return;
+    }
+    if(!employees||employees.length===0){
+        try{ await loadEmployees(); }catch(_){}
+    }
+
+    const deliverAt=_payslipDeliverDate(ym);
+    resultEl.innerHTML='<div style="color:#555;font-size:.85rem">📦 ZIP 파일을 읽는 중…</div>';
+
+    try{
+        const zip=await JSZip.loadAsync(file);
+        const pdfEntries=[];
+        zip.forEach((path,entry)=>{
+            if(entry.dir) return;
+            const lower=path.toLowerCase();
+            if(!lower.endsWith('.pdf')) return;
+            // __MACOSX 등 시스템 경로 제외
+            if(path.split('/').some(p=>p.startsWith('.')||p==='__MACOSX')) return;
+            pdfEntries.push({path,entry});
+        });
+
+        if(pdfEntries.length===0){
+            resultEl.innerHTML='<div style="color:#9b1c1c;font-size:.85rem">ZIP 안에 PDF 파일이 없습니다.</div>';
+            input.value=''; return;
+        }
+
+        const matched=[], unmatched=[], noEmail=[];
+        let done=0;
+        for(const {path,entry} of pdfEntries){
+            done++;
+            resultEl.innerHTML=`<div style="color:#555;font-size:.85rem">⏳ 처리 중… (${done}/${pdfEntries.length})</div>`;
+            // 파일명(경로/확장자 제거)
+            const fname=path.split('/').pop();
+            const base=fname.replace(/\.pdf$/i,'');
+            const emp=_matchEmployeeByFileName(base);
+            if(!emp){ unmatched.push(fname); continue; }
+            const blob=await entry.async('blob');
+            await _savePayslipDoc(emp, fname, blob, ym, deliverAt);
+            if(!(emp.email||'').trim()) noEmail.push(emp.name);
+            matched.push({name:emp.name,fname});
+        }
+
+        resultEl.innerHTML=_payslipResultHtml(matched, unmatched, noEmail, ym, deliverAt);
+        renderPayslipList();
+    }catch(e){
+        console.error('급여명세서 업로드 오류:',e);
+        resultEl.innerHTML=`<div style="color:#9b1c1c;font-size:.85rem">업로드 실패: ${e.message||e}</div>`;
+    }finally{
+        input.value='';
+    }
+}
+
+async function renderPayslipList(){
+    const tbody=document.getElementById('payslipTable');
+    if(!tbody) return;
+    const ymInput=document.getElementById('payslipMonth');
+    if(ymInput&&!ymInput.value) ymInput.value=_defaultPayslipYM();
+    const ym=(ymInput&&ymInput.value)||_defaultPayslipYM();
+    tbody.innerHTML='<tr><td colspan="7" class="text-center" style="color:#888">불러오는 중…</td></tr>';
+    try{
+        const snap=await db.collection('payslips').where('ym','==',ym).get();
+        const rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+        rows.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+        const today=new Date().toISOString().split('T')[0];
+        if(rows.length===0){
+            tbody.innerHTML='<tr><td colspan="7" class="text-center" style="color:#aaa">해당 귀속월에 업로드된 급여명세서가 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML=rows.map(r=>{
+            const kb=r.size?Math.round(r.size/1024)+' KB':'-';
+            const visible=r.deliverAt&&r.deliverAt<=today;
+            const status=visible
+                ?'<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:4px;font-size:.78rem">노출중</span>'
+                :`<span style="background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:4px;font-size:.78rem">대기 (${r.deliverAt||'-'})</span>`;
+            return `<tr>
+                <td>${r.ym||'-'}</td>
+                <td><strong>${r.name||'-'}</strong></td>
+                <td style="font-size:.85rem;color:#555">${r.fileName||'-'}</td>
+                <td class="text-right">${kb}</td>
+                <td>${r.deliverAt||'-'}</td>
+                <td>${status}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary" onclick="viewPayslip('${r.id}')">보기</button>
+                    <button class="btn btn-sm btn-danger" onclick="deletePayslip('${r.id}','${(r.name||'').replace(/'/g,"")}')">삭제</button>
+                </td>
+            </tr>`;
+        }).join('');
+    }catch(e){
+        console.error('급여명세서 목록 오류:',e);
+        tbody.innerHTML=`<tr><td colspan="7" class="text-center" style="color:#9b1c1c">불러오기 실패: ${e.message||e}</td></tr>`;
+    }
+}
+
+async function viewPayslip(docId){
+    try{
+        const doc=await db.collection('payslips').doc(docId).get();
+        if(!doc.exists){ alert('명세서를 찾을 수 없습니다.'); return; }
+        const data=doc.data();
+        _openDataUrlPdf(data.dataUrl, data.fileName||'payslip.pdf');
+    }catch(e){ alert('열기 실패: '+(e.message||e)); }
+}
+
+// iOS(아이폰/아이패드) 감지
+function _isIOSAdmin(){
+    const ua=navigator.userAgent||'';
+    return /iPad|iPhone|iPod/.test(ua)
+        || (navigator.platform==='MacIntel' && (navigator.maxTouchPoints||0)>1); // iPadOS
+}
+
+// dataURL(base64 PDF) → 플랫폼별 최적 열기
+//  · 아이폰/아이패드: blob 새 탭이 'Unknown 다운로드'로 깨지므로 같은 탭에서 네이티브 렌더
+//  · 데스크톱/안드로이드: 새 탭, 팝업 차단 시 다운로드
+function _openDataUrlPdf(dataUrl, fileName){
+    try{
+        const arr=(dataUrl||'').split(',');
+        if(arr.length<2) throw new Error('PDF 데이터가 없습니다.');
+        const bstr=atob(arr[1]);
+        let n=bstr.length; const u8=new Uint8Array(n);
+        while(n--) u8[n]=bstr.charCodeAt(n);
+        // iOS 렌더 안정성을 위해 MIME 을 application/pdf 로 고정
+        const blob=new Blob([u8],{type:'application/pdf'});
+        const url=URL.createObjectURL(blob);
+        if(_isIOSAdmin()){
+            window.location.href=url; // 같은 탭 네이티브 뷰어(뒤로가기로 복귀)
+            return;
+        }
+        const w=window.open(url,'_blank');
+        if(!w){ // 팝업 차단 시 다운로드
+            const a=document.createElement('a');
+            a.href=url; a.download=fileName||'급여명세서.pdf';
+            document.body.appendChild(a); a.click(); a.remove();
+        }
+        setTimeout(()=>URL.revokeObjectURL(url), 60000);
+    }catch(e){ alert('PDF 열기 실패: '+(e.message||e)); }
+}
+
+async function deletePayslip(docId, name){
+    if(!confirm(`${name||''} 급여명세서를 삭제하시겠습니까?`)) return;
+    try{
+        await db.collection('payslips').doc(docId).delete();
+        renderPayslipList();
+    }catch(e){ alert('삭제 실패: '+(e.message||e)); }
 }
 
 checkAuth();
