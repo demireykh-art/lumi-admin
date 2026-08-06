@@ -45,6 +45,17 @@
 - 시각 편집 (탭·이름변경·이동·삭제)
 - 백업/복원 (`consultTreeBackups` 최근 10개)
 
+### 📚 직원 교육·인계
+- `handovers` 컬렉션 Firestore 실시간 동기화
+- 홈 카드 `📚 직원 교육·인계` (전 계정 노출)
+- 부서 탭: 원장·데스크·피부·간호·공통 (5개)
+  · 로그인 계정에 맞는 부서 자동 선택(`_myHandoverDept`): 공용계정 이메일 local-part
+    (nurse/desk/skin/doctor…) → 개인계정 `role`(직급) → `chartRole` 순으로 추정
+  · 부서 탭 클릭으로 자유 열람 (열람 제한 없음)
+- 메모 카드: 제목(선택) + 본문 텍스트(메모장 붙여넣기) + 노션 링크(긴 내용·이미지)
+  · 인라인 편집(수정/저장/취소)·삭제, `updatedAt` 최신순 정렬
+- 데이터: `handovers/{id}` = {dept, title, body, notionUrl, createdAt, updatedAt, authorName}
+
 ### 📢 공지·할일
 - `notices` 컬렉션 Firestore 실시간 동기화
 - 홈 인라인 (오늘 공지)
@@ -92,7 +103,7 @@
 - 👥 STAFF (adminHigh만)
 
 공용·개인 모두 노출:
-- 홈페이지 · 재고 · 수가표 · 상담 · 공지
+- 홈페이지 · 재고 · 수가표 · 상담 · 직원 교육·인계 · 공지
 
 ---
 

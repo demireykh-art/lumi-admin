@@ -60,8 +60,9 @@ service cloud.firestore {
     match /vatTaxes/{id}                        { allow read, write: if signedIn(); }
     match /withholdingTaxes/{id}                { allow read, write: if signedIn(); }
 
-    // ── 공지·상담 트리·설정·관리자 ──
+    // ── 공지·교육/인계·상담 트리·설정·관리자 ──
     match /notices/{id}                         { allow read, write: if signedIn(); }
+    match /handovers/{id}                       { allow read, write: if signedIn(); }
     match /consultTreeBackups/{id}              { allow read, write: if signedIn(); }
     match /settings/{id}                        { allow read, write: if signedIn(); }
     match /config/{id}                          { allow read, write: if signedIn(); }
