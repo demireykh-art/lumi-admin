@@ -3276,25 +3276,48 @@
             }).join('');
         }
 
+        // iOS(아이폰/아이패드) 감지
+        function _isIOS(){
+            const ua=navigator.userAgent||'';
+            return /iPad|iPhone|iPod/.test(ua)
+                || (navigator.platform==='MacIntel' && (navigator.maxTouchPoints||0)>1); // iPadOS
+        }
+
+        // base64 dataURL → PDF 열기 (플랫폼별 최적)
+        //  · 아이폰/아이패드: blob 새 탭은 'Unknown 다운로드'로 깨지므로
+        //    같은 탭에서 iOS 네이티브 PDF 뷰어로 렌더(뒤로가기로 앱 복귀)
+        //  · 데스크톱/안드로이드: 새 탭으로 열고, 팝업 차단 시 다운로드
+        function _openPdfSmart(dataUrl, fileName){
+            const arr=(dataUrl||'').split(',');
+            if(arr.length<2) throw new Error('PDF 데이터가 없습니다.');
+            const bstr=atob(arr[1]);
+            let n=bstr.length; const u8=new Uint8Array(n);
+            while(n--) u8[n]=bstr.charCodeAt(n);
+            // iOS 렌더 안정성을 위해 MIME 을 application/pdf 로 고정
+            const blob=new Blob([u8],{type:'application/pdf'});
+            const url=URL.createObjectURL(blob);
+            if(_isIOS()){
+                // 같은 탭에서 네이티브 뷰어로 렌더 (가장 안정적)
+                // 페이지가 전환되므로 revoke 하지 않음(전환 후 자동 무효화)
+                window.location.href=url;
+                return;
+            }
+            const w=window.open(url,'_blank');
+            if(!w){
+                const a=document.createElement('a');
+                a.href=url; a.download=fileName||'급여명세서.pdf';
+                document.body.appendChild(a); a.click(); a.remove();
+            }
+            setTimeout(()=>URL.revokeObjectURL(url),60000);
+        }
+
         function openMyPayslip(docId){
             const p=myPayslips.find(x=>x.id===docId);
             // 재확인: 메모리에 없거나 타인 것이면 차단(authEmail 기준 — 규칙/쿼리와 동일)
             const myEmail=((auth&&auth.currentUser&&auth.currentUser.email)||(currentUser&&currentUser.email)||'').toLowerCase();
             if(!p||(p.authEmail||'').toLowerCase()!==myEmail){ alert('명세서를 열 수 없습니다.'); return; }
             try{
-                const arr=(p.dataUrl||'').split(',');
-                const mime=(arr[0].match(/:(.*?);/)||[])[1]||'application/pdf';
-                const bstr=atob(arr[1]);
-                let n=bstr.length; const u8=new Uint8Array(n);
-                while(n--) u8[n]=bstr.charCodeAt(n);
-                const blob=new Blob([u8],{type:mime});
-                const url=URL.createObjectURL(blob);
-                const w=window.open(url,'_blank');
-                if(!w){
-                    const a=document.createElement('a');
-                    a.href=url; a.download=p.fileName||'급여명세서.pdf'; a.click();
-                }
-                setTimeout(()=>URL.revokeObjectURL(url),60000);
+                _openPdfSmart(p.dataUrl, p.fileName||'급여명세서.pdf');
             }catch(e){ alert('PDF 열기 실패: '+(e.message||e)); }
         }
         
