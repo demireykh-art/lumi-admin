@@ -1778,20 +1778,35 @@ async function viewPayslip(docId){
     }catch(e){ alert('열기 실패: '+(e.message||e)); }
 }
 
-// dataURL(base64 PDF) → Blob → 새 창으로 열기
+// iOS(아이폰/아이패드) 감지
+function _isIOSAdmin(){
+    const ua=navigator.userAgent||'';
+    return /iPad|iPhone|iPod/.test(ua)
+        || (navigator.platform==='MacIntel' && (navigator.maxTouchPoints||0)>1); // iPadOS
+}
+
+// dataURL(base64 PDF) → 플랫폼별 최적 열기
+//  · 아이폰/아이패드: blob 새 탭이 'Unknown 다운로드'로 깨지므로 같은 탭에서 네이티브 렌더
+//  · 데스크톱/안드로이드: 새 탭, 팝업 차단 시 다운로드
 function _openDataUrlPdf(dataUrl, fileName){
     try{
-        const arr=dataUrl.split(',');
-        const mime=(arr[0].match(/:(.*?);/)||[])[1]||'application/pdf';
+        const arr=(dataUrl||'').split(',');
+        if(arr.length<2) throw new Error('PDF 데이터가 없습니다.');
         const bstr=atob(arr[1]);
         let n=bstr.length; const u8=new Uint8Array(n);
         while(n--) u8[n]=bstr.charCodeAt(n);
-        const blob=new Blob([u8],{type:mime});
+        // iOS 렌더 안정성을 위해 MIME 을 application/pdf 로 고정
+        const blob=new Blob([u8],{type:'application/pdf'});
         const url=URL.createObjectURL(blob);
+        if(_isIOSAdmin()){
+            window.location.href=url; // 같은 탭 네이티브 뷰어(뒤로가기로 복귀)
+            return;
+        }
         const w=window.open(url,'_blank');
         if(!w){ // 팝업 차단 시 다운로드
             const a=document.createElement('a');
-            a.href=url; a.download=fileName; a.click();
+            a.href=url; a.download=fileName||'급여명세서.pdf';
+            document.body.appendChild(a); a.click(); a.remove();
         }
         setTimeout(()=>URL.revokeObjectURL(url), 60000);
     }catch(e){ alert('PDF 열기 실패: '+(e.message||e)); }
