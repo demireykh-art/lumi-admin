@@ -1964,14 +1964,20 @@
                     </select>
                 </div>
                 <div class="form-group"><label class="form-label">입사일 *</label><input type="date" class="form-input" id="seEmpJoinDate"></div>
-                <div class="form-group"><label class="form-label">연봉 (만원)</label><input type="number" class="form-input" id="seEmpSalary" placeholder="예: 3000"></div>
+                <div class="form-group"><label class="form-label">현재 연봉 (만원) <span style="font-size:.72rem;color:var(--text-muted)">자동 — 급여 이력의 최신값</span></label><input type="number" class="form-input" id="seEmpSalary" placeholder="아래 급여 이력에서 관리" readonly style="background:#f9fafb"></div>
+                <div class="form-group" style="border-top:1px dashed var(--border);padding-top:.75rem">
+                    <label class="form-label" style="font-weight:600">📈 급여 인상 이력 <span style="font-size:.72rem;color:var(--text-muted);font-weight:400">(적용일 · 연봉 만원)</span></label>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin:.15rem 0 .4rem">적용일부터 해당 연봉이 적용됩니다. 인상 시 새 행을 추가하세요. 인상액·인상률이 자동 표시됩니다.</div>
+                    <div id="seSalaryHistBox" style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.5rem"></div>
+                    <button type="button" onclick="_seAddSalaryRow()" style="background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;font-size:.8rem;padding:.35rem .7rem;border-radius:6px;cursor:pointer">＋ 급여/인상 추가</button>
+                </div>
                 <div class="form-group"><label class="form-label">시급 <span style="font-size:.75rem;color:var(--text-muted)">(수동수정 가능)</span></label><input type="number" class="form-input" id="seEmpHourly" value="12000"></div>
                 <div class="form-group"><label class="form-label">생년월일</label><input type="date" class="form-input" id="seEmpBirthday"></div>
                 <div class="form-group"><label class="form-label">상태</label>
                     <select class="form-select" id="seEmpStatus" onchange="_seToggleResignRow()"><option value="active">재직</option><option value="inactive">퇴사</option></select>
                 </div>
-                <div class="form-group" id="seEmpResignDateRow" style="display:none">
-                    <label class="form-label">퇴사일 <span style="font-size:.75rem;color:var(--text-muted)">(이후 신청 연차 자동 정리)</span></label>
+                <div class="form-group" id="seEmpResignDateRow">
+                    <label class="form-label">퇴사일 <span style="font-size:.75rem;color:var(--text-muted)">(다음날부터 자동 '퇴사' 처리 · 이후 신청 연차 자동 정리)</span></label>
                     <input type="date" class="form-input" id="seEmpResignDate">
                 </div>
                 <div class="form-group"><label class="form-label">식대 월 한도 (원)</label><input type="number" class="form-input" id="seEmpMealLimit" value="300000" placeholder="기본 300,000원"></div>
@@ -8590,6 +8596,7 @@
         let _staffAdminLeaves=[];      // leaveRequests 캐시
         let _staffAdminAttendance=[];  // attendance 캐시
         let _staffAdminLunchOT=[];     // lunchOT 캐시
+        let _staffAdminMeals=[];       // mealRecords 캐시 (OT·식사 탭)
         let _staffCalMonth=(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
         // 급여·인센티브 관련
         let _staffPayrollYm=(function(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
@@ -8627,21 +8634,24 @@
             document.getElementById('staffAdminBody').innerHTML=
                 '<div style="text-align:center;color:#9ca3af;padding:1.5rem;font-size:.85rem">데이터 로딩 중...</div>';
             try{
-                const [empS, leaveS, attS, otS, itemS, recS, revS]=await Promise.all([
+                const [empS, leaveS, attS, otS, itemS, recS, revS, mealS]=await Promise.all([
                     db.collection('employees').get(),
                     db.collection('leaveRequests').get(),
                     db.collection('attendance').get(),
                     db.collection('lunchOT').get().catch(()=>({docs:[]})),
                     db.collection('incentiveItems').get().catch(()=>({docs:[]})),
                     db.collection('incentiveRecords').get().catch(()=>({docs:[]})),
-                    db.collection('revenue').get().catch(()=>({docs:[]}))
+                    db.collection('revenue').get().catch(()=>({docs:[]})),
+                    db.collection('mealRecords').get().catch(()=>({docs:[]}))
                 ]);
                 _staffAdminEmployees=empS.docs.map(d=>({id:d.id,...d.data()}))
                     .filter(e=>e.id!==SHARED_ACCOUNT_ID)
                     .sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+                await _seApplyAutoRetire(_staffAdminEmployees);   // 퇴사일 지난 직원 자동 퇴사 처리
                 _staffAdminLeaves=leaveS.docs.map(d=>({id:d.id,...d.data()}));
                 _staffAdminAttendance=attS.docs.map(d=>({id:d.id,...d.data()}));
                 _staffAdminLunchOT=otS.docs.map(d=>({id:d.id,...d.data()}));
+                _staffAdminMeals=mealS.docs.map(d=>({id:d.id,...d.data()}));
                 _staffIncItems=itemS.docs.map(d=>({id:d.id,...d.data()}));
                 _staffIncRecords=recS.docs.map(d=>({id:d.id,...d.data()}));
                 _staffRevenueMap={};
@@ -8710,6 +8720,113 @@
         // ─────────────────────────────
         // 개인계정 기본 노출 탭(재고 미포함). 이 세트와 동일하면 visibleTabs=null(기본값)로 저장.
         const SE_DEFAULT_TABS=['attendance','meal','ot','leave','info'];
+
+        // 직원목록 재직/퇴사 필터 상태
+        let _seEmpFilter='active';            // 'active' | 'inactive' | 'all'
+        // 급여 이력 편집 임시 버퍼 (직원 모달)
+        let _seSalaryDraft=[];                 // [{date:'YYYY-MM-DD', salary: 만원}]
+
+        // 퇴사 여부 판정: status=inactive 이거나, 퇴사일이 지난(다음날부터) 경우
+        function _seIsRetired(emp){
+            if(!emp) return false;
+            if(emp.status==='inactive') return true;
+            if(emp.resignDate){ return getToday()>emp.resignDate; } // 퇴사일 다음날부터 퇴사
+            return false;
+        }
+        // 로드 시: 퇴사일이 지난 재직자를 자동으로 '퇴사'로 정규화(+DB 반영)
+        async function _seApplyAutoRetire(list){
+            const toFix=[];
+            (list||[]).forEach(e=>{
+                if(e.status!=='inactive' && e.resignDate && getToday()>e.resignDate){
+                    e.status='inactive';       // 메모리 즉시 반영 → 이하 active 필터에 자동 적용
+                    toFix.push(e.id);
+                }
+            });
+            if(toFix.length){
+                try{
+                    const batch=db.batch();
+                    toFix.forEach(id=>batch.update(db.collection('employees').doc(id),{status:'inactive'}));
+                    await batch.commit();
+                }catch(err){ console.warn('자동 퇴사 반영 실패:',err); }
+            }
+        }
+        function _seSetEmpFilter(f){ _seEmpFilter=f; _renderStaffAdminBody(); }
+
+        // ── 급여 인상 이력 편집 ──
+        // 오늘 기준 '현재 적용 연봉'(적용일 ≤ 오늘 중 최신). 없으면 가장 이른 값.
+        function _seCurrentSalaryFromDraft(){
+            const valid=_seSalaryDraft.filter(h=>Number(h.salary)>0);
+            if(!valid.length) return 0;
+            const today=getToday();
+            const sorted=valid.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+            const applied=sorted.filter(h=>!h.date||h.date<=today);
+            const pick=applied.length?applied[applied.length-1]:sorted[0];
+            return Number(pick.salary)||0;
+        }
+        function _seSyncCurrentSalary(){
+            const el=document.getElementById('seEmpSalary');
+            if(!el) return;
+            const s=_seCurrentSalaryFromDraft();
+            el.value=s>0?s:'';
+        }
+        function _seInitSalaryHistory(emp){
+            let hist=[];
+            if(emp && Array.isArray(emp.salaryHistory) && emp.salaryHistory.length){
+                hist=emp.salaryHistory.map(h=>({date:h.date||'', salary:Number(h.salary)||0}));
+            }else if(emp && (Number(emp.salary)>0)){
+                // 기존 단일 연봉 → 입사일 기준 1건으로 시드
+                hist=[{date:emp.joinDate||'', salary:Number(emp.salary)||0}];
+            }
+            _seSalaryDraft=hist;
+            _seRenderSalaryHistory();
+        }
+        function _seAddSalaryRow(){ _seSalaryDraft.push({date:'', salary:0}); _seRenderSalaryHistory(); }
+        function _seRemoveSalaryRow(i){ _seSalaryDraft.splice(i,1); _seRenderSalaryHistory(); }
+        function _seOnSalaryRowChange(i,field,val){
+            if(!_seSalaryDraft[i]) return;
+            if(field==='date') _seSalaryDraft[i].date=val;
+            else _seSalaryDraft[i].salary=Number(val)||0;
+            _seRenderSalaryHistory();   // 정렬·인상률 갱신 (onchange=blur 후라 포커스 영향 없음)
+        }
+        function _seRenderSalaryHistory(){
+            const box=document.getElementById('seSalaryHistBox');
+            if(!box) return;
+            // 적용일 오름차순 (빈 날짜는 뒤로)
+            _seSalaryDraft=_seSalaryDraft.slice().sort((a,b)=>{
+                if(!a.date) return 1; if(!b.date) return -1;
+                return a.date.localeCompare(b.date);
+            });
+            if(!_seSalaryDraft.length){
+                box.innerHTML='<div style="font-size:.78rem;color:#9ca3af">이력이 없습니다. [＋ 급여/인상 추가]로 등록하세요.</div>';
+                _seSyncCurrentSalary();
+                return;
+            }
+            box.innerHTML=_seSalaryDraft.map((h,i)=>{
+                let tag;
+                if(i===0){
+                    tag='<span style="font-size:.72rem;color:#9ca3af;white-space:nowrap">최초</span>';
+                }else{
+                    const prev=Number(_seSalaryDraft[i-1].salary)||0;
+                    const curv=Number(h.salary)||0;
+                    if(prev>0){
+                        const diff=curv-prev;
+                        const rate=diff/prev*100;
+                        const sign=diff>0?'+':'';
+                        const color=diff>0?'#059669':(diff<0?'#dc2626':'#6b7280');
+                        tag=`<span style="font-size:.72rem;color:${color};font-weight:600;white-space:nowrap">${sign}${diff}만 (${sign}${rate.toFixed(1)}%)</span>`;
+                    }else{
+                        tag='<span style="font-size:.72rem;color:#9ca3af;white-space:nowrap">-</span>';
+                    }
+                }
+                return `<div style="display:flex;align-items:center;gap:.35rem">
+                    <input type="date" value="${h.date||''}" onchange="_seOnSalaryRowChange(${i},'date',this.value)" style="flex:0 0 auto;font-size:.78rem;padding:.3rem;border:1px solid var(--border);border-radius:5px">
+                    <input type="number" value="${h.salary||''}" onchange="_seOnSalaryRowChange(${i},'salary',this.value)" placeholder="연봉(만원)" style="flex:1;min-width:64px;font-size:.78rem;padding:.3rem;border:1px solid var(--border);border-radius:5px">
+                    ${tag}
+                    <button type="button" onclick="_seRemoveSalaryRow(${i})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.9rem;padding:0 .2rem">✕</button>
+                </div>`;
+            }).join('');
+            _seSyncCurrentSalary();
+        }
         function _seCalcLegalLeave(joinDate){
             if(!joinDate) return 0;
             const join=new Date(joinDate), now=new Date();
@@ -8719,9 +8836,9 @@
             return Math.min(15+Math.floor((years-1)/2),25);
         }
         function _seToggleResignRow(){
-            const sel=document.getElementById('seEmpStatus');
+            // 퇴사일은 항상 노출 — 미래 퇴사일을 미리 입력하면 다음날부터 자동 퇴사 처리
             const row=document.getElementById('seEmpResignDateRow');
-            if(sel&&row) row.style.display=sel.value==='inactive'?'':'none';
+            if(row) row.style.display='';
         }
         async function _seReloadEmployees(){
             try{
@@ -8729,14 +8846,29 @@
                 _staffAdminEmployees=empS.docs.map(d=>({id:d.id,...d.data()}))
                     .filter(e=>e.id!==SHARED_ACCOUNT_ID)
                     .sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+                await _seApplyAutoRetire(_staffAdminEmployees);   // 퇴사일 지난 직원 자동 퇴사 처리
             }catch(e){ console.warn('직원 재로드 실패:',e); }
         }
         function _renderStaffEmployees(el){
-            const list=_staffAdminEmployees||[];
+            const all=_staffAdminEmployees||[];
+            const cntActive=all.filter(e=>!_seIsRetired(e)).length;
+            const cntInactive=all.filter(e=>_seIsRetired(e)).length;
+            const list=all.filter(e=>{
+                const retired=_seIsRetired(e);
+                if(_seEmpFilter==='active') return !retired;
+                if(_seEmpFilter==='inactive') return retired;
+                return true;
+            });
+            const _fbtn=(key,label,n)=>{
+                const on=_seEmpFilter===key;
+                return `<button onclick="_seSetEmpFilter('${key}')" style="background:${on?'#4338ca':'#fff'};color:${on?'#fff':'#4b5563'};border:1px solid ${on?'#4338ca':'#d1d5db'};font-size:.78rem;font-weight:${on?'600':'500'};padding:.3rem .7rem;border-radius:999px;cursor:pointer">${label} ${n}</button>`;
+            };
             const rows=list.map(e=>{
                 const roleL=roleLabels[e.role]||e.role||'-';
-                const statusBadge=e.status==='inactive'
-                    ?'<span style="background:#fee2e2;color:#b91c1c;font-size:.7rem;padding:1px 7px;border-radius:8px">퇴사</span>'
+                const retired=_seIsRetired(e);
+                const resignInfo=(retired&&e.resignDate)?` <span style="color:#9ca3af;font-size:.68rem">~${_esc(e.resignDate)}</span>`:'';
+                const statusBadge=retired
+                    ?`<span style="background:#fee2e2;color:#b91c1c;font-size:.7rem;padding:1px 7px;border-radius:8px">퇴사</span>${resignInfo}`
                     :'<span style="background:#dcfce7;color:#166534;font-size:.7rem;padding:1px 7px;border-radius:8px">재직</span>';
                 const loginInfo=e.email?_esc(e.email):'<span style="color:#9ca3af">로그인 미설정</span>';
                 const jid=String(e.id).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
@@ -8755,11 +8887,15 @@
                 </div>`;
             }).join('');
             el.innerHTML=`
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
-                    <div style="font-size:.85rem;color:#6b7280">총 ${list.length}명</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.6rem;flex-wrap:wrap">
+                    <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+                        ${_fbtn('active','재직',cntActive)}
+                        ${_fbtn('inactive','퇴사',cntInactive)}
+                        ${_fbtn('all','전체',all.length)}
+                    </div>
                     <button onclick="_seOpenEmployeeModal('')" style="background:#4338ca;color:#fff;border:none;font-size:.82rem;font-weight:600;padding:.45rem .8rem;border-radius:6px;cursor:pointer">＋ 직원 등록</button>
                 </div>
-                ${rows||'<div style="text-align:center;color:#9ca3af;padding:1.5rem;font-size:.85rem">직원이 없습니다</div>'}`;
+                ${rows||'<div style="text-align:center;color:#9ca3af;padding:1.5rem;font-size:.85rem">해당 조건의 직원이 없습니다</div>'}`;
         }
         function _seOpenEmployeeModal(id){
             const g=x=>document.getElementById(x);
@@ -8781,6 +8917,7 @@
             g('seAutoAnnualLeave').textContent='0';
             document.querySelectorAll('.seEmpTab').forEach(cb=>cb.checked=SE_DEFAULT_TABS.includes(cb.getAttribute('data-tab')));
             _seToggleResignRow();
+            _seInitSalaryHistory(null);   // 신규: 빈 이력
             if(id){
                 const emp=(_staffAdminEmployees||[]).find(e=>e.id===id);
                 if(emp){
@@ -8794,6 +8931,7 @@
                     g('seEmpRole').value=emp.role||'esthetician';
                     g('seEmpJoinDate').value=emp.joinDate||'';
                     g('seEmpSalary').value=emp.salary||'';
+                    _seInitSalaryHistory(emp);   // 급여 이력 로드(없으면 기존 연봉으로 시드)
                     g('seEmpHourly').value=emp.hourly||12000;
                     g('seEmpBirthday').value=emp.birthday||'';
                     g('seEmpStatus').value=emp.status||'active';
@@ -8888,7 +9026,12 @@
                 if(!initialPw||initialPw.length<6){ alert('초기 비밀번호는 6자 이상이어야 합니다 (Firebase Auth 요구사항).'); return; }
             }
 
-            const salary=parseInt(g('seEmpSalary').value)||0;
+            // 급여 이력(유효 항목만, 적용일 오름차순) + 현재 연봉 파생
+            const salaryHistory=_seSalaryDraft
+                .filter(h=>Number(h.salary)>0)
+                .map(h=>({date:h.date||'', salary:Number(h.salary)||0}))
+                .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+            const salary=_seCurrentSalaryFromDraft()||(parseInt(g('seEmpSalary').value)||0);
             const annualLeaveInput=g('seEmpAnnualLeave').value;
             const annualLeave=annualLeaveInput?parseInt(annualLeaveInput):null;
             const usedLeave=parseInt(g('seEmpUsedLeave').value)||0;
@@ -8908,7 +9051,7 @@
                 locationExempt:g('seEmpLocationExempt').checked, incType:g('seEmpIncType').value||'none',
                 incPercent:parseFloat(g('seEmpIncPercent').value)||0, incRounding:parseInt(g('seEmpIncRounding').value)||0,
                 incJapan:g('seEmpIncJapan').checked, personalSalesSource:g('seEmpPersonalSalesSource').value||'manual',
-                isIncentiveTarget, visibleTabs:visibleTabsValue
+                isIncentiveTarget, visibleTabs:visibleTabsValue, salaryHistory
             };
             if(staffId){ data.staffId=staffId; }
             if(email){ data.email=email; }
@@ -9260,7 +9403,45 @@
                 </div>`;
             });
             html+='</div>';
-            html+='<div style="font-size:.7rem;color:#9ca3af;margin-top:.4rem">※ 상세 편집·삭제는 경영관리 앱(index.html)에서.</div>';
+
+            // ── 🍽 개인 식사 사용 내역 (같은 달) ──
+            const monthMeals=(_staffAdminMeals||[]).filter(m=>String(m.date||'').startsWith(monthPrefix));
+            html+='<div style="margin:1.1rem 0 .4rem;font-weight:700;font-size:.9rem;color:#111827">🍽 '+monthPrefix+' 식사 사용 내역</div>';
+            if(!monthMeals.length){
+                html+='<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:6px">이번 달 식사 사용 없음</div>';
+            }else{
+                html+='<div style="max-height:280px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px">';
+                html+='<table style="width:100%;border-collapse:collapse;font-size:.78rem;background:#fff">';
+                html+='<thead style="position:sticky;top:0;background:#f9fafb"><tr><th style="padding:.4rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">날짜</th><th style="padding:.4rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">직원</th><th style="padding:.4rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">구분</th><th style="padding:.4rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">금액</th><th style="padding:.4rem .5rem;text-align:left;border-bottom:1px solid #e5e7eb">메모</th></tr></thead><tbody>';
+                monthMeals.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).forEach(m=>{
+                    const emp=_staffAdminEmployees.find(e=>e.id===m.employeeId);
+                    const isGroup=m.groupId&&m.splitMode!=='personal';
+                    const typeLabel=isGroup?('👥 그룹'+(m.headCount?(' '+m.headCount+'명'):'')):'🍽 개인';
+                    html+=`<tr>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6">${_esc(m.date||'')}</td>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6">${_esc(emp?.name||m.empName||m.employeeId||'?')}</td>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6">${typeLabel}</td>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right">${formatCurrency(m.amount||0)}</td>
+                        <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6">${_esc(m.memo||'')}</td>
+                    </tr>`;
+                });
+                html+='</tbody></table></div>';
+            }
+            // 직원별 선택 월 식대 합계
+            html+='<div style="margin:.9rem 0 .4rem;font-weight:700;font-size:.9rem;color:#111827">📊 직원별 '+monthPrefix+' 식대 합계</div>';
+            html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.35rem">';
+            active.forEach(e=>{
+                const sum=monthMeals.filter(m=>m.employeeId===e.id).reduce((s,m)=>s+(Number(m.amount||0)),0);
+                const limit=Number(e.mealLimit||300000);
+                const over=sum>limit;
+                html+=`<div style="padding:.5rem;background:${over?'#fef2f2':(sum>0?'#ecfdf5':'#f9fafb')};color:${over?'#b91c1c':(sum>0?'#047857':'#6b7280')};border-radius:6px;font-size:.78rem">
+                    <div style="font-weight:700">${_esc(e.name||e.id)}</div>
+                    <div>${formatCurrency(sum)} <span style="font-size:.68rem;color:#9ca3af">/ ${formatCurrency(limit)}</span></div>
+                </div>`;
+            });
+            html+='</div>';
+
+            html+='<div style="font-size:.7rem;color:#9ca3af;margin-top:.4rem">※ 상세 편집·삭제는 경영관리 앱(index.html) 또는 각 직원 앱에서.</div>';
             el.innerHTML=html;
         }
 
