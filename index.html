@@ -169,14 +169,23 @@
                         <div><label class="form-label" style="display:inline;margin-right:6px">귀속월</label><input type="month" class="form-input" id="payslipMonth" style="width:auto;display:inline-block" onchange="renderPayslipList()"></div>
                     </div>
                     <div style="background:#f0f4ff;border:1px solid #d6e0ff;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:.82rem;color:#334">
-                        직원 이름으로 된 PDF들을 하나의 <b>ZIP</b>으로 올리면, 각 직원의 Staff App(루미앱) &gt; 내정보 &gt; 급여명세서에 <b>본인 것만</b> 노출됩니다.
+                        직원 <b>이름으로 된 PDF</b>를 올리면, 각 직원의 Staff App(루미앱) &gt; 내정보 &gt; 급여명세서에 <b>본인 것만</b> 노출됩니다.
                         <br>파일명은 직원 이름과 같아야 매칭됩니다. (예: <b>윤소영.pdf</b>) · 위에서 선택한 <b>귀속월</b>의 명세서로 저장되며, 다음 달 <b>5일</b>부터 직원에게 노출됩니다.
+                        <br>여러 명은 <b>ZIP</b>으로, 한두 명 테스트는 <b>개별 PDF</b>로 올리세요. (매칭은 이름, 본인 조회 격리는 그 직원의 <b>로그인 이메일</b> 기준)
                     </div>
-                    <div class="upload-area" onclick="document.getElementById('payslipZip').click()" style="margin-bottom:16px">
-                        <div class="upload-icon">🗜️</div>
-                        <div class="upload-text">급여명세서 ZIP 파일 업로드</div>
-                        <div class="upload-hint">ZIP 안에 직원 이름별 PDF (예: 윤소영.pdf, 김민정.pdf …)</div>
-                        <input type="file" id="payslipZip" accept=".zip" style="display:none" onchange="handlePayslipZip(this)">
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+                        <div class="upload-area" onclick="document.getElementById('payslipZip').click()" style="flex:1;min-width:220px;margin-bottom:0">
+                            <div class="upload-icon">🗜️</div>
+                            <div class="upload-text">급여명세서 ZIP 업로드</div>
+                            <div class="upload-hint">ZIP 안에 직원 이름별 PDF (예: 윤소영.pdf, 김민정.pdf …)</div>
+                            <input type="file" id="payslipZip" accept=".zip" style="display:none" onchange="handlePayslipZip(this)">
+                        </div>
+                        <div class="upload-area" onclick="document.getElementById('payslipPdfs').click()" style="flex:1;min-width:220px;margin-bottom:0">
+                            <div class="upload-icon">📄</div>
+                            <div class="upload-text">개별 PDF 업로드 (여러 개 선택)</div>
+                            <div class="upload-hint">이름.pdf 파일을 직접 선택 (예: 윤소영.pdf) · 테스트/소량 배포용</div>
+                            <input type="file" id="payslipPdfs" accept=".pdf,application/pdf" multiple style="display:none" onchange="handlePayslipPdfs(this)">
+                        </div>
                     </div>
                     <div id="payslipUploadResult" style="margin-bottom:16px"></div>
                     <div class="table-container"><table><thead><tr><th>귀속월</th><th>직원명</th><th>파일명</th><th class="text-right">크기</th><th>노출 시작일</th><th>상태</th><th>관리</th></tr></thead><tbody id="payslipTable"></tbody></table></div>
