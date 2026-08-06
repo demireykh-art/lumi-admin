@@ -2024,8 +2024,10 @@
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="meal" style="width:16px;height:16px" checked>🍽 식사</label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="ot" style="width:16px;height:16px" checked>⏰ OT</label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="leave" style="width:16px;height:16px" checked>🏖 연차</label>
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="inventory" style="width:16px;height:16px">📦 재고</label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="info" style="width:16px;height:16px" checked>👤 내정보</label>
                     </div>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.5rem">※ 재고는 통합앱(공용계정)에서 관리하므로 개인 계정은 기본 미노출입니다. 필요한 직원만 체크하세요.</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -8706,6 +8708,8 @@
         //    서버 로직(Auth 계정 생성 / updateUserEmail / 화이트리스트)은
         //    admin 웹과 동일하게 동작.
         // ─────────────────────────────
+        // 개인계정 기본 노출 탭(재고 미포함). 이 세트와 동일하면 visibleTabs=null(기본값)로 저장.
+        const SE_DEFAULT_TABS=['attendance','meal','ot','leave','info'];
         function _seCalcLegalLeave(joinDate){
             if(!joinDate) return 0;
             const join=new Date(joinDate), now=new Date();
@@ -8736,11 +8740,16 @@
                     :'<span style="background:#dcfce7;color:#166534;font-size:.7rem;padding:1px 7px;border-radius:8px">재직</span>';
                 const loginInfo=e.email?_esc(e.email):'<span style="color:#9ca3af">로그인 미설정</span>';
                 const jid=String(e.id).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:.7rem .8rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem">
+                const hasLogin=e.email&&!String(e.email).endsWith('@lumi.local');
+                const pwBtn=hasLogin
+                    ?`<button onclick="_seResetEmployeePassword('${jid}')" style="background:#fff;color:#7a5b2e;border:1px solid #c9a86a;font-size:.78rem;padding:.35rem .6rem;border-radius:6px;cursor:pointer;flex-shrink:0">🔑 비번</button>`
+                    :'';
+                return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:.7rem .8rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
                     <div style="flex:1;min-width:0">
                         <div style="font-weight:600;font-size:.92rem">${_esc(e.name||e.id)} <span style="font-weight:400;color:#6b7280;font-size:.78rem">${_esc(roleL)}</span> ${statusBadge}</div>
                         <div style="font-size:.75rem;color:#6b7280;margin-top:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${loginInfo}</div>
                     </div>
+                    ${pwBtn}
                     <button onclick="_seOpenEmployeeModal('${jid}')" style="background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;font-size:.78rem;padding:.35rem .6rem;border-radius:6px;cursor:pointer;flex-shrink:0">수정</button>
                     <button onclick="_seDeleteEmployee('${jid}')" style="background:#fff;color:#dc2626;border:1px solid #fecaca;font-size:.78rem;padding:.35rem .6rem;border-radius:6px;cursor:pointer;flex-shrink:0">삭제</button>
                 </div>`;
@@ -8770,7 +8779,7 @@
             g('seEmpPersonalSalesSource').value='manual';
             g('seEmpAnnualLeave').value=''; g('seEmpUsedLeave').value='0';
             g('seAutoAnnualLeave').textContent='0';
-            document.querySelectorAll('.seEmpTab').forEach(cb=>cb.checked=true);
+            document.querySelectorAll('.seEmpTab').forEach(cb=>cb.checked=SE_DEFAULT_TABS.includes(cb.getAttribute('data-tab')));
             _seToggleResignRow();
             if(id){
                 const emp=(_staffAdminEmployees||[]).find(e=>e.id===id);
@@ -8883,9 +8892,12 @@
             const annualLeaveInput=g('seEmpAnnualLeave').value;
             const annualLeave=annualLeaveInput?parseInt(annualLeaveInput):null;
             const usedLeave=parseInt(g('seEmpUsedLeave').value)||0;
-            const selectedTabs=[]; const allTabs=document.querySelectorAll('.seEmpTab');
+            const selectedTabs=[];
             document.querySelectorAll('.seEmpTab:checked').forEach(cb=>selectedTabs.push(cb.getAttribute('data-tab')));
-            const visibleTabsValue=selectedTabs.length===allTabs.length?null:selectedTabs;
+            if(!selectedTabs.includes('info')) selectedTabs.push('info'); // 내정보는 항상 노출
+            // 기본 세트(재고 미포함)와 동일하면 null(=기본값 사용), 아니면 선택 목록을 그대로 저장
+            const _isDefaultTabs=selectedTabs.length===SE_DEFAULT_TABS.length && SE_DEFAULT_TABS.every(t=>selectedTabs.includes(t));
+            const visibleTabsValue=_isDefaultTabs?null:selectedTabs;
             const isIncentiveTarget=selectedTabs.includes('incentive');
 
             const data={
@@ -8952,6 +8964,32 @@
                     ?`삭제 완료. 화이트리스트에서 ${email} 제거됨.\n※ Firebase Auth 계정은 자동 삭제되지 않습니다 (Console에서 별도 삭제).`
                     :'삭제 완료.');
             }catch(e){ alert('삭제 실패: '+(e.message||e)); }
+        }
+
+        // 🔑 직원 비밀번호 초기화 (관리자 → resetUserPassword 콜러블, 서버가 경영관리자 권한 검증)
+        async function _seResetEmployeePassword(id){
+            if(!functions){alert('Cloud Functions 모듈이 로드되지 않았습니다. 새로고침 후 다시 시도하세요.');return;}
+            const emp=(_staffAdminEmployees||[]).find(e=>e.id===id);
+            if(!emp){alert('직원을 찾을 수 없습니다.');return;}
+            const email=String(emp.email||'').trim().toLowerCase();
+            if(!email||email.endsWith('@lumi.local')){
+                alert('이 직원은 로그인 이메일이 설정돼 있지 않습니다.\n먼저 [수정]에서 로그인 이메일을 등록하세요.');
+                return;
+            }
+            const who=emp.name||email;
+            const pw=prompt(`${who} 님의 새 비밀번호를 입력하세요 (6자 이상):`);
+            if(pw===null) return;
+            if(pw.length<6){alert('비밀번호는 6자 이상이어야 합니다.');return;}
+            if(!confirm(`${who} 님의 비밀번호를 아래 값으로 초기화합니다.\n\n${pw}\n\n· 직원은 이 비밀번호로 로그인 후 비밀번호 변경을 안내받습니다.\n계속하시겠습니까?`)) return;
+            try{
+                const fn=functions.httpsCallable('resetUserPassword');
+                await fn({email, newPassword:pw});
+                alert(`✅ ${who} 님의 비밀번호가 초기화되었습니다.\n\n새 비밀번호: ${pw}\n\n직원에게 전달해 주세요.`);
+            }catch(e){
+                console.error('직원 비번 초기화 실패:',e);
+                const msg=e?.message||e?.code||'알 수 없는 오류';
+                alert(`실패: ${msg}\n\n※ 경영관리자(bizAdmins) 권한이 있는 계정만 초기화할 수 있습니다.`);
+            }
         }
 
         // ─────────────────────────────
