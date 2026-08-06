@@ -2889,11 +2889,13 @@
                 _initFeeRealtime();
                 ensureFeeData().then(()=>{ _deriveProceduresFromFee(); _scheduleProcSync(); }).catch(()=>{});
             });
+            // 상담 차팅 노출 대상: 개인계정 + 관리자(bizAdmin/adminHigh) — 공용계정이어도 관리자면 노출
+            const _chartVisible=(currentUser?.role!=='shared') || isBizAdmin || isAdminHigh;
             // 시술 레시피 등 메타 로드 (준비 카드 자동 생성용)
-            if(currentUser?.role!=='shared') _loadProcedureMeta().catch(()=>{});
-            // 상담 차팅: 개인계정에만 홈 버튼 노출
+            if(_chartVisible) _loadProcedureMeta().catch(()=>{});
+            // 상담 차팅: 개인계정 또는 관리자 계정에 홈 버튼 노출
             const chartBtn=document.getElementById('topHomeChartingBtn');
-            if(chartBtn) chartBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
+            if(chartBtn) chartBtn.style.display=_chartVisible?'flex':'none';
             // 이전 태그 캐시 로드 (자동완성용)
             _chartingLoadRecentTags();
             // 고객채팅: 개인계정에만 노출 + 실시간 스레드 구독
