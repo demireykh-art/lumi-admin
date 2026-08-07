@@ -14,6 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root{--bg:#faf9f7;--bg-card:#fff;--primary:#9a8b7a;--primary-dark:#7a6b5a;--text:#2c2c2c;--text-secondary:#6b6b6b;--text-muted:#999;--border:#e8e4df;--green:#5a7a5a;--red:#a85a5a;--orange:#c4956a;--purple:#7a6a8a}
@@ -9843,7 +9844,10 @@
 
             // 3) 사전 급여 대장 — OT 분해 (저녁·점심·조퇴·총)
             html+=`<div style="border:1px solid #e5e7eb;border-radius:8px;padding:.75rem;background:#fff">
-                <div style="font-weight:700;font-size:.9rem;color:#111827;margin-bottom:.4rem">📊 사전 급여 대장</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem">
+                    <div style="font-weight:700;font-size:.9rem;color:#111827">📊 사전 급여 대장 <span style="font-size:.72rem;color:#9ca3af;font-weight:400">(노무사 전달용)</span></div>
+                    <button onclick="_staffExportPrePayroll()" style="background:#059669;color:#fff;border:none;padding:.4rem .8rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">⬇ 엑셀 다운로드</button>
+                </div>
                 <div style="overflow-x:auto">
                 <table style="width:100%;border-collapse:collapse;font-size:.78rem;min-width:660px">
                     <thead><tr style="background:#f9fafb">
@@ -10086,6 +10090,47 @@
             if(!confirm(`${name||''} 급여명세서를 삭제하시겠습니까?`)) return;
             try{ await db.collection('payslips').doc(docId).delete(); _staffRenderPayslipList(); }
             catch(e){ alert('삭제 실패: '+(e.message||e)); }
+        }
+
+        // 사전 급여 대장 → 엑셀 aoa 생성 (다운로드/이메일 공용)
+        function _staffBuildPrePayrollAoa(ym){
+            const active=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&!String(e.id||'').startsWith('lumi'));
+            const rows=[['직원','직급','연봉(만원) 세전','저녁OT(분)','점심OT(분)','조퇴(분)','총OT(분)','인센티브(원) 세전']];
+            active.forEach(emp=>{
+                const empAtt=_staffAdminAttendance.filter(a=>(a.employeeId===emp.id||a.empId===emp.id)&&String(a.date||'').startsWith(ym));
+                let eveningPos=0, earlyNeg=0;
+                empAtt.forEach(a=>{
+                    if(a.checkOut){
+                        const v=_staffCalcEveningOt(a.checkOut, a.date);
+                        if(v>0) eveningPos+=v; else if(v<0) earlyNeg+=v;
+                    }
+                });
+                const lunchMin=_staffAdminLunchOT.filter(o=>(o.employeeId===emp.id||o.empId===emp.id)&&String(o.date||'').startsWith(ym)).reduce((s,o)=>s+(Number(o.minutes||o.otMinutes||0)),0);
+                const totalOt=eveningPos+lunchMin+earlyNeg;
+                const {sales, japan}=_staffCalcIncentive(emp);
+                let perCase=0;
+                _staffIncRecords.filter(r=>r.employeeId===emp.id&&r.yearMonth===ym).forEach(r=>{
+                    const it=_staffIncItems.find(i=>i.id===r.itemId);
+                    if(it&&it.type==='perCase') perCase+=(it.price||0);
+                });
+                const incTotal=sales+japan+perCase;
+                let salaryDisplay=emp.salary?emp.salary+'만원':'';
+                if(emp.role==='doctor'&&emp.salaryType==='afterTax') salaryDisplay=emp.salary+'만원(세후)';
+                rows.push([emp.name, _staffRoleLabel(emp.role), salaryDisplay, eveningPos, lunchMin, earlyNeg, totalOt, incTotal>0?incTotal:'']);
+            });
+            return rows;
+        }
+        function _staffPrePayrollWorkbook(ym){
+            const ws=XLSX.utils.aoa_to_sheet(_staffBuildPrePayrollAoa(ym));
+            ws['!cols']=[{wch:10},{wch:12},{wch:16},{wch:10},{wch:10},{wch:10},{wch:10},{wch:16}];
+            const wb=XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb,ws,'사전급여대장');
+            return wb;
+        }
+        function _staffExportPrePayroll(){
+            if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리(XLSX)를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.'); return; }
+            const ym=_staffPayrollYm||_staffDefaultPayslipYM();
+            XLSX.writeFile(_staffPrePayrollWorkbook(ym), '사전급여대장_'+ym+'_노무사전달용.xlsx');
         }
 
         // 미리보기(입력값만 임시 반영)
