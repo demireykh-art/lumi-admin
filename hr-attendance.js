@@ -323,9 +323,20 @@ function getAutoJapanVisitors(){
     }catch(_){return 0;}
 }
 
+// 1000단위 콤마 유틸 (금액 입력 표시용)
+function _numComma(v){
+    const s=String(v==null?'':v).replace(/[^\d]/g,'');
+    return s?s.replace(/\B(?=(\d{3})+(?!\d))/g,','):'';
+}
+function _numParse(v){
+    const s=String(v==null?'':v).replace(/[^\d]/g,'');
+    return s?parseInt(s,10):0;
+}
+function _onCommaInput(el){ if(el) el.value=_numComma(el.value); }
+
 function renderIncInputForm(){
-    // 총매출은 수동 복원
-    document.getElementById('incTotalRevenue').value=monthlyIncInput.totalRevenue||'';
+    // 총매출은 수동 복원 (1000단위 콤마)
+    document.getElementById('incTotalRevenue').value=monthlyIncInput.totalRevenue?_numComma(monthlyIncInput.totalRevenue):'';
     // 일본인 내원 환자수는 매출 업로드 자동값으로 갱신
     document.getElementById('incJapanVisitors').value=getAutoJapanVisitors()||'';
 
@@ -356,14 +367,14 @@ function renderIncInputForm(){
             const val=monthlyIncInput.staffRevenue?.[emp.id]||'';
             return `<div class="form-row" style="margin-bottom:.3rem">
                 <div class="form-group" style="flex:0 0 100px"><label class="form-label" style="font-size:.85rem;margin-top:.4rem">${emp.name}</label></div>
-                <div class="form-group"><input type="number" class="form-input" id="incStaff_${emp.id}" value="${val}" placeholder="매출액" oninput="previewIncentive()"></div>
+                <div class="form-group"><input type="text" inputmode="numeric" class="form-input" id="incStaff_${emp.id}" value="${val?_numComma(val):''}" placeholder="매출액" oninput="_onCommaInput(this);previewIncentive()"></div>
             </div>`;
         }).join('');
 }
 
 async function saveMonthlyIncentiveInput(){
     const ym=getYM();
-    const totalRevenue=parseInt(document.getElementById('incTotalRevenue').value)||0;
+    const totalRevenue=_numParse(document.getElementById("incTotalRevenue").value);
     // 일본인 내원 환자수는 매출 업로드 자동값 사용 (수동 입력 미사용)
     const japanVisitors=getAutoJapanVisitors();
 
@@ -372,7 +383,7 @@ async function saveMonthlyIncentiveInput(){
     employees.filter(e=>e.status==='active'&&e.incType==='personal'&&(e.personalSalesSource||'manual')==='manual').forEach(emp=>{
         const el=document.getElementById('incStaff_'+emp.id);
         if(el){
-            const val=parseInt(el.value)||0;
+            const val=_numParse(el.value);
             if(val>0) staffRevenue[emp.id]=val;
         }
     });
@@ -445,12 +456,12 @@ function roundUp(value, digits){
 
 function previewIncentive(){
     // 임시로 입력값 반영 (수동 소스만 staffRevenue에 반영, 자동 소스는 calculateIncentiveForEmp가 직접 산출)
-    const totalRevenue=parseInt(document.getElementById('incTotalRevenue').value)||0;
+    const totalRevenue=_numParse(document.getElementById("incTotalRevenue").value);
     const japanVisitors=getAutoJapanVisitors();
     const staffRevenue={};
     employees.filter(e=>e.status==='active'&&e.incType==='personal'&&(e.personalSalesSource||'manual')==='manual').forEach(emp=>{
         const el=document.getElementById('incStaff_'+emp.id);
-        if(el) staffRevenue[emp.id]=parseInt(el.value)||0;
+        if(el) staffRevenue[emp.id]=_numParse(el.value);
     });
     monthlyIncInput={totalRevenue, japanVisitors, staffRevenue};
     renderIncentiveSummary();

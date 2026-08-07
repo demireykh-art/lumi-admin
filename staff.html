@@ -9090,7 +9090,7 @@
                     :'<span style="background:#dcfce7;color:#166534;font-size:.7rem;padding:1px 7px;border-radius:8px">재직</span>';
                 const loginInfo=e.email?_esc(e.email):'<span style="color:#9ca3af">로그인 미설정</span>';
                 const jid=String(e.id).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                const hasLogin=e.email&&!String(e.email).endsWith('@lumi.local');
+                const hasLogin=!!e.email;   // 이메일 또는 ID(@lumi.local) 계정이 있으면 비번 초기화 가능
                 const pwBtn=hasLogin
                     ?`<button onclick="_seResetEmployeePassword('${jid}')" style="background:#fff;color:#7a5b2e;border:1px solid #c9a86a;font-size:.78rem;padding:.35rem .6rem;border-radius:6px;cursor:pointer;flex-shrink:0">🔑 비번</button>`
                     :'';
@@ -9333,12 +9333,13 @@
             const emp=(_staffAdminEmployees||[]).find(e=>e.id===id);
             if(!emp){alert('직원을 찾을 수 없습니다.');return;}
             const email=String(emp.email||'').trim().toLowerCase();
-            if(!email||email.endsWith('@lumi.local')){
-                alert('이 직원은 로그인 이메일이 설정돼 있지 않습니다.\n먼저 [수정]에서 로그인 이메일을 등록하세요.');
+            if(!email){
+                alert('이 직원은 로그인 계정이 없습니다.\n먼저 [수정]에서 로그인 ID 또는 이메일을 등록하세요.');
                 return;
             }
             const who=emp.name||email;
-            const pw=prompt(`${who} 님의 새 비밀번호를 입력하세요 (6자 이상):`);
+            const idHint=email.endsWith('@lumi.local')?`\n(로그인 ID: ${email.split('@')[0]})`:`\n(로그인 이메일: ${email})`;
+            const pw=prompt(`${who} 님의 새 비밀번호를 입력하세요 (6자 이상):${idHint}`);
             if(pw===null) return;
             if(pw.length<6){alert('비밀번호는 6자 이상이어야 합니다.');return;}
             if(!confirm(`${who} 님의 비밀번호를 아래 값으로 초기화합니다.\n\n${pw}\n\n· 직원은 이 비밀번호로 로그인 후 비밀번호 변경을 안내받습니다.\n계속하시겠습니까?`)) return;
@@ -9737,6 +9738,17 @@
             _renderStaffAdminBody();
         }
 
+        // 1000단위 콤마 유틸 (금액 입력 표시용)
+        function _numComma(v){
+            const s=String(v==null?'':v).replace(/[^\d]/g,'');
+            return s?s.replace(/\B(?=(\d{3})+(?!\d))/g,','):'';
+        }
+        function _numParse(v){
+            const s=String(v==null?'':v).replace(/[^\d]/g,'');
+            return s?parseInt(s,10):0;
+        }
+        function _onCommaInput(el){ if(el) el.value=_numComma(el.value); }
+
         function _renderStaffPayroll(el){
             const ym=_staffPayrollYm;
             const active=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&!String(e.id||'').startsWith('lumi'));
@@ -9750,7 +9762,7 @@
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem">
                     <div style="flex:1;min-width:150px">
                         <label style="display:block;font-size:.7rem;color:#6b7280;font-weight:600;margin-bottom:.15rem">총매출</label>
-                        <input type="number" id="staffIncTotalRev" value="${totalRev}" oninput="_staffPreviewInc()" placeholder="총매출액"
+                        <input type="text" inputmode="numeric" id="staffIncTotalRev" value="${totalRev?_numComma(totalRev):''}" oninput="_onCommaInput(this)" onchange="_staffPreviewInc()" placeholder="총매출액"
                             style="width:100%;padding:.4rem .5rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:5px;box-sizing:border-box">
                     </div>
                     <div style="flex:0 0 130px">
@@ -9773,7 +9785,7 @@
                         const v=(_staffMonthIncInput.staffRevenue||{})[emp.id]||'';
                         html+=`<div style="flex:1 1 200px;display:flex;align-items:center;gap:.35rem">
                             <span style="font-size:.78rem;font-weight:600;color:#374151;min-width:65px">${_esc(emp.name)}</span>
-                            <input type="number" id="staffIncEmp_${_esc(emp.id)}" value="${v}" placeholder="개인매출" oninput="_staffPreviewInc()"
+                            <input type="text" inputmode="numeric" id="staffIncEmp_${_esc(emp.id)}" value="${v?_numComma(v):''}" placeholder="개인매출" oninput="_onCommaInput(this)" onchange="_staffPreviewInc()"
                                 style="flex:1;padding:.35rem .45rem;font-size:.8rem;border:1px solid #d1d5db;border-radius:5px">
                         </div>`;
                     }
@@ -9891,12 +9903,12 @@
 
         // 미리보기(입력값만 임시 반영)
         function _staffPreviewInc(){
-            const total=parseInt(document.getElementById('staffIncTotalRev')?.value)||0;
+            const total=_numParse(document.getElementById('staffIncTotalRev')?.value);
             const staffRev={};
             const active=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&e.incType==='personal'&&(e.personalSalesSource||'manual')==='manual');
             active.forEach(emp=>{
                 const el=document.getElementById('staffIncEmp_'+emp.id);
-                if(el){ const v=parseInt(el.value)||0; if(v>0) staffRev[emp.id]=v; }
+                if(el){ const v=_numParse(el.value); if(v>0) staffRev[emp.id]=v; }
             });
             _staffMonthIncInput={..._staffMonthIncInput, totalRevenue:total, staffRevenue:staffRev};
             _renderStaffAdminBody(); // 요약·대장 재계산
