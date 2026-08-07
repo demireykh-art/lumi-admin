@@ -668,3 +668,103 @@ exports.parseRevenueFile = onCall(
     };
   }
 );
+
+// ================================================================
+// sendPrePayrollEmail (HTTPS Callable)
+//   · 사전급여대장 xlsx(base64)를 노무사 이메일로 발송
+//   · 발신: 회사 구글 워크스페이스 계정 (서비스계정 도메인 전체 위임 · gmail.send)
+//   · 호출자는 settings/bizAdmins 화이트리스트의 경영관리자여야 함
+//   ⚠️ 사전 설정 필요:
+//     1) Google Cloud 콘솔에서 Gmail API 사용 설정
+//     2) Workspace 관리콘솔 > 보안 > API 제어 > 도메인 전체 위임에
+//        서비스계정 client_id 에 scope https://www.googleapis.com/auth/gmail.send 위임
+//     3) senderEmail 은 위임을 허용한 워크스페이스 도메인의 실제 사용자여야 함
+// ================================================================
+exports.sendPrePayrollEmail = onCall(
+  {region: 'asia-northeast3', cors: true, secrets: [DRIVE_SERVICE_KEY]},
+  async (request) => {
+    // 1) 인증 + 경영관리자(bizAdmins) 권한
+    if (!request.auth) throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
+    const callerEmail = String(request.auth.token.email || '').toLowerCase();
+    if (!callerEmail) throw new HttpsError('permission-denied', '이메일이 확인되지 않습니다.');
+    const adminsDoc = await admin.firestore().collection('settings').doc('bizAdmins').get();
+    const allowed = (adminsDoc.exists && Array.isArray(adminsDoc.data().emails))
+      ? adminsDoc.data().emails.map((e) => String(e).toLowerCase()) : [];
+    if (!allowed.includes(callerEmail)) {
+      logger.warn(`Unauthorized sendPrePayrollEmail by ${callerEmail}`);
+      throw new HttpsError('permission-denied', '경영관리자 권한이 없습니다.');
+    }
+
+    // 2) 입력 검증
+    const d = request.data || {};
+    const to = String(d.to || '').trim();
+    const senderEmail = String(d.senderEmail || '').trim();
+    const ym = String(d.ym || '').trim();
+    const xlsxBase64 = String(d.xlsxBase64 || '');
+    const subject = String(d.subject || `[루미의원] ${ym} 사전급여대장`).slice(0, 200);
+    const bodyText = String(d.body || `${ym} 사전급여대장을 첨부합니다.\n\n- 루미의원 경영관리`).slice(0, 5000);
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRe.test(to)) throw new HttpsError('invalid-argument', '받는 사람(노무사) 이메일이 올바르지 않습니다.');
+    if (!emailRe.test(senderEmail)) throw new HttpsError('invalid-argument', '발신 계정(워크스페이스) 이메일이 올바르지 않습니다.');
+    if (!xlsxBase64) throw new HttpsError('invalid-argument', '첨부할 엑셀 데이터가 없습니다.');
+    if (xlsxBase64.length > 30 * 1024 * 1024) throw new HttpsError('invalid-argument', '첨부 용량이 너무 큽니다.');
+
+    // 3) Gmail 클라이언트 (서비스계정 도메인 위임 · senderEmail 로 impersonate)
+    const {google} = require('googleapis');
+    const raw = process.env.DRIVE_SERVICE_KEY;
+    if (!raw) throw new HttpsError('failed-precondition', 'DRIVE_SERVICE_KEY 시크릿 미설정');
+    let key;
+    try { key = JSON.parse(raw); }
+    catch (e) { throw new HttpsError('failed-precondition', 'DRIVE_SERVICE_KEY JSON 파싱 실패'); }
+    const auth = new google.auth.JWT({
+      email: key.client_email,
+      key: key.private_key,
+      scopes: ['https://www.googleapis.com/auth/gmail.send'],
+      subject: senderEmail, // 도메인 위임 대상 워크스페이스 사용자
+    });
+    try { await auth.authorize(); }
+    catch (e) {
+      logger.error('Gmail auth 실패:', e);
+      throw new HttpsError('failed-precondition', 'Gmail 인증 실패. 서비스계정 도메인 전체 위임(gmail.send)과 발신 계정 설정을 확인하세요.');
+    }
+    const gmail = google.gmail({version: 'v1', auth});
+
+    // 4) MIME 메시지 구성 (첨부: xlsx). 파일명은 ASCII 로 고정(한글 인코딩 이슈 회피)
+    const b64 = (s) => Buffer.from(s, 'utf-8').toString('base64');
+    const attachName = `PrePayroll_${ym || 'export'}.xlsx`;
+    const boundary = 'lumi_' + key.client_email.length + '_' + ym.replace(/[^0-9]/g, '');
+    const mime = [
+      `From: ${senderEmail}`,
+      `To: ${to}`,
+      `Subject: =?UTF-8?B?${b64(subject)}?=`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      b64(bodyText),
+      `--${boundary}`,
+      'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${attachName}"`,
+      '',
+      xlsxBase64,
+      `--${boundary}--`,
+      '',
+    ].join('\r\n');
+    const rawMsg = Buffer.from(mime, 'utf-8').toString('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    // 5) 발송
+    try {
+      const res = await gmail.users.messages.send({userId: 'me', requestBody: {raw: rawMsg}});
+      logger.info(`사전급여대장 메일 발송 by ${callerEmail} → ${to} (from ${senderEmail}, id=${res.data.id})`);
+      return {success: true, id: res.data.id, to, from: senderEmail};
+    } catch (e) {
+      logger.error('Gmail 발송 실패:', e);
+      throw new HttpsError('internal', 'Gmail 발송 실패: ' + (e.message || e.code || String(e)));
+    }
+  }
+);

@@ -9846,7 +9846,10 @@
             html+=`<div style="border:1px solid #e5e7eb;border-radius:8px;padding:.75rem;background:#fff">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem">
                     <div style="font-weight:700;font-size:.9rem;color:#111827">📊 사전 급여 대장 <span style="font-size:.72rem;color:#9ca3af;font-weight:400">(노무사 전달용)</span></div>
-                    <button onclick="_staffExportPrePayroll()" style="background:#059669;color:#fff;border:none;padding:.4rem .8rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">⬇ 엑셀 다운로드</button>
+                    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+                        <button onclick="_staffExportPrePayroll()" style="background:#059669;color:#fff;border:none;padding:.4rem .8rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">⬇ 엑셀 다운로드</button>
+                        <button onclick="_staffEmailPrePayroll()" style="background:#4338ca;color:#fff;border:none;padding:.4rem .8rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">✉️ 노무사 이메일 전송</button>
+                    </div>
                 </div>
                 <div style="overflow-x:auto">
                 <table style="width:100%;border-collapse:collapse;font-size:.78rem;min-width:660px">
@@ -10131,6 +10134,45 @@
             if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리(XLSX)를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.'); return; }
             const ym=_staffPayrollYm||_staffDefaultPayslipYM();
             XLSX.writeFile(_staffPrePayrollWorkbook(ym), '사전급여대장_'+ym+'_노무사전달용.xlsx');
+        }
+        // 노무사 이메일 자동 전송 (Cloud Function sendPrePayrollEmail · 워크스페이스 발신)
+        let _staffPayrollMailCfg=null;
+        async function _staffEmailPrePayroll(){
+            if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리(XLSX)를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.'); return; }
+            if(!functions){ alert('Cloud Functions 모듈이 로드되지 않았습니다. 새로고침 후 다시 시도하세요.'); return; }
+            const ym=_staffPayrollYm||_staffDefaultPayslipYM();
+            const reEmail=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            // 저장된 설정 로드(노무사·발신 계정)
+            let cfg=_staffPayrollMailCfg;
+            if(!cfg){
+                try{ const doc=await db.collection('settings').doc('payroll').get(); cfg=doc.exists?doc.data():{}; }catch(_){ cfg={}; }
+                _staffPayrollMailCfg=cfg;
+            }
+            let to=prompt('노무사(받는 사람) 이메일:', cfg.laborEmail||'');
+            if(to===null) return; to=to.trim();
+            if(!reEmail.test(to)){ alert('받는 사람 이메일 형식이 올바르지 않습니다.'); return; }
+            let from=prompt('발신 계정 (회사 구글 워크스페이스 이메일):', cfg.senderEmail||'');
+            if(from===null) return; from=from.trim();
+            if(!reEmail.test(from)){ alert('발신 계정 이메일 형식이 올바르지 않습니다.'); return; }
+            if(!confirm(`${ym} 사전급여대장을 전송합니다.\n\n받는 사람(노무사): ${to}\n보내는 사람(워크스페이스): ${from}\n\n계속하시겠습니까?`)) return;
+            // 설정 저장(다음 편의)
+            try{
+                await db.collection('settings').doc('payroll').set({laborEmail:to, senderEmail:from},{merge:true});
+                _staffPayrollMailCfg={...cfg, laborEmail:to, senderEmail:from};
+            }catch(_){}
+            // xlsx → base64
+            let xlsxBase64='';
+            try{ xlsxBase64=XLSX.write(_staffPrePayrollWorkbook(ym), {bookType:'xlsx', type:'base64'}); }
+            catch(e){ alert('엑셀 생성 실패: '+(e.message||e)); return; }
+            try{
+                const fn=functions.httpsCallable('sendPrePayrollEmail');
+                await fn({to, senderEmail:from, ym, xlsxBase64});
+                alert(`✅ ${ym} 사전급여대장을 전송했습니다.\n받는 사람: ${to}`);
+            }catch(e){
+                console.error('사전급여대장 이메일 실패:',e);
+                const msg=e?.message||e?.code||'알 수 없는 오류';
+                alert(`전송 실패: ${msg}\n\n※ 최초 사용 전, 서비스계정 도메인 위임(gmail.send)과 발신 계정 설정이 필요합니다.\n(권한: 경영관리자 bizAdmins)`);
+            }
         }
 
         // 미리보기(입력값만 임시 반영)
