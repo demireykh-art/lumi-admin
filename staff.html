@@ -2379,6 +2379,7 @@
             try{
                 await ensureFeeData();               // _procCache 파생
                 await _loadProcedureMeta(true);      // recipe 등 메타
+                await _loadChartEquipment();         // 장비 마스터 리스트
                 if(!invItems.length){                // 재고 아이템 (레시피 재료 선택용)
                     try{ const s=await db.collection('inventory').orderBy('name').get(); invItems=s.docs.map(d=>({id:d.id,...d.data()})); }catch(_){}
                 }
@@ -2394,10 +2395,30 @@
             const s=String(name||'').trim();
             return (invItems||[]).find(i=>String(i.name||'').trim()===s)||null;
         }
+        // ── 장비 마스터 리스트 (settings/chartEquipment) — 시술 마스터 장비 선택용 ──
+        let _chartEquipmentList=[];
+        async function _loadChartEquipment(){
+            try{
+                const doc=await db.collection('settings').doc('chartEquipment').get();
+                const l=doc.exists?doc.data()?.list:null;
+                _chartEquipmentList=Array.isArray(l)?l.filter(Boolean):[];
+            }catch(e){ console.warn('장비 리스트 로드 스킵:', e?.message||e); }
+            return _chartEquipmentList;
+        }
+        async function _saveChartEquipment(){
+            try{ await db.collection('settings').doc('chartEquipment').set({ list:_chartEquipmentList, updatedAt:new Date().toISOString() }, {merge:true}); }
+            catch(e){ console.warn('장비 리스트 저장 스킵:', e?.message||e); }
+        }
+        function _chartEquipOptions(){
+            return (_chartEquipmentList||[]).map(n=>`<option value="${_esc(n)}"></option>`).join('');
+        }
         function _procMetaEnsure(procId){
-            if(!_procMeta[procId]) _procMeta[procId]={ recipe:[], needsAnesthesia:false, needsPhoto:true, minutes:0, code:'' };
-            if(!Array.isArray(_procMeta[procId].recipe)) _procMeta[procId].recipe=[];
-            return _procMeta[procId];
+            if(!_procMeta[procId]) _procMeta[procId]={ recipe:[], equipment:[], prepNote:'', needsAnesthesia:false, needsPhoto:true, minutes:0, code:'' };
+            const m=_procMeta[procId];
+            if(!Array.isArray(m.recipe)) m.recipe=[];
+            if(!Array.isArray(m.equipment)) m.equipment=[];
+            if(typeof m.prepNote!=='string') m.prepNote='';
+            return m;
         }
         function _renderProcMasterList(){
             const wrap=document.getElementById('procMasterList');
@@ -2452,6 +2473,19 @@
                         style="width:60px;padding:.3rem .4rem;font-size:.78rem;border:1px solid #86efac;border-radius:5px;background:#fff">
                     <button onclick="procRecipeAddItem('${p.procId}')" style="background:#166534;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer">+ 추가</button>
                 </div>
+                <div style="font-size:.72rem;font-weight:700;color:#166534;margin:.2rem 0 .3rem">장비</div>
+                <div id="procEquipChips-${p.procId}" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.3rem">${(meta.equipment||[]).map((e,i)=>_procEquipChip(p.procId,e,i)).join('')||'<span style="font-size:.72rem;color:#9ca3af">장비 없음</span>'}</div>
+                <div style="display:flex;gap:.35rem;align-items:center;margin-bottom:.5rem">
+                    <input type="text" id="procEquipAdd-${p.procId}" list="procEquipDL" placeholder="장비 선택·입력 (예: 피코토닝)"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();procEquipAdd('${p.procId}');}"
+                        style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.78rem;border:1px solid #86efac;border-radius:5px;background:#fff">
+                    <button onclick="procEquipAdd('${p.procId}')" style="background:#166534;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer">+ 장비</button>
+                </div>
+
+                <div style="font-size:.72rem;font-weight:700;color:#166534;margin-bottom:.2rem">준비 / Mix 안내</div>
+                <textarea id="procPrepNote-${p.procId}" rows="2" placeholder="예: 리본느pdrn 생리식염수 0.7cc로 mix, 2시린지 분주" onchange="procSetPrepNote('${p.procId}',this.value)"
+                    style="width:100%;padding:.4rem;font-size:.78rem;border:1px solid #86efac;border-radius:5px;box-sizing:border-box;font-family:inherit;line-height:1.4;resize:vertical;background:#fff;margin-bottom:.5rem">${_esc(meta.prepNote||'')}</textarea>
+
                 <div style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
                     <label style="font-size:.76rem;color:#374151;display:flex;align-items:center;gap:.25rem;cursor:pointer">
                         <input type="checkbox" ${meta.needsAnesthesia?'checked':''} onchange="procToggleFlag('${p.procId}','needsAnesthesia')"> 💉 마취 필요</label>
@@ -2462,7 +2496,28 @@
                 </div>
                 <button onclick="procRecipeSave('${p.procId}')" style="width:100%;background:#4338ca;color:#fff;border:none;padding:.5rem;border-radius:6px;font-size:.82rem;font-weight:700;cursor:pointer">💾 이 시술 저장</button>
                 <datalist id="procInvDL">${_procInvOptions()}</datalist>
+                <datalist id="procEquipDL">${_chartEquipOptions()}</datalist>
             </div>`;
+        }
+        function _procEquipChip(procId, name, i){
+            return `<span style="display:inline-flex;align-items:center;gap:.25rem;padding:.15rem .45rem;background:#e0e7ff;color:#3730a3;font-size:.72rem;border-radius:10px">🔧 ${_esc(name)}
+                <button onclick="procEquipRemove('${procId}',${i})" style="background:none;border:none;color:#3730a3;padding:0;font-size:.8rem;cursor:pointer;line-height:1">×</button></span>`;
+        }
+        function procEquipAdd(procId){
+            const el=document.getElementById('procEquipAdd-'+procId);
+            const name=(el?.value||'').trim(); if(!name) return;
+            const meta=_procMetaEnsure(procId);
+            if(!meta.equipment.includes(name)) meta.equipment.push(name);
+            // 마스터 리스트에 누적
+            if(!_chartEquipmentList.includes(name)){ _chartEquipmentList.push(name); _chartEquipmentList.sort((a,b)=>a.localeCompare(b,'ko')); _saveChartEquipment(); }
+            if(el) el.value='';
+            _renderProcMasterList();
+        }
+        function procEquipRemove(procId, i){
+            const meta=_procMetaEnsure(procId); (meta.equipment||[]).splice(i,1); _renderProcMasterList();
+        }
+        function procSetPrepNote(procId, val){
+            const meta=_procMetaEnsure(procId); meta.prepNote=val;
         }
         function procMasterEditRecipe(procId){
             _procMasterEditingId=(_procMasterEditingId===procId)?null:procId;
@@ -2507,6 +2562,8 @@
                     code: meta.code||p.code||'', name: p.name||'', category: p.category||'',
                     treatmentName: p.treatmentName||'', price: Number(p.price)||0, vatIncluded:true,
                     recipe: (meta.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'',memo:r.memo||''})),
+                    equipment: Array.isArray(meta.equipment)?meta.equipment.slice():[],
+                    prepNote: meta.prepNote||'',
                     needsAnesthesia: !!meta.needsAnesthesia, needsPhoto: meta.needsPhoto!==false,
                     minutes: Number(meta.minutes)||0, active:true, updatedAt:now, updatedBy:by
                 };
@@ -5976,6 +6033,8 @@
                     const x=d.data()||{};
                     m[d.id]={
                         recipe: Array.isArray(x.recipe)?x.recipe:[],
+                        equipment: Array.isArray(x.equipment)?x.equipment:[],
+                        prepNote: x.prepNote||'',
                         needsAnesthesia: !!x.needsAnesthesia,
                         needsPhoto: x.needsPhoto!==false,
                         minutes: Number(x.minutes)||0,
@@ -7585,6 +7644,33 @@
         }
 
         // ─── 원장 섹션 ───
+        // 원장 플랜/오늘시행 시술의 준비 정보(장비·레시피·Mix) 읽기 표시
+        function _cePlanPrepInfoHtml(d){
+            const seen=new Set(); const items=[];
+            [...(d.treatmentPlan||[]), ...(d.todayProcedures||[])].forEach(x=>{
+                const pid=x.procId; if(!pid || seen.has(pid)) return; seen.add(pid);
+                const m=_procMeta[pid]; if(!m) return;
+                const hasInfo=(m.equipment||[]).length || (m.recipe||[]).length || (m.prepNote||'').trim();
+                if(!hasInfo) return;
+                items.push({ name:x.procName||(_procById[pid]?_procDisplayName(_procById[pid]):'(시술)'), m });
+            });
+            if(!items.length) return '';
+            const body=items.map(it=>{
+                const eq=(it.m.equipment||[]).map(e=>`<span style="display:inline-block;background:#e0e7ff;color:#3730a3;font-size:.68rem;padding:1px 6px;border-radius:8px;margin:0 3px 2px 0">🔧 ${_esc(e)}</span>`).join('');
+                const rc=(it.m.recipe||[]).map(r=>`<div style="font-size:.72rem;color:#374151">· ${_esc(r.itemName||'')} <strong>${r.qty??0}${_esc(r.unit||'')}</strong>${r.memo?` <span style="color:#9ca3af">(${_esc(r.memo)})</span>`:''}</div>`).join('');
+                const anes=it.m.needsAnesthesia?' 💉':''; const photo=(it.m.needsPhoto!==false)?' 📷':'';
+                return `<div style="border-top:1px dashed #bae6fd;padding:.35rem 0">
+                    <div style="font-size:.76rem;font-weight:700;color:#0369a1;margin-bottom:.15rem">${_esc(it.name)}${anes}${photo}</div>
+                    ${eq?`<div style="margin-bottom:.15rem">${eq}</div>`:''}
+                    ${rc?`<div style="margin-bottom:.15rem">${rc}</div>`:''}
+                    ${it.m.prepNote?`<div style="font-size:.72rem;color:#7c3aed;background:#faf5ff;border-radius:5px;padding:.2rem .4rem"><strong>Mix/준비:</strong> ${_esc(it.m.prepNote)}</div>`:''}
+                </div>`;
+            }).join('');
+            return `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:.4rem .6rem;margin-top:.5rem">
+                <div style="font-size:.72rem;font-weight:700;color:#0369a1">🧪 시술 준비 정보 <span style="font-weight:400;color:#0ea5e9">(시술 마스터 기준)</span></div>
+                ${body}
+            </div>`;
+        }
         function _ceDoctorSectionHtml(v, ro){
             const d=v.doctorSection||{};
             const dis=ro?'disabled':'';
@@ -7626,6 +7712,8 @@
                 ${ro?'':`<input type="text" id="ceTodayInput" list="ceProcDL" placeholder="시술 검색 (Enter로 추가)"
                     onkeydown="if(event.key==='Enter'){event.preventDefault();chartingAddPlanItem('today');}"
                     style="width:100%;padding:.45rem;font-size:.85rem;border:1px solid #7dd3fc;border-radius:6px;box-sizing:border-box;background:#fff">`}
+
+                ${_cePlanPrepInfoHtml(d)}
 
                 <label style="display:block;font-size:.72rem;color:#0369a1;font-weight:600;margin:.5rem 0 .15rem">경과 (재진)</label>
                 <textarea id="ceProgressNote" rows="2" ${dis} placeholder="재진 경과·반응" onchange="_chartingDraft.doctorSection.progressNote=this.value"
