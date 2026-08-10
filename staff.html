@@ -5941,6 +5941,7 @@
                             category: c.name || '',
                             treatmentName: t.name || '',
                             price: (Number(v.price)||0)*10000,   // 만원 → 원
+                            sessions: Number(v.sessions)||0,      // 횟수 (0=단건)
                             vatIncluded: true,
                             tags: Array.isArray(v.tags)?v.tags.slice():[],
                             active: true
@@ -6145,6 +6146,11 @@
                                     <input type="text" id="feeVarLabel-${v.id}" value="${_esc(v.label)}" placeholder="시술명"
                                         style="flex:1 1 60%;min-width:120px;padding:.35rem .5rem;font-size:.85rem;border:1px solid #f59e0b;border-radius:5px;background:#fff">
                                     <div style="display:flex;align-items:center;gap:.2rem;flex-shrink:0">
+                                        <input type="number" id="feeVarSessions-${v.id}" value="${v.sessions||''}" min="0" step="1" placeholder="횟수"
+                                            style="width:46px;text-align:right;padding:.35rem .3rem;font-size:.85rem;border:1px solid #f59e0b;border-radius:5px;background:#fff">
+                                        <span style="font-size:.78rem;color:#92400e;font-weight:600">회</span>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:.2rem;flex-shrink:0">
                                         <input type="number" id="feeVarPrice-${v.id}" value="${v.price||0}" step="0.1"
                                             style="width:60px;text-align:right;padding:.35rem .3rem;font-size:.85rem;border:1px solid #f59e0b;border-radius:5px;background:#fff">
                                         <span style="font-size:.78rem;color:#92400e;font-weight:600">만</span>
@@ -6169,6 +6175,7 @@
                                 ${_esc(v.label)}
                                 ${_feeTagsHtml(v.tags)}
                             </div>
+                            ${v.sessions?`<div style="font-size:.74rem;color:#6d28d9;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;padding:1px 7px;flex-shrink:0;font-weight:600">${v.sessions}회</div>`:''}
                             <div style="font-size:.85rem;color:#111827;font-weight:600;flex-shrink:0">₩${priceWon.toLocaleString()}</div>
                         </div>`;
                     }).join('');
@@ -6241,9 +6248,12 @@
             const label=(document.getElementById('feeVarLabel-'+vid)?.value||'').trim();
             const priceRaw=document.getElementById('feeVarPrice-'+vid)?.value;
             const price=priceRaw===''?0:(Number(priceRaw)||0);
+            const sessRaw=document.getElementById('feeVarSessions-'+vid)?.value;
+            const sessions=sessRaw?(parseInt(String(sessRaw).replace(/[^\d]/g,''))||0):0;
             if(!label){ alert('시술명을 입력하세요.'); return; }
             v.label=label;
             v.price=price;
+            if(sessions>0) v.sessions=sessions; else delete v.sessions;
             _feeEditingVariantId=null;
             saveFeeData();
             renderFeeList();
