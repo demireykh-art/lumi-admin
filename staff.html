@@ -7588,7 +7588,7 @@
         function _ceDoctorSectionHtml(v, ro){
             const d=v.doctorSection||{};
             const dis=ro?'disabled':'';
-            const diagChips=(d.diagnosis||[]).map((x,i)=>_ceChip(x.detail?`${x.tag}(${x.detail})`:x.tag, `chartingRemoveDiag(${i})`, '#dbeafe', '#1e40af', ro)).join('');
+            const diagChips=(d.diagnosis||[]).map((x,i)=>_ceDiagChip(x,i,ro)).join('');
             const planChips=(d.treatmentPlan||[]).map((x,i)=>_ceChip(x.procName||'(시술)', `chartingRemovePlanItem('plan',${i})`, '#dcfce7', '#166534', ro)).join('');
             const todayChips=(d.todayProcedures||[]).map((x,i)=>_ceChip(x.procName||'(시술)', `chartingRemovePlanItem('today',${i})`, '#ede9fe', '#5b21b6', ro)).join('');
             const vt=d.visitType||'first';
@@ -7602,11 +7602,18 @@
                     </select>
                 </div>
 
-                <label style="display:block;font-size:.72rem;color:#0369a1;font-weight:600;margin:.25rem 0 .15rem">진단 태그</label>
+                <label style="display:block;font-size:.72rem;color:#0369a1;font-weight:600;margin:.25rem 0 .15rem">진단 태그 <span style="font-weight:400;color:#0ea5e9">(진단 + 부위)</span></label>
                 <div id="ceDiagChips" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.3rem">${diagChips}</div>
-                ${ro?'':`<input type="text" id="ceDiagInput" list="ceDiagDL" placeholder="예: 색소, 흑자·기미 (Enter로 추가)"
-                    onkeydown="if(event.key==='Enter'){event.preventDefault();chartingAddDiag();}"
-                    style="width:100%;padding:.45rem;font-size:.85rem;border:1px solid #7dd3fc;border-radius:6px;box-sizing:border-box;background:#fff">`}
+                ${ro?'':`<div style="display:flex;gap:.3rem;flex-wrap:wrap">
+                    <input type="text" id="ceDiagInput" list="ceDiagDL" placeholder="진단 (예: 색소)"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('ceDiagDetail').focus();}"
+                        style="flex:1;min-width:110px;padding:.45rem;font-size:.85rem;border:1px solid #7dd3fc;border-radius:6px;box-sizing:border-box;background:#fff">
+                    <input type="text" id="ceDiagDetail" placeholder="부위 (예: 팔 양측)"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();chartingAddDiag();}"
+                        style="flex:1;min-width:110px;padding:.45rem;font-size:.85rem;border:1px solid #7dd3fc;border-radius:6px;box-sizing:border-box;background:#fff">
+                    <button onclick="chartingAddDiag()" style="background:#0369a1;color:#fff;border:none;padding:.45rem .7rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;flex-shrink:0">추가</button>
+                </div>
+                <div style="font-size:.66rem;color:#0ea5e9;margin-top:.15rem">칩을 더블탭하면 부위를 수정할 수 있어요. 진단칸에 "색소>팔 양측" 처럼 입력해도 됩니다.</div>`}
 
                 <label style="display:block;font-size:.72rem;color:#0369a1;font-weight:600;margin:.5rem 0 .15rem">플랜 (시술)</label>
                 <div id="cePlanChips" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.3rem">${planChips}</div>
@@ -7791,15 +7798,39 @@
         }
 
         // ── 원장: 진단 태그 chip ──
+        // 진단 chip (진단 + 부위). 더블탭 시 부위 편집.
+        function _ceDiagChip(x,i,ro){
+            const label=x.detail?`${x.tag} · ${x.detail}`:x.tag;
+            return `<span style="display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .5rem;background:#dbeafe;color:#1e40af;font-size:.75rem;border-radius:12px">
+                <span ${ro?'':`ondblclick="chartingEditDiagDetail(${i})" title="더블탭: 부위 편집" style="cursor:pointer"`}>${_esc(label)}</span>
+                ${ro?'':`<button onclick="chartingRemoveDiag(${i})" style="background:none;border:none;color:#1e40af;padding:0;font-size:.85rem;cursor:pointer;line-height:1">×</button>`}
+            </span>`;
+        }
         function chartingAddDiag(){
             const inp=document.getElementById('ceDiagInput');
+            const detEl=document.getElementById('ceDiagDetail');
             const val=(inp?.value||'').trim();
-            if(!val) return;
+            const detail=(detEl?.value||'').trim();
+            if(!val){ if(detEl) detEl.value=''; if(inp) inp.focus(); return; }
             const arr=_chartingDraft.doctorSection.diagnosis=_chartingDraft.doctorSection.diagnosis||[];
-            val.split(',').map(s=>s.trim()).filter(Boolean).forEach(tag=>{
-                if(!arr.some(x=>x.tag===tag)) arr.push({tag, detail:''});
+            // 콤마로 다중 진단, "진단>부위"·"진단-부위" 인라인 부위 지원
+            val.split(',').map(s=>s.trim()).filter(Boolean).forEach(part=>{
+                let tag=part, det=detail;
+                const m=part.split(/\s*[>\-–]\s*/);
+                if(m.length>=2){ tag=m[0].trim(); det=(m.slice(1).join(' ').trim())||detail; }
+                if(!tag) return;
+                const ex=arr.find(y=>y.tag===tag);
+                if(ex){ if(det) ex.detail=det; } else arr.push({tag, detail:det||''});
             });
-            if(inp){ inp.value=''; inp.focus(); }
+            if(inp){ inp.value=''; } if(detEl){ detEl.value=''; }
+            if(inp) inp.focus();
+            _ceRefreshDiagChips();
+        }
+        function chartingEditDiagDetail(i){
+            const x=(_chartingDraft.doctorSection.diagnosis||[])[i]; if(!x) return;
+            const det=prompt(`"${x.tag}" 부위/세부:`, x.detail||'');
+            if(det===null) return;
+            x.detail=det.trim();
             _ceRefreshDiagChips();
         }
         function chartingRemoveDiag(i){
@@ -7808,7 +7839,7 @@
         }
         function _ceRefreshDiagChips(){
             const el=document.getElementById('ceDiagChips'); if(!el) return;
-            el.innerHTML=(_chartingDraft.doctorSection.diagnosis||[]).map((x,i)=>_ceChip(x.detail?`${x.tag}(${x.detail})`:x.tag, `chartingRemoveDiag(${i})`, '#dbeafe', '#1e40af', false)).join('');
+            el.innerHTML=(_chartingDraft.doctorSection.diagnosis||[]).map((x,i)=>_ceDiagChip(x,i,false)).join('');
         }
         // ── 원장: 플랜/오늘시행 시술 chip (procedures 자동완성) ──
         function chartingAddPlanItem(kind){
@@ -8260,7 +8291,7 @@
             if(!d) return;
             // 현재 탭 입력창에 남은 값 흡수 (원장 탭 chip 계열)
             if(_chartingActiveTab==='doctor'){
-                if((document.getElementById('ceDiagInput')?.value||'').trim()) chartingAddDiag();
+                if(((document.getElementById('ceDiagInput')?.value||'')+ (document.getElementById('ceDiagDetail')?.value||'')).trim()) chartingAddDiag();
                 if((document.getElementById('cePlanInput')?.value||'').trim()) chartingAddPlanItem('plan');
                 if((document.getElementById('ceTodayInput')?.value||'').trim()) chartingAddPlanItem('today');
             }
