@@ -461,7 +461,8 @@ async function loadAllData(){
             typeof loadAuditRecords==='function'?loadAuditRecords():Promise.resolve(),
             typeof loadPurchaseRequests==='function'?loadPurchaseRequests():Promise.resolve(),
             loadMealAllRecords(),
-            typeof loadMonthlyIncentiveInput==='function'?loadMonthlyIncentiveInput():Promise.resolve()
+            typeof loadMonthlyIncentiveInput==='function'?loadMonthlyIncentiveInput():Promise.resolve(),
+            typeof loadProductRatings==='function'?loadProductRatings():Promise.resolve()
         ]);
         
         renderAll();
@@ -555,6 +556,8 @@ function renderAll(){
     if(typeof renderPurchaseRequests==='function')renderPurchaseRequests();
     // 손익
     if(typeof renderPLStatement==='function')renderPLStatement();
+    // 제품 평점
+    if(typeof renderProductRatings==='function')renderProductRatings();
 }
 
 // ===== Init =====

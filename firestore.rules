@@ -29,6 +29,7 @@ service cloud.firestore {
     match /vendors/{id}                        { allow read, write: if signedIn(); }
     match /purchaseRequests/{id}               { allow read, write: if signedIn(); }
     match /categoryRules/{id}                  { allow read, write: if signedIn(); }
+    match /productRatings/{id}                  { allow read, write: if signedIn(); }
 
     // ── 인사·근태·급여 ──
     match /employees/{id}                      { allow read, write: if signedIn(); }

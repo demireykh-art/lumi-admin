@@ -57,6 +57,7 @@
             <div class="nav-tab" data-tab="employee">직원관리</div>
             <div class="nav-tab" data-tab="inventory">재고관리</div>
             <div class="nav-tab" data-tab="pl">손익 리포트</div>
+            <div class="nav-tab" data-tab="rating">⭐ 제품 평점</div>
             <div class="nav-tab" data-tab="settings">⚙ 설정</div>
         </nav>
         <!-- Dashboard Top Cards -->
@@ -486,6 +487,29 @@
                 </div>
                 <div id="plContainer">
                     <div style="text-align:center;padding:3rem;color:var(--text-secondary)">데이터를 불러오는 중...</div>
+                </div>
+            </div>
+
+            <!-- ===== 제품 평점 탭 ===== -->
+            <div class="tab-content" id="tab-rating">
+                <div class="section-header">
+                    <div class="section-title">⭐ 제품별 평점</div>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                        <span id="ratingSaveStatus" style="font-size:.8rem;color:var(--text-secondary)"></span>
+                        <button class="btn btn-outline" onclick="addRatingColumn()">+ 평가항목 추가</button>
+                        <button class="btn btn-outline" onclick="addRatingRow()">+ 상품 추가</button>
+                        <button class="btn btn-primary" onclick="saveProductRatings()">💾 저장</button>
+                    </div>
+                </div>
+                <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:1rem">
+                    상품명(또는 오더명)을 입력하고 각 항목의 별을 클릭해 3점 만점으로 평가하세요.
+                    평가항목(헤더)과 상품(행)은 자유롭게 추가·수정·삭제할 수 있으며, 변경 사항은 자동 저장됩니다.
+                </p>
+                <div class="table-container">
+                    <table id="ratingTable">
+                        <thead id="ratingHead"></thead>
+                        <tbody id="ratingBody"></tbody>
+                    </table>
                 </div>
             </div>
 
@@ -1017,6 +1041,7 @@
     <script src="expense.js"></script>
     <script src="hr-attendance.js?v=20260613b"></script>
     <script src="inventory.js?v=20260613d"></script>
+    <script src="product-rating.js?v=20260811a"></script>
     <script src="finance.js"></script>
     <script src="version-check.js"></script>
 </body>
