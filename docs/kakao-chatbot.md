@@ -111,13 +111,18 @@ settings/chatTagTaxonomy {
 
 기존 `webhookKakao`·`chatThreads` 스캐폴드 재활용. Phase 1~3은 심사 없이, Phase 4만 상담톡 관문.
 
-### Phase 1 — 우리 챗봇 (인바운드 자동응대 + 태깅)
-- `webhookKakao` 스텁을 **오픈빌더 스킬서버 스펙**으로 개조
-  - 요청: `userRequest.utterance`, `userRequest.user.id`
-  - 응답: 스킬 응답 JSON (`template.outputs`)
-- 시나리오·폴백(영업시간·시술·예약 안내) + 시술명·관심사 태그를 `chatThreads` 기록
-- 사람 필요 시 "상담직원 연결" 폴백
+### Phase 1 — 우리 챗봇 (인바운드 자동응대 + 태깅) ✅ 구현 (배포 대기)
+- **`functions/kakaoSkill.js`** 신규 모듈 = 오픈빌더 스킬서버 (`exports.kakaoSkill`, `asia-northeast3`)
+  - 상담톡 `webhookKakao`(상담챗 세션 담당)는 **건드리지 않음** — 스펙·용도가 달라 별도 엔드포인트
+  - 요청 파싱: `userRequest.utterance`, `userRequest.user.id`
+  - 응답: 오픈빌더 SkillResponse 2.0 (`template.outputs[].simpleText` + `quickReplies`)
+- 시나리오(영업시간·위치·가격·보톡스·필러·리프팅·색소·예약) + 폴백, 키워드 부분일치 라우팅
+- `chatThreads/{kakao_ob_<userId>}` 결정적 스레드에 대화·태그 적재
+  - `tags`·`interests`·`procInterest` 를 `arrayUnion` 으로 누적, 메시지 in/out 기록
+  - "상담원 연결" 요청 시 `status='needs_human'`·`agentRequested=true`
+- **시나리오는 코드 시드 + `settings/chatBotConfig` 로 관리자 편집 가능** (덮어쓰기)
 - **산출물**: 채널 문의가 우리 로직으로 자동 응답, 태그가 Firestore에 축적
+- 검증: mock end-to-end 라우팅·태깅·응답 통과 (실배포·오픈빌더 연결은 아래 §6.5)
 
 ### Phase 2 — 환자 매칭 (§4)
 - 상담 중 직원 **수동 입력**: 이름 + 차트번호(1차) + 전화번호(교차검증)
@@ -134,6 +139,55 @@ settings/chatTagTaxonomy {
 - 카카오 **상담톡 API 파트너 심사** 통과
 - 사람 1:1 상담을 우리 앱 화면으로 흡수, 대화 로그 우리 DB 캡처
 - **산출물**: 자동응대~사람 상담~재진 전 구간을 통합앱이 소유
+
+---
+
+## 6.5 Phase 1 운영 메모 (배포 · 카카오 설정 · 봇 편집)
+
+### 배포
+```bash
+cd functions
+firebase deploy --only functions:kakaoSkill
+```
+배포 후 엔드포인트 URL 확인 (예: `https://asia-northeast3-lumiclinic-c1a95.cloudfunctions.net/kakaoSkill`).
+
+### 카카오 콘솔 (수동, 1회)
+1. 카카오톡 채널 생성 (임시 채널 사용) → 비즈니스 채널 전환
+2. **카카오 i 오픈빌더**에서 봇 생성 → 채널 연결
+3. **스킬(Skill)** 등록 → URL 에 위 `kakaoSkill` 엔드포인트 입력
+4. 시나리오 블록의 **폴백 블록 / 기본 스킬**을 이 스킬로 연결
+   (또는 각 블록 발화 → 스킬 호출). PoC 는 폴백 블록에 스킬 연결이 가장 단순
+5. **상담직원 연결**: 오픈빌더의 `상담원 연결` 블록/버튼으로 채널 관리자센터 상담 전환
+   (Phase 4 상담톡 승격 전까지는 사람 응대가 관리자센터에서 이뤄짐)
+
+### 보안 (선택)
+`settings/chatBotConfig.skillSecret` 설정 시, 오픈빌더 스킬 헤더에
+`X-Skill-Secret` 를 동일 값으로 넣어야 통과. 미설정 시 검증 생략(PoC 기본).
+
+### 봇 시나리오 편집 (`settings/chatBotConfig`)
+코드의 `DEFAULT_CONFIG` 가 시드. 아래 문서를 Firestore 에 만들면 덮어씀.
+```javascript
+settings/chatBotConfig {
+  fallback: '...', agentReply: '...',
+  agentKeywords: ['상담원','사람','연결', ...],
+  defaultQuickReplies: ['상담원 연결'],
+  intents: [
+    { key:'hours', keywords:['영업','시간', ...], reply:'...', tags:['영업시간문의'] },
+    { key:'botox', keywords:['보톡스', ...], reply:'...', tags:['시술관심'],
+      interests:['보톡스'], procInterest:['BOTOX_TRAP_100U'], quickReplies:['예약 문의'] },
+    // ...
+  ],
+  // skillSecret: '...'  // 선택
+}
+```
+- `procInterest` 는 `procedures.procId` (수가표 자동 파생) 와 연결 → 재진 세그먼트 기준.
+- ⚙ 관리자 설정 UI 는 후속(통합앱 staff.html)에서 붙일 수 있음. 우선은 Firestore 직접 편집.
+
+### 미결
+- 오픈빌더는 블록 단위라, "모든 발화를 스킬로" 보내려면 폴백 블록 활용 or LLM 블록 조합 필요
+- 실채널 연결 후 실제 오픈빌더 payload 로 `user.id`·발화 매핑 재확인
+- ⚠️ `chatThreads` 스레드가 상담톡(webhookKakao)·오픈빌더 두 소스에서 생김 →
+  `source` 필드(`'openbuilder'`)로 구분. 통합앱 채팅 UI 는 상담챗 세션과 조율 필요
 
 ---
 

@@ -668,3 +668,9 @@ exports.parseRevenueFile = onCall(
     };
   }
 );
+
+// ================================================================
+//  💬 카카오 오픈빌더 스킬서버 (챗봇) — docs/kakao-chatbot.md Phase 1
+//   · 자체 모듈(functions/kakaoSkill.js). 상담톡 webhookKakao 와 별개 엔드포인트.
+// ================================================================
+exports.kakaoSkill = require('./kakaoSkill').kakaoSkill;
