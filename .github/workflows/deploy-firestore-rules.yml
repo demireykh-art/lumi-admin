@@ -1,0 +1,53 @@
+name: Deploy Firestore Rules
+
+# firestore.rules 또는 firebase.json 이 main 에 푸시되면 규칙을 자동 배포.
+# GitHub 모바일 앱에서 Actions 탭 → "Run workflow" 로 수동 실행도 가능.
+# 사전 준비(1회): 레포 Settings → Secrets and variables → Actions 에
+#   FIREBASE_SERVICE_ACCOUNT = (Firebase 서비스 계정 JSON 키 전체) 등록
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+  workflow_dispatch: {}   # 모바일/웹에서 수동 실행 버튼
+
+concurrency:
+  group: firestore-rules-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Write service account key
+        env:
+          SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA_KEY" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT 시크릿이 설정되지 않았습니다. 레포 Settings → Secrets 에서 등록해주세요."
+            exit 1
+          fi
+          printf '%s' "$SA_KEY" > "$RUNNER_TEMP/sa.json"
+
+      - name: Deploy Firestore rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          firebase deploy --only firestore:rules \
+            --project lumiclinic-c1a95 \
+            --non-interactive
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
