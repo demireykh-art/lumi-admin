@@ -1726,6 +1726,30 @@
         </div>
     </div>
 
+    <!-- 소모품 카탈로그 구매링크 수정 모달 -->
+    <div class="modal" id="catalogLinkEditModal">
+        <div class="modal-content" style="max-width:440px">
+            <div class="modal-header">
+                <div class="modal-title">🔗 구매 링크 수정</div>
+                <button class="modal-close" onclick="closeModal('catalogLinkEditModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="catalogLinkEditName">
+                <div id="catalogLinkEditItemName" style="font-weight:700;font-size:.95rem;margin-bottom:.6rem"></div>
+                <div class="form-group">
+                    <label class="form-label">구매 링크 (URL)</label>
+                    <input type="url" class="form-input" id="catalogLinkEditInput" placeholder="https://쿠팡·네이버 등 구매 URL">
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">쿠팡·네이버 등 상품 페이지 주소(https://…)를 붙여넣으세요. 비워두고 저장하면 링크가 삭제됩니다.</div>
+                </div>
+                <div id="catalogLinkEditOriginal" style="font-size:.72rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:.5rem;margin-top:.5rem;display:none"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('catalogLinkEditModal')" style="flex:1">취소</button>
+                <button class="btn btn-primary" onclick="saveCatalogLink()" style="flex:2">저장</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="inventoryOverviewModal">
         <div class="modal-content" style="max-width:900px;width:96vw;max-height:92vh;display:flex;flex-direction:column">
             <div class="modal-header">
@@ -11988,9 +12012,37 @@
 
         // ===== 신규 품목 등록 =====
         // ===== 소모품 구입 카탈로그 (Google Sheet 기반) =====
-        function openSuppliesCatalog(){
-            renderSuppliesCatalog();
+        // 직원이 직접 넣은 구매 링크 오버라이드 (Firestore: suppliesCatalogLinks, 문서ID=품목명)
+        let _catalogLinkOverrides={};
+        async function _loadCatalogLinkOverrides(){
+            try{
+                if(typeof db==='undefined') return;
+                const snap=await db.collection('suppliesCatalogLinks').get();
+                const m={};
+                snap.forEach(doc=>{ const d=doc.data()||{}; m[d.name||doc.id]=String(d.link||''); });
+                _catalogLinkOverrides=m;
+            }catch(e){ console.warn('카탈로그 링크 오버라이드 로드 실패', e); }
+        }
+        // 문자열이 열 수 있는 http(s) URL 이면 정규화해 반환, 아니면 '' (프로토콜 없는 도메인은 보정)
+        function _normalizeCatalogUrl(str){
+            const s=String(str==null?'':str).trim();
+            if(!s) return '';
+            if(/^https?:\/\//i.test(s)) return s;
+            // 예: "coupang.com/vp/..." 처럼 프로토콜만 빠진 형태 보정
+            if(/^(www\.)?[\w-]+(\.[\w-]+)+(\/|\?|$)/.test(s) && !/\s/.test(s)) return 'https://'+s;
+            return '';
+        }
+        // 오버라이드 우선 → 없으면 카탈로그 원본 link (원본 문자열 그대로, URL 판정은 별도)
+        function _rawCatalogLink(item){
+            const name=item?.name||'';
+            if(Object.prototype.hasOwnProperty.call(_catalogLinkOverrides,name)) return _catalogLinkOverrides[name];
+            return item?.link||'';
+        }
+        async function openSuppliesCatalog(){
             openModal('suppliesCatalogModal');
+            renderSuppliesCatalog();
+            await _loadCatalogLinkOverrides();
+            renderSuppliesCatalog();
         }
         function _catalogItems(){
             const cat=window.SUPPLIES_CATALOG||{items:[]};
@@ -12066,8 +12118,17 @@
                         else dueBadge=`<span style="background:#f0fdf4;color:#166534;padding:1px 6px;border-radius:8px;font-size:.65rem;margin-left:4px">다음 ${dueIn}일 후</span>`;
                     }
                     const teamsTag=(i.teams||[]).length>1?`<span style="background:#f3f4f6;color:#4b5563;padding:1px 6px;border-radius:8px;font-size:.62rem;margin-left:4px">공용: ${i.teams.join('·')}</span>`:'';
-                    const linkBtn=i.link?`<a href="${i.link}" target="_blank" rel="noopener" style="background:#f97316;color:#fff;padding:.35rem .75rem;border-radius:6px;text-decoration:none;font-size:.75rem;font-weight:600;white-space:nowrap">🛒 구매</a>`:'<span style="color:#9ca3af;font-size:.75rem">링크 없음</span>';
-                    const wishBtn=`<button onclick="addSupplyToWishlist('${encodeURIComponent(i.name)}')" style="background:none;border:1px solid #6366f1;color:#6366f1;padding:.3rem .65rem;border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">📝 요청</button>`;
+                    const nameEnc=encodeURIComponent(i.name);
+                    const rawLink=_rawCatalogLink(i);
+                    const url=_normalizeCatalogUrl(rawLink);
+                    // URL 이 유효할 때만 실제 구매 링크로 노출 (텍스트 메모는 없는 페이지로 이동하므로 링크 처리 안 함)
+                    const linkBtn=url
+                        ? `<a href="${_esc(url)}" target="_blank" rel="noopener" style="background:#f97316;color:#fff;padding:.35rem .75rem;border-radius:6px;text-decoration:none;font-size:.75rem;font-weight:600;white-space:nowrap">🛒 구매</a>`
+                        : '<span style="color:#9ca3af;font-size:.75rem">링크 없음</span>';
+                    const editBtn=`<button onclick="openCatalogLinkEdit('${nameEnc}')" style="background:none;border:1px solid #94a3b8;color:#475569;padding:.3rem .6rem;border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">✏️ 수정</button>`;
+                    const wishBtn=`<button onclick="addSupplyToWishlist('${nameEnc}')" style="background:none;border:1px solid #6366f1;color:#6366f1;padding:.3rem .65rem;border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">📝 요청</button>`;
+                    // URL 은 아니지만 참고 메모(상품명 등)가 남아있으면 안내로 표시
+                    const noteRow=(rawLink && !url)?`<div style="font-size:.68rem;color:#b45309;margin-top:2px">📝 참고: ${_esc(rawLink)}</div>`:'';
                     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.6rem .7rem;border-bottom:1px solid #f1f5f9;gap:.4rem;flex-wrap:wrap">
                         <div style="flex:1;min-width:180px">
                             <div style="font-weight:600;font-size:.9rem">${i.name}${dueBadge}${teamsTag}</div>
@@ -12077,8 +12138,9 @@
                                 ${interval?` · 평균 ${interval} 간격`:''}
                                 ${isRegular?' <span style="color:#166534;font-weight:600">· 정기</span>':''}
                             </div>
+                            ${noteRow}
                         </div>
-                        <div style="display:flex;gap:.4rem;flex-shrink:0">${wishBtn}${linkBtn}</div>
+                        <div style="display:flex;gap:.4rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">${wishBtn}${editBtn}${linkBtn}</div>
                     </div>`;
                 }).join('');
                 return `<div style="margin-bottom:1rem;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
@@ -12097,11 +12159,13 @@
                 if(typeof db==='undefined') throw new Error('DB 미준비');
                 // 카탈로그에서 해당 아이템 찾아 링크 함께 등록
                 const it=(_catalogItems()||[]).find(x=>x.name===name);
+                // 직원이 수정한 링크(오버라이드)를 우선 사용하고, URL 형태만 등록
+                const reqLink=_normalizeCatalogUrl(_rawCatalogLink(it||{name}));
                 await db.collection('purchaseRequests').add({
                     name,
                     qty:1,
                     estimatedPrice:0,
-                    purchaseLink:it?.link||'',
+                    purchaseLink:reqLink,
                     reason:'소모품 카탈로그에서 요청 (팀: '+(it?.team||'-')+')',
                     requestedBy:currentUser?.name||'직원',
                     requestedById:currentUser?.id||'',
@@ -12112,6 +12176,60 @@
                 if(typeof loadStaffWishlist==='function') await loadStaffWishlist();
             }catch(e){
                 alert('추가 실패: '+(e.message||e));
+            }
+        }
+
+        // 카탈로그 품목의 구매 링크 수정 모달 열기
+        function openCatalogLinkEdit(nameEnc){
+            const name=decodeURIComponent(nameEnc);
+            const item=(_catalogItems()||[]).find(x=>x.name===name);
+            const rawLink=_rawCatalogLink(item||{name});
+            const url=_normalizeCatalogUrl(rawLink);
+            document.getElementById('catalogLinkEditName').value=name;
+            document.getElementById('catalogLinkEditItemName').textContent=name;
+            document.getElementById('catalogLinkEditInput').value=url||'';
+            const orig=document.getElementById('catalogLinkEditOriginal');
+            if(rawLink && !url){
+                orig.style.display='block';
+                orig.textContent='기존 참고 메모(주소 아님): '+rawLink;
+            }else{
+                orig.style.display='none';
+                orig.textContent='';
+            }
+            openModal('catalogLinkEditModal');
+            setTimeout(()=>document.getElementById('catalogLinkEditInput').focus(),50);
+        }
+        // 구매 링크 저장 (Firestore suppliesCatalogLinks, 문서ID=품목명). 빈 값이면 삭제.
+        async function saveCatalogLink(){
+            const name=document.getElementById('catalogLinkEditName').value;
+            let link=(document.getElementById('catalogLinkEditInput').value||'').trim();
+            if(!name) return;
+            if(link){
+                const norm=_normalizeCatalogUrl(link);
+                if(!norm){ alert('올바른 URL 을 입력하세요. (예: https://www.coupang.com/...)'); return; }
+                link=norm;
+            }
+            try{
+                if(typeof db==='undefined') throw new Error('DB 미준비');
+                const ref=db.collection('suppliesCatalogLinks').doc(name);
+                if(link){
+                    await ref.set({
+                        name, link,
+                        updatedBy:currentUser?.name||'직원',
+                        updatedById:currentUser?.id||'',
+                        updatedAt:new Date().toISOString()
+                    },{merge:true});
+                    _catalogLinkOverrides[name]=link;
+                    alert('✅ 구매 링크를 저장했습니다.');
+                }else{
+                    await ref.delete();
+                    delete _catalogLinkOverrides[name];
+                    alert('🗑️ 구매 링크를 삭제했습니다.');
+                }
+                closeModal('catalogLinkEditModal');
+                renderSuppliesCatalog();
+            }catch(e){
+                alert('저장 실패: '+(e.message||e));
             }
         }
 
