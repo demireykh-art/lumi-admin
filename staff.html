@@ -493,6 +493,15 @@
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
+                        <button type="button" onclick="showTop('proctime')"
+                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <span style="font-size:2.25rem">⏱️</span>
+                            <div style="flex:1">
+                                <div style="font-weight:700;font-size:1rem;color:#1f2937">시술시간</div>
+                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">고객별 체류·시술·마취 시간 기록 → 분당 수익 분석</div>
+                            </div>
+                            <span style="color:#9ca3af">→</span>
+                        </button>
                         <button type="button" onclick="showTop('consult')"
                             style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <span style="font-size:2.25rem">🩺</span>
@@ -591,6 +600,27 @@
                         </table>
                     </div>
                 </div>
+            </div>
+
+            <!-- === ⏱️ 시술시간 (Firestore 'procedureTimes/main' 단일 문서) === -->
+            <div class="tab-content" id="tab-proctime">
+                <div class="card" style="margin-bottom:0;overflow-x:hidden">
+                    <div class="card-title" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
+                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTopHome()">← 홈</button>
+                        <span style="flex:1;min-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.95rem">⏱️ 시술시간</span>
+                        <span id="ptSaveStatus" style="font-size:.72rem;color:var(--text-muted);flex-shrink:0"></span>
+                        <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .5rem;flex-shrink:0;white-space:nowrap" onclick="ptAddColumn()">+ 헤더</button>
+                        <button class="btn btn-primary" style="font-size:.7rem;padding:.3rem .5rem;flex-shrink:0;white-space:nowrap" onclick="ptAddVisit()">+ 고객</button>
+                    </div>
+                    <p style="margin-top:.5rem;font-size:.75rem;color:var(--text-secondary);line-height:1.5">
+                        고객별로 <b>체류시작·종료</b> 시각과 각 오더의 <b>시술금액·시술시간·마취시간</b>을 기록하세요.
+                        오더명은 <b>시술 수가표</b>에서 자동완성되며, 새 오더는 저장 시 수가표에 추가할지 물어봅니다.
+                        데이터가 쌓이면 아래 <b>시술별 분당수익</b>이 자동 계산되고, 수가표에도 표시됩니다.
+                    </p>
+                    <div id="ptVisits" style="margin-top:.6rem"></div>
+                    <div id="ptStats" style="margin-top:1rem"></div>
+                </div>
+                <datalist id="ptOrderDL"></datalist>
             </div>
 
             <!-- === 공지 · 할일 뷰 === -->
@@ -2990,6 +3020,8 @@
                 _initFeeRealtime();
                 ensureFeeData().then(()=>{ _deriveProceduresFromFee(); _scheduleProcSync(); }).catch(()=>{});
             });
+            // 시술시간 기록 실시간 동기화 (분당수익 집계 → 수가표 배지)
+            _initProcTimeRealtime();
             // 상담 차팅 노출 대상: 개인계정 + 관리자(bizAdmin/adminHigh) — 공용계정이어도 관리자면 노출
             const _chartVisible=(currentUser?.role!=='shared') || isBizAdmin || isAdminHigh;
             // 시술 레시피 등 메타 로드 (준비 카드 자동 생성용)
@@ -5938,6 +5970,404 @@
         }
 
         // ==================================================================
+        //  ⏱️ 시술시간 (Procedure Time) — 고객 체류·시술·마취 시간 기록 → 분당수익
+        //   · Firestore 'procedureTimes/main' 단일 문서(전 기기 실시간 공유)
+        //   · 오더명은 시술 수가표(_feeData)에서 자동완성, 새 오더는 수가표에 저장
+        //   · 시술별 분당수익(시술금액÷시술시간) 집계 → 이 탭 + 시술 수가표에 표시
+        // ==================================================================
+        // 오더 상세 기본 컬럼(고정): 삭제·이름수정 불가, 좌우 이동은 가능
+        const PT_BASE_COLS=[
+            {id:'orderName', name:'오더명',   kind:'order'},
+            {id:'price',     name:'시술금액', kind:'money'},
+            {id:'procMin',   name:'시술시간', kind:'min'},
+            {id:'anesMin',   name:'마취시간', kind:'min'}
+        ];
+        let procTimeState=null;   // {columns:[{id,name,kind,fixed}], visits:[{id,customerName,chartNo,checkIn,checkOut,orders:[{id,values:{colId:val}}]}]}
+        let _procTimeStats={};    // 정규화된 오더명 → 집계 {name,count,sumPrice,priceCount,sumProcMin,minCount,sumAnesMin,anesCount,pairPrice,pairMin,pairCount}
+        let _ptUnsub=null;
+        let _ptSaveTimer=null;
+
+        function _ptEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        function _ptNorm(s){ return String(s==null?'':s).trim().toLowerCase().replace(/[·\s]+/g,''); }
+        function _ptNum(v){ const n=Number(String(v==null?'':v).replace(/[,\s]/g,'')); return isFinite(n)?n:0; }
+
+        function _ptDefaultState(){ return { columns: PT_BASE_COLS.map(c=>Object.assign({fixed:true},c)), visits: [] }; }
+        // 저장 문서 → 상태 정규화 (기본 컬럼 보정 포함)
+        function _ptNormalizeState(d){
+            let cols=(Array.isArray(d.columns)&&d.columns.length)?d.columns.map(c=>({
+                id:c.id||_uid(), name:String(c.name||''), kind:c.kind||'text', fixed:!!c.fixed
+            })):[];
+            // 누락된 기본 컬럼 보정 + 기본 컬럼 속성 강제
+            PT_BASE_COLS.forEach((bc,i)=>{
+                const ex=cols.find(c=>c.id===bc.id);
+                if(ex){ ex.name=bc.name; ex.kind=bc.kind; ex.fixed=true; }
+                else{ cols.splice(Math.min(i,cols.length),0,Object.assign({fixed:true},bc)); }
+            });
+            if(!cols.length) cols=PT_BASE_COLS.map(c=>Object.assign({fixed:true},c));
+            const visits=Array.isArray(d.visits)?d.visits.map(v=>({
+                id:v.id||_uid(),
+                customerName:String(v.customerName||''),
+                chartNo:String(v.chartNo||''),
+                checkIn:String(v.checkIn||''),
+                checkOut:String(v.checkOut||''),
+                orders:Array.isArray(v.orders)?v.orders.map(o=>({
+                    id:o.id||_uid(),
+                    values:(o&&o.values&&typeof o.values==='object')?Object.assign({},o.values):{}
+                })):[]
+            })):[];
+            return { columns:cols, visits };
+        }
+
+        // ── 데이터 로드 ──
+        async function loadProcedureTimes(){
+            try{
+                const doc=await db.collection('procedureTimes').doc('main').get();
+                procTimeState=doc.exists?_ptNormalizeState(doc.data()||{}):_ptDefaultState();
+            }catch(e){
+                console.error('Load procedureTimes:', e);
+                if(!procTimeState) procTimeState=_ptDefaultState();
+            }
+            _recomputeProcTimeStats();
+        }
+        // ── 저장 (디바운스) ──
+        function saveProcedureTimes(){
+            const st=procTimeState; if(!st) return;
+            _recomputeProcTimeStats();
+            const statusEl=document.getElementById('ptSaveStatus');
+            if(statusEl) statusEl.textContent='저장 중...';
+            clearTimeout(_ptSaveTimer);
+            _ptSaveTimer=setTimeout(async()=>{
+                try{
+                    await db.collection('procedureTimes').doc('main').set({
+                        columns: st.columns,
+                        visits: st.visits,
+                        updatedAt: new Date().toISOString(),
+                        updatedBy: currentUser?.name||currentUser?.id||'staff'
+                    });
+                    if(statusEl) statusEl.textContent='✓ 저장됨';
+                }catch(e){
+                    console.error('Save procedureTimes:', e);
+                    if(statusEl) statusEl.textContent='⚠ 저장 실패';
+                }
+            }, 600);
+        }
+        // ── 실시간 동기화 ──
+        function _initProcTimeRealtime(){
+            if(_ptUnsub||typeof db==='undefined') return;
+            try{
+                _ptUnsub=db.collection('procedureTimes').doc('main').onSnapshot(doc=>{
+                    if(!doc.exists){ if(!procTimeState){ procTimeState=_ptDefaultState(); _recomputeProcTimeStats(); } return; }
+                    procTimeState=_ptNormalizeState(doc.data()||{});
+                    _recomputeProcTimeStats();
+                    const ptTab=document.getElementById('tab-proctime');
+                    if(ptTab&&ptTab.classList.contains('active')){ _ptRefreshOrderDatalist(); renderProcTime(); }
+                    const feeTab=document.getElementById('tab-feeschedule');
+                    if(feeTab&&feeTab.classList.contains('active')&&document.getElementById('feeList')) renderFeeList();
+                }, err=>console.warn('procedureTimes 스냅샷 실패:', err));
+            }catch(e){ console.warn('procedureTimes 실시간 초기화 실패:',e); }
+        }
+
+        // ── 분당수익 집계 ──
+        function _recomputeProcTimeStats(){
+            const map={};
+            const st=procTimeState;
+            if(st){
+                st.visits.forEach(v=>{
+                    (v.orders||[]).forEach(o=>{
+                        const nm=(o.values&&o.values.orderName)||'';
+                        const key=_ptNorm(nm);
+                        if(!key) return;
+                        const price=_ptNum(o.values.price), pmin=_ptNum(o.values.procMin), amin=_ptNum(o.values.anesMin);
+                        if(!map[key]) map[key]={name:String(nm).trim(),count:0,sumPrice:0,priceCount:0,sumProcMin:0,minCount:0,sumAnesMin:0,anesCount:0,pairPrice:0,pairMin:0,pairCount:0};
+                        const s=map[key];
+                        s.count++;
+                        if(price>0){ s.sumPrice+=price; s.priceCount++; }
+                        if(pmin>0){ s.sumProcMin+=pmin; s.minCount++; }
+                        if(amin>0){ s.sumAnesMin+=amin; s.anesCount++; }
+                        if(price>0&&pmin>0){ s.pairPrice+=price; s.pairMin+=pmin; s.pairCount++; }
+                    });
+                });
+            }
+            _procTimeStats=map;
+            return map;
+        }
+        function _ptPerMin(s){ return (s&&s.pairMin>0)?s.pairPrice/s.pairMin:null; }
+        // 시술 수가표 variant → 분당수익 집계 매칭 (라벨·시술명 후보로 조회)
+        function _procTimePerMinFor(labels){
+            if(!_procTimeStats) return null;
+            for(const lb of (labels||[])){
+                const key=_ptNorm(lb);
+                if(key&&_procTimeStats[key]) return _procTimeStats[key];
+            }
+            return null;
+        }
+
+        // ── 오더명 자동완성(datalist) — 시술 수가표에서 생성 ──
+        function _ptOrderNameOptions(){
+            const set=new Set();
+            (_feeData||[]).forEach(c=>{
+                (c.treatments||[]).forEach(t=>{
+                    if(t.name) set.add(t.name);
+                    (t.variants||[]).forEach(v=>{
+                        if(v.label&&v.label!=='기본') set.add(v.label);
+                        if(t.name&&v.label&&v.label!=='기본') set.add(t.name+' · '+v.label);
+                    });
+                });
+            });
+            return Array.from(set);
+        }
+        function _ptRefreshOrderDatalist(){
+            const dl=document.getElementById('ptOrderDL');
+            if(!dl) return;
+            dl.innerHTML=_ptOrderNameOptions().map(n=>`<option value="${_ptEsc(n)}"></option>`).join('');
+        }
+        // 새 오더명 → 수가표에 없으면 추가 여부 확인 후 등록
+        async function _ptEnsureOrderInFee(name, priceWon){
+            name=String(name||'').trim();
+            if(!name) return null;
+            await ensureFeeData();
+            const m=_findFeeVariantByOrderName(name);
+            if(m) return m;
+            if(!confirm(`'${name}' 은(는) 시술 수가표에 없는 오더입니다.\n수가표에 새로 추가할까요?`)) return null;
+            const CAT_NAME='시술시간 등록';
+            let cat=(_feeData||[]).find(c=>c.name===CAT_NAME);
+            if(!cat){ cat={id:_uid(),name:CAT_NAME,note:'시술시간 탭에서 자동 추가',treatments:[]}; _feeData=_feeData||[]; _feeData.push(cat); }
+            const priceMan=priceWon>0?Math.round(priceWon/10000*10)/10:0;
+            cat.treatments=cat.treatments||[];
+            cat.treatments.push({id:_uid(),name:name,note:'',variants:[{id:_uid(),label:'기본',price:priceMan}]});
+            saveFeeData();
+            _ptRefreshOrderDatalist();
+            return true;
+        }
+
+        // ── 방문(고객) CRUD ──
+        function ptAddVisit(){
+            const st=procTimeState=procTimeState||_ptDefaultState();
+            st.visits.push({id:_uid(),customerName:'',chartNo:'',checkIn:'',checkOut:'',orders:[{id:_uid(),values:{}}]});
+            renderProcTime(); saveProcedureTimes();
+            const inps=document.querySelectorAll('#ptVisits .pt-visit .pt-cust');
+            if(inps.length) inps[inps.length-1].focus();
+        }
+        function ptRemoveVisit(vid){
+            const st=procTimeState; if(!st) return;
+            const v=st.visits.find(x=>x.id===vid); if(!v) return;
+            if(!confirm(`${v.customerName?`'${v.customerName}'`:'이 고객'} 기록을 삭제할까요?`)) return;
+            st.visits=st.visits.filter(x=>x.id!==vid);
+            renderProcTime(); saveProcedureTimes();
+        }
+        function ptSetVisitField(vid, field, val){
+            const st=procTimeState; if(!st) return;
+            const v=st.visits.find(x=>x.id===vid); if(!v) return;
+            v[field]=val;
+            if(field==='checkIn'||field==='checkOut') renderProcTime(); // 체류시간 재계산 표시
+            saveProcedureTimes();
+        }
+
+        // ── 오더 행 CRUD ──
+        function ptAddOrder(vid){
+            const st=procTimeState; if(!st) return;
+            const v=st.visits.find(x=>x.id===vid); if(!v) return;
+            v.orders=v.orders||[]; v.orders.push({id:_uid(),values:{}});
+            renderProcTime(); saveProcedureTimes();
+        }
+        function ptRemoveOrder(vid,oid){
+            const st=procTimeState; if(!st) return;
+            const v=st.visits.find(x=>x.id===vid); if(!v) return;
+            v.orders=(v.orders||[]).filter(o=>o.id!==oid);
+            renderProcTime(); saveProcedureTimes();
+        }
+        function ptSetOrderValue(vid,oid,colId,val){
+            const st=procTimeState; if(!st) return;
+            const v=st.visits.find(x=>x.id===vid); if(!v) return;
+            const o=(v.orders||[]).find(x=>x.id===oid); if(!o) return;
+            if(!o.values) o.values={};
+            o.values[colId]=val;
+            saveProcedureTimes();
+        }
+        // 오더명 확정(blur/enter): 수가표 매칭 → 금액 자동채움, 없으면 등록 확인
+        async function ptOrderNameChange(vid,oid,val){
+            ptSetOrderValue(vid,oid,'orderName',val);
+            const name=String(val||'').trim();
+            if(!name){ renderProcTime(); return; }
+            await ensureFeeData();
+            const st=procTimeState;
+            const v=st&&st.visits.find(x=>x.id===vid);
+            const o=v&&(v.orders||[]).find(x=>x.id===oid);
+            const m=_findFeeVariantByOrderName(name);
+            if(m){
+                if(o&&(!o.values.price||_ptNum(o.values.price)===0)&&Number(m.price)>0){
+                    o.values.price=Number(m.price)*10000; // 만원 → 원
+                    saveProcedureTimes();
+                }
+            }else{
+                const priceWon=o?_ptNum(o.values.price):0;
+                await _ptEnsureOrderInFee(name, priceWon);
+            }
+            renderProcTime();
+        }
+
+        // ── 헤더(열) CRUD — 좌우 이동 ──
+        function ptAddColumn(){
+            const st=procTimeState=procTimeState||_ptDefaultState();
+            let name=prompt('추가할 헤더(열) 이름을 입력하세요 (예: 담당자, 비고)','');
+            if(name==null) return; name=name.trim(); if(!name) return;
+            if(st.columns.some(c=>c.name===name)){ alert('이미 존재하는 헤더입니다.'); return; }
+            st.columns.push({id:_uid(),name:name,kind:'text',fixed:false});
+            renderProcTime(); saveProcedureTimes();
+        }
+        function ptRenameColumn(cid){
+            const st=procTimeState; if(!st) return;
+            const col=st.columns.find(c=>c.id===cid); if(!col||col.fixed) return;
+            const nn=prompt('헤더 이름:',col.name); if(nn==null) return;
+            const name=nn.trim(); if(!name) return;
+            if(st.columns.some(c=>c.id!==cid&&c.name===name)){ alert('이미 존재하는 헤더입니다.'); return; }
+            col.name=name; renderProcTime(); saveProcedureTimes();
+        }
+        function ptRemoveColumn(cid){
+            const st=procTimeState; if(!st) return;
+            const col=st.columns.find(c=>c.id===cid); if(!col||col.fixed) return;
+            if(!confirm(`'${col.name}' 헤더를 삭제할까요? 모든 행의 해당 값도 삭제됩니다.`)) return;
+            st.columns=st.columns.filter(c=>c.id!==cid);
+            st.visits.forEach(v=>(v.orders||[]).forEach(o=>{ if(o.values) delete o.values[cid]; }));
+            renderProcTime(); saveProcedureTimes();
+        }
+        function ptMoveColumn(cid,dir){
+            const st=procTimeState; if(!st) return;
+            const idx=st.columns.findIndex(c=>c.id===cid), j=idx+dir;
+            if(idx<0||j<0||j>=st.columns.length) return;
+            const tmp=st.columns[idx]; st.columns[idx]=st.columns[j]; st.columns[j]=tmp;
+            renderProcTime(); saveProcedureTimes();
+        }
+
+        // ── 시간 유틸 ──
+        function _ptTimeToMin(s){ const m=/^(\d{1,2}):(\d{2})$/.exec(String(s||'').trim()); return m?(parseInt(m[1])*60+parseInt(m[2])):null; }
+        function _ptStayMinutes(v){
+            if(!v||!v.checkIn||!v.checkOut) return null;
+            const a=_ptTimeToMin(v.checkIn), b=_ptTimeToMin(v.checkOut);
+            if(a==null||b==null) return null;
+            let d=b-a; if(d<0) d+=1440; return d;
+        }
+        function _ptFmtMin(min){ if(min==null) return '-'; const h=Math.floor(min/60), mm=min%60; return h>0?`${h}시간 ${mm}분`:`${mm}분`; }
+        function _ptVisitTotals(v){
+            let price=0, proc=0;
+            (v.orders||[]).forEach(o=>{ price+=_ptNum(o.values&&o.values.price); proc+=_ptNum(o.values&&o.values.procMin); });
+            return {price,proc};
+        }
+
+        // ── 셀 입력 렌더 ──
+        function _ptCellInput(vid,oid,col,val){
+            const v=_ptEsc(val);
+            if(col.kind==='order')
+                return `<input type="text" list="ptOrderDL" value="${v}" placeholder="오더명" onchange="ptOrderNameChange('${vid}','${oid}',this.value)" style="width:100%;min-width:120px;padding:.3rem .4rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:var(--bg)">`;
+            if(col.kind==='money')
+                return `<input type="number" inputmode="numeric" value="${v}" placeholder="원" min="0" step="1000" oninput="ptSetOrderValue('${vid}','${oid}','${col.id}',this.value)" onchange="renderProcTime()" style="width:92px;text-align:right;padding:.3rem .35rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`;
+            if(col.kind==='min')
+                return `<input type="number" inputmode="numeric" value="${v}" placeholder="분" min="0" step="1" oninput="ptSetOrderValue('${vid}','${oid}','${col.id}',this.value)" onchange="renderProcTime()" style="width:62px;text-align:right;padding:.3rem .35rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`;
+            return `<input type="text" value="${v}" placeholder="${_ptEsc(col.name)}" oninput="ptSetOrderValue('${vid}','${oid}','${col.id}',this.value)" style="width:100%;min-width:80px;padding:.3rem .4rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:var(--bg)">`;
+        }
+        // ── 방문 카드 렌더 ──
+        function _ptRenderVisit(v,vi){
+            const st=procTimeState;
+            const nCols=st.columns.length;
+            const colHead=st.columns.map((col,ci)=>{
+                const left = ci>0 ? `<button onclick="ptMoveColumn('${col.id}',-1)" title="왼쪽으로" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:.7rem;padding:0 1px">◀</button>` : '';
+                const right = ci<nCols-1 ? `<button onclick="ptMoveColumn('${col.id}',1)" title="오른쪽으로" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:.7rem;padding:0 1px">▶</button>` : '';
+                const edit = col.fixed ? '' :
+                    `<button onclick="ptRenameColumn('${col.id}')" title="이름수정" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:.68rem;padding:0 1px">✎</button>`
+                  + `<button onclick="ptRemoveColumn('${col.id}')" title="삭제" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:.78rem;padding:0 1px">×</button>`;
+                return `<th style="padding:.35rem .3rem;border-bottom:2px solid var(--border);white-space:nowrap;font-size:.74rem;color:var(--text-secondary)"><div>${_ptEsc(col.name)}</div><div style="margin-top:1px">${left}${right}${edit}</div></th>`;
+            }).join('');
+            const rows=(v.orders||[]).map(o=>{
+                const cells=st.columns.map(col=>`<td style="padding:.25rem .3rem;border-bottom:1px solid var(--border)">${_ptCellInput(v.id,o.id,col,o.values?o.values[col.id]:'')}</td>`).join('');
+                const price=_ptNum(o.values&&o.values.price), pmin=_ptNum(o.values&&o.values.procMin);
+                const pm = pmin>0 ? `₩${Math.round(price/pmin).toLocaleString()}<span style="font-size:.6rem;color:var(--text-muted)">/분</span>` : '<span style="color:var(--text-muted)">-</span>';
+                return `<tr>${cells}`
+                  + `<td style="text-align:right;padding:.25rem .3rem;border-bottom:1px solid var(--border);white-space:nowrap;font-size:.78rem;color:#047857;font-weight:600">${pm}</td>`
+                  + `<td style="text-align:center;padding:.25rem .3rem;border-bottom:1px solid var(--border)"><button class="btn btn-danger btn-sm" onclick="ptRemoveOrder('${v.id}','${o.id}')" style="font-size:.66rem;padding:.12rem .4rem">삭제</button></td></tr>`;
+            }).join('') || `<tr><td colspan="${nCols+2}" style="text-align:center;color:var(--text-muted);padding:.8rem;font-size:.78rem">오더가 없습니다. [+ 오더 추가]를 누르세요.</td></tr>`;
+            const stay=_ptStayMinutes(v), totals=_ptVisitTotals(v);
+            const stayPm=(stay&&stay>0&&totals.price>0)?Math.round(totals.price/stay):null;
+            const bd='display:inline-block;font-size:.68rem;padding:1px 7px;border-radius:8px;white-space:nowrap';
+            return `<div class="pt-visit" data-vid="${v.id}" style="border:1px solid #e5e7eb;border-radius:12px;margin-bottom:.9rem;overflow:hidden;background:#fff">
+                <div style="background:#eef2ff;padding:.55rem .6rem;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center">
+                    <span style="font-size:.7rem;color:#4338ca;font-weight:700;flex-shrink:0">고객 #${vi+1}</span>
+                    <input class="pt-cust" value="${_ptEsc(v.customerName)}" placeholder="고객이름" oninput="ptSetVisitField('${v.id}','customerName',this.value)" style="width:96px;padding:.3rem .4rem;font-size:.82rem;border:1px solid #c7d2fe;border-radius:6px;background:#fff">
+                    <input value="${_ptEsc(v.chartNo)}" placeholder="차트번호" oninput="ptSetVisitField('${v.id}','chartNo',this.value)" style="width:88px;padding:.3rem .4rem;font-size:.82rem;border:1px solid #c7d2fe;border-radius:6px;background:#fff">
+                    <span style="display:inline-flex;align-items:center;gap:.2rem;font-size:.72rem;color:#4b5563">체류
+                        <input type="time" value="${_ptEsc(v.checkIn)}" onchange="ptSetVisitField('${v.id}','checkIn',this.value)" style="padding:.25rem .3rem;font-size:.78rem;border:1px solid #c7d2fe;border-radius:6px;background:#fff">
+                        ~
+                        <input type="time" value="${_ptEsc(v.checkOut)}" onchange="ptSetVisitField('${v.id}','checkOut',this.value)" style="padding:.25rem .3rem;font-size:.78rem;border:1px solid #c7d2fe;border-radius:6px;background:#fff">
+                    </span>
+                    <span style="${bd};background:#e0e7ff;color:#3730a3">체류 ${_ptFmtMin(stay)}</span>
+                    ${stayPm!=null?`<span style="${bd};background:#ecfdf5;color:#047857;font-weight:600">체류 분당 ₩${stayPm.toLocaleString()}</span>`:''}
+                    <span style="flex:1"></span>
+                    <button class="btn btn-danger btn-sm" onclick="ptRemoveVisit('${v.id}')" style="font-size:.68rem;padding:.15rem .45rem;flex-shrink:0">고객 삭제</button>
+                </div>
+                <div style="overflow-x:auto">
+                    <table style="width:100%;border-collapse:collapse">
+                        <thead><tr>${colHead}<th style="padding:.35rem .3rem;border-bottom:2px solid var(--border);font-size:.74rem;color:#047857;white-space:nowrap">분당수익</th><th style="padding:.35rem .3rem;border-bottom:2px solid var(--border);font-size:.74rem;color:var(--text-secondary)">관리</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <div style="padding:.4rem .6rem;background:#fafafa;border-top:1px solid #f3f4f6;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                    <button class="btn btn-secondary btn-sm" onclick="ptAddOrder('${v.id}')" style="font-size:.72rem;padding:.2rem .5rem">+ 오더 추가</button>
+                    <span style="flex:1"></span>
+                    <span style="font-size:.74rem;color:#374151">시술합계 <b>₩${totals.price.toLocaleString()}</b> · 시술시간 <b>${totals.proc}분</b></span>
+                </div>
+            </div>`;
+        }
+        // ── 전체 렌더 ──
+        function renderProcTime(){
+            const wrap=document.getElementById('ptVisits');
+            if(!wrap) return;
+            const st=procTimeState=procTimeState||_ptDefaultState();
+            _ptRefreshOrderDatalist();
+            wrap.innerHTML=st.visits.length
+                ? st.visits.map((v,vi)=>_ptRenderVisit(v,vi)).join('')
+                : `<div style="text-align:center;color:var(--text-secondary);padding:2rem;font-size:.85rem">기록이 없습니다. 우측 상단 [+ 고객] 버튼으로 추가하세요.</div>`;
+            _ptRenderStats();
+        }
+        // ── 시술별 분당수익 요약 렌더 ──
+        function _ptRenderStats(){
+            const el=document.getElementById('ptStats');
+            if(!el) return;
+            const arr=Object.values(_procTimeStats||{});
+            if(!arr.length){ el.innerHTML=''; return; }
+            const rows=arr.map(s=>({s,perMin:_ptPerMin(s)})).sort((a,b)=>{
+                if(a.perMin==null&&b.perMin==null) return b.s.count-a.s.count;
+                if(a.perMin==null) return 1; if(b.perMin==null) return -1;
+                return b.perMin-a.perMin;
+            });
+            const body=rows.map(({s,perMin})=>{
+                const avgPrice=s.priceCount?Math.round(s.sumPrice/s.priceCount):0;
+                const avgProc=s.minCount?Math.round(s.sumProcMin/s.minCount):0;
+                const avgAnes=s.anesCount?Math.round(s.sumAnesMin/s.anesCount):0;
+                const pm = perMin!=null
+                    ? `₩${Math.round(perMin).toLocaleString()}/분${s.pairCount<3?` <span style="color:#b45309;font-size:.66rem;font-weight:400">(표본 ${s.pairCount})</span>`:''}`
+                    : '<span style="color:#9ca3af;font-weight:400">데이터 부족</span>';
+                return `<tr>
+                    <td style="padding:.4rem;border-bottom:1px solid #f3f4f6">${_ptEsc(s.name)}</td>
+                    <td style="text-align:center;padding:.4rem;border-bottom:1px solid #f3f4f6">${s.count}</td>
+                    <td style="text-align:right;padding:.4rem;border-bottom:1px solid #f3f4f6">₩${avgPrice.toLocaleString()}</td>
+                    <td style="text-align:right;padding:.4rem;border-bottom:1px solid #f3f4f6">${avgProc}분</td>
+                    <td style="text-align:right;padding:.4rem;border-bottom:1px solid #f3f4f6">${avgAnes}분</td>
+                    <td style="text-align:right;padding:.4rem;border-bottom:1px solid #f3f4f6;font-weight:700;color:#047857;white-space:nowrap">${pm}</td>
+                </tr>`;
+            }).join('');
+            el.innerHTML=`<div style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+                <div style="background:#ecfdf5;padding:.55rem .7rem;font-weight:700;color:#065f46;font-size:.85rem">💹 시술별 분당수익 <span style="font-weight:400;font-size:.7rem;color:#047857">시술금액 ÷ 시술시간 · 표본이 쌓일수록 정확</span></div>
+                <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.8rem">
+                    <thead><tr style="background:#f9fafb">
+                        <th style="text-align:left;padding:.4rem;white-space:nowrap">오더명</th>
+                        <th style="padding:.4rem;white-space:nowrap">건수</th>
+                        <th style="text-align:right;padding:.4rem;white-space:nowrap">평균 시술금액</th>
+                        <th style="text-align:right;padding:.4rem;white-space:nowrap">평균 시술시간</th>
+                        <th style="text-align:right;padding:.4rem;white-space:nowrap">평균 마취시간</th>
+                        <th style="text-align:right;padding:.4rem;white-space:nowrap">분당수익</th>
+                    </tr></thead><tbody>${body}</tbody></table></div></div>`;
+        }
+
+        // ==================================================================
         //  시술 수가표 + 상담 트리 — localStorage 로 편집분 저장, Firebase 미사용
         // ==================================================================
         const FEE_LS_KEY='staff_fee_cats_v2';
@@ -5998,6 +6428,11 @@
             }else if(view==='rating'){
                 await loadProductRatings();
                 renderProductRatings();
+            }else if(view==='proctime'){
+                await ensureFeeData();       // 오더명 자동완성·수가표 연동용
+                await loadProcedureTimes();
+                _ptRefreshOrderDatalist();
+                renderProcTime();
             }
         }
         function _feeBack(){
@@ -6337,6 +6772,12 @@
                     const collapsed=!!_feeCollapsed[t.id];
                     const vsBody=(t.variants||[]).map(v=>{
                         const priceWon=(Number(v.price)||0)*10000;
+                        // 시술시간 탭 기록 기반 분당수익 배지
+                        const _ptStat=_procTimePerMinFor([v.label, t.name, t.name+' · '+v.label, t.name+' '+v.label]);
+                        const _ptPm=_ptStat?_ptPerMin(_ptStat):null;
+                        const _ptBadge=_ptPm!=null
+                            ? `<div title="시술시간 기록 ${_ptStat.pairCount}건 기준 (시술금액÷시술시간)" style="font-size:.68rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${Math.round(_ptPm).toLocaleString()}</div>`
+                            : '';
                         const isEditing=(_feeEditingVariantId===v.id);
                         if(isEditing){
                             // ── 편집 모드 ──
@@ -6375,6 +6816,7 @@
                                 ${_feeTagsHtml(v.tags)}
                             </div>
                             ${v.sessions?`<div style="font-size:.74rem;color:#6d28d9;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;padding:1px 7px;flex-shrink:0;font-weight:600">${v.sessions}회</div>`:''}
+                            ${_ptBadge}
                             <div style="font-size:.85rem;color:#111827;font-weight:600;flex-shrink:0">₩${priceWon.toLocaleString()}</div>
                         </div>`;
                     }).join('');
