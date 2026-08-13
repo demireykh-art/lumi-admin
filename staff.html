@@ -614,8 +614,10 @@
                     </div>
                     <p style="margin-top:.5rem;font-size:.75rem;color:var(--text-secondary);line-height:1.5">
                         고객별로 <b>체류시작·종료</b> 시각과 각 오더의 <b>시술금액·시술시간·마취시간</b>을 기록하세요.
-                        오더명은 <b>시술 수가표</b>에서 자동완성되며, 새 오더는 저장 시 수가표에 추가할지 물어봅니다.
-                        데이터가 쌓이면 아래 <b>시술별 분당수익</b>이 자동 계산되고, 수가표에도 표시됩니다.
+                        오더는 <b>시술 수가표</b>와 동일하게 <b>큰분류 → 오더명 → 회차권</b> 순으로 드롭다운에서 선택합니다.
+                        목록에 없으면 각 드롭다운의 <b>[+ 새…]</b>로 추가하면 수가표에도 자동 저장됩니다.
+                        회차권은 <b>1회당 금액(시술금액÷회차)</b> 기준으로 분당수익을 계산하며, 데이터가 쌓이면
+                        아래 <b>시술별 분당수익</b>과 수가표 배지에 자동 표시됩니다.
                     </p>
                     <div id="ptVisits" style="margin-top:.6rem"></div>
                     <div id="ptStats" style="margin-top:1rem"></div>
@@ -5977,7 +5979,9 @@
         // ==================================================================
         // 오더 상세 기본 컬럼(고정): 삭제·이름수정 불가, 좌우 이동은 가능
         const PT_BASE_COLS=[
+            {id:'category',  name:'큰분류',   kind:'category'},
             {id:'orderName', name:'오더명',   kind:'order'},
+            {id:'variant',   name:'회차권',   kind:'variant'},
             {id:'price',     name:'시술금액', kind:'money'},
             {id:'procMin',   name:'시술시간', kind:'min'},
             {id:'anesMin',   name:'마취시간', kind:'min'}
@@ -6067,15 +6071,32 @@
             }catch(e){ console.warn('procedureTimes 실시간 초기화 실패:',e); }
         }
 
-        // 회차권이면 회차 수(>1)를 반환, 아니면 1 — 시술 수가표 variant.sessions 기준.
-        // 분당수익은 1회당 금액(시술금액÷회차)으로 계산하기 위한 나눗셈 값.
-        function _ptOrderSessions(name){
-            if(!name) return 1;
-            try{
-                const m=_findFeeVariantByOrderName(name);
-                const s=(m&&m.v)?Number(m.v.sessions):0;
-                return (s>1)?s:1;
-            }catch(_){ return 1; }
+        // 큰분류·오더명·회차권(라벨) → 시술 수가표 variant 정확 매칭
+        function _ptResolveVariant(vals){
+            if(!vals) return null;
+            const cat=(_feeData||[]).find(c=>c.name===vals.category);
+            const t=cat?(cat.treatments||[]).find(x=>x.name===vals.orderName):null;
+            if(!t) return null;
+            return (t.variants||[]).find(x=>x.label===vals.variant) || null;
+        }
+        // 회차권이면 회차 수(>1)를 반환, 아니면 1 — 분당수익을 1회당 금액으로 계산하기 위한 나눗셈 값.
+        function _ptSessionsOf(vals){
+            const v=_ptResolveVariant(vals);
+            const s=v?Number(v.sessions):0;
+            return (s>1)?s:1;
+        }
+        // 오더 → 집계 키: 수가표 variant 로 매칭되면 variant.id(정확), 아니면 오더명 텍스트
+        function _ptStatKey(vals){
+            const v=_ptResolveVariant(vals);
+            if(v) return 'v:'+v.id;
+            const nm=_ptNorm(vals&&vals.orderName);
+            return nm?('o:'+nm):'';
+        }
+        function _ptDispName(vals){
+            const nm=String((vals&&vals.orderName)||'').trim();
+            const va=String((vals&&vals.variant)||'').trim();
+            if(nm&&va&&va!=='기본') return nm+' · '+va;
+            return nm||va||'(무명)';
         }
         // ── 분당수익 집계 ──
         // pairPrice 는 "1회당 금액(시술금액÷회차)" 합계 → 회차권은 회차로 나눠 분당수익 산출.
@@ -6086,13 +6107,13 @@
             if(st){
                 st.visits.forEach(v=>{
                     (v.orders||[]).forEach(o=>{
-                        const nm=(o.values&&o.values.orderName)||'';
-                        const key=_ptNorm(nm);
+                        const vals=o.values||{};
+                        const key=_ptStatKey(vals);
                         if(!key) return;
-                        const price=_ptNum(o.values.price), pmin=_ptNum(o.values.procMin), amin=_ptNum(o.values.anesMin);
-                        const sessions=_ptOrderSessions(nm);
+                        const price=_ptNum(vals.price), pmin=_ptNum(vals.procMin), amin=_ptNum(vals.anesMin);
+                        const sessions=_ptSessionsOf(vals);
                         const effPrice=price/sessions; // 1회당 금액
-                        if(!map[key]) map[key]={name:String(nm).trim(),count:0,sumPrice:0,priceCount:0,sumProcMin:0,minCount:0,sumAnesMin:0,anesCount:0,pairPrice:0,pairMin:0,pairCount:0};
+                        if(!map[key]) map[key]={name:_ptDispName(vals),count:0,sumPrice:0,priceCount:0,sumProcMin:0,minCount:0,sumAnesMin:0,anesCount:0,pairPrice:0,pairMin:0,pairCount:0};
                         const s=map[key];
                         s.count++;
                         if(price>0){ s.sumPrice+=price; s.priceCount++; }
@@ -6106,14 +6127,9 @@
             return map;
         }
         function _ptPerMin(s){ return (s&&s.pairMin>0)?s.pairPrice/s.pairMin:null; }
-        // 시술 수가표 variant → 분당수익 집계 매칭 (라벨·시술명 후보로 조회)
-        function _procTimePerMinFor(labels){
-            if(!_procTimeStats) return null;
-            for(const lb of (labels||[])){
-                const key=_ptNorm(lb);
-                if(key&&_procTimeStats[key]) return _procTimeStats[key];
-            }
-            return null;
+        // 시술 수가표 variant → 분당수익 집계 조회 (variant.id 정확 매칭)
+        function _procTimeStatForVariant(vid){
+            return (_procTimeStats&&_procTimeStats['v:'+vid])||null;
         }
 
         // ── 오더명 자동완성(datalist) — 시술 수가표에서 생성 ──
@@ -6135,23 +6151,10 @@
             if(!dl) return;
             dl.innerHTML=_ptOrderNameOptions().map(n=>`<option value="${_ptEsc(n)}"></option>`).join('');
         }
-        // 새 오더명 → 수가표에 없으면 추가 여부 확인 후 등록
-        async function _ptEnsureOrderInFee(name, priceWon){
-            name=String(name||'').trim();
-            if(!name) return null;
-            await ensureFeeData();
-            const m=_findFeeVariantByOrderName(name);
-            if(m) return m;
-            if(!confirm(`'${name}' 은(는) 시술 수가표에 없는 오더입니다.\n수가표에 새로 추가할까요?`)) return null;
-            const CAT_NAME='시술시간 등록';
-            let cat=(_feeData||[]).find(c=>c.name===CAT_NAME);
-            if(!cat){ cat={id:_uid(),name:CAT_NAME,note:'시술시간 탭에서 자동 추가',treatments:[]}; _feeData=_feeData||[]; _feeData.push(cat); }
-            const priceMan=priceWon>0?Math.round(priceWon/10000*10)/10:0;
-            cat.treatments=cat.treatments||[];
-            cat.treatments.push({id:_uid(),name:name,note:'',variants:[{id:_uid(),label:'기본',price:priceMan}]});
-            saveFeeData();
-            _ptRefreshOrderDatalist();
-            return true;
+        function _ptOrder(vid,oid){
+            const st=procTimeState; if(!st) return null;
+            const v=st.visits.find(x=>x.id===vid); if(!v) return null;
+            return (v.orders||[]).find(x=>x.id===oid)||null;
         }
 
         // ── 방문(고객) CRUD ──
@@ -6220,26 +6223,72 @@
             }else{ pos=0; }
             try{ el.setSelectionRange(pos,pos); }catch(_){}
         }
-        // 오더명 확정(blur/enter): 수가표 매칭 → 금액 자동채움, 없으면 등록 확인
-        async function ptOrderNameChange(vid,oid,val){
-            ptSetOrderValue(vid,oid,'orderName',val);
-            const name=String(val||'').trim();
-            if(!name){ renderProcTime(); return; }
-            await ensureFeeData();
-            const st=procTimeState;
-            const v=st&&st.visits.find(x=>x.id===vid);
-            const o=v&&(v.orders||[]).find(x=>x.id===oid);
-            const m=_findFeeVariantByOrderName(name);
-            if(m){
-                if(o&&(!o.values.price||_ptNum(o.values.price)===0)&&Number(m.price)>0){
-                    o.values.price=Number(m.price)*10000; // 만원 → 원
-                    saveProcedureTimes();
+        // ── 큰분류 → 오더명 → 회차권 드롭다운 (시술 수가표와 동일 구조, 신규는 수가표에 등록) ──
+        // 큰분류(카테고리) 선택/추가
+        function ptOnCategoryChange(vid,oid,el){
+            const o=_ptOrder(vid,oid); if(!o) return;
+            let val=el.value;
+            if(val==='__new__'){
+                const name=prompt('새 큰분류(카테고리) 이름:');
+                if(name==null||!name.trim()){ renderProcTime(); return; }
+                const nm=name.trim();
+                if(!(_feeData||[]).some(c=>c.name===nm)){
+                    _feeData=_feeData||[]; _feeData.push({id:_uid(),name:nm,note:'',treatments:[]}); saveFeeData();
                 }
-            }else{
-                const priceWon=o?_ptNum(o.values.price):0;
-                await _ptEnsureOrderInFee(name, priceWon);
+                val=nm;
             }
-            renderProcTime();
+            o.values=o.values||{};
+            o.values.category=val;
+            o.values.orderName=''; o.values.variant=''; // 하위 선택 초기화
+            renderProcTime(); saveProcedureTimes();
+        }
+        // 오더명(시술) 선택/추가 — 큰분류 먼저 선택 필요
+        function ptOnOrderChange(vid,oid,el){
+            const o=_ptOrder(vid,oid); if(!o) return;
+            const cat=(_feeData||[]).find(c=>c.name===(o.values&&o.values.category));
+            let val=el.value;
+            if(val==='__new__'){
+                if(!cat){ alert('먼저 큰분류를 선택하세요.'); renderProcTime(); return; }
+                const name=prompt('새 오더명(시술) 이름:');
+                if(name==null||!name.trim()){ renderProcTime(); return; }
+                const nm=name.trim();
+                if(!(cat.treatments||[]).some(t=>t.name===nm)){
+                    cat.treatments=cat.treatments||[];
+                    cat.treatments.push({id:_uid(),name:nm,note:'',variants:[{id:_uid(),label:'기본',price:0}]});
+                    saveFeeData();
+                }
+                val=nm;
+            }
+            o.values=o.values||{};
+            o.values.orderName=val;
+            o.values.variant=''; // 회차권 초기화
+            renderProcTime(); saveProcedureTimes();
+        }
+        // 회차권(옵션) 선택/추가 — 선택 시 시술금액(정가) 자동 채움
+        function ptOnVariantChange(vid,oid,el){
+            const o=_ptOrder(vid,oid); if(!o) return;
+            const cat=(_feeData||[]).find(c=>c.name===(o.values&&o.values.category));
+            const t=cat?(cat.treatments||[]).find(x=>x.name===(o.values&&o.values.orderName)):null;
+            let val=el.value;
+            if(val==='__new__'){
+                if(!t){ alert('먼저 큰분류·오더명을 선택하세요.'); renderProcTime(); return; }
+                const label=prompt('새 회차권/옵션 이름 (예: 5회권, 1cc, 기본):','');
+                if(label==null||!label.trim()){ renderProcTime(); return; }
+                const lb=label.trim();
+                const sess=parseInt(String(prompt('회차 수 (단건이면 1 또는 빈칸):','1')||'').replace(/[^\d]/g,''))||0;
+                const priceMan=Number(String(prompt('정가 (만원):','0')||'0').replace(/[^\d.]/g,''))||0;
+                if(!(t.variants||[]).some(x=>x.label===lb)){
+                    const nv={id:_uid(),label:lb,price:priceMan};
+                    if(sess>1) nv.sessions=sess;
+                    t.variants=t.variants||[]; t.variants.push(nv); saveFeeData();
+                }
+                val=lb;
+            }
+            o.values=o.values||{};
+            o.values.variant=val;
+            const vv=_ptResolveVariant(o.values);
+            if(vv && Number(vv.price)>0) o.values.price=Number(vv.price)*10000; // 만원→원
+            renderProcTime(); saveProcedureTimes();
         }
 
         // ── 헤더(열) CRUD — 좌우 이동 ──
@@ -6288,7 +6337,7 @@
             let price=0, effPrice=0, proc=0;
             (v.orders||[]).forEach(o=>{
                 const p=_ptNum(o.values&&o.values.price);
-                const sessions=_ptOrderSessions(o.values&&o.values.orderName);
+                const sessions=_ptSessionsOf(o.values);
                 price+=p;                 // 입력 실제 금액 합계(시술합계 표시용)
                 effPrice+=p/sessions;     // 1회당 금액 합계(체류 분당수익 계산용)
                 proc+=_ptNum(o.values&&o.values.procMin);
@@ -6296,11 +6345,43 @@
             return {price,effPrice,proc};
         }
 
-        // ── 셀 입력 렌더 ──
-        function _ptCellInput(vid,oid,col,val){
+        // 드롭다운 옵션 빌더: 현재값이 목록에 없어도 유지되도록 포함
+        function _ptSelect(onchange, cur, names, newLabel){
+            const set=[]; const seen=new Set();
+            names.forEach(n=>{ if(n!=null&&n!==''&&!seen.has(n)){ seen.add(n); set.push(n); } });
+            if(cur&&!seen.has(cur)) set.push(cur); // 목록에 없는 기존값 보존
+            let opts='<option value="">(선택)</option>';
+            opts+=set.map(n=>`<option value="${_ptEsc(n)}"${n===cur?' selected':''}>${_ptEsc(n)}</option>`).join('');
+            opts+=`<option value="__new__">${newLabel}</option>`;
+            return `<select onchange="${onchange}" style="width:100%;min-width:96px;max-width:150px;padding:.3rem .3rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:inherit">${opts}</select>`;
+        }
+        // ── 셀 입력 렌더 ── (vals = 해당 오더 행의 전체 값, 캐스케이드용)
+        function _ptCellInput(vid,oid,col,val,vals){
+            vals=vals||{};
             const v=_ptEsc(val);
-            if(col.kind==='order')
-                return `<input type="text" list="ptOrderDL" value="${v}" placeholder="오더명" onchange="ptOrderNameChange('${vid}','${oid}',this.value)" style="width:100%;min-width:120px;padding:.3rem .4rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:var(--bg)">`;
+            if(col.kind==='category'){
+                const names=(_feeData||[]).map(c=>c.name);
+                return _ptSelect(`ptOnCategoryChange('${vid}','${oid}',this)`, val, names, '+ 새 큰분류…');
+            }
+            if(col.kind==='order'){
+                const cat=(_feeData||[]).find(c=>c.name===vals.category);
+                const names=cat?(cat.treatments||[]).map(t=>t.name):[];
+                return _ptSelect(`ptOnOrderChange('${vid}','${oid}',this)`, val, names, '+ 새 오더명…');
+            }
+            if(col.kind==='variant'){
+                const cat=(_feeData||[]).find(c=>c.name===vals.category);
+                const t=cat?(cat.treatments||[]).find(x=>x.name===vals.orderName):null;
+                const vars=t?(t.variants||[]):[];
+                // 표시는 "라벨 · N회" 이지만 값은 라벨
+                const seen=[]; let opts='<option value="">(선택)</option>';
+                vars.forEach(x=>{ seen.push(x.label);
+                    const lbl=`${x.label}${x.sessions?` · ${x.sessions}회`:''}`;
+                    opts+=`<option value="${_ptEsc(x.label)}"${x.label===val?' selected':''}>${_ptEsc(lbl)}</option>`;
+                });
+                if(val&&!seen.includes(val)) opts+=`<option value="${_ptEsc(val)}" selected>${_ptEsc(val)}</option>`;
+                opts+=`<option value="__new__">+ 새 회차권…</option>`;
+                return `<select onchange="ptOnVariantChange('${vid}','${oid}',this)" style="width:100%;min-width:96px;max-width:160px;padding:.3rem .3rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:inherit">${opts}</select>`;
+            }
             if(col.kind==='money')
                 return `<input type="text" inputmode="numeric" value="${_ptFmtComma(val)}" placeholder="원" oninput="ptOnMoneyInput('${vid}','${oid}','${col.id}',this)" onchange="renderProcTime()" style="width:92px;text-align:right;padding:.3rem .35rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`;
             if(col.kind==='min')
@@ -6320,9 +6401,9 @@
                 return `<th style="padding:.35rem .3rem;border-bottom:2px solid var(--border);white-space:nowrap;font-size:.74rem;color:var(--text-secondary)"><div>${_ptEsc(col.name)}</div><div style="margin-top:1px">${left}${right}${edit}</div></th>`;
             }).join('');
             const rows=(v.orders||[]).map(o=>{
-                const cells=st.columns.map(col=>`<td style="padding:.25rem .3rem;border-bottom:1px solid var(--border)">${_ptCellInput(v.id,o.id,col,o.values?o.values[col.id]:'')}</td>`).join('');
+                const cells=st.columns.map(col=>`<td style="padding:.25rem .3rem;border-bottom:1px solid var(--border)">${_ptCellInput(v.id,o.id,col,o.values?o.values[col.id]:'',o.values)}</td>`).join('');
                 const price=_ptNum(o.values&&o.values.price), pmin=_ptNum(o.values&&o.values.procMin);
-                const sessions=_ptOrderSessions(o.values&&o.values.orderName);
+                const sessions=_ptSessionsOf(o.values);
                 const pm = pmin>0 ? `₩${Math.round((price/sessions)/pmin).toLocaleString()}<span style="font-size:.6rem;color:var(--text-muted)">/분</span>` : '<span style="color:var(--text-muted)">-</span>';
                 return `<tr>${cells}`
                   + `<td style="text-align:right;padding:.25rem .3rem;border-bottom:1px solid var(--border);white-space:nowrap;font-size:.78rem;color:#047857;font-weight:600">${pm}</td>`
@@ -6816,7 +6897,7 @@
                     const vsBody=(t.variants||[]).map(v=>{
                         const priceWon=(Number(v.price)||0)*10000;
                         // 시술시간 탭 기록 기반 분당수익 배지
-                        const _ptStat=_procTimePerMinFor([v.label, t.name, t.name+' · '+v.label, t.name+' '+v.label]);
+                        const _ptStat=_procTimeStatForVariant(v.id);
                         const _ptPm=_ptStat?_ptPerMin(_ptStat):null;
                         const _ptBadge=_ptPm!=null
                             ? `<div title="시술시간 기록 ${_ptStat.pairCount}건 기준 (시술금액÷시술시간)" style="font-size:.68rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${Math.round(_ptPm).toLocaleString()}</div>`
