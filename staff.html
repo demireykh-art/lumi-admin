@@ -4122,7 +4122,7 @@
                     date:today,
                     checkIn:time,
                     status:status,
-                    location:{lat:userLocation.lat,lng:userLocation.lng},
+                    location:userLocation?{lat:userLocation.lat,lng:userLocation.lng}:null,
                     createdAt:firebase.firestore.FieldValue.serverTimestamp()
                 });
                 alert('출근 완료: '+time+(status==='late'?' (지각)':''));
