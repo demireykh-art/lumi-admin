@@ -6067,7 +6067,19 @@
             }catch(e){ console.warn('procedureTimes 실시간 초기화 실패:',e); }
         }
 
+        // 회차권이면 회차 수(>1)를 반환, 아니면 1 — 시술 수가표 variant.sessions 기준.
+        // 분당수익은 1회당 금액(시술금액÷회차)으로 계산하기 위한 나눗셈 값.
+        function _ptOrderSessions(name){
+            if(!name) return 1;
+            try{
+                const m=_findFeeVariantByOrderName(name);
+                const s=(m&&m.v)?Number(m.v.sessions):0;
+                return (s>1)?s:1;
+            }catch(_){ return 1; }
+        }
         // ── 분당수익 집계 ──
+        // pairPrice 는 "1회당 금액(시술금액÷회차)" 합계 → 회차권은 회차로 나눠 분당수익 산출.
+        // sumPrice(평균 시술금액 표시용)는 입력한 실제 금액 그대로 유지.
         function _recomputeProcTimeStats(){
             const map={};
             const st=procTimeState;
@@ -6078,13 +6090,15 @@
                         const key=_ptNorm(nm);
                         if(!key) return;
                         const price=_ptNum(o.values.price), pmin=_ptNum(o.values.procMin), amin=_ptNum(o.values.anesMin);
+                        const sessions=_ptOrderSessions(nm);
+                        const effPrice=price/sessions; // 1회당 금액
                         if(!map[key]) map[key]={name:String(nm).trim(),count:0,sumPrice:0,priceCount:0,sumProcMin:0,minCount:0,sumAnesMin:0,anesCount:0,pairPrice:0,pairMin:0,pairCount:0};
                         const s=map[key];
                         s.count++;
                         if(price>0){ s.sumPrice+=price; s.priceCount++; }
                         if(pmin>0){ s.sumProcMin+=pmin; s.minCount++; }
                         if(amin>0){ s.sumAnesMin+=amin; s.anesCount++; }
-                        if(price>0&&pmin>0){ s.pairPrice+=price; s.pairMin+=pmin; s.pairCount++; }
+                        if(price>0&&pmin>0){ s.pairPrice+=effPrice; s.pairMin+=pmin; s.pairCount++; }
                     });
                 });
             }
@@ -6271,9 +6285,15 @@
         }
         function _ptFmtMin(min){ if(min==null) return '-'; const h=Math.floor(min/60), mm=min%60; return h>0?`${h}시간 ${mm}분`:`${mm}분`; }
         function _ptVisitTotals(v){
-            let price=0, proc=0;
-            (v.orders||[]).forEach(o=>{ price+=_ptNum(o.values&&o.values.price); proc+=_ptNum(o.values&&o.values.procMin); });
-            return {price,proc};
+            let price=0, effPrice=0, proc=0;
+            (v.orders||[]).forEach(o=>{
+                const p=_ptNum(o.values&&o.values.price);
+                const sessions=_ptOrderSessions(o.values&&o.values.orderName);
+                price+=p;                 // 입력 실제 금액 합계(시술합계 표시용)
+                effPrice+=p/sessions;     // 1회당 금액 합계(체류 분당수익 계산용)
+                proc+=_ptNum(o.values&&o.values.procMin);
+            });
+            return {price,effPrice,proc};
         }
 
         // ── 셀 입력 렌더 ──
@@ -6302,13 +6322,14 @@
             const rows=(v.orders||[]).map(o=>{
                 const cells=st.columns.map(col=>`<td style="padding:.25rem .3rem;border-bottom:1px solid var(--border)">${_ptCellInput(v.id,o.id,col,o.values?o.values[col.id]:'')}</td>`).join('');
                 const price=_ptNum(o.values&&o.values.price), pmin=_ptNum(o.values&&o.values.procMin);
-                const pm = pmin>0 ? `₩${Math.round(price/pmin).toLocaleString()}<span style="font-size:.6rem;color:var(--text-muted)">/분</span>` : '<span style="color:var(--text-muted)">-</span>';
+                const sessions=_ptOrderSessions(o.values&&o.values.orderName);
+                const pm = pmin>0 ? `₩${Math.round((price/sessions)/pmin).toLocaleString()}<span style="font-size:.6rem;color:var(--text-muted)">/분</span>` : '<span style="color:var(--text-muted)">-</span>';
                 return `<tr>${cells}`
                   + `<td style="text-align:right;padding:.25rem .3rem;border-bottom:1px solid var(--border);white-space:nowrap;font-size:.78rem;color:#047857;font-weight:600">${pm}</td>`
                   + `<td style="text-align:center;padding:.25rem .3rem;border-bottom:1px solid var(--border)"><button class="btn btn-danger btn-sm" onclick="ptRemoveOrder('${v.id}','${o.id}')" style="font-size:.66rem;padding:.12rem .4rem">삭제</button></td></tr>`;
             }).join('') || `<tr><td colspan="${nCols+2}" style="text-align:center;color:var(--text-muted);padding:.8rem;font-size:.78rem">오더가 없습니다. [+ 오더 추가]를 누르세요.</td></tr>`;
             const stay=_ptStayMinutes(v), totals=_ptVisitTotals(v);
-            const stayPm=(stay&&stay>0&&totals.price>0)?Math.round(totals.price/stay):null;
+            const stayPm=(stay&&stay>0&&totals.effPrice>0)?Math.round(totals.effPrice/stay):null;
             const bd='display:inline-block;font-size:.68rem;padding:1px 7px;border-radius:8px;white-space:nowrap';
             return `<div class="pt-visit" data-vid="${v.id}" style="border:1px solid #e5e7eb;border-radius:12px;margin-bottom:.9rem;overflow:hidden;background:#fff">
                 <div style="background:#eef2ff;padding:.55rem .6rem;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center">
