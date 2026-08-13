@@ -6272,10 +6272,18 @@
             let val=el.value;
             if(val==='__new__'){
                 if(!t){ alert('먼저 큰분류·오더명을 선택하세요.'); renderProcTime(); return; }
-                const label=prompt('새 회차권/옵션 이름 (예: 5회권, 1cc, 기본):','');
+                const label=prompt('새 회차권/옵션 이름 (예: 10회권, 5회, 1cc, 기본):','');
                 if(label==null||!label.trim()){ renderProcTime(); return; }
                 const lb=label.trim();
-                const sess=parseInt(String(prompt('회차 수 (단건이면 1 또는 빈칸):','1')||'').replace(/[^\d]/g,''))||0;
+                // 회차 수: 이름의 "N회"를 자동 인식(예: 10회권→10). 없으면 단건, 애매하면 한 번만 확인.
+                let sess=0;
+                const mm=lb.match(/(\d+)\s*회/);
+                if(mm){ sess=parseInt(mm[1])||1; }
+                else{
+                    const ans=prompt(`'${lb}'가 여러 회 묶음(회차권)이면 회차 수를 입력하세요.\n단건(1회 시술)이면 그대로 확인.`,'1');
+                    if(ans==null){ renderProcTime(); return; }
+                    sess=parseInt(String(ans).replace(/[^\d]/g,''))||1;
+                }
                 const priceMan=Number(String(prompt('정가 (만원):','0')||'0').replace(/[^\d.]/g,''))||0;
                 if(!(t.variants||[]).some(x=>x.label===lb)){
                     const nv={id:_uid(),label:lb,price:priceMan};
@@ -6375,7 +6383,8 @@
                 // 표시는 "라벨 · N회" 이지만 값은 라벨
                 const seen=[]; let opts='<option value="">(선택)</option>';
                 vars.forEach(x=>{ seen.push(x.label);
-                    const lbl=`${x.label}${x.sessions?` · ${x.sessions}회`:''}`;
+                    // 이름에 이미 "N회"가 있으면 회차 배지 생략(중복 방지)
+                    const lbl=`${x.label}${(x.sessions>1&&!/\d+\s*회/.test(x.label))?` · ${x.sessions}회`:''}`;
                     opts+=`<option value="${_ptEsc(x.label)}"${x.label===val?' selected':''}>${_ptEsc(lbl)}</option>`;
                 });
                 if(val&&!seen.includes(val)) opts+=`<option value="${_ptEsc(val)}" selected>${_ptEsc(val)}</option>`;
