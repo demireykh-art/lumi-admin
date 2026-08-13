@@ -6064,7 +6064,12 @@
                     procTimeState=_ptNormalizeState(doc.data()||{});
                     _recomputeProcTimeStats();
                     const ptTab=document.getElementById('tab-proctime');
-                    if(ptTab&&ptTab.classList.contains('active')){ _ptRefreshOrderDatalist(); renderProcTime(); }
+                    if(ptTab&&ptTab.classList.contains('active')){
+                        // 입력 중(포커스가 이 탭 안 입력요소)이면 전체 재렌더 생략 → 타이핑 포커스 유지
+                        const ae=document.activeElement;
+                        const editing=ae&&ptTab.contains(ae)&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName);
+                        if(!editing){ _ptRefreshOrderDatalist(); renderProcTime(); }
+                    }
                     const feeTab=document.getElementById('tab-feeschedule');
                     if(feeTab&&feeTab.classList.contains('active')&&document.getElementById('feeList')) renderFeeList();
                 }, err=>console.warn('procedureTimes 스냅샷 실패:', err));
@@ -6190,6 +6195,9 @@
         function ptRemoveOrder(vid,oid){
             const st=procTimeState; if(!st) return;
             const v=st.visits.find(x=>x.id===vid); if(!v) return;
+            const o=(v.orders||[]).find(x=>x.id===oid);
+            const nm=o&&o.values&&(o.values.orderName||o.values.category);
+            if(!confirm(`${nm?`'${nm}' `:''}오더를 삭제할까요?`)) return; // 오탭 삭제 방지
             v.orders=(v.orders||[]).filter(o=>o.id!==oid);
             renderProcTime(); saveProcedureTimes();
         }
@@ -6284,7 +6292,8 @@
                     if(ans==null){ renderProcTime(); return; }
                     sess=parseInt(String(ans).replace(/[^\d]/g,''))||1;
                 }
-                const priceMan=Number(String(prompt('정가 (만원):','0')||'0').replace(/[^\d.]/g,''))||0;
+                const priceWon=Number(String(prompt('정가 (원):','0')||'0').replace(/[^\d]/g,''))||0;
+                const priceMan=priceWon>0?Math.round(priceWon/100)/100:0; // 원 → 만원(백원 단위 보존)
                 if(!(t.variants||[]).some(x=>x.label===lb)){
                     const nv={id:_uid(),label:lb,price:priceMan};
                     if(sess>1) nv.sessions=sess;
@@ -6433,8 +6442,6 @@
                     </span>
                     <span style="${bd};background:#e0e7ff;color:#3730a3">체류 ${_ptFmtMin(stay)}</span>
                     ${stayPm!=null?`<span style="${bd};background:#ecfdf5;color:#047857;font-weight:600">체류 분당 ₩${stayPm.toLocaleString()}</span>`:''}
-                    <span style="flex:1"></span>
-                    <button class="btn btn-danger btn-sm" onclick="ptRemoveVisit('${v.id}')" style="font-size:.68rem;padding:.15rem .45rem;flex-shrink:0">고객 삭제</button>
                 </div>
                 <div style="overflow-x:auto">
                     <table style="width:100%;border-collapse:collapse">
@@ -6446,6 +6453,7 @@
                     <button class="btn btn-secondary btn-sm" onclick="ptAddOrder('${v.id}')" style="font-size:.72rem;padding:.2rem .5rem">+ 오더 추가</button>
                     <span style="flex:1"></span>
                     <span style="font-size:.74rem;color:#374151">시술합계 <b>₩${totals.price.toLocaleString()}</b> · 시술시간 <b>${totals.proc}분</b></span>
+                    <button onclick="ptRemoveVisit('${v.id}')" title="이 고객 기록 삭제" style="margin-left:.5rem;background:#fff;border:1px solid #fca5a5;color:#dc2626;font-size:.7rem;padding:.2rem .55rem;border-radius:6px;cursor:pointer;flex-shrink:0">고객 삭제</button>
                 </div>
             </div>`;
         }
