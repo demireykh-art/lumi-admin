@@ -6184,6 +6184,28 @@
             o.values[colId]=val;
             saveProcedureTimes();
         }
+        // 시술금액: 천 단위 쉼표 표기 유틸
+        function _ptFmtComma(v){
+            const n=String(v==null?'':v).replace(/[^\d]/g,'');
+            return n?Number(n).toLocaleString('en-US'):'';
+        }
+        // 시술금액 입력: 숫자만 저장하고 화면엔 쉼표 자동 삽입(캐럿 위치 보존)
+        function ptOnMoneyInput(vid,oid,colId,el){
+            const caret=el.selectionStart||0;
+            const digitsBefore=(el.value.slice(0,caret).match(/\d/g)||[]).length;
+            const digits=el.value.replace(/[^\d]/g,'');
+            const formatted=digits?Number(digits).toLocaleString('en-US'):'';
+            el.value=formatted;
+            ptSetOrderValue(vid,oid,colId,digits); // 저장은 순수 숫자
+            // 캐럿 복원: 앞쪽 숫자 개수 기준
+            let pos=formatted.length, seen=0;
+            if(digitsBefore>0){
+                for(let i=0;i<formatted.length;i++){
+                    if(/\d/.test(formatted[i])){ seen++; if(seen>=digitsBefore){ pos=i+1; break; } }
+                }
+            }else{ pos=0; }
+            try{ el.setSelectionRange(pos,pos); }catch(_){}
+        }
         // 오더명 확정(blur/enter): 수가표 매칭 → 금액 자동채움, 없으면 등록 확인
         async function ptOrderNameChange(vid,oid,val){
             ptSetOrderValue(vid,oid,'orderName',val);
@@ -6260,7 +6282,7 @@
             if(col.kind==='order')
                 return `<input type="text" list="ptOrderDL" value="${v}" placeholder="오더명" onchange="ptOrderNameChange('${vid}','${oid}',this.value)" style="width:100%;min-width:120px;padding:.3rem .4rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:var(--bg)">`;
             if(col.kind==='money')
-                return `<input type="number" inputmode="numeric" value="${v}" placeholder="원" min="0" step="1000" oninput="ptSetOrderValue('${vid}','${oid}','${col.id}',this.value)" onchange="renderProcTime()" style="width:92px;text-align:right;padding:.3rem .35rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`;
+                return `<input type="text" inputmode="numeric" value="${_ptFmtComma(val)}" placeholder="원" oninput="ptOnMoneyInput('${vid}','${oid}','${col.id}',this)" onchange="renderProcTime()" style="width:92px;text-align:right;padding:.3rem .35rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`;
             if(col.kind==='min')
                 return `<input type="number" inputmode="numeric" value="${v}" placeholder="분" min="0" step="1" oninput="ptSetOrderValue('${vid}','${oid}','${col.id}',this.value)" onchange="renderProcTime()" style="width:62px;text-align:right;padding:.3rem .35rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`;
             return `<input type="text" value="${v}" placeholder="${_ptEsc(col.name)}" oninput="ptSetOrderValue('${vid}','${oid}','${col.id}',this.value)" style="width:100%;min-width:80px;padding:.3rem .4rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:var(--bg)">`;
