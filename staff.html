@@ -6956,6 +6956,36 @@
             });
             return o;
         }
+        // 시술(오더) 이동용 카테고리 옵션 — 대분류 › 중분류 › 카테고리 경로 표시
+        function _feeCategoryOptions(selCid){
+            const g=_feeGrouping();
+            const emit=(c,prefix)=>`<option value="${c.id}"${c.id===selCid?' selected':''}>${_esc(prefix+c.name)}</option>`;
+            let o='';
+            g.majors.forEach(maj=>{
+                (g.midByMajor[maj.id]||[]).forEach(mid=>{
+                    (g.catByMid[mid.id]||[]).forEach(c=>{ o+=emit(c, `${maj.name} › ${mid.name} › `); });
+                });
+            });
+            g.orphanMids.forEach(mid=>{ (g.catByMid[mid.id]||[]).forEach(c=>{ o+=emit(c, `(미분류) › ${mid.name} › `); }); });
+            g.unassignedCats.forEach(c=>{ o+=emit(c, `(미분류) › `); });
+            return o;
+        }
+        // 시술(오더)을 다른 카테고리로 이동 → 대/중분류 재분류
+        function feeMoveTreatmentToCategory(fromCid, tid, toCid){
+            if(!toCid||fromCid===toCid){ renderFeeList(); return; }
+            const from=(_feeData||[]).find(c=>c.id===fromCid);
+            const to=(_feeData||[]).find(c=>c.id===toCid);
+            if(!from||!to) return;
+            const idx=(from.treatments||[]).findIndex(t=>t.id===tid);
+            if(idx<0) return;
+            const t=from.treatments[idx];
+            if(!confirm(`시술 '${t.name}'을(를) '${to.name}' 카테고리로 이동할까요?`)){ renderFeeList(); return; }
+            from.treatments.splice(idx,1);
+            to.treatments=to.treatments||[];
+            to.treatments.push(t);
+            _feeEditingTreatmentId=null;
+            saveFeeData(); renderFeeList();
+        }
         // 분류 구조 계산: 대분류→중분류→카테고리 그룹핑
         function _feeGrouping(){
             const majors=_feeTax.majors.slice();
@@ -7077,8 +7107,9 @@
                         <button onclick="feeMoveTreatment('${c.id}','${t.id}',-1)" ${tIdx===0?'disabled':''} style="background:${tIdx===0?'#f3f4f6':'#fff'};border:1px solid #d1d5db;color:${tIdx===0?'#d1d5db':'#4b5563'};padding:.15rem .4rem;border-radius:4px;font-size:.7rem;cursor:${tIdx===0?'not-allowed':'pointer'}">↑</button>
                         <button onclick="feeMoveTreatment('${c.id}','${t.id}',1)" ${tIdx===treats.length-1?'disabled':''} style="background:${tIdx===treats.length-1?'#f3f4f6':'#fff'};border:1px solid #d1d5db;color:${tIdx===treats.length-1?'#d1d5db':'#4b5563'};padding:.15rem .4rem;border-radius:4px;font-size:.7rem;cursor:${tIdx===treats.length-1?'not-allowed':'pointer'}">↓</button>` : '';
                     const treatActions=isTreatEditing?`
-                        <div style="display:flex;gap:.25rem;flex-shrink:0;flex-wrap:wrap">
+                        <div style="display:flex;gap:.25rem;flex-shrink:0;flex-wrap:wrap;align-items:center">
                             ${tUpDown}
+                            <select onchange="feeMoveTreatmentToCategory('${c.id}','${t.id}',this.value)" title="다른 분류(카테고리)로 이동" style="font-size:.68rem;padding:.18rem .25rem;border:1px solid #4338ca;border-radius:4px;background:#fff;max-width:160px">${_feeCategoryOptions(c.id)}</select>
                             <button onclick="feeAddVariant('${c.id}','${t.id}')" style="background:#eef2ff;border:1px solid #4338ca;color:#4338ca;padding:.2rem .5rem;border-radius:4px;font-size:.72rem;cursor:pointer;font-weight:600">+ 옵션</button>
                             <button onclick="feeEditTreatment('${c.id}','${t.id}')" style="background:#fff;border:1px solid #d1d5db;color:#4b5563;padding:.2rem .5rem;border-radius:4px;font-size:.72rem;cursor:pointer">이름수정</button>
                             <button onclick="feeDeleteTreatment('${c.id}','${t.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.2rem .5rem;border-radius:4px;font-size:.72rem;cursor:pointer">🗑</button>
