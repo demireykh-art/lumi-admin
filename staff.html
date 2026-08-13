@@ -615,8 +615,8 @@
                     </div>
                     <p style="margin-top:.5rem;font-size:.75rem;color:var(--text-secondary);line-height:1.5">
                         고객별로 <b>체류시작·종료</b> 시각과 각 오더의 <b>시술금액·시술시간·마취시간</b>을 기록하세요.
-                        오더는 <b>시술 수가표</b>의 <b>대분류 → 오더명 → 회차권</b> 순으로 드롭다운에서 선택합니다.
-                        새 오더명·회차권은 위치(중분류·카테고리)를 지정해야 하므로 <b>시술 수가표</b>에서 추가하세요(대분류는 여기서도 추가 가능).
+                        오더는 <b>시술 수가표</b>의 <b>대분류 → 중분류 → 오더명 → 회차권</b> 순으로 드롭다운에서 선택합니다.
+                        새 오더명·회차권은 위치(카테고리)를 지정해야 하므로 <b>시술 수가표</b>에서 추가하세요(대분류·중분류는 여기서도 추가 가능).
                         회차권은 <b>1회당 금액(시술금액÷회차)</b> 기준으로 분당수익을 계산하며, 데이터가 쌓이면
                         아래 <b>시술별 분당수익</b>과 수가표 배지에 자동 표시됩니다.
                     </p>
@@ -5981,6 +5981,7 @@
         // 오더 상세 기본 컬럼(고정): 삭제·이름수정 불가, 좌우 이동은 가능
         const PT_BASE_COLS=[
             {id:'category',  name:'대분류',   kind:'category'},
+            {id:'middle',    name:'중분류',   kind:'middle'},
             {id:'orderName', name:'오더명',   kind:'order'},
             {id:'variant',   name:'회차권',   kind:'variant'},
             {id:'price',     name:'시술금액', kind:'money'},
@@ -6078,37 +6079,54 @@
         }
 
         // 큰분류·오더명·회차권(라벨) → 시술 수가표 variant 정확 매칭
-        // 시술시간 '대분류'(vals.category) 아래 카테고리 목록 (미분류 포함)
-        function _ptCategoriesUnderMajor(majorName){
+        const PT_NONE='(미분류)', PT_MID_NONE='(중분류 미지정)';
+        function _ptMajorObj(name){ return (_feeTax.majors||[]).find(m=>m.name===name)||null; }
+        function _ptIsNoneMajor(name){ return name===PT_NONE||name==='미분류'; }
+        // 선택한 대분류 아래 중분류 이름 목록 (미분류 대분류는 대분류 없는 중분류 + 미지정)
+        function _ptMiddlesForMajor(majorName){
             if(!majorName) return [];
-            if(majorName==='(미분류)'||majorName==='미분류'){
-                const realMidIds=new Set((_feeTax.middles||[]).map(m=>m.id));
-                return (_feeData||[]).filter(c=>!c.middleId||!realMidIds.has(c.middleId));
+            if(_ptIsNoneMajor(majorName)){
+                const orphans=(_feeTax.middles||[]).filter(m=>!(_feeTax.majors||[]).some(x=>x.id===m.majorId)).map(m=>m.name);
+                return orphans.concat(PT_MID_NONE);
             }
-            const maj=(_feeTax.majors||[]).find(m=>m.name===majorName);
-            if(!maj) return [];
-            const midIds=new Set((_feeTax.middles||[]).filter(m=>m.majorId===maj.id).map(m=>m.id));
-            return (_feeData||[]).filter(c=>midIds.has(c.middleId));
+            const maj=_ptMajorObj(majorName); if(!maj) return [];
+            return (_feeTax.middles||[]).filter(m=>m.majorId===maj.id).map(m=>m.name);
         }
-        // 대분류 아래 모든 시술(treatment) 목록 — 오더명 드롭다운용 (이름 중복 제거)
-        function _ptTreatmentsUnderMajor(majorName){
+        // 선택한 (대분류,중분류)에 속한 카테고리 목록
+        function _ptCategoriesForRow(vals){
+            const majorName=vals&&vals.category, middleName=vals&&vals.middle;
+            if(!majorName) return [];
+            const realMidIds=new Set((_feeTax.middles||[]).map(m=>m.id));
+            if(_ptIsNoneMajor(majorName)){
+                if(!middleName||middleName===PT_MID_NONE)
+                    return (_feeData||[]).filter(c=>!c.middleId||!realMidIds.has(c.middleId));
+                const mid=(_feeTax.middles||[]).find(m=>m.name===middleName&&!(_feeTax.majors||[]).some(x=>x.id===m.majorId));
+                return mid?(_feeData||[]).filter(c=>c.middleId===mid.id):[];
+            }
+            const maj=_ptMajorObj(majorName); if(!maj) return [];
+            if(!middleName) return [];
+            const mid=(_feeTax.middles||[]).find(m=>m.majorId===maj.id&&m.name===middleName);
+            return mid?(_feeData||[]).filter(c=>c.middleId===mid.id):[];
+        }
+        // 오더명 드롭다운용: 선택한 중분류에 속한 시술(treatment) 목록 (이름 중복 제거)
+        function _ptTreatmentsForRow(vals){
             const seen=new Set(), out=[];
-            _ptCategoriesUnderMajor(majorName).forEach(c=>(c.treatments||[]).forEach(t=>{
+            _ptCategoriesForRow(vals).forEach(c=>(c.treatments||[]).forEach(t=>{
                 if(t.name&&!seen.has(t.name)){ seen.add(t.name); out.push(t); }
             }));
             return out;
         }
-        // 대분류+오더명 으로 treatment 찾기 (하위 카테고리들 중 첫 매칭)
-        function _ptFindTreatment(majorName, orderName){
-            for(const c of _ptCategoriesUnderMajor(majorName)){
-                const t=(c.treatments||[]).find(x=>x.name===orderName);
+        function _ptFindTreatment(vals){
+            const nm=vals&&vals.orderName; if(!nm) return null;
+            for(const c of _ptCategoriesForRow(vals)){
+                const t=(c.treatments||[]).find(x=>x.name===nm);
                 if(t) return t;
             }
             return null;
         }
         function _ptResolveVariant(vals){
             if(!vals) return null;
-            const t=_ptFindTreatment(vals.category, vals.orderName);
+            const t=_ptFindTreatment(vals);
             if(!t) return null;
             return (t.variants||[]).find(x=>x.label===vals.variant) || null;
         }
@@ -6259,8 +6277,8 @@
             }else{ pos=0; }
             try{ el.setSelectionRange(pos,pos); }catch(_){}
         }
-        // ── 대분류 → 오더명 → 회차권 드롭다운 (시술 수가표 대분류/시술/옵션 참조) ──
-        // 신규 오더명·회차권은 위치(중분류·카테고리)가 필요하므로 수가표에서 추가하도록 안내.
+        // ── 대분류 → 중분류 → 오더명 → 회차권 드롭다운 (시술 수가표 참조) ──
+        // 신규 오더명·회차권은 위치(카테고리)가 필요하므로 수가표에서 추가하도록 안내.
         // 대분류 선택/추가 (신규는 수가표 대분류로 등록)
         function ptOnCategoryChange(vid,oid,el){
             const o=_ptOrder(vid,oid); if(!o) return;
@@ -6274,16 +6292,35 @@
             }
             o.values=o.values||{};
             o.values.category=val;
-            o.values.orderName=''; o.values.variant=''; // 하위 선택 초기화
+            o.values.middle=''; o.values.orderName=''; o.values.variant=''; // 하위 초기화
             renderProcTime(); saveProcedureTimes();
         }
-        // 오더명(시술) 선택 — 대분류 먼저 선택 필요. 신규는 수가표에서.
-        function ptOnOrderChange(vid,oid,el){
+        // 중분류 선택/추가 (신규는 선택한 대분류 아래로 등록)
+        function ptOnMiddleChange(vid,oid,el){
             const o=_ptOrder(vid,oid); if(!o) return;
             let val=el.value;
             if(val==='__new__'){
                 if(!o.values||!o.values.category){ alert('먼저 대분류를 선택하세요.'); renderProcTime(); return; }
-                alert('새 오더명은 [시술 수가표]에서 중분류·카테고리를 지정해 추가해 주세요.\n(대분류만으로는 위치를 정할 수 없어요)');
+                const maj=_ptMajorObj(o.values.category);
+                if(!maj){ alert('새 중분류는 [시술 수가표]에서 추가해 주세요.'); renderProcTime(); return; }
+                const name=prompt('새 중분류 이름 (예: 색소, 주름):');
+                if(name==null||!name.trim()){ renderProcTime(); return; }
+                const nm=name.trim();
+                if(!(_feeTax.middles||[]).some(m=>m.majorId===maj.id&&m.name===nm)){ _feeTax.middles.push({id:_uid(),name:nm,majorId:maj.id}); saveFeeData(); }
+                val=nm;
+            }
+            o.values=o.values||{};
+            o.values.middle=val;
+            o.values.orderName=''; o.values.variant=''; // 하위 초기화
+            renderProcTime(); saveProcedureTimes();
+        }
+        // 오더명(시술) 선택 — 대분류·중분류 먼저 선택 필요. 신규는 수가표에서.
+        function ptOnOrderChange(vid,oid,el){
+            const o=_ptOrder(vid,oid); if(!o) return;
+            let val=el.value;
+            if(val==='__new__'){
+                if(!o.values||!o.values.category||!o.values.middle){ alert('먼저 대분류·중분류를 선택하세요.'); renderProcTime(); return; }
+                alert('새 오더명은 [시술 수가표]에서 카테고리에 추가해 주세요.');
                 renderProcTime(); return;
             }
             o.values=o.values||{};
@@ -6376,15 +6413,20 @@
             const v=_ptEsc(val);
             if(col.kind==='category'){
                 // 대분류: 시술 수가표의 대분류 목록 참조 (+ 미분류)
-                const names=(_feeTax.majors||[]).map(m=>m.name).concat('(미분류)');
+                const names=(_feeTax.majors||[]).map(m=>m.name).concat(PT_NONE);
                 return _ptSelect(`ptOnCategoryChange('${vid}','${oid}',this)`, val, names, '+ 새 대분류…');
             }
+            if(col.kind==='middle'){
+                // 중분류: 선택한 대분류 아래 중분류 참조
+                const names=_ptMiddlesForMajor(vals.category);
+                return _ptSelect(`ptOnMiddleChange('${vid}','${oid}',this)`, val, names, '+ 새 중분류…');
+            }
             if(col.kind==='order'){
-                const names=_ptTreatmentsUnderMajor(vals.category).map(t=>t.name);
+                const names=_ptTreatmentsForRow(vals).map(t=>t.name);
                 return _ptSelect(`ptOnOrderChange('${vid}','${oid}',this)`, val, names, '+ 새 오더명…');
             }
             if(col.kind==='variant'){
-                const t=_ptFindTreatment(vals.category, vals.orderName);
+                const t=_ptFindTreatment(vals);
                 const vars=t?(t.variants||[]):[];
                 // 표시는 "라벨 · N회" 이지만 값은 라벨
                 const seen=[]; let opts='<option value="">(선택)</option>';
