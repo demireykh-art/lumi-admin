@@ -2718,7 +2718,12 @@
                 return a + _invUnitPrice(it)*(Number(r.qty)||0);
             },0));
         }
-        function _mixYield(mix){ return Number(mix&&mix.yield)||0; }
+        // 총 생성량 = cc(=ml) 단위 재료 수량 자동 합산
+        function _mixYield(mix){
+            if(!mix||!Array.isArray(mix.recipe)) return 0;
+            const s=mix.recipe.reduce((a,r)=>a+((r.unit==='cc'||r.unit==='ml')?(Number(r.qty)||0):0),0);
+            return Math.round(s*100)/100;
+        }
         function _mixYieldUnit(mix){ return (mix&&mix.yieldUnit)||'cc'; }
         // 믹스 단위단가 = 총원가 ÷ 총용량 (용량 미입력 시 전체원가) — 소수 2자리
         function _mixUnitPrice(mix){
@@ -2747,7 +2752,7 @@
                 await db.collection('injectionMixes').doc(m.id).set({
                     name:m.name||'',
                     recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'개',memo:r.memo||''})),
-                    yield:Number(m.yield)||0, yieldUnit:m.yieldUnit||'cc',
+                    yield:_mixYield(m), yieldUnit:'cc',
                     note:m.note||'', updatedAt:new Date().toISOString(), updatedBy:currentUser?.name||currentUser?.id||'staff'
                 });
             }catch(e){ alert('믹스 저장 실패: '+(e?.message||e)); }
@@ -2799,9 +2804,9 @@
                 </div>
                 <div style="display:flex;align-items:center;gap:.35rem;border-top:1px dashed #ddd6fe;padding-top:.4rem;margin-bottom:.35rem">
                     <span style="font-size:.76rem;color:#5b21b6;font-weight:600">총 생성량</span>
-                    <input type="number" value="${m.yield||''}" step="0.1" placeholder="예: 157.5" onchange="mixSetYield('${m.id}',this.value)" style="width:74px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:4px;background:#fff">
-                    <select onchange="mixSetYieldUnit('${m.id}',this.value)" style="font-size:.74rem;padding:.24rem .15rem;border:1px solid #c4b5fd;border-radius:4px;background:#fff">${['cc','개','ml'].map(u=>`<option value="${u}"${_mixYieldUnit(m)===u?' selected':''}>${u}</option>`).join('')}</select>
-                    <span style="flex:1;text-align:right;font-size:.74rem;color:#6b7280">${_mixYield(m)>0?`= ₩${_mixUnitPrice(m).toLocaleString()}/${_esc(_mixYieldUnit(m))}`:'용량 입력 시 단위당 단가'}</span>
+                    <span style="font-size:.82rem;color:#111827;font-weight:700">${_mixYield(m).toLocaleString()}cc</span>
+                    <span style="font-size:.7rem;color:#9ca3af">(cc 재료 자동 합산)</span>
+                    <span style="flex:1;text-align:right;font-size:.74rem;color:#6b7280">${_mixYield(m)>0?`= ₩${_mixUnitPrice(m).toLocaleString()}/cc`:'cc 재료 입력 시 cc당 단가'}</span>
                 </div>
                 <div style="display:flex;gap:.4rem;align-items:center;justify-content:space-between;border-top:1px dashed #ddd6fe;padding-top:.4rem">
                     <span style="font-size:.82rem;font-weight:700;color:#5b21b6">믹스 원가 ₩${_mixCost(m).toLocaleString()}</span>
@@ -2841,7 +2846,7 @@
             const m=_mixes.find(x=>x.id===id); if(!m) return;
             const inv=_findInvByName(name);
             m.recipe=m.recipe||[];
-            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:inv?.unit||'개',memo:''});
+            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:'cc',memo:''});
             _mixSaveDoc(m); _renderMixList();
         }
         function mixRecipeUpdate(id,idx,field,val){
