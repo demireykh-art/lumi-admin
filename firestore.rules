@@ -34,6 +34,7 @@ service cloud.firestore {
     match /categoryRules/{id}                  { allow read, write: if signedIn(); }
     match /productRatings/{id}                  { allow read, write: if signedIn(); }
     match /procedureTimes/{id}                  { allow read, write: if signedIn(); }
+    match /injectionMixes/{id}                  { allow read, write: if signedIn(); }
 
     // ── 인사·근태·급여 ──
     match /employees/{id}                      { allow read, write: if signedIn(); }
