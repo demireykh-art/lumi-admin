@@ -2837,7 +2837,7 @@
             return `<div style="border:1px solid #ddd6fe;border-top:none;border-radius:0 0 8px 8px;background:#faf5ff;padding:.55rem .6rem;margin-top:-.35rem">
                 <div style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:.4rem">${rows}</div>
                 <div style="display:flex;gap:.35rem;align-items:center;margin-bottom:.5rem">
-                    <input type="text" id="mixRecipeAddName-${m.id}" list="mixInvDL" placeholder="재고 아이템 검색 (예: 리도카인, N/S)"
+                    <input type="text" lang="ko" inputmode="text" id="mixRecipeAddName-${m.id}" list="mixInvDL" placeholder="재고 아이템 검색 (예: 리도카인, N/S)"
                         style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
                     <input type="number" id="mixRecipeAddQty-${m.id}" placeholder="cc/개" step="0.1"
                         style="width:62px;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
@@ -7378,10 +7378,10 @@
                         const isEditing=(_feeEditingVariantId===v.id);
                         if(isEditing){
                             const supRows=(v.supplies||[]).map((s,i)=>{
-                                const line=Math.round((Number(s.price)||0)*(Number(s.qty)||0));
+                                const line=Math.ceil((Number(s.price)||0)*(Number(s.qty)||0));
                                 const _su=s.unit||'개';
                                 return `<div style="display:flex;align-items:center;gap:.25rem;margin-bottom:.25rem">
-                                    <input type="text" list="feeInvDL" value="${_esc(s.name||'')}" placeholder="소모품·믹스 검색" onchange="feeVarSupplyName('${c.id}','${t.id}','${v.id}',${i},this.value)" style="flex:1;min-width:0;padding:.28rem .35rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">
+                                    <input type="text" lang="ko" inputmode="text" list="feeInvDL" value="${_esc(s.name||'')}" placeholder="소모품·믹스 검색" onchange="feeVarSupplyName('${c.id}','${t.id}','${v.id}',${i},this.value)" style="flex:1;min-width:0;padding:.28rem .35rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">
                                     <input type="number" value="${s.qty??1}" min="0" step="0.1" title="수량" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'qty',this.value)" style="width:46px;text-align:right;padding:.28rem .3rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px">
                                     <select onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'unit',this.value)" style="font-size:.72rem;padding:.26rem .05rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">${['개','cc'].map(u=>`<option value="${u}"${_su===u?' selected':''}>${u}</option>`).join('')}</select>
                                     <span style="font-size:.7rem;color:#92400e">×</span>
@@ -7636,7 +7636,8 @@
             return invItems;
         }
         function _feeSupplyCost(v){
-            return (v&&Array.isArray(v.supplies)?v.supplies:[]).reduce((a,s)=>a+(Number(s.price)||0)*(Number(s.qty)||0),0);
+            // 소모품 각 줄 금액은 소수점 올림(ceil) 후 합산
+            return (v&&Array.isArray(v.supplies)?v.supplies:[]).reduce((a,s)=>a+Math.ceil((Number(s.price)||0)*(Number(s.qty)||0)),0);
         }
         function _feeVarSessions(v){ return (v&&Number(v.sessions)>1)?Number(v.sessions):1; }
         // 분당수익 계산 시 마취시간 포함 여부(전역 토글, localStorage 유지)
