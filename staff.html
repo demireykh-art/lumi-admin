@@ -1482,7 +1482,11 @@
                 <input type="hidden" id="editItemId">
                 <div class="form-group">
                     <label class="form-label">품목명</label>
-                    <input type="text" class="form-input" id="editItemName" disabled style="background:#f5f5f5">
+                    <input type="text" class="form-input" id="editItemName" placeholder="예: 리도카인 20ml">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">1개 용량 <span style="font-size:.7rem;color:var(--text-muted)">(ml/cc · 주사제 등 액상만 · 믹스 용량 계산용)</span></label>
+                    <input type="number" class="form-input" id="editItemVolumeMl" step="0.1" placeholder="예: 20 (1병=20ml)">
                 </div>
                 <div class="form-group">
                     <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(선택 · 하위 품목 그룹핑용)</span></label>
@@ -2864,7 +2868,9 @@
             const m=_mixes.find(x=>x.id===id); if(!m) return;
             const inv=_findInvByName(name);
             m.recipe=m.recipe||[];
-            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:'cc',memo:''});
+            // 재고에 '1개 용량(ml)'이 있거나 이름에 용량이 있으면 개 단위+개당용량 자동 설정
+            const _vol=Number(inv&&inv.volumeMl)||_parseVolFromName(inv?inv.name:name);
+            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:_vol>0?'개':'cc',volEach:_vol>0?_vol:0,memo:''});
             _mixSaveDoc(m); _renderMixList();
         }
         function mixRecipeUpdate(id,idx,field,val){
@@ -13436,6 +13442,7 @@
             _refreshParentItemDatalist();
             document.getElementById('editItemId').value=itemId;
             document.getElementById('editItemName').value=item.name||'';
+            const volEl=document.getElementById('editItemVolumeMl'); if(volEl) volEl.value=(Number(item.volumeMl)>0?item.volumeMl:'');
             const parentInp=document.getElementById('editItemParent');
             if(parentInp) parentInp.value=item.parentName||'';
             document.getElementById('editItemCategory').value=item.category||'common';
@@ -13615,6 +13622,10 @@
                 updatedAt:new Date().toISOString(),
                 updatedBy:currentUser?.name||'staff'
             };
+            const _editName=(document.getElementById('editItemName')?.value||'').trim();
+            if(_editName) data.name=_editName; // 품목명 수정 반영
+            const _volMl=Number(document.getElementById('editItemVolumeMl')?.value)||0;
+            data.volumeMl=_volMl>0?_volMl:0; // 1개 용량(ml) — 믹스 용량 계산용
             try{
                 await db.collection('inventory').doc(id).update(data);
                 closeModal('editItemModal');
