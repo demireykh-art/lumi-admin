@@ -2057,6 +2057,9 @@
         </div>
     </div>
 
+    <!-- 공용 자동완성 드롭다운 (소모품·재료 검색 — 첫 글자부터 부분일치) -->
+    <div id="acBox" style="display:none;position:fixed;z-index:3000;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:240px;overflow-y:auto;font-size:.82rem;-webkit-overflow-scrolling:touch"></div>
+
     <!-- 차팅 역할 관리 모달 (bizAdmin 전용) -->
     <div class="modal" id="chartRoleAdminModal">
         <div class="modal-content" style="max-width:520px;max-height:88vh">
@@ -2781,6 +2784,42 @@
             }).join('');
             return mix + _procInvOptions();
         }
+        // ── 공용 자동완성 (네이티브 datalist 대체 · 첫 글자부터 부분일치, 한글 IME 안정) ──
+        function _acHide(){ const b=document.getElementById('acBox'); if(b){ b.style.display='none'; b.innerHTML=''; } }
+        function _acShow(inputEl, matches, onPick){
+            const b=document.getElementById('acBox'); if(!b) return;
+            if(!matches||!matches.length){ _acHide(); return; }
+            b.innerHTML=matches.map((m,i)=>`<div data-i="${i}" style="padding:.55rem .7rem;cursor:pointer;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(m.label||m.value)}</div>`).join('');
+            const r=inputEl.getBoundingClientRect();
+            b.style.left=Math.max(4,r.left)+'px';
+            b.style.top=(r.bottom+2)+'px';
+            b.style.width=Math.max(r.width,200)+'px';
+            b.style.display='block';
+            Array.prototype.forEach.call(b.children, el=>{
+                el.addEventListener('mousedown', (e)=>{ e.preventDefault(); const m=matches[Number(el.dataset.i)]; _acHide(); if(m&&onPick) onPick(m); });
+            });
+        }
+        function _supplyMatches(q){
+            q=String(q||'').trim().toLowerCase(); if(!q) return [];
+            const out=[];
+            (_mixes||[]).forEach(m=>{ if(String(m.name||'').toLowerCase().includes(q)) out.push({value:m.name,label:`🧪 ${m.name} · ₩${_mixUnitPrice(m).toLocaleString()}/${_mixYieldUnit(m)}`}); });
+            (invItems||[]).forEach(it=>{ if(String(it.name||'').toLowerCase().includes(q)) out.push({value:it.name,label:`${it.name} · ₩${_invUnitPrice(it).toLocaleString()}`}); });
+            return out.slice(0,30);
+        }
+        function ptSupplyAcInput(el, cid, tid, vid, i){
+            _acShow(el, _supplyMatches(el.value), (m)=>{ el.value=m.value; feeVarSupplyName(cid,tid,vid,i,m.value); });
+        }
+        function _invMatches(q){
+            q=String(q||'').trim().toLowerCase(); if(!q) return [];
+            return (invItems||[]).filter(it=>String(it.name||'').toLowerCase().includes(q))
+                .slice(0,30).map(it=>({value:it.name,label:`${it.name} · ₩${_invUnitPrice(it).toLocaleString()}`}));
+        }
+        function mixIngAcInput(el){ _acShow(el, _invMatches(el.value), (m)=>{ el.value=m.value; }); }
+        // 스크롤·리사이즈 시 위치 어긋나므로 닫기 (한 번만 바인딩)
+        if(!window._acBound){ window._acBound=true;
+            document.addEventListener('scroll', ()=>{ const b=document.getElementById('acBox'); if(b&&b.style.display==='block') _acHide(); }, true);
+            window.addEventListener('resize', _acHide);
+        }
         async function _mixSaveDoc(m){
             try{
                 await db.collection('injectionMixes').doc(m.id).set({
@@ -2837,7 +2876,8 @@
             return `<div style="border:1px solid #ddd6fe;border-top:none;border-radius:0 0 8px 8px;background:#faf5ff;padding:.55rem .6rem;margin-top:-.35rem">
                 <div style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:.4rem">${rows}</div>
                 <div style="display:flex;gap:.35rem;align-items:center;margin-bottom:.5rem">
-                    <input type="text" lang="ko" inputmode="text" id="mixRecipeAddName-${m.id}" list="mixInvDL" placeholder="재고 아이템 검색 (예: 리도카인, N/S)"
+                    <input type="text" lang="ko" inputmode="text" id="mixRecipeAddName-${m.id}" placeholder="재고 아이템 검색 (예: 리도카인, N/S)"
+                        oninput="mixIngAcInput(this)" onblur="setTimeout(_acHide,200)"
                         style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
                     <input type="number" id="mixRecipeAddQty-${m.id}" placeholder="cc/개" step="0.1"
                         style="width:62px;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
@@ -7381,7 +7421,7 @@
                                 const line=Math.ceil((Number(s.price)||0)*(Number(s.qty)||0));
                                 const _su=s.unit||'개';
                                 return `<div style="display:flex;align-items:center;gap:.25rem;margin-bottom:.25rem">
-                                    <input type="text" lang="ko" inputmode="text" list="feeInvDL" value="${_esc(s.name||'')}" placeholder="소모품·믹스 검색" onchange="feeVarSupplyName('${c.id}','${t.id}','${v.id}',${i},this.value)" style="flex:1;min-width:0;padding:.28rem .35rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">
+                                    <input type="text" lang="ko" inputmode="text" value="${_esc(s.name||'')}" placeholder="소모품·믹스 검색" oninput="ptSupplyAcInput(this,'${c.id}','${t.id}','${v.id}',${i})" onblur="setTimeout(_acHide,200)" onchange="feeVarSupplyName('${c.id}','${t.id}','${v.id}',${i},this.value)" style="flex:1;min-width:0;padding:.28rem .35rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">
                                     <input type="number" value="${s.qty??1}" min="0" step="0.1" title="수량" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'qty',this.value)" style="width:46px;text-align:right;padding:.28rem .3rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px">
                                     <select onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'unit',this.value)" style="font-size:.72rem;padding:.26rem .05rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">${['개','cc'].map(u=>`<option value="${u}"${_su===u?' selected':''}>${u}</option>`).join('')}</select>
                                     <span style="font-size:.7rem;color:#92400e">×</span>
