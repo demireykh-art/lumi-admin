@@ -6647,8 +6647,20 @@
             o.values=o.values||{};
             o.values.variant=val;
             const vv=_ptResolveVariant(o.values);
-            if(vv && Number(vv.price)>0) o.values.price=Number(vv.price)*10000; // 만원→원
+            if(vv && vv.unitPriced){
+                // 단가형: 수량×단가로 계산(수량 입력 전엔 0)
+                o.values.price=Math.round((Number(vv.unitPrice)||0)*_ptNum(o.values.unitQty));
+            }else if(vv && Number(vv.price)>0){
+                o.values.price=Number(vv.price)*10000; // 만원→원(고정가)
+            }
             renderProcTime(); saveProcedureTimes();
+        }
+        // 단가형 수량 변경 → 시술금액 재계산
+        function ptRecalcMoney(vid,oid){
+            const o=_ptOrder(vid,oid); if(!o) return;
+            const vv=_ptResolveVariant(o.values);
+            if(vv && vv.unitPriced) o.values.price=Math.round((Number(vv.unitPrice)||0)*_ptNum(o.values.unitQty));
+            saveProcedureTimes(); renderProcTime();
         }
 
         // ── 헤더(열) CRUD — 좌우 이동 ──
@@ -6747,8 +6759,19 @@
                 opts+=`<option value="__new__">+ 새 회차권…</option>`;
                 return `<select onchange="ptOnVariantChange('${vid}','${oid}',this)" style="width:100%;min-width:96px;max-width:160px;padding:.3rem .3rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg);font-family:inherit">${opts}</select>`;
             }
-            if(col.kind==='money')
+            if(col.kind==='money'){
+                const _vv=_ptResolveVariant(vals);
+                if(_vv && _vv.unitPriced){
+                    // 단가형: 수량 입력 → 시술금액 = 단가 × 수량 자동
+                    const uq=_ptNum(vals.unitQty);
+                    const amt=Math.round((Number(_vv.unitPrice)||0)*uq);
+                    return `<span style="display:inline-flex;align-items:center;gap:.15rem;white-space:nowrap">`
+                        + `<input type="number" inputmode="numeric" value="${uq||''}" placeholder="수량" min="0" step="1" oninput="ptSetOrderValue('${vid}','${oid}','unitQty',this.value)" onchange="ptRecalcMoney('${vid}','${oid}')" style="width:48px;text-align:right;padding:.3rem .3rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`
+                        + `<span style="font-size:.7rem;color:var(--text-muted)">${_ptEsc(_vv.unit||'')}</span>`
+                        + `<span style="font-size:.78rem;color:#111827;font-weight:600">₩${amt.toLocaleString()}</span></span>`;
+                }
                 return `<input type="text" inputmode="numeric" value="${_ptFmtComma(val)}" placeholder="원" oninput="ptOnMoneyInput('${vid}','${oid}','${col.id}',this)" onchange="renderProcTime()" style="width:92px;text-align:right;padding:.3rem .35rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`;
+            }
             if(col.kind==='min')
                 return `<input type="number" inputmode="numeric" value="${v}" placeholder="분" min="0" step="1" oninput="ptSetOrderValue('${vid}','${oid}','${col.id}',this.value)" onchange="renderProcTime()" style="width:62px;text-align:right;padding:.3rem .35rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;background:var(--bg)">`;
             return `<input type="text" value="${v}" placeholder="${_ptEsc(col.name)}" oninput="ptSetOrderValue('${vid}','${oid}','${col.id}',this.value)" style="width:100%;min-width:80px;padding:.3rem .4rem;font-size:.8rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:var(--bg)">`;
@@ -7447,6 +7470,14 @@
                                         <span style="font-size:.72rem;color:#a16207;min-width:65px;text-align:right">= ₩${priceWon.toLocaleString()}</span>
                                     </div>
                                 </div>
+                                <div style="display:flex;align-items:center;gap:.5rem;padding:.35rem .55rem;flex-wrap:wrap;border-top:1px dashed #fde68a">
+                                    <label style="font-size:.76rem;color:#92400e;display:flex;align-items:center;gap:.3rem;font-weight:600;cursor:pointer">
+                                        <input type="checkbox" id="feeVarUnitPriced-${v.id}" ${v.unitPriced?'checked':''} onchange="feeToggleVarUnitPriced('${c.id}','${t.id}','${v.id}',this.checked)"> 단가형(수량×단가)</label>
+                                    ${v.unitPriced?`<span style="display:flex;align-items:center;gap:.2rem;font-size:.76rem;color:#92400e">1
+                                        <input type="text" id="feeVarUnit-${v.id}" value="${_esc(v.unit||'샷')}" placeholder="샷/cc" onchange="feeSaveVarUnitFields('${c.id}','${t.id}','${v.id}')" style="width:44px;text-align:center;padding:.25rem .2rem;font-size:.78rem;border:1px solid #f59e0b;border-radius:4px;background:#fff"> 당
+                                        <input type="number" id="feeVarUnitPrice-${v.id}" value="${v.unitPrice||''}" min="0" step="10" placeholder="원" onchange="feeSaveVarUnitFields('${c.id}','${t.id}','${v.id}')" style="width:82px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #f59e0b;border-radius:4px;background:#fff"> 원</span>
+                                        <span style="font-size:.68rem;color:#a16207;flex-basis:100%">※ 시술금액은 시술시간·차팅에서 수량 입력 시 (단가×수량)으로 자동 계산됩니다.</span>`:''}
+                                </div>
                                 <div style="display:flex;align-items:center;gap:.6rem;padding:.35rem .55rem;flex-wrap:wrap;border-top:1px dashed #fde68a">
                                     <label style="font-size:.76rem;color:#92400e;display:flex;align-items:center;gap:.25rem">⏱ 시술
                                         <input type="number" id="feeVarProcMin-${v.id}" value="${v.procMin||''}" min="0" step="1" placeholder="분" style="width:52px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #f59e0b;border-radius:4px;background:#fff"> 분</label>
@@ -7475,7 +7506,7 @@
                         }
                         // ── 보기 모드 (깔끔) ──  더블탭으로 편집 진입
                         const _timeBadge=(v.procMin||v.anesMin)?`<div style="font-size:.68rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">⏱${v.procMin||0}·🧴${v.anesMin||0}분</div>`:'';
-                        const _planBadge=_planPm!=null?`<div title="계획 분당수익 = (정가÷회차 − 소모품) ÷ ${_feeInclAnes?'(시술+연고마취)':'시술'}시간" style="font-size:.68rem;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${_planPm.toLocaleString()}${_feeInclAnes?'🧴':''}</div>`:'';
+                        const _planBadge=(v.unitPriced||_planPm==null)?'':`<div title="계획 분당수익 = (정가÷회차 − 소모품) ÷ ${_feeInclAnes?'(시술+연고마취)':'시술'}시간" style="font-size:.68rem;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${_planPm.toLocaleString()}${_feeInclAnes?'🧴':''}</div>`;
                         const _recBadge=_ptPm!=null?`<div title="시술시간 탭 실측 ${_ptStat.pairCount}건" style="font-size:.66rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">실측 ₩${Math.round(_ptPm).toLocaleString()}</div>`:'';
                         const _supBadge=_supCost>0?`<div title="소모품 합계" style="font-size:.66rem;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">소모품 ₩${_supCost.toLocaleString()}</div>`:'';
                         const _vMove = !q ? `<span ondblclick="event.stopPropagation()" style="display:inline-flex;flex-direction:column;gap:1px;flex-shrink:0">
@@ -7496,7 +7527,7 @@
                             ${_supBadge}
                             ${_planBadge}
                             ${_recBadge}
-                            <div style="font-size:.85rem;color:#111827;font-weight:600;flex-shrink:0">₩${priceWon.toLocaleString()}</div>
+                            <div style="font-size:.85rem;color:#111827;font-weight:600;flex-shrink:0">${v.unitPriced?`₩${(Number(v.unitPrice)||0).toLocaleString()}<span style="font-size:.68rem;color:var(--text-muted)">/${_esc(v.unit||'단위')}</span>`:`₩${priceWon.toLocaleString()}`}</div>
                         </div>`;
                     }).join('');
                     const varCount=(t.variants||[]).length;
@@ -7659,9 +7690,31 @@
             if(sessions>0) v.sessions=sessions; else delete v.sessions;
             if(procMin>0) v.procMin=procMin; else delete v.procMin;
             if(anesMin>0) v.anesMin=anesMin; else delete v.anesMin;
+            // 단가형 필드
+            const upON=document.getElementById('feeVarUnitPriced-'+vid)?.checked;
+            v.unitPriced=!!upON;
+            if(upON){
+                const u=document.getElementById('feeVarUnit-'+vid)?.value; if(u!=null) v.unit=(u.trim()||'샷');
+                const upp=document.getElementById('feeVarUnitPrice-'+vid)?.value; v.unitPrice=Number(String(upp).replace(/[^\d.]/g,''))||0;
+            }
             _feeEditingVariantId=null;
             saveFeeData();
             renderFeeList();
+        }
+        // 단가형 토글/필드 저장 (편집 중 즉시 반영·재렌더)
+        function feeToggleVarUnitPriced(cid,tid,vid,on){
+            _feeVarSyncPending(cid,tid,vid);
+            const {v}=_feeFind(cid,tid,vid); if(!v) return;
+            v.unitPriced=!!on;
+            if(on && !v.unit) v.unit='샷';
+            saveFeeData(); renderFeeList();
+        }
+        function feeSaveVarUnitFields(cid,tid,vid){
+            _feeVarSyncPending(cid,tid,vid);
+            const {v}=_feeFind(cid,tid,vid); if(!v) return;
+            const u=document.getElementById('feeVarUnit-'+vid); if(u) v.unit=(u.value||'').trim()||'샷';
+            const p=document.getElementById('feeVarUnitPrice-'+vid); if(p) v.unitPrice=Number(String(p.value).replace(/[^\d.]/g,''))||0;
+            saveFeeData(); renderFeeList();
         }
         // ── 옵션(variant) 소모품·시간·분당수익 ──
         function _invUnitPrice(item){
@@ -7709,6 +7762,8 @@
             const ss=g('feeVarSessions'); if(ss){ const n=parseInt(String(ss.value).replace(/[^\d]/g,''))||0; if(n>0) v.sessions=n; else delete v.sessions; }
             const pm=g('feeVarProcMin'); if(pm){ const n=Number(pm.value)||0; if(n>0) v.procMin=n; else delete v.procMin; }
             const am=g('feeVarAnesMin'); if(am){ const n=Number(am.value)||0; if(n>0) v.anesMin=n; else delete v.anesMin; }
+            const un=g('feeVarUnit'); if(un) v.unit=(un.value||'').trim()||v.unit;
+            const upp=g('feeVarUnitPrice'); if(upp) v.unitPrice=Number(String(upp.value).replace(/[^\d.]/g,''))||0;
         }
         function feeVarAddSupply(cid,tid,vid){
             _feeVarSyncPending(cid,tid,vid);
