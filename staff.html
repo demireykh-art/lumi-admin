@@ -2040,9 +2040,11 @@
                 <button class="modal-close" onclick="closeModal('mixModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <div style="font-size:.78rem;color:#666;margin-bottom:.5rem">
-                    주사마취처럼 자주 쓰는 믹스를 등록하세요. 재고 아이템(리도카인·N/S·주사기 등)과 수량을 넣으면
-                    <b>믹스 원가</b>가 자동 계산되고, 시술 수가표 옵션의 <b>소모품</b>에서 이 믹스를 바로 선택할 수 있습니다.
+                <div style="font-size:.78rem;color:#666;margin-bottom:.5rem;line-height:1.5">
+                    주사마취처럼 자주 쓰는 믹스를 등록하세요. <b>믹스 원가</b>가 자동 계산되고, 시술 수가표 옵션의 <b>소모품</b>에서 바로 선택할 수 있습니다.<br>
+                    · <b>cc 단위</b>: 넣은 cc = 용량 (원가 = cc당 단가 × cc)<br>
+                    · <b>개(병) 단위</b>: <b>병수만</b> 입력 → 원가 = 병당 단가 × 병수, 용량 = 병수 × <b>1개 용량</b>(재고에 등록한 값 자동)<br>
+                    <span style="color:#7c3aed">※ 병당 용량이 있는 주사제는 재고 ✏️수정에서 '1개 용량(ml)'을 먼저 등록하세요.</span>
                 </div>
                 <button onclick="mixAdd()" style="width:100%;background:#7c3aed;color:#fff;border:none;padding:.55rem;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;margin-bottom:.6rem">+ 새 주사제 믹스</button>
                 <div id="mixList" style="display:flex;flex-direction:column;gap:.4rem">
@@ -2728,12 +2730,18 @@
             const mm=String(name||'').match(/(\d+(?:\.\d+)?)\s*(?:ml|cc|㎖)/i);
             return mm?(Number(mm[1])||0):0;
         }
-        // 재료 1행이 배치에 더하는 용량(cc): cc 단위=수량, 개 단위=수량×개당용량(volEach)
+        // 개(병) 1개당 용량(cc): 재고 '1개 용량' 우선, 없으면 저장값/이름추정
+        function _recipeVolEach(r){
+            if(!r) return 0;
+            const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
+            return Number(it&&it.volumeMl)||Number(r.volEach)||_parseVolFromName(r.itemName)||0;
+        }
+        // 재료 1행이 배치에 더하는 용량(cc): cc 단위=수량, 개 단위=수량×개당용량(재고에서 자동)
         function _recipeVol(r){
             if(!r) return 0;
             const q=Number(r.qty)||0;
             if(r.unit==='cc'||r.unit==='ml') return q;
-            if(r.unit==='개') return q*(Number(r.volEach)||0);
+            if(r.unit==='개') return q*_recipeVolEach(r);
             return 0;
         }
         function _mixYield(mix){
@@ -2768,7 +2776,7 @@
             try{
                 await db.collection('injectionMixes').doc(m.id).set({
                     name:m.name||'',
-                    recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'개',volEach:Number(r.volEach)||0,memo:r.memo||''})),
+                    recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'개',volEach:_recipeVolEach(r),memo:r.memo||''})),
                     yield:_mixYield(m), yieldUnit:'cc',
                     note:m.note||'', updatedAt:new Date().toISOString(), updatedBy:currentUser?.name||currentUser?.id||'staff'
                 });
@@ -2802,13 +2810,17 @@
                 const up=_invUnitPrice(it);
                 const line=Math.round(up*(Number(r.qty)||0));
                 const _u=r.unit||'개';
-                // 개 단위 재료는 '개당 용량(cc)' 입력 → 총 생성량에 반영 (예: NS 1개 = 100cc)
+                // 개(병) 단위: 용량은 재고 '1개 용량'에서 자동 → 읽기전용 표시(= Ncc). cc 단위: 수량=용량.
+                const _vEach=_recipeVolEach(r);
+                const _vol=_recipeVol(r);
                 const _volCell = _u==='개'
-                    ? `<span style="font-size:.66rem;color:#9ca3af">×</span><input type="number" value="${r.volEach??''}" step="1" placeholder="cc/개" title="1개당 용량(cc) — 총 생성량 반영" onchange="mixRecipeUpdate('${m.id}',${i},'volEach',this.value)" style="width:46px;text-align:right;padding:.24rem .25rem;font-size:.72rem;border:1px solid #a5b4fc;border-radius:4px;background:#fff"><span style="font-size:.64rem;color:#9ca3af">cc</span>`
-                    : `<span style="min-width:58px"></span>`;
-                return `<div style="display:flex;align-items:center;gap:.25rem">
+                    ? (_vEach>0
+                        ? `<span style="min-width:62px;text-align:right;font-size:.7rem;color:#6d28d9;white-space:nowrap" title="병수 × 1개 용량(${_vEach}${_esc(r.unit==='ml'?'ml':'cc')}, 재고 등록값)">= ${_vol.toLocaleString()}cc</span>`
+                        : `<span style="min-width:62px;text-align:right;font-size:.64rem;color:#c084fc;white-space:nowrap" title="재고에서 이 품목의 '1개 용량(ml)'을 등록하면 총 생성량에 자동 반영됩니다">용량 미등록</span>`)
+                    : `<span style="min-width:62px;text-align:right;font-size:.7rem;color:#9ca3af">${_vol?`= ${_vol.toLocaleString()}cc`:''}</span>`;
+                return `<div style="display:flex;align-items:center;gap:.3rem">
                     <span style="flex:1;min-width:0;font-size:.78rem;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(r.itemName||'(재료)')}</span>
-                    <input type="number" value="${r.qty??0}" step="0.1" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:46px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
+                    <input type="number" value="${r.qty??0}" step="0.1" title="${_u==='개'?'병수':'용량(cc)'}" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:50px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
                     <select onchange="mixRecipeUpdate('${m.id}',${i},'unit',this.value)" style="font-size:.72rem;padding:.24rem .1rem;border:1px solid #d1d5db;border-radius:4px;background:#fff">${['개','cc'].map(u=>`<option value="${u}"${_u===u?' selected':''}>${u}</option>`).join('')}</select>
                     ${_volCell}
                     <span style="font-size:.72rem;color:#374151;min-width:56px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
