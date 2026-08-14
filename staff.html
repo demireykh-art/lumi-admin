@@ -2718,11 +2718,20 @@
         }
         function _findMixByName(name){ const s=String(name||'').trim(); return (_mixes||[]).find(m=>String(m.name||'').trim()===s)||null; }
         // 믹스 원가 = Σ(재고 낱개단가 × 수량)
+        // 재료 1행 원가: 개=낱개단가×병수, cc=cc당단가(낱개단가÷1개용량)×cc
+        //   1개 용량이 등록되어 있으면 개/cc 어느 쪽으로 넣어도 동일 금액이 나온다.
+        function _recipeLineCost(r){
+            if(!r) return 0;
+            const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
+            const up=_invUnitPrice(it); // 낱개단가(=1개/1병 가격)
+            const q=Number(r.qty)||0;
+            if(r.unit==='개') return Math.round(up*q);
+            const volEach=_recipeVolEach(r); // 1개 용량(cc)
+            if((r.unit==='cc'||r.unit==='ml') && volEach>0) return Math.round((up/volEach)*q);
+            return Math.round(up*q); // 용량 정보 없으면 낱개단가를 단위단가로 사용
+        }
         function _mixCost(mix){
-            return Math.round((mix&&Array.isArray(mix.recipe)?mix.recipe:[]).reduce((a,r)=>{
-                const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
-                return a + _invUnitPrice(it)*(Number(r.qty)||0);
-            },0));
+            return Math.round((mix&&Array.isArray(mix.recipe)?mix.recipe:[]).reduce((a,r)=>a+_recipeLineCost(r),0));
         }
         // 총 생성량 = cc(=ml) 단위 재료 수량 자동 합산
         // 이름에서 용량(ml/cc) 추정 — 예: "NS 100ml" → 100
@@ -2806,10 +2815,8 @@
         }
         function _mixRecipeEditor(m){
             const rows=(m.recipe||[]).map((r,i)=>{
-                const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
-                const up=_invUnitPrice(it);
-                const line=Math.round(up*(Number(r.qty)||0));
-                const _u=r.unit||'개';
+                const line=_recipeLineCost(r);
+                const _u=r.unit||'cc';
                 // 개(병) 단위: 용량은 재고 '1개 용량'에서 자동 → 읽기전용 표시(= Ncc). cc 단위: 수량=용량.
                 const _vEach=_recipeVolEach(r);
                 const _vol=_recipeVol(r);
@@ -2817,7 +2824,7 @@
                     ? (_vEach>0
                         ? `<span style="min-width:62px;text-align:right;font-size:.7rem;color:#6d28d9;white-space:nowrap" title="병수 × 1개 용량(${_vEach}${_esc(r.unit==='ml'?'ml':'cc')}, 재고 등록값)">= ${_vol.toLocaleString()}cc</span>`
                         : `<span style="min-width:62px;text-align:right;font-size:.64rem;color:#c084fc;white-space:nowrap" title="재고에서 이 품목의 '1개 용량(ml)'을 등록하면 총 생성량에 자동 반영됩니다">용량 미등록</span>`)
-                    : `<span style="min-width:62px;text-align:right;font-size:.7rem;color:#9ca3af">${_vol?`= ${_vol.toLocaleString()}cc`:''}</span>`;
+                    : `<span style="min-width:62px;text-align:right;font-size:.66rem;color:#9ca3af">${_vEach>0?`@₩${Math.round(_invUnitPrice(r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName))/_vEach).toLocaleString()}/cc`:''}</span>`;
                 return `<div style="display:flex;align-items:center;gap:.3rem">
                     <span style="flex:1;min-width:0;font-size:.78rem;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(r.itemName||'(재료)')}</span>
                     <input type="number" value="${r.qty??0}" step="0.1" title="${_u==='개'?'병수':'용량(cc)'}" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:50px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
@@ -2880,9 +2887,9 @@
             const m=_mixes.find(x=>x.id===id); if(!m) return;
             const inv=_findInvByName(name);
             m.recipe=m.recipe||[];
-            // 재고에 '1개 용량(ml)'이 있거나 이름에 용량이 있으면 개 단위+개당용량 자동 설정
+            // 기본 단위 cc(용량 직접 입력). 1개 용량(재고/이름)은 cc당 단가 환산·병 단위 전환에 사용.
             const _vol=Number(inv&&inv.volumeMl)||_parseVolFromName(inv?inv.name:name);
-            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:_vol>0?'개':'cc',volEach:_vol>0?_vol:0,memo:''});
+            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:'cc',volEach:_vol>0?_vol:0,memo:''});
             _mixSaveDoc(m); _renderMixList();
         }
         function mixRecipeUpdate(id,idx,field,val){
