@@ -2718,23 +2718,36 @@
                 return a + _invUnitPrice(it)*(Number(r.qty)||0);
             },0));
         }
-        // 소모품 단가 조회: 믹스 우선(원가), 없으면 재고 낱개단가
-        function _supplyUnitPrice(name){
-            const mix=_findMixByName(name);
-            if(mix) return _mixCost(mix);
-            const it=_findInvByName(name);
-            return it?_invUnitPrice(it):0;
+        function _mixYield(mix){ return Number(mix&&mix.yield)||0; }
+        function _mixYieldUnit(mix){ return (mix&&mix.yieldUnit)||'cc'; }
+        // 믹스 단위단가 = 총원가 ÷ 총용량 (용량 미입력 시 전체원가) — 소수 2자리
+        function _mixUnitPrice(mix){
+            const cost=_mixCost(mix), y=_mixYield(mix);
+            return y>0 ? Math.round(cost/y*100)/100 : cost;
         }
+        // 소모품 단가·단위 조회: 믹스 우선(단위단가·용량단위), 없으면 재고 낱개단가(개)
+        function _supplyLookup(name){
+            const mix=_findMixByName(name);
+            if(mix) return { price:_mixUnitPrice(mix), unit:_mixYieldUnit(mix) };
+            const it=_findInvByName(name);
+            return it ? { price:_invUnitPrice(it), unit:(it.unit||'개') } : { price:0, unit:'개' };
+        }
+        function _supplyUnitPrice(name){ return _supplyLookup(name).price; }
         // 소모품 datalist 옵션: 믹스 + 재고 전체
         function _feeSupplyOptions(){
-            const mix=(_mixes||[]).map(m=>`<option value="${_esc(m.name||'')}">🧪 주사제 믹스 (₩${_mixCost(m).toLocaleString()})</option>`).join('');
+            const mix=(_mixes||[]).map(m=>{
+                const y=_mixYield(m);
+                const label=y>0?`🧪 믹스 ₩${_mixUnitPrice(m).toLocaleString()}/${_esc(_mixYieldUnit(m))}`:`🧪 믹스 ₩${_mixCost(m).toLocaleString()}`;
+                return `<option value="${_esc(m.name||'')}">${label}</option>`;
+            }).join('');
             return mix + _procInvOptions();
         }
         async function _mixSaveDoc(m){
             try{
                 await db.collection('injectionMixes').doc(m.id).set({
                     name:m.name||'',
-                    recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'',memo:r.memo||''})),
+                    recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'개',memo:r.memo||''})),
+                    yield:Number(m.yield)||0, yieldUnit:m.yieldUnit||'cc',
                     note:m.note||'', updatedAt:new Date().toISOString(), updatedBy:currentUser?.name||currentUser?.id||'staff'
                 });
             }catch(e){ alert('믹스 저장 실패: '+(e?.message||e)); }
@@ -2754,7 +2767,7 @@
                 const head=`<div style="display:flex;align-items:center;gap:.5rem;padding:.45rem .55rem;background:${editing?'#faf5ff':'#fff'};border:1px solid ${editing?'#ddd6fe':'#e5e7eb'};border-radius:8px">
                     <div style="flex:1;min-width:0">
                         <div style="font-size:.88rem;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🧪 ${_esc(m.name||'(무명)')}</div>
-                        <div style="font-size:.72rem;color:#6b7280">원가 ₩${cost.toLocaleString()} · 재료 ${(m.recipe||[]).length}종</div>
+                        <div style="font-size:.72rem;color:#6b7280">원가 ₩${cost.toLocaleString()} · 재료 ${(m.recipe||[]).length}종${_mixYield(m)>0?` · ₩${_mixUnitPrice(m).toLocaleString()}/${_esc(_mixYieldUnit(m))}`:''}</div>
                     </div>
                     <button onclick="mixEditToggle('${m.id}')" style="background:${editing?'#6d28d9':'#f5f3ff'};color:${editing?'#fff':'#6d28d9'};border:1px solid ${editing?'#6d28d9':'#ddd6fe'};padding:.3rem .7rem;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;flex-shrink:0">${editing?'닫기':'편집'}</button>
                 </div>`;
@@ -2766,12 +2779,13 @@
                 const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
                 const up=_invUnitPrice(it);
                 const line=Math.round(up*(Number(r.qty)||0));
-                return `<div style="display:flex;align-items:center;gap:.35rem">
+                const _u=r.unit||'개';
+                return `<div style="display:flex;align-items:center;gap:.3rem">
                     <span style="flex:1;min-width:0;font-size:.78rem;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(r.itemName||'(재료)')}</span>
-                    <input type="number" value="${r.qty??0}" step="0.1" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:52px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
-                    <span style="font-size:.72rem;color:#6b7280;min-width:20px">${_esc(r.unit||'')}</span>
-                    <span style="font-size:.72rem;color:#374151;min-width:64px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
-                    <button onclick="mixRecipeRemove('${m.id}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.2rem .45rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
+                    <input type="number" value="${r.qty??0}" step="0.1" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:50px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
+                    <select onchange="mixRecipeUpdate('${m.id}',${i},'unit',this.value)" style="font-size:.72rem;padding:.24rem .1rem;border:1px solid #d1d5db;border-radius:4px;background:#fff">${['개','cc'].map(u=>`<option value="${u}"${_u===u?' selected':''}>${u}</option>`).join('')}</select>
+                    <span style="font-size:.72rem;color:#374151;min-width:60px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
+                    <button onclick="mixRecipeRemove('${m.id}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.2rem .4rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
                 </div>`;
             }).join('') || '<div style="font-size:.75rem;color:#9ca3af;padding:.2rem 0">등록된 재료 없음</div>';
             return `<div style="border:1px solid #ddd6fe;border-top:none;border-radius:0 0 8px 8px;background:#faf5ff;padding:.55rem .6rem;margin-top:-.35rem">
@@ -2782,6 +2796,12 @@
                     <input type="number" id="mixRecipeAddQty-${m.id}" placeholder="cc/개" step="0.1"
                         style="width:62px;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
                     <button onclick="mixRecipeAddItem('${m.id}')" style="background:#6d28d9;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer">+ 추가</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:.35rem;border-top:1px dashed #ddd6fe;padding-top:.4rem;margin-bottom:.35rem">
+                    <span style="font-size:.76rem;color:#5b21b6;font-weight:600">총 생성량</span>
+                    <input type="number" value="${m.yield||''}" step="0.1" placeholder="예: 157.5" onchange="mixSetYield('${m.id}',this.value)" style="width:74px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:4px;background:#fff">
+                    <select onchange="mixSetYieldUnit('${m.id}',this.value)" style="font-size:.74rem;padding:.24rem .15rem;border:1px solid #c4b5fd;border-radius:4px;background:#fff">${['cc','개','ml'].map(u=>`<option value="${u}"${_mixYieldUnit(m)===u?' selected':''}>${u}</option>`).join('')}</select>
+                    <span style="flex:1;text-align:right;font-size:.74rem;color:#6b7280">${_mixYield(m)>0?`= ₩${_mixUnitPrice(m).toLocaleString()}/${_esc(_mixYieldUnit(m))}`:'용량 입력 시 단위당 단가'}</span>
                 </div>
                 <div style="display:flex;gap:.4rem;align-items:center;justify-content:space-between;border-top:1px dashed #ddd6fe;padding-top:.4rem">
                     <span style="font-size:.82rem;font-weight:700;color:#5b21b6">믹스 원가 ₩${_mixCost(m).toLocaleString()}</span>
@@ -2796,7 +2816,7 @@
         async function mixAdd(){
             const name=prompt('새 주사제 믹스 이름 (예: 주사마취):'); if(name==null||!name.trim()) return;
             await _ensureInvItems();
-            const m={id:_uid(),name:name.trim(),recipe:[],note:''};
+            const m={id:_uid(),name:name.trim(),recipe:[],yield:0,yieldUnit:'cc',note:''};
             _mixes.push(m); _mixes.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
             _mixEditingId=m.id;
             await _mixSaveDoc(m); _renderMixList();
@@ -2821,7 +2841,7 @@
             const m=_mixes.find(x=>x.id===id); if(!m) return;
             const inv=_findInvByName(name);
             m.recipe=m.recipe||[];
-            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:inv?.unit||'cc',memo:''});
+            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:inv?.unit||'개',memo:''});
             _mixSaveDoc(m); _renderMixList();
         }
         function mixRecipeUpdate(id,idx,field,val){
@@ -2829,6 +2849,15 @@
             if(field==='qty') m.recipe[idx].qty=Number(String(val).replace(/[^\d.]/g,''))||0;
             else m.recipe[idx][field]=val;
             _mixSaveDoc(m); _renderMixList();
+        }
+        function mixSetYield(id,val){
+            const m=_mixes.find(x=>x.id===id); if(!m) return;
+            m.yield=Number(String(val).replace(/[^\d.]/g,''))||0;
+            _mixSaveDoc(m); _renderMixList();
+        }
+        function mixSetYieldUnit(id,val){
+            const m=_mixes.find(x=>x.id===id); if(!m) return;
+            m.yieldUnit=val||'cc'; _mixSaveDoc(m); _renderMixList();
         }
         function mixRecipeRemove(id,idx){
             const m=_mixes.find(x=>x.id===id); if(!m) return;
@@ -7299,13 +7328,15 @@
                         if(isEditing){
                             const supRows=(v.supplies||[]).map((s,i)=>{
                                 const line=Math.round((Number(s.price)||0)*(Number(s.qty)||0));
-                                return `<div style="display:flex;align-items:center;gap:.3rem;margin-bottom:.25rem">
-                                    <input type="text" list="feeInvDL" value="${_esc(s.name||'')}" placeholder="소모품(재고) 검색" onchange="feeVarSupplyName('${c.id}','${t.id}','${v.id}',${i},this.value)" style="flex:1;min-width:0;padding:.28rem .35rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">
-                                    <input type="number" value="${s.qty??1}" min="0" step="1" title="수량" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'qty',this.value)" style="width:42px;text-align:right;padding:.28rem .3rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px">
+                                const _su=s.unit||'개';
+                                return `<div style="display:flex;align-items:center;gap:.25rem;margin-bottom:.25rem">
+                                    <input type="text" list="feeInvDL" value="${_esc(s.name||'')}" placeholder="소모품·믹스 검색" onchange="feeVarSupplyName('${c.id}','${t.id}','${v.id}',${i},this.value)" style="flex:1;min-width:0;padding:.28rem .35rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">
+                                    <input type="number" value="${s.qty??1}" min="0" step="0.1" title="수량" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'qty',this.value)" style="width:46px;text-align:right;padding:.28rem .3rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px">
+                                    <select onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'unit',this.value)" style="font-size:.72rem;padding:.26rem .05rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">${['개','cc'].map(u=>`<option value="${u}"${_su===u?' selected':''}>${u}</option>`).join('')}</select>
                                     <span style="font-size:.7rem;color:#92400e">×</span>
-                                    <input type="number" value="${s.price??0}" min="0" step="100" title="단가(원)" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'price',this.value)" style="width:76px;text-align:right;padding:.28rem .3rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px">
-                                    <span style="font-size:.72rem;color:#374151;min-width:66px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
-                                    <button onclick="feeVarRemoveSupply('${c.id}','${t.id}','${v.id}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .4rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
+                                    <input type="number" value="${s.price??0}" min="0" step="10" title="단위 단가(원)" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'price',this.value)" style="width:74px;text-align:right;padding:.28rem .3rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px">
+                                    <span style="font-size:.72rem;color:#374151;min-width:60px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
+                                    <button onclick="feeVarRemoveSupply('${c.id}','${t.id}','${v.id}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .35rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
                                 </div>`;
                             }).join('')||'<div style="font-size:.72rem;color:#9ca3af;padding:.1rem 0">소모품 없음</div>';
                             // ── 편집 모드 ──
@@ -7591,7 +7622,7 @@
             _feeVarSyncPending(cid,tid,vid);
             const {v}=_feeFind(cid,tid,vid); if(!v) return;
             v.supplies=Array.isArray(v.supplies)?v.supplies:[];
-            v.supplies.push({name:'',price:0,qty:1});
+            v.supplies.push({name:'',price:0,qty:1,unit:'개'});
             saveFeeData(); renderFeeList();
         }
         function feeVarRemoveSupply(cid,tid,vid,i){
@@ -7603,14 +7634,16 @@
             _feeVarSyncPending(cid,tid,vid);
             const {v}=_feeFind(cid,tid,vid); if(!v||!v.supplies||!v.supplies[i]) return;
             v.supplies[i].name=String(val||'').trim();
-            const up=_supplyUnitPrice(v.supplies[i].name); // 믹스 원가 or 재고 단가 자동입력
-            if(up>0) v.supplies[i].price=up;
+            const lk=_supplyLookup(v.supplies[i].name); // 믹스(단위단가·cc) or 재고(낱개·개) 자동입력
+            if(lk.price>0) v.supplies[i].price=lk.price;
+            v.supplies[i].unit=lk.unit; // 단위도 자동(믹스→cc, 재고→개)
             saveFeeData(); renderFeeList();
         }
         function feeVarSupplyField(cid,tid,vid,i,field,val){
             _feeVarSyncPending(cid,tid,vid);
             const {v}=_feeFind(cid,tid,vid); if(!v||!v.supplies||!v.supplies[i]) return;
-            v.supplies[i][field]=Number(String(val).replace(/[^\d.]/g,''))||0;
+            if(field==='unit') v.supplies[i].unit=String(val||'개');
+            else v.supplies[i][field]=Number(String(val).replace(/[^\d.]/g,''))||0;
             saveFeeData(); renderFeeList();
         }
         function feeOpenTreatmentEdit(tid){
