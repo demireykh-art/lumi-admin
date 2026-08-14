@@ -571,7 +571,8 @@
                     <div class="card-title" id="feeStickyBar" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;position:sticky;top:0;z-index:20;background:var(--bg-card);margin:-1.25rem -1.25rem .6rem;padding:.7rem 1rem;border-bottom:1px solid var(--border)">
                         <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="_feeBack()" id="feeBackBtn">← 홈</button>
                         <span style="flex:1;min-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.95rem" id="feeTitle">시술 수가표</span>
-                        <button id="feeAnesToggle" onclick="feeToggleInclAnes()" title="분당수익 계산에 마취시간 포함/제외" style="font-size:.95rem;line-height:1;padding:.25rem .4rem;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">💉</button>
+                        <button onclick="openMixManager()" title="주사제 믹스 관리 (주사마취 등)" style="font-size:.95rem;line-height:1;padding:.25rem .4rem;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">🧪</button>
+                        <button id="feeAnesToggle" onclick="feeToggleInclAnes()" title="분당수익 계산에 연고마취 시간 포함/제외" style="font-size:.95rem;line-height:1;padding:.25rem .4rem;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">🧴</button>
                         <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .5rem;flex-shrink:0;white-space:nowrap" onclick="feeAddMajor()">+ 대분류</button>
                         <input type="text" id="feeQ" placeholder="검색" oninput="renderFeeList()"
                             style="width:92px;padding:.35rem .5rem;font-size:.8rem;border:1px solid var(--border);border-radius:6px;flex-shrink:0">
@@ -2027,6 +2028,29 @@
         </div>
     </div>
 
+    <!-- 🧪 주사제 믹스 관리 모달 -->
+    <div class="modal" id="mixModal">
+        <div class="modal-content" style="max-width:640px;max-height:90vh">
+            <div class="modal-header">
+                <div class="modal-title">🧪 주사제 믹스</div>
+                <button class="modal-close" onclick="closeModal('mixModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="font-size:.78rem;color:#666;margin-bottom:.5rem">
+                    주사마취처럼 자주 쓰는 믹스를 등록하세요. 재고 아이템(리도카인·N/S·주사기 등)과 수량을 넣으면
+                    <b>믹스 원가</b>가 자동 계산되고, 시술 수가표 옵션의 <b>소모품</b>에서 이 믹스를 바로 선택할 수 있습니다.
+                </div>
+                <button onclick="mixAdd()" style="width:100%;background:#7c3aed;color:#fff;border:none;padding:.55rem;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;margin-bottom:.6rem">+ 새 주사제 믹스</button>
+                <div id="mixList" style="display:flex;flex-direction:column;gap:.4rem">
+                    <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('mixModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 차팅 역할 관리 모달 (bizAdmin 전용) -->
     <div class="modal" id="chartRoleAdminModal">
         <div class="modal-content" style="max-width:520px;max-height:88vh">
@@ -2669,6 +2693,146 @@
                 await db.collection('procedures').doc(procId).set(payload, {merge:true});
                 _chartToast('시술 레시피 저장됨');
             }catch(e){ alert('저장 실패: '+(e?.message||e)); }
+        }
+
+        // ================================================================
+        //  🧪 주사제 믹스 (injectionMixes) — 주사마취 등, 재고 레시피 → 원가 자동
+        //   등록된 믹스는 시술 수가표 옵션의 '소모품'에서 참조·선택 가능
+        // ================================================================
+        let _mixes=[]; let _mixesLoaded=false; let _mixEditingId=null;
+        async function _loadMixes(force){
+            if(_mixesLoaded&&!force) return _mixes;
+            try{
+                const s=await db.collection('injectionMixes').get();
+                _mixes=s.docs.map(d=>({id:d.id,...d.data()}));
+                _mixes.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+                _mixesLoaded=true;
+            }catch(e){ console.warn('주사제 믹스 로드 스킵:', e?.message||e); }
+            return _mixes;
+        }
+        function _findMixByName(name){ const s=String(name||'').trim(); return (_mixes||[]).find(m=>String(m.name||'').trim()===s)||null; }
+        // 믹스 원가 = Σ(재고 낱개단가 × 수량)
+        function _mixCost(mix){
+            return Math.round((mix&&Array.isArray(mix.recipe)?mix.recipe:[]).reduce((a,r)=>{
+                const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
+                return a + _invUnitPrice(it)*(Number(r.qty)||0);
+            },0));
+        }
+        // 소모품 단가 조회: 믹스 우선(원가), 없으면 재고 낱개단가
+        function _supplyUnitPrice(name){
+            const mix=_findMixByName(name);
+            if(mix) return _mixCost(mix);
+            const it=_findInvByName(name);
+            return it?_invUnitPrice(it):0;
+        }
+        // 소모품 datalist 옵션: 믹스 + 재고 전체
+        function _feeSupplyOptions(){
+            const mix=(_mixes||[]).map(m=>`<option value="${_esc(m.name||'')}">🧪 주사제 믹스 (₩${_mixCost(m).toLocaleString()})</option>`).join('');
+            return mix + _procInvOptions();
+        }
+        async function _mixSaveDoc(m){
+            try{
+                await db.collection('injectionMixes').doc(m.id).set({
+                    name:m.name||'',
+                    recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'',memo:r.memo||''})),
+                    note:m.note||'', updatedAt:new Date().toISOString(), updatedBy:currentUser?.name||currentUser?.id||'staff'
+                });
+            }catch(e){ alert('믹스 저장 실패: '+(e?.message||e)); }
+        }
+        async function openMixManager(){
+            const modal=document.getElementById('mixModal'); if(modal) modal.classList.add('active');
+            const list=document.getElementById('mixList'); if(list) list.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            try{ await _ensureInvItems(); await _loadMixes(true); _renderMixList(); }
+            catch(e){ if(list) list.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+_esc(e?.message||String(e))+'</div>'; }
+        }
+        function _renderMixList(){
+            const wrap=document.getElementById('mixList'); if(!wrap) return;
+            if(!_mixes.length){ wrap.innerHTML='<div style="color:#9ca3af;font-size:.85rem;padding:1rem;text-align:center">등록된 믹스가 없습니다. [+ 새 주사제 믹스]로 추가하세요.</div>'; return; }
+            wrap.innerHTML=_mixes.map(m=>{
+                const editing=(_mixEditingId===m.id);
+                const cost=_mixCost(m);
+                const head=`<div style="display:flex;align-items:center;gap:.5rem;padding:.45rem .55rem;background:${editing?'#faf5ff':'#fff'};border:1px solid ${editing?'#ddd6fe':'#e5e7eb'};border-radius:8px">
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:.88rem;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🧪 ${_esc(m.name||'(무명)')}</div>
+                        <div style="font-size:.72rem;color:#6b7280">원가 ₩${cost.toLocaleString()} · 재료 ${(m.recipe||[]).length}종</div>
+                    </div>
+                    <button onclick="mixEditToggle('${m.id}')" style="background:${editing?'#6d28d9':'#f5f3ff'};color:${editing?'#fff':'#6d28d9'};border:1px solid ${editing?'#6d28d9':'#ddd6fe'};padding:.3rem .7rem;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;flex-shrink:0">${editing?'닫기':'편집'}</button>
+                </div>`;
+                return head + (editing ? _mixRecipeEditor(m) : '');
+            }).join('');
+        }
+        function _mixRecipeEditor(m){
+            const rows=(m.recipe||[]).map((r,i)=>{
+                const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
+                const up=_invUnitPrice(it);
+                const line=Math.round(up*(Number(r.qty)||0));
+                return `<div style="display:flex;align-items:center;gap:.35rem">
+                    <span style="flex:1;min-width:0;font-size:.78rem;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(r.itemName||'(재료)')}</span>
+                    <input type="number" value="${r.qty??0}" step="0.1" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:52px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
+                    <span style="font-size:.72rem;color:#6b7280;min-width:20px">${_esc(r.unit||'')}</span>
+                    <span style="font-size:.72rem;color:#374151;min-width:64px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
+                    <button onclick="mixRecipeRemove('${m.id}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.2rem .45rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
+                </div>`;
+            }).join('') || '<div style="font-size:.75rem;color:#9ca3af;padding:.2rem 0">등록된 재료 없음</div>';
+            return `<div style="border:1px solid #ddd6fe;border-top:none;border-radius:0 0 8px 8px;background:#faf5ff;padding:.55rem .6rem;margin-top:-.35rem">
+                <div style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:.4rem">${rows}</div>
+                <div style="display:flex;gap:.35rem;align-items:center;margin-bottom:.5rem">
+                    <input type="text" id="mixRecipeAddName-${m.id}" list="mixInvDL" placeholder="재고 아이템 검색 (예: 리도카인, N/S)"
+                        style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
+                    <input type="number" id="mixRecipeAddQty-${m.id}" placeholder="cc/개" step="0.1"
+                        style="width:62px;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
+                    <button onclick="mixRecipeAddItem('${m.id}')" style="background:#6d28d9;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer">+ 추가</button>
+                </div>
+                <div style="display:flex;gap:.4rem;align-items:center;justify-content:space-between;border-top:1px dashed #ddd6fe;padding-top:.4rem">
+                    <span style="font-size:.82rem;font-weight:700;color:#5b21b6">믹스 원가 ₩${_mixCost(m).toLocaleString()}</span>
+                    <span style="display:flex;gap:.35rem">
+                        <button onclick="mixRename('${m.id}')" style="background:#fff;border:1px solid #c4b5fd;color:#6d28d9;padding:.25rem .55rem;border-radius:5px;font-size:.74rem;cursor:pointer">이름수정</button>
+                        <button onclick="mixDelete('${m.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.25rem .55rem;border-radius:5px;font-size:.74rem;cursor:pointer">🗑 삭제</button>
+                    </span>
+                </div>
+                <datalist id="mixInvDL">${_procInvOptions()}</datalist>
+            </div>`;
+        }
+        async function mixAdd(){
+            const name=prompt('새 주사제 믹스 이름 (예: 주사마취):'); if(name==null||!name.trim()) return;
+            await _ensureInvItems();
+            const m={id:_uid(),name:name.trim(),recipe:[],note:''};
+            _mixes.push(m); _mixes.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+            _mixEditingId=m.id;
+            await _mixSaveDoc(m); _renderMixList();
+        }
+        function mixEditToggle(id){ _mixEditingId=(_mixEditingId===id)?null:id; _renderMixList(); }
+        function mixRename(id){
+            const m=_mixes.find(x=>x.id===id); if(!m) return;
+            const n=prompt('믹스 이름:',m.name); if(n==null) return;
+            m.name=n.trim()||m.name; _mixSaveDoc(m); _renderMixList();
+        }
+        async function mixDelete(id){
+            const m=_mixes.find(x=>x.id===id); if(!m) return;
+            if(!confirm(`믹스 '${m.name}' 을(를) 삭제할까요?`)) return;
+            _mixes=_mixes.filter(x=>x.id!==id);
+            try{ await db.collection('injectionMixes').doc(id).delete(); }catch(_){}
+            _renderMixList();
+        }
+        function mixRecipeAddItem(id){
+            const nameEl=document.getElementById('mixRecipeAddName-'+id);
+            const qtyEl=document.getElementById('mixRecipeAddQty-'+id);
+            const name=(nameEl?.value||'').trim(); if(!name){ alert('재고 아이템을 선택하세요.'); return; }
+            const m=_mixes.find(x=>x.id===id); if(!m) return;
+            const inv=_findInvByName(name);
+            m.recipe=m.recipe||[];
+            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:inv?.unit||'cc',memo:''});
+            _mixSaveDoc(m); _renderMixList();
+        }
+        function mixRecipeUpdate(id,idx,field,val){
+            const m=_mixes.find(x=>x.id===id); if(!m||!m.recipe[idx]) return;
+            if(field==='qty') m.recipe[idx].qty=Number(String(val).replace(/[^\d.]/g,''))||0;
+            else m.recipe[idx][field]=val;
+            _mixSaveDoc(m); _renderMixList();
+        }
+        function mixRecipeRemove(id,idx){
+            const m=_mixes.find(x=>x.id===id); if(!m) return;
+            m.recipe.splice(idx,1); _mixSaveDoc(m); _renderMixList();
         }
 
         // ================================================================
@@ -6613,6 +6777,7 @@
                 _feeOrigin=opts.from||null;
                 await ensureFeeData();
                 _ensureInvItems().catch(()=>{}); // 소모품(재고) 목록 미리 로드
+                _loadMixes().catch(()=>{});      // 주사제 믹스(소모품 참조) 로드
                 // 진입 시 검색어 초기화 or 지정값
                 const q=document.getElementById('feeQ');
                 if(q) q.value=(opts.search!=null?opts.search:'');
@@ -7157,18 +7322,18 @@
                                 <div style="display:flex;align-items:center;gap:.6rem;padding:.35rem .55rem;flex-wrap:wrap;border-top:1px dashed #fde68a">
                                     <label style="font-size:.76rem;color:#92400e;display:flex;align-items:center;gap:.25rem">⏱ 시술
                                         <input type="number" id="feeVarProcMin-${v.id}" value="${v.procMin||''}" min="0" step="1" placeholder="분" style="width:52px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #f59e0b;border-radius:4px;background:#fff"> 분</label>
-                                    <label style="font-size:.76rem;color:#92400e;display:flex;align-items:center;gap:.25rem">💉 마취
+                                    <label style="font-size:.76rem;color:#92400e;display:flex;align-items:center;gap:.25rem">🧴 연고마취
                                         <input type="number" id="feeVarAnesMin-${v.id}" value="${v.anesMin||''}" min="0" step="1" placeholder="분" style="width:52px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #f59e0b;border-radius:4px;background:#fff"> 분</label>
                                 </div>
                                 <div style="padding:.35rem .55rem;border-top:1px dashed #fde68a">
-                                    <div style="font-size:.72rem;font-weight:700;color:#92400e;margin-bottom:.3rem">소모품 <span style="font-weight:400;color:#a16207">(재고 선택 시 단가 자동)</span></div>
+                                    <div style="font-size:.72rem;font-weight:700;color:#92400e;margin-bottom:.3rem">소모품 <span style="font-weight:400;color:#a16207">(재고·주사제 믹스 선택 시 단가 자동)</span></div>
                                     ${supRows}
                                     <button onclick="feeVarAddSupply('${c.id}','${t.id}','${v.id}')" style="margin-top:.3rem;background:#fff7ed;border:1px solid #f59e0b;color:#b45309;padding:.22rem .55rem;border-radius:5px;font-size:.72rem;cursor:pointer;font-weight:600">+ 소모품</button>
                                 </div>
                                 <div style="padding:.35rem .55rem;border-top:1px dashed #fde68a;font-size:.74rem;color:#374151;display:flex;flex-wrap:wrap;gap:.7rem;align-items:center">
                                     <span>소모품 합계 <b>₩${_supCost.toLocaleString()}</b></span>
                                     <span>순수익${_feeVarSessions(v)>1?'/회':''} <b>₩${_net.toLocaleString()}</b></span>
-                                    <span style="color:#6d28d9;font-weight:700">분당수익 ${_planPm!=null?`₩${_planPm.toLocaleString()}/분`:'<span style="color:#9ca3af;font-weight:400">시술시간 입력</span>'}<span style="font-weight:400;color:#a16207;font-size:.7rem"> ${_feeInclAnes?'💉시술+마취':'⏱시술만'}</span></span>
+                                    <span style="color:#6d28d9;font-weight:700">분당수익 ${_planPm!=null?`₩${_planPm.toLocaleString()}/분`:'<span style="color:#9ca3af;font-weight:400">시술시간 입력</span>'}<span style="font-weight:400;color:#a16207;font-size:.7rem"> ${_feeInclAnes?'🧴시술+연고마취':'⏱시술만'}</span></span>
                                 </div>
                                 <div style="display:flex;align-items:center;gap:.25rem;padding:.35rem .55rem;flex-wrap:wrap;border-top:1px dashed #fde68a">
                                     <div style="flex:1;min-width:0">${_feeTagsHtml(v.tags)}</div>
@@ -7177,12 +7342,12 @@
                                     <button onclick="_feeCancelVariantEdit()" style="background:#fff;border:1px solid #d1d5db;color:#6b7280;padding:.25rem .6rem;border-radius:5px;font-size:.72rem;cursor:pointer">취소</button>
                                     <button onclick="feeSaveVariantInline('${c.id}','${t.id}','${v.id}')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.25rem .7rem;border-radius:5px;font-size:.75rem;cursor:pointer;font-weight:600">✓ 저장</button>
                                 </div>
-                                <datalist id="feeInvDL">${_procInvOptions()}</datalist>
+                                <datalist id="feeInvDL">${_feeSupplyOptions()}</datalist>
                             </div>`;
                         }
                         // ── 보기 모드 (깔끔) ──  더블탭으로 편집 진입
-                        const _timeBadge=(v.procMin||v.anesMin)?`<div style="font-size:.68rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">⏱${v.procMin||0}·💉${v.anesMin||0}분</div>`:'';
-                        const _planBadge=_planPm!=null?`<div title="계획 분당수익 = (정가÷회차 − 소모품) ÷ ${_feeInclAnes?'(시술+마취)':'시술'}시간" style="font-size:.68rem;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${_planPm.toLocaleString()}${_feeInclAnes?'💉':''}</div>`:'';
+                        const _timeBadge=(v.procMin||v.anesMin)?`<div style="font-size:.68rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">⏱${v.procMin||0}·🧴${v.anesMin||0}분</div>`:'';
+                        const _planBadge=_planPm!=null?`<div title="계획 분당수익 = (정가÷회차 − 소모품) ÷ ${_feeInclAnes?'(시술+연고마취)':'시술'}시간" style="font-size:.68rem;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${_planPm.toLocaleString()}${_feeInclAnes?'🧴':''}</div>`:'';
                         const _recBadge=_ptPm!=null?`<div title="시술시간 탭 실측 ${_ptStat.pairCount}건" style="font-size:.66rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">실측 ₩${Math.round(_ptPm).toLocaleString()}</div>`:'';
                         const _supBadge=_supCost>0?`<div title="소모품 합계" style="font-size:.66rem;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">소모품 ₩${_supCost.toLocaleString()}</div>`:'';
                         return `<div class="fee-var-row" data-vid="${v.id}"
@@ -7322,10 +7487,10 @@
             const b=document.getElementById('feeAnesToggle'); if(!b) return;
             if(_feeInclAnes){
                 b.style.background='#fce7f3'; b.style.borderColor='#f472b6'; b.style.boxShadow='0 0 0 1px #f472b6 inset'; b.style.opacity='1';
-                b.title='마취 시간 포함 ✓ (분당수익 = 순수익 ÷ (시술+마취)시간) — 클릭 시 제외';
+                b.title='연고마취 시간 포함 ✓ (분당수익 = 순수익 ÷ (시술+연고마취)시간) — 클릭 시 제외';
             }else{
                 b.style.background='var(--bg)'; b.style.borderColor='var(--border)'; b.style.boxShadow='none'; b.style.opacity='.5';
-                b.title='마취 시간 포함 (분당수익에 마취시간 합산) — 클릭 시 켜짐';
+                b.title='연고마취 시간 포함 (분당수익에 연고마취시간 합산) — 클릭 시 켜짐';
             }
         }
 
@@ -7427,8 +7592,8 @@
             _feeVarSyncPending(cid,tid,vid);
             const {v}=_feeFind(cid,tid,vid); if(!v||!v.supplies||!v.supplies[i]) return;
             v.supplies[i].name=String(val||'').trim();
-            const it=_findInvByName(v.supplies[i].name);
-            if(it){ const up=_invUnitPrice(it); if(up>0) v.supplies[i].price=up; } // 재고 단가 자동입력
+            const up=_supplyUnitPrice(v.supplies[i].name); // 믹스 원가 or 재고 단가 자동입력
+            if(up>0) v.supplies[i].price=up;
             saveFeeData(); renderFeeList();
         }
         function feeVarSupplyField(cid,tid,vid,i,field,val){
@@ -12021,6 +12186,7 @@
             low:()=>showInvListLowStock(),
             unused:()=>showInvListUnused(),
             buy:()=>openSuppliesCatalog(),
+            mix:()=>openMixManager(),
         };
         function renderInvHome(){
             const grid=document.getElementById('invHomeGrid');
@@ -12034,6 +12200,7 @@
                 {act:'low',label:'발주 필요',icon:'⚠️',color:'#dc2626',count:_invLowStockCount()},
                 {act:'unused',label:'안쓰는 제품',icon:'😴',color:'#7c3aed',count:_invUnusedCountCard()},
                 {act:'buy',label:'소모품 구입',icon:'🛍️',color:'#16a34a',count:''},
+                {act:'mix',label:'주사제 믹스',icon:'🧪',color:'#7c3aed',count:''},
             ];
             grid.innerHTML=cards.map(c=>`
                 <button type="button" data-inv-home-act="${c.act}" style="border:1px solid #e5e7eb;background:#fff;padding:1rem .75rem;border-radius:14px;cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:.35rem;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform .1s;touch-action:manipulation">
