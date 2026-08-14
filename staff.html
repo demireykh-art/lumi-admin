@@ -7105,6 +7105,11 @@
             const idx=c.treatments.findIndex(t=>t.id===tid);
             if(_moveInArray(c.treatments, idx, dir)){ saveFeeData(); renderFeeList(); }
         }
+        function feeMoveVariant(cid, tid, vid, dir){
+            const {t}=_feeFind(cid,tid); if(!t||!Array.isArray(t.variants)) return;
+            const idx=t.variants.findIndex(v=>v.id===vid);
+            if(_moveInArray(t.variants, idx, dir)){ saveFeeData(); renderFeeList(); }
+        }
         // ── 대분류/중분류 접힘 상태 ──
         const FEE_MAJ_COLLAPSED_KEY='staff_fee_maj_collapsed_v1';
         const FEE_MID_COLLAPSED_KEY='staff_fee_mid_collapsed_v1';
@@ -7282,7 +7287,8 @@
                 const catCollapsed=!!_feeCatCollapsed[c.id];
                 const treatsHtml=treats.map((t,tIdx)=>{
                     const collapsed=!!_feeCollapsed[t.id];
-                    const vsBody=(t.variants||[]).map(v=>{
+                    const _vArr=(t.variants||[]);
+                    const vsBody=_vArr.map((v,vIdx)=>{
                         const priceWon=(Number(v.price)||0)*10000;
                         const _supCost=_feeSupplyCost(v);
                         const _net=_feeVarNetPerSession(v);
@@ -7350,11 +7356,16 @@
                         const _planBadge=_planPm!=null?`<div title="계획 분당수익 = (정가÷회차 − 소모품) ÷ ${_feeInclAnes?'(시술+연고마취)':'시술'}시간" style="font-size:.68rem;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${_planPm.toLocaleString()}${_feeInclAnes?'🧴':''}</div>`:'';
                         const _recBadge=_ptPm!=null?`<div title="시술시간 탭 실측 ${_ptStat.pairCount}건" style="font-size:.66rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">실측 ₩${Math.round(_ptPm).toLocaleString()}</div>`:'';
                         const _supBadge=_supCost>0?`<div title="소모품 합계" style="font-size:.66rem;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">소모품 ₩${_supCost.toLocaleString()}</div>`:'';
+                        const _vMove = !q ? `<span ondblclick="event.stopPropagation()" style="display:inline-flex;flex-direction:column;gap:1px;flex-shrink:0">
+                            <button onclick="feeMoveVariant('${c.id}','${t.id}','${v.id}',-1)" ${vIdx===0?'disabled':''} title="위로" style="line-height:.9;background:${vIdx===0?'#f9fafb':'#fff'};border:1px solid #e5e7eb;color:${vIdx===0?'#d1d5db':'#6b7280'};padding:0 .3rem;border-radius:3px;font-size:.62rem;cursor:${vIdx===0?'default':'pointer'}">▲</button>
+                            <button onclick="feeMoveVariant('${c.id}','${t.id}','${v.id}',1)" ${vIdx===_vArr.length-1?'disabled':''} title="아래로" style="line-height:.9;background:${vIdx===_vArr.length-1?'#f9fafb':'#fff'};border:1px solid #e5e7eb;color:${vIdx===_vArr.length-1?'#d1d5db':'#6b7280'};padding:0 .3rem;border-radius:3px;font-size:.62rem;cursor:${vIdx===_vArr.length-1?'default':'pointer'}">▼</button>
+                        </span>` : '';
                         return `<div class="fee-var-row" data-vid="${v.id}"
                             ondblclick="feeOpenVariantEdit('${v.id}')"
                             title="더블탭하여 편집"
                             style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;padding:.55rem .7rem;border-top:1px solid #f3f4f6;background:#fff;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none">
-                            <div style="flex:1 1 45%;min-width:110px;font-size:.85rem;color:#374151;word-break:break-word;line-height:1.4">
+                            ${_vMove}
+                            <div style="flex:1 1 40%;min-width:100px;font-size:.85rem;color:#374151;word-break:break-word;line-height:1.4">
                                 ${_esc(v.label)}
                                 ${_feeTagsHtml(v.tags)}
                             </div>
@@ -7374,7 +7385,6 @@
                         <button onclick="feeMoveTreatment('${c.id}','${t.id}',1)" ${tIdx===treats.length-1?'disabled':''} style="background:${tIdx===treats.length-1?'#f3f4f6':'#fff'};border:1px solid #d1d5db;color:${tIdx===treats.length-1?'#d1d5db':'#4b5563'};padding:.15rem .4rem;border-radius:4px;font-size:.7rem;cursor:${tIdx===treats.length-1?'not-allowed':'pointer'}">↓</button>` : '';
                     const treatActions=isTreatEditing?`
                         <div style="display:flex;gap:.25rem;flex-shrink:0;flex-wrap:wrap;align-items:center">
-                            ${tUpDown}
                             <select onchange="feeMoveTreatmentToCategory('${c.id}','${t.id}',this.value)" title="다른 소분류로 이동" style="font-size:.68rem;padding:.18rem .25rem;border:1px solid #4338ca;border-radius:4px;background:#fff;max-width:160px">${_feeCategoryOptions(c.id)}</select>
                             <button onclick="feeAddVariant('${c.id}','${t.id}')" style="background:#eef2ff;border:1px solid #4338ca;color:#4338ca;padding:.2rem .5rem;border-radius:4px;font-size:.72rem;cursor:pointer;font-weight:600">+ 옵션</button>
                             <button onclick="feeEditTreatment('${c.id}','${t.id}')" style="background:#fff;border:1px solid #d1d5db;color:#4b5563;padding:.2rem .5rem;border-radius:4px;font-size:.72rem;cursor:pointer">이름수정</button>
@@ -7385,6 +7395,7 @@
                         <div style="display:flex;align-items:center;gap:.35rem;padding:.5rem .6rem;background:${isTreatEditing?'#fef3c7':'#f9fafb'};flex-wrap:wrap">
                             <button onclick="feeToggleTreatment('${t.id}')" style="background:none;border:none;font-size:.85rem;padding:0 .3rem;cursor:pointer;color:#374151;flex-shrink:0">${collapsed?'▶':'▼'}</button>
                             <div ondblclick="feeOpenTreatmentEdit('${t.id}')" title="더블탭하여 편집" style="flex:1;min-width:0;font-weight:700;font-size:.85rem;word-break:break-word;cursor:pointer;user-select:none;-webkit-user-select:none">${_esc(t.name)}${t.note?` <span style="font-weight:400;font-size:.7rem;color:#6b7280">(${_esc(t.note)})</span>`:''}<span style="font-weight:400;font-size:.68rem;color:#9ca3af;margin-left:4px">${varCount}</span></div>
+                            ${tUpDown}
                             ${treatActions}
                         </div>
                         ${collapsed?'':vsBody}
@@ -7398,7 +7409,6 @@
                 const isCatEditing=(_feeEditingCategoryId===c.id);
                 const catActions=isCatEditing?`
                     <div style="display:flex;gap:.25rem;flex-shrink:0;flex-wrap:wrap;align-items:center">
-                        ${cUpDown}
                         <select onchange="feeSetCategoryMiddle('${c.id}',this.value)" title="중분류(대분류 › 중분류)로 이동" style="font-size:.68rem;padding:.18rem .25rem;border:1px solid #a5b4fc;border-radius:4px;background:#fff;max-width:150px">${_feeMiddleOptions(c.middleId||'')}</select>
                         <button onclick="feeAddTreatment('${c.id}')" style="background:#4338ca;color:#fff;border:none;padding:.2rem .55rem;border-radius:4px;font-size:.72rem;cursor:pointer;font-weight:600">+ 시술</button>
                         <button onclick="feeEditCategory('${c.id}')" style="background:#fff;border:1px solid #4338ca;color:#4338ca;padding:.2rem .5rem;border-radius:4px;font-size:.72rem;cursor:pointer">이름수정</button>
@@ -7409,6 +7419,7 @@
                     <div style="background:${isCatEditing?'#fef3c7':'#eef2ff'};padding:.5rem .75rem;font-weight:700;color:${isCatEditing?'#92400e':'#4338ca'};display:flex;align-items:center;gap:.3rem;flex-wrap:wrap">
                         <button onclick="feeToggleCategory('${c.id}')" style="background:none;border:none;font-size:.9rem;padding:0 .25rem;cursor:pointer;color:inherit;flex-shrink:0">${catCollapsed?'▶':'▼'}</button>
                         <div ondblclick="feeOpenCategoryEdit('${c.id}')" title="더블탭하여 편집" style="flex:1;min-width:0;word-break:break-word;cursor:pointer;user-select:none;-webkit-user-select:none">${_esc(c.name)}${c.note?` <span style="font-weight:400;font-size:.7rem;color:#6b7280">${_esc(c.note)}</span>`:''}<span style="font-weight:400;font-size:.68rem;color:#9ca3af;margin-left:4px">${treatCount}</span></div>
+                        ${cUpDown}
                         ${catActions}
                     </div>
                     ${catCollapsed?'':(treatsHtml||'<div style="padding:1rem;text-align:center;color:#9ca3af;font-size:.85rem">시술이 없습니다.</div>')}
