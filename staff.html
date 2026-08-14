@@ -2719,9 +2719,22 @@
             },0));
         }
         // 총 생성량 = cc(=ml) 단위 재료 수량 자동 합산
+        // 이름에서 용량(ml/cc) 추정 — 예: "NS 100ml" → 100
+        function _parseVolFromName(name){
+            const mm=String(name||'').match(/(\d+(?:\.\d+)?)\s*(?:ml|cc|㎖)/i);
+            return mm?(Number(mm[1])||0):0;
+        }
+        // 재료 1행이 배치에 더하는 용량(cc): cc 단위=수량, 개 단위=수량×개당용량(volEach)
+        function _recipeVol(r){
+            if(!r) return 0;
+            const q=Number(r.qty)||0;
+            if(r.unit==='cc'||r.unit==='ml') return q;
+            if(r.unit==='개') return q*(Number(r.volEach)||0);
+            return 0;
+        }
         function _mixYield(mix){
             if(!mix||!Array.isArray(mix.recipe)) return 0;
-            const s=mix.recipe.reduce((a,r)=>a+((r.unit==='cc'||r.unit==='ml')?(Number(r.qty)||0):0),0);
+            const s=mix.recipe.reduce((a,r)=>a+_recipeVol(r),0);
             return Math.round(s*100)/100;
         }
         function _mixYieldUnit(mix){ return (mix&&mix.yieldUnit)||'cc'; }
@@ -2751,7 +2764,7 @@
             try{
                 await db.collection('injectionMixes').doc(m.id).set({
                     name:m.name||'',
-                    recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'개',memo:r.memo||''})),
+                    recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'개',volEach:Number(r.volEach)||0,memo:r.memo||''})),
                     yield:_mixYield(m), yieldUnit:'cc',
                     note:m.note||'', updatedAt:new Date().toISOString(), updatedBy:currentUser?.name||currentUser?.id||'staff'
                 });
@@ -2785,12 +2798,17 @@
                 const up=_invUnitPrice(it);
                 const line=Math.round(up*(Number(r.qty)||0));
                 const _u=r.unit||'개';
-                return `<div style="display:flex;align-items:center;gap:.3rem">
+                // 개 단위 재료는 '개당 용량(cc)' 입력 → 총 생성량에 반영 (예: NS 1개 = 100cc)
+                const _volCell = _u==='개'
+                    ? `<span style="font-size:.66rem;color:#9ca3af">×</span><input type="number" value="${r.volEach??''}" step="1" placeholder="cc/개" title="1개당 용량(cc) — 총 생성량 반영" onchange="mixRecipeUpdate('${m.id}',${i},'volEach',this.value)" style="width:46px;text-align:right;padding:.24rem .25rem;font-size:.72rem;border:1px solid #a5b4fc;border-radius:4px;background:#fff"><span style="font-size:.64rem;color:#9ca3af">cc</span>`
+                    : `<span style="min-width:58px"></span>`;
+                return `<div style="display:flex;align-items:center;gap:.25rem">
                     <span style="flex:1;min-width:0;font-size:.78rem;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(r.itemName||'(재료)')}</span>
-                    <input type="number" value="${r.qty??0}" step="0.1" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:50px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
+                    <input type="number" value="${r.qty??0}" step="0.1" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:46px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
                     <select onchange="mixRecipeUpdate('${m.id}',${i},'unit',this.value)" style="font-size:.72rem;padding:.24rem .1rem;border:1px solid #d1d5db;border-radius:4px;background:#fff">${['개','cc'].map(u=>`<option value="${u}"${_u===u?' selected':''}>${u}</option>`).join('')}</select>
-                    <span style="font-size:.72rem;color:#374151;min-width:60px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
-                    <button onclick="mixRecipeRemove('${m.id}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.2rem .4rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
+                    ${_volCell}
+                    <span style="font-size:.72rem;color:#374151;min-width:56px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
+                    <button onclick="mixRecipeRemove('${m.id}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.2rem .35rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
                 </div>`;
             }).join('') || '<div style="font-size:.75rem;color:#9ca3af;padding:.2rem 0">등록된 재료 없음</div>';
             return `<div style="border:1px solid #ddd6fe;border-top:none;border-radius:0 0 8px 8px;background:#faf5ff;padding:.55rem .6rem;margin-top:-.35rem">
@@ -2851,8 +2869,11 @@
         }
         function mixRecipeUpdate(id,idx,field,val){
             const m=_mixes.find(x=>x.id===id); if(!m||!m.recipe[idx]) return;
-            if(field==='qty') m.recipe[idx].qty=Number(String(val).replace(/[^\d.]/g,''))||0;
-            else m.recipe[idx][field]=val;
+            const r=m.recipe[idx];
+            if(field==='qty'||field==='volEach') r[field]=Number(String(val).replace(/[^\d.]/g,''))||0;
+            else r[field]=val;
+            // 개 단위로 바꾸면 개당 용량을 이름에서 자동 추정 (미입력 시)
+            if(field==='unit' && val==='개' && !(Number(r.volEach)>0)) r.volEach=_parseVolFromName(r.itemName);
             _mixSaveDoc(m); _renderMixList();
         }
         function mixSetYield(id,val){
