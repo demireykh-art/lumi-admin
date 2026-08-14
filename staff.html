@@ -2060,6 +2060,21 @@
     <!-- 공용 자동완성 드롭다운 (소모품·재료 검색 — 첫 글자부터 부분일치) -->
     <div id="acBox" style="display:none;position:fixed;z-index:3000;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15);max-height:240px;overflow-y:auto;font-size:.82rem;-webkit-overflow-scrolling:touch"></div>
 
+    <!-- 소모품·재고 선택 모달 (모바일 친화) -->
+    <div class="modal" id="itemPickerModal">
+        <div class="modal-content" style="max-width:560px;height:80vh;max-height:80vh;display:flex;flex-direction:column">
+            <div class="modal-header">
+                <div class="modal-title" id="itemPickerTitle">항목 선택</div>
+                <button class="modal-close" onclick="closeModal('itemPickerModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;min-height:0;flex:1">
+                <input type="text" lang="ko" inputmode="text" id="itemPickerSearch" placeholder="🔍 이름 검색 (첫 글자부터)" oninput="_renderItemPicker(this.value)"
+                    style="width:100%;padding:.65rem .7rem;font-size:1rem;border:1px solid #d1d5db;border-radius:8px;box-sizing:border-box;margin-bottom:.5rem">
+                <div id="itemPickerList" style="flex:1;overflow-y:auto;border:1px solid #eee;border-radius:8px;-webkit-overflow-scrolling:touch"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- 차팅 역할 관리 모달 (bizAdmin 전용) -->
     <div class="modal" id="chartRoleAdminModal">
         <div class="modal-content" style="max-width:520px;max-height:88vh">
@@ -2784,41 +2799,54 @@
             }).join('');
             return mix + _procInvOptions();
         }
-        // ── 공용 자동완성 (네이티브 datalist 대체 · 첫 글자부터 부분일치, 한글 IME 안정) ──
-        function _acHide(){ const b=document.getElementById('acBox'); if(b){ b.style.display='none'; b.innerHTML=''; } }
-        function _acShow(inputEl, matches, onPick){
-            const b=document.getElementById('acBox'); if(!b) return;
-            if(!matches||!matches.length){ _acHide(); return; }
-            b.innerHTML=matches.map((m,i)=>`<div data-i="${i}" style="padding:.55rem .7rem;cursor:pointer;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(m.label||m.value)}</div>`).join('');
-            const r=inputEl.getBoundingClientRect();
-            b.style.left=Math.max(4,r.left)+'px';
-            b.style.top=(r.bottom+2)+'px';
-            b.style.width=Math.max(r.width,200)+'px';
-            b.style.display='block';
-            Array.prototype.forEach.call(b.children, el=>{
-                el.addEventListener('mousedown', (e)=>{ e.preventDefault(); const m=matches[Number(el.dataset.i)]; _acHide(); if(m&&onPick) onPick(m); });
-            });
-        }
-        function _supplyMatches(q){
-            q=String(q||'').trim().toLowerCase(); if(!q) return [];
+        // ── 공용 항목 선택 모달 (모바일 친화 · 첫 글자부터 부분일치, 한글 IME 안정) ──
+        //    기존 플로팅 드롭다운(#acBox)은 모바일 가로화면에서 안 보이는 문제가 있어
+        //    전체 화면 모달 리스트로 대체. 검색어가 비면 전체 목록을 보여줌.
+        function _acHide(){ /* 하위호환용 no-op (구 드롭다운 제거됨) */ }
+        let _pickerSource='supply';   // 'supply'(믹스+재고) | 'inv'(재고만)
+        let _pickerOnPick=null;       // (item)=>void — item.value 사용
+        let _pickerCache=[];          // 현재 렌더된 목록 캐시 (_pickItem 조회용)
+        function _pickerItems(q){
+            q=String(q||'').trim().toLowerCase();
             const out=[];
-            (_mixes||[]).forEach(m=>{ if(String(m.name||'').toLowerCase().includes(q)) out.push({value:m.name,label:`🧪 ${m.name} · ₩${_mixUnitPrice(m).toLocaleString()}/${_mixYieldUnit(m)}`}); });
-            (invItems||[]).forEach(it=>{ if(String(it.name||'').toLowerCase().includes(q)) out.push({value:it.name,label:`${it.name} · ₩${_invUnitPrice(it).toLocaleString()}`}); });
-            return out.slice(0,30);
+            if(_pickerSource==='supply'){
+                (_mixes||[]).forEach(m=>{ if(!q||String(m.name||'').toLowerCase().includes(q)) out.push({value:m.name,label:`🧪 ${m.name}`,sub:`₩${_mixUnitPrice(m).toLocaleString()}/${_mixYieldUnit(m)}`}); });
+            }
+            (invItems||[]).forEach(it=>{ if(!q||String(it.name||'').toLowerCase().includes(q)) out.push({value:it.name,label:it.name,sub:`₩${_invUnitPrice(it).toLocaleString()}`}); });
+            return out.slice(0,300);
         }
-        function ptSupplyAcInput(el, cid, tid, vid, i){
-            _acShow(el, _supplyMatches(el.value), (m)=>{ el.value=m.value; feeVarSupplyName(cid,tid,vid,i,m.value); });
+        function _renderItemPicker(q){
+            const list=document.getElementById('itemPickerList'); if(!list) return;
+            const items=_pickerItems(q); _pickerCache=items;
+            if(!items.length){ list.innerHTML='<div style="padding:1rem;color:#888;font-size:.9rem;text-align:center">검색 결과가 없습니다</div>'; return; }
+            list.innerHTML=items.map((m,i)=>`<div onclick="_pickItem(${i})" style="padding:.75rem .7rem;cursor:pointer;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;gap:.5rem;align-items:center">`+
+                `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(m.label)}</span>`+
+                `<span style="color:#6b7280;font-size:.82rem;flex:none">${_esc(m.sub||'')}</span></div>`).join('');
         }
-        function _invMatches(q){
-            q=String(q||'').trim().toLowerCase(); if(!q) return [];
-            return (invItems||[]).filter(it=>String(it.name||'').toLowerCase().includes(q))
-                .slice(0,30).map(it=>({value:it.name,label:`${it.name} · ₩${_invUnitPrice(it).toLocaleString()}`}));
+        function _pickItem(i){
+            const m=_pickerCache[Number(i)]; if(!m) return;
+            const cb=_pickerOnPick; _pickerOnPick=null;
+            closeModal('itemPickerModal');
+            if(cb) cb(m);
         }
-        function mixIngAcInput(el){ _acShow(el, _invMatches(el.value), (m)=>{ el.value=m.value; }); }
-        // 스크롤·리사이즈 시 위치 어긋나므로 닫기 (한 번만 바인딩)
-        if(!window._acBound){ window._acBound=true;
-            document.addEventListener('scroll', ()=>{ const b=document.getElementById('acBox'); if(b&&b.style.display==='block') _acHide(); }, true);
-            window.addEventListener('resize', _acHide);
+        async function openItemPicker(source, onPick, title){
+            _pickerSource=source||'supply'; _pickerOnPick=onPick||null;
+            const t=document.getElementById('itemPickerTitle'); if(t) t.textContent=title||'항목 선택';
+            const s=document.getElementById('itemPickerSearch'); if(s) s.value='';
+            const m=document.getElementById('itemPickerModal'); if(m) m.classList.add('active');
+            const list=document.getElementById('itemPickerList'); if(list) list.innerHTML='<div style="padding:1rem;color:#888;font-size:.9rem;text-align:center">로딩 중...</div>';
+            try{ await _ensureInvItems(); }catch(e){}
+            if(source!=='inv'){ try{ await _loadMixes(); }catch(e){} }
+            _renderItemPicker('');
+            if(s) setTimeout(()=>{ try{ s.focus(); }catch(e){} }, 60);
+        }
+        // 소모품(믹스+재고) 선택 → 수가표 옵션 소모품에 반영
+        function openSupplyPicker(cid, tid, vid, i){
+            openItemPicker('supply', (m)=>{ feeVarSupplyName(cid,tid,vid,i,m.value); }, '소모품·믹스 선택');
+        }
+        // 재고 아이템 선택 → 믹스 레시피 입력칸 채우기
+        function openMixIngPicker(mixId){
+            openItemPicker('inv', (m)=>{ const el=document.getElementById('mixRecipeAddName-'+mixId); if(el) el.value=m.value; }, '재고 아이템 선택');
         }
         async function _mixSaveDoc(m){
             try{
@@ -2876,9 +2904,9 @@
             return `<div style="border:1px solid #ddd6fe;border-top:none;border-radius:0 0 8px 8px;background:#faf5ff;padding:.55rem .6rem;margin-top:-.35rem">
                 <div style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:.4rem">${rows}</div>
                 <div style="display:flex;gap:.35rem;align-items:center;margin-bottom:.5rem">
-                    <input type="text" lang="ko" inputmode="text" id="mixRecipeAddName-${m.id}" placeholder="재고 아이템 검색 (예: 리도카인, N/S)"
-                        oninput="mixIngAcInput(this)" onblur="setTimeout(_acHide,200)"
-                        style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
+                    <input type="text" readonly id="mixRecipeAddName-${m.id}" placeholder="🔍 재고 아이템 선택 (예: 리도카인, N/S)"
+                        onclick="openMixIngPicker('${m.id}')"
+                        style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff;cursor:pointer">
                     <input type="number" id="mixRecipeAddQty-${m.id}" placeholder="cc/개" step="0.1"
                         style="width:62px;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
                     <button onclick="mixRecipeAddItem('${m.id}')" style="background:#6d28d9;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer">+ 추가</button>
@@ -7443,14 +7471,14 @@
                             const supRows=(v.supplies||[]).map((s,i)=>{
                                 const line=Math.ceil((Number(s.price)||0)*(Number(s.qty)||0));
                                 const _su=s.unit||'개';
-                                return `<div style="display:flex;align-items:center;gap:.25rem;margin-bottom:.25rem">
-                                    <input type="text" lang="ko" inputmode="text" value="${_esc(s.name||'')}" placeholder="소모품·믹스 검색" oninput="ptSupplyAcInput(this,'${c.id}','${t.id}','${v.id}',${i})" onblur="setTimeout(_acHide,200)" onchange="feeVarSupplyName('${c.id}','${t.id}','${v.id}',${i},this.value)" style="flex:1;min-width:0;padding:.28rem .35rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">
-                                    <input type="number" value="${s.qty??1}" min="0" step="0.1" title="수량" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'qty',this.value)" style="width:46px;text-align:right;padding:.28rem .3rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px">
-                                    <select onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'unit',this.value)" style="font-size:.72rem;padding:.26rem .05rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">${['개','cc'].map(u=>`<option value="${u}"${_su===u?' selected':''}>${u}</option>`).join('')}</select>
-                                    <span style="font-size:.7rem;color:#92400e">×</span>
-                                    <input type="number" value="${s.price??0}" min="0" step="10" title="단위 단가(원)" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'price',this.value)" style="width:74px;text-align:right;padding:.28rem .3rem;font-size:.76rem;border:1px solid #fcd34d;border-radius:4px">
-                                    <span style="font-size:.72rem;color:#374151;min-width:60px;text-align:right;white-space:nowrap">₩${line.toLocaleString()}</span>
-                                    <button onclick="feeVarRemoveSupply('${c.id}','${t.id}','${v.id}',${i})" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .35rem;font-size:.72rem;border-radius:4px;cursor:pointer">×</button>
+                                return `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:.25rem;margin-bottom:.4rem;padding-bottom:.35rem;border-bottom:1px dashed #fde68a">
+                                    <button type="button" onclick="openSupplyPicker('${c.id}','${t.id}','${v.id}',${i})" title="소모품·믹스 선택" style="flex:1 1 100%;min-width:0;text-align:left;padding:.5rem .55rem;font-size:.82rem;border:1px solid #fcd34d;border-radius:6px;background:#fffbeb;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${s.name?'#111827':'#9ca3af'}">${s.name?'🧴 '+_esc(s.name):'🔍 소모품·믹스 선택'}</button>
+                                    <input type="number" value="${s.qty??1}" min="0" step="0.1" title="수량" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'qty',this.value)" style="width:52px;text-align:right;padding:.3rem .3rem;font-size:.78rem;border:1px solid #fcd34d;border-radius:4px">
+                                    <select onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'unit',this.value)" style="font-size:.74rem;padding:.3rem .1rem;border:1px solid #fcd34d;border-radius:4px;background:#fff">${['개','cc'].map(u=>`<option value="${u}"${_su===u?' selected':''}>${u}</option>`).join('')}</select>
+                                    <span style="font-size:.72rem;color:#92400e">×</span>
+                                    <input type="number" value="${s.price??0}" min="0" step="10" title="단위 단가(원)" onchange="feeVarSupplyField('${c.id}','${t.id}','${v.id}',${i},'price',this.value)" style="flex:1;min-width:60px;width:74px;text-align:right;padding:.3rem .3rem;font-size:.78rem;border:1px solid #fcd34d;border-radius:4px">
+                                    <span style="font-size:.74rem;color:#374151;min-width:56px;text-align:right;white-space:nowrap;font-weight:600">₩${line.toLocaleString()}</span>
+                                    <button onclick="feeVarRemoveSupply('${c.id}','${t.id}','${v.id}',${i})" title="삭제" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.25rem .45rem;font-size:.78rem;border-radius:4px;cursor:pointer">×</button>
                                 </div>`;
                             }).join('')||'<div style="font-size:.72rem;color:#9ca3af;padding:.1rem 0">소모품 없음</div>';
                             // ── 편집 모드 ──
