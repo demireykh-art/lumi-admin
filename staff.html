@@ -571,6 +571,7 @@
                     <div class="card-title" id="feeStickyBar" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;position:sticky;top:0;z-index:20;background:var(--bg-card);margin:-1.25rem -1.25rem .6rem;padding:.7rem 1rem;border-bottom:1px solid var(--border)">
                         <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="_feeBack()" id="feeBackBtn">← 홈</button>
                         <span style="flex:1;min-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.95rem" id="feeTitle">시술 수가표</span>
+                        <button id="feeAnesToggle" onclick="feeToggleInclAnes()" title="분당수익 계산에 마취시간 포함/제외" style="font-size:.95rem;line-height:1;padding:.25rem .4rem;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">💉</button>
                         <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .5rem;flex-shrink:0;white-space:nowrap" onclick="feeAddMajor()">+ 대분류</button>
                         <input type="text" id="feeQ" placeholder="검색" oninput="renderFeeList()"
                             style="width:92px;padding:.35rem .5rem;font-size:.8rem;border:1px solid var(--border);border-radius:6px;flex-shrink:0">
@@ -7167,7 +7168,7 @@
                                 <div style="padding:.35rem .55rem;border-top:1px dashed #fde68a;font-size:.74rem;color:#374151;display:flex;flex-wrap:wrap;gap:.7rem;align-items:center">
                                     <span>소모품 합계 <b>₩${_supCost.toLocaleString()}</b></span>
                                     <span>순수익${_feeVarSessions(v)>1?'/회':''} <b>₩${_net.toLocaleString()}</b></span>
-                                    <span style="color:#6d28d9;font-weight:700">분당수익 ${_planPm!=null?`₩${_planPm.toLocaleString()}/분`:'<span style="color:#9ca3af;font-weight:400">시술시간 입력</span>'}</span>
+                                    <span style="color:#6d28d9;font-weight:700">분당수익 ${_planPm!=null?`₩${_planPm.toLocaleString()}/분`:'<span style="color:#9ca3af;font-weight:400">시술시간 입력</span>'}<span style="font-weight:400;color:#a16207;font-size:.7rem"> ${_feeInclAnes?'💉시술+마취':'⏱시술만'}</span></span>
                                 </div>
                                 <div style="display:flex;align-items:center;gap:.25rem;padding:.35rem .55rem;flex-wrap:wrap;border-top:1px dashed #fde68a">
                                     <div style="flex:1;min-width:0">${_feeTagsHtml(v.tags)}</div>
@@ -7181,7 +7182,7 @@
                         }
                         // ── 보기 모드 (깔끔) ──  더블탭으로 편집 진입
                         const _timeBadge=(v.procMin||v.anesMin)?`<div style="font-size:.68rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">⏱${v.procMin||0}·💉${v.anesMin||0}분</div>`:'';
-                        const _planBadge=_planPm!=null?`<div title="계획 분당수익 (정가÷회차 − 소모품)÷시술시간" style="font-size:.68rem;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${_planPm.toLocaleString()}</div>`:'';
+                        const _planBadge=_planPm!=null?`<div title="계획 분당수익 = (정가÷회차 − 소모품) ÷ ${_feeInclAnes?'(시술+마취)':'시술'}시간" style="font-size:.68rem;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:1px 6px;flex-shrink:0;font-weight:600;white-space:nowrap">분당 ₩${_planPm.toLocaleString()}${_feeInclAnes?'💉':''}</div>`:'';
                         const _recBadge=_ptPm!=null?`<div title="시술시간 탭 실측 ${_ptStat.pairCount}건" style="font-size:.66rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">실측 ₩${Math.round(_ptPm).toLocaleString()}</div>`:'';
                         const _supBadge=_supCost>0?`<div title="소모품 합계" style="font-size:.66rem;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:1px 6px;flex-shrink:0;white-space:nowrap">소모품 ₩${_supCost.toLocaleString()}</div>`:'';
                         return `<div class="fee-var-row" data-vid="${v.id}"
@@ -7314,6 +7315,18 @@
                 </div>`;
             }
             wrap.innerHTML=out||'<div style="padding:1.5rem;text-align:center;color:#9ca3af">시술 데이터가 없습니다.</div>';
+            _feeUpdateAnesToggle();
+        }
+        // 마취시간 포함 토글 버튼 상태 표시(호버 안내 문구 포함)
+        function _feeUpdateAnesToggle(){
+            const b=document.getElementById('feeAnesToggle'); if(!b) return;
+            if(_feeInclAnes){
+                b.style.background='#fce7f3'; b.style.borderColor='#f472b6'; b.style.boxShadow='0 0 0 1px #f472b6 inset'; b.style.opacity='1';
+                b.title='마취 시간 포함 ✓ (분당수익 = 순수익 ÷ (시술+마취)시간) — 클릭 시 제외';
+            }else{
+                b.style.background='var(--bg)'; b.style.borderColor='var(--border)'; b.style.boxShadow='none'; b.style.opacity='.5';
+                b.title='마취 시간 포함 (분당수익에 마취시간 합산) — 클릭 시 켜짐';
+            }
         }
 
         // ---- 인라인 편집 상태 (더블탭/더블클릭으로 진입) ----
@@ -7368,14 +7381,25 @@
             return (v&&Array.isArray(v.supplies)?v.supplies:[]).reduce((a,s)=>a+(Number(s.price)||0)*(Number(s.qty)||0),0);
         }
         function _feeVarSessions(v){ return (v&&Number(v.sessions)>1)?Number(v.sessions):1; }
-        // 순수익(1회당) = (정가÷회차) − 소모품비, 분당수익 = 순수익 ÷ 시술시간
+        // 분당수익 계산 시 마취시간 포함 여부(전역 토글, localStorage 유지)
+        let _feeInclAnes=(function(){ try{return localStorage.getItem('staff_fee_incl_anes_v1')==='1';}catch(_){return false;} })();
+        function feeToggleInclAnes(){
+            _feeInclAnes=!_feeInclAnes;
+            try{ localStorage.setItem('staff_fee_incl_anes_v1', _feeInclAnes?'1':'0'); }catch(_){}
+            renderFeeList();
+        }
+        // 순수익(1회당) = (정가÷회차) − 소모품비, 분당수익 = 순수익 ÷ 소요시간
         function _feeVarNetPerSession(v){
             const priceWon=(Number(v&&v.price)||0)*10000;
             return Math.round(priceWon/_feeVarSessions(v) - _feeSupplyCost(v));
         }
+        // 분당수익 분모 = 시술시간 (+ 토글 시 마취시간)
+        function _feeVarDenomMin(v){
+            return (Number(v&&v.procMin)||0) + (_feeInclAnes?(Number(v&&v.anesMin)||0):0);
+        }
         function _feeVarPlanPerMin(v){
-            const pm=Number(v&&v.procMin)||0;
-            return pm>0?Math.round(_feeVarNetPerSession(v)/pm):null;
+            const d=_feeVarDenomMin(v);
+            return d>0?Math.round(_feeVarNetPerSession(v)/d):null;
         }
         // 편집 중 DOM 값(라벨·가격·회차·시간)을 옵션 객체에 반영 (소모품 재렌더 전 보존)
         function _feeVarSyncPending(cid,tid,vid){
