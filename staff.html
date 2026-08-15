@@ -7453,9 +7453,17 @@
         function _feeCatCard(c, q, mv){
             mv=mv||{up:false,down:false};
             {
+                // 검색 매칭: 대분류·중분류·소분류·시술명·옵션(회차권)명 어디든 부분일치(중간 단어 포함)
+                const _mid=(_feeTax.middles||[]).find(m=>m.id===c.middleId);
+                const _maj=_mid?(_feeTax.majors||[]).find(m=>m.id===_mid.majorId):null;
+                const _catCtx=[c.name,c.note,_mid&&_mid.name,_maj&&_maj.name].map(x=>String(x||'').toLowerCase());
+                const _catMatch=!!q&&_catCtx.some(x=>x.includes(q));
                 const treats=(c.treatments||[]).filter(t=>{
                     if(!q) return true;
-                    return (t.name||'').toLowerCase().includes(q)||(c.name||'').toLowerCase().includes(q);
+                    if(_catMatch) return true; // 분류명이 일치하면 하위 시술 전부 표시
+                    if((t.name||'').toLowerCase().includes(q)||(t.note||'').toLowerCase().includes(q)) return true;
+                    // 옵션(회차권/단가형)명·태그도 검색 대상
+                    return (t.variants||[]).some(v=>String(v.label||'').toLowerCase().includes(q)||(Array.isArray(v.tags)&&v.tags.some(tg=>String(tg||'').toLowerCase().includes(q))));
                 });
                 const catCollapsed=!!_feeCatCollapsed[c.id];
                 const treatsHtml=treats.map((t,tIdx)=>{
