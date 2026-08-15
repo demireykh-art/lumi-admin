@@ -896,54 +896,34 @@
                 </div>
 
                 <!-- === 재고 실사 상세 (홈에서 카테고리 선택 시 노출) === -->
-                <div id="invListView" class="card" style="display:none;margin-bottom:0;padding-bottom:.5rem">
-                    <!-- 헤더: 좌측 홈/제목, 우측 제출 버튼 -->
-                    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
-                        <span style="display:flex;align-items:center;gap:.5rem">
-                            <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem" onclick="showInvHome()">← 홈</button>
-                            <span id="invListTitle">📦 재고 실사</span>
-                        </span>
-                        <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap">
-                            <button class="btn btn-primary" style="font-size:.75rem;padding:.35rem .7rem" onclick="openNewItemModal()">+ 신규</button>
-                            <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()"
-                                style="width:auto;padding:.4rem .8rem;font-size:.8rem;letter-spacing:0;border-radius:6px">실사 결과 제출</button>
+                <div id="invListView" class="card" style="display:none;margin:-1rem 0 0;padding-top:0;padding-bottom:.5rem;overflow-x:clip">
+                    <!-- 스티키 상단바: 1행(제목·필터·뒤로가기) + 2행(검색·신규) + 실사제출 -->
+                    <div style="display:block;position:sticky;top:-1rem;z-index:20;background:var(--bg-card);margin:0 -1.25rem .6rem;padding:.6rem 1rem;border-bottom:1px solid var(--border)">
+                        <!-- 1행: 제목 · 필터(아이콘) · 뒤로가기 -->
+                        <div style="display:flex;align-items:center;gap:.35rem;margin-bottom:.45rem">
+                            <span id="invListTitle" style="flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:.9rem">📦 재고 실사</span>
+                            <select id="invParentDropdown" onchange="onInvParentDropdownChange(this.value)" title="상위 품목 필터" style="flex:1 1 0;min-width:0;padding:.42rem .15rem;border:1px solid var(--border);border-radius:6px;font-size:.74rem;background:#fff">
+                                <option value="">📂 전체</option>
+                            </select>
+                            <select id="invAuditLocationFilter" onchange="filterInventoryItems()" title="장소 필터" style="flex:1 1 0;min-width:0;padding:.42rem .15rem;border:1px solid var(--border);border-radius:6px;font-size:.74rem;background:#fff">
+                                <option value="">📍 전체</option>
+                            </select>
+                            <select id="invSortBy" onchange="filterInventoryItems()" title="정렬" style="flex:1 1 0;min-width:0;padding:.42rem .15rem;border:1px solid var(--border);border-radius:6px;font-size:.74rem;background:#fff">
+                                <option value="recent">📊 최근</option>
+                                <option value="parent">📊 그룹</option>
+                                <option value="name">📊 이름</option>
+                                <option value="location">📊 장소</option>
+                                <option value="stock-low">📊 적은순</option>
+                                <option value="stock-high">📊 많은순</option>
+                            </select>
+                            <button onclick="showInvHome()" title="뒤로가기" aria-label="뒤로가기" style="flex:0 0 auto;font-size:1rem;line-height:1;padding:.35rem .5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">←</button>
                         </div>
-                    </div>
-
-                    <!-- 1행: 상위 품목 그룹 드롭다운 -->
-                    <div style="margin-bottom:.6rem;margin-top:.75rem">
-                        <select id="invParentDropdown" onchange="onInvParentDropdownChange(this.value)"
-                            style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem;background:#fff">
-                            <option value="">📂 상위 품목 (전체)</option>
-                        </select>
-                    </div>
-
-                    <!-- 2행: 품목명 검색 -->
-                    <div style="margin-bottom:.6rem">
-                        <input type="text" id="invSearchInput" placeholder="🔍 품목명 검색..."
-                            oninput="filterInventoryItems()"
-                            style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
-                    </div>
-
-                    <!-- 3행: 실사 장소 선택 -->
-                    <div style="margin-bottom:.6rem">
-                        <select id="invAuditLocationFilter" class="form-select" onchange="filterInventoryItems()"
-                            style="width:100%;padding:.55rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
-                            <option value="">📍 전체 장소 (모든 품목)</option>
-                        </select>
-                    </div>
-
-                    <!-- 4행: 정렬 -->
-                    <div style="margin-bottom:.6rem">
-                        <select id="invSortBy" class="form-select" onchange="filterInventoryItems()"
-                            style="width:100%;padding:.55rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
-                            <option value="recent">📊 최근 등록 순서</option>
-                            <option value="parent">📊 상위 품목 그룹순</option>
-                            <option value="name">📊 이름순 (가나다)</option>
-                            <option value="location">📊 장소순</option>
-                            <option value="stock-low">📊 재고 적은순</option>
-                            <option value="stock-high">📊 재고 많은순</option>
-                        </select>
+                        <!-- 2행: 검색 · 신규 · 실사결과제출 -->
+                        <div style="display:flex;align-items:center;gap:.35rem;margin-bottom:.45rem">
+                            <input type="text" id="invSearchInput" placeholder="🔍 품목명 검색..." oninput="filterInventoryItems()" style="flex:1 1 auto;min-width:0;padding:.5rem .55rem;border:1px solid var(--border);border-radius:6px;font-size:.88rem">
+                            <button class="btn btn-primary" style="width:auto;margin-bottom:0;font-size:.76rem;padding:.5rem .6rem;flex:0 0 auto;white-space:nowrap;border-radius:6px" onclick="openNewItemModal()">+ 신규</button>
+                            <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()" style="width:auto;margin-bottom:0;padding:.5rem .6rem;font-size:.76rem;letter-spacing:0;flex:0 0 auto;white-space:nowrap;border-radius:6px">실사 결과 제출</button>
+                        </div>
                     </div>
 
                     <!-- 카테고리 chips / 발주 알림 / 30일 미사용 토글은 홈 카드로 대체되어 숨김 -->
@@ -952,11 +932,6 @@
                     <div id="invParentButtons" style="display:none"></div>
                     <button id="invUnusedToggle" onclick="toggleInvUnused()" style="display:none">30일+ 미사용 <span id="invUnusedCount">0</span></button>
 
-                    <div class="inv-progress" id="invProgress">
-                        <span>진행률</span>
-                        <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
-                        <span id="invProgressText">0/0</span>
-                    </div>
                     <div id="invAuditList" style="padding:.5rem 0"></div>
                 </div><!-- /invListView -->
             </div><!-- /tab-inventory -->
@@ -5597,7 +5572,7 @@
                 .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ko'));
             const cur=currentInvParent||'';
             sel.innerHTML=
-                `<option value="">📂 상위 품목 (전체 · ${pool.length})</option>`+
+                `<option value="">📂 전체·${pool.length}</option>`+
                 groups.map(([n,c])=>{
                     const sel_=(n===cur)?' selected':'';
                     return `<option value="${n.replace(/"/g,'&quot;')}"${sel_}>📂 ${n} (${c})</option>`;
@@ -6089,7 +6064,7 @@
             // 장소 필터 초기화
             const locFilter = document.getElementById('invAuditLocationFilter');
             if(locFilter && receivingLocations.length > 0){
-                locFilter.innerHTML = '<option value="">전체 장소 (모든 품목)</option>';
+                locFilter.innerHTML = '<option value="">📍 전체</option>';
                 receivingLocations.forEach(loc => {
                     const opt = document.createElement('option');
                     const v=locDisplayName(loc);
