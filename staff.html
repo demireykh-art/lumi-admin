@@ -2718,18 +2718,34 @@
         // 믹스 원가 = Σ(재고 낱개단가 × 수량)
         // 재료 1행 원가: 개=낱개단가×병수, cc=cc당단가(낱개단가÷1개용량)×cc
         //   1개 용량이 등록되어 있으면 개/cc 어느 쪽으로 넣어도 동일 금액이 나온다.
+        // 재료 1행이 참조하는 항목(재고 or 믹스) 해석: {up=낱개/1배치 단가, volEach=1개/1배치 용량(cc)}
+        //   재고: up=낱개단가, volEach=1개 용량. 믹스(중첩): up=믹스 원가(1배치), volEach=총 생성량(cc).
+        //   → 개/cc 단위 계산이 재고·믹스 모두 동일 공식으로 처리됨.
+        function _recipeResolve(r){
+            if(!r) return {up:0,volEach:0,isMix:false};
+            const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
+            if(it) return {up:_invUnitPrice(it), volEach:Number(it.volumeMl)||Number(r.volEach)||_parseVolFromName(r.itemName)||0, isMix:false};
+            const mix=_findMixByName(r.itemName);
+            if(mix) return {up:_mixCost(mix), volEach:_mixYield(mix)||Number(r.volEach)||0, isMix:true, mix};
+            return {up:0, volEach:Number(r.volEach)||_parseVolFromName(r.itemName)||0, isMix:false};
+        }
         function _recipeLineCost(r){
             if(!r) return 0;
-            const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
-            const up=_invUnitPrice(it); // 낱개단가(=1개/1병 가격)
+            const {up,volEach}=_recipeResolve(r);
             const q=Number(r.qty)||0;
             if(r.unit==='개') return Math.round(up*q);
-            const volEach=_recipeVolEach(r); // 1개 용량(cc)
             if((r.unit==='cc'||r.unit==='ml') && volEach>0) return Math.round((up/volEach)*q);
             return Math.round(up*q); // 용량 정보 없으면 낱개단가를 단위단가로 사용
         }
+        let _mixCostStk=new Set(); // 믹스 중첩 참조 순환 방지
         function _mixCost(mix){
-            return Math.round((mix&&Array.isArray(mix.recipe)?mix.recipe:[]).reduce((a,r)=>a+_recipeLineCost(r),0));
+            if(!mix) return 0;
+            const key=mix.id||mix.name;
+            if(key&&_mixCostStk.has(key)) return 0; // 순환 참조 차단
+            if(key)_mixCostStk.add(key);
+            const c=Math.round((Array.isArray(mix.recipe)?mix.recipe:[]).reduce((a,r)=>a+_recipeLineCost(r),0));
+            if(key)_mixCostStk.delete(key);
+            return c;
         }
         // 총 생성량 = cc(=ml) 단위 재료 수량 자동 합산
         // 이름에서 용량(ml/cc) 추정 — 예: "NS 100ml" → 100
@@ -2738,11 +2754,7 @@
             return mm?(Number(mm[1])||0):0;
         }
         // 개(병) 1개당 용량(cc): 재고 '1개 용량' 우선, 없으면 저장값/이름추정
-        function _recipeVolEach(r){
-            if(!r) return 0;
-            const it=r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName);
-            return Number(it&&it.volumeMl)||Number(r.volEach)||_parseVolFromName(r.itemName)||0;
-        }
+        function _recipeVolEach(r){ return _recipeResolve(r).volEach; }
         // 재료 1행이 배치에 더하는 용량(cc): cc 단위=수량, 개 단위=수량×개당용량(재고에서 자동)
         function _recipeVol(r){
             if(!r) return 0;
@@ -2751,9 +2763,14 @@
             if(r.unit==='개') return q*_recipeVolEach(r);
             return 0;
         }
+        let _mixYieldStk=new Set(); // 믹스 중첩 참조 순환 방지
         function _mixYield(mix){
             if(!mix||!Array.isArray(mix.recipe)) return 0;
+            const key=mix.id||mix.name;
+            if(key&&_mixYieldStk.has(key)) return 0; // 순환 참조 차단
+            if(key)_mixYieldStk.add(key);
             const s=mix.recipe.reduce((a,r)=>a+_recipeVol(r),0);
+            if(key)_mixYieldStk.delete(key);
             return Math.round(s*100)/100;
         }
         function _mixYieldUnit(mix){ return (mix&&mix.yieldUnit)||'cc'; }
@@ -2786,11 +2803,12 @@
         let _pickerSource='supply';   // 'supply'(믹스+재고) | 'inv'(재고만)
         let _pickerOnPick=null;       // (item)=>void — item.value 사용
         let _pickerCache=[];          // 현재 렌더된 목록 캐시 (_pickItem 조회용)
+        let _pickerExcludeMix=null;   // 목록에서 제외할 믹스 id/name (자기 자신 방지)
         function _pickerItems(q){
             q=String(q||'').trim().toLowerCase();
             const out=[];
             if(_pickerSource==='supply'){
-                (_mixes||[]).forEach(m=>{ if(!q||String(m.name||'').toLowerCase().includes(q)) out.push({value:m.name,label:`🧪 ${m.name}`,sub:`₩${_mixUnitPrice(m).toLocaleString()}/${_mixYieldUnit(m)}`}); });
+                (_mixes||[]).forEach(m=>{ if(_pickerExcludeMix&&(m.id===_pickerExcludeMix||m.name===_pickerExcludeMix)) return; if(!q||String(m.name||'').toLowerCase().includes(q)) out.push({value:m.name,label:`🧪 ${m.name}`,sub:`₩${_mixUnitPrice(m).toLocaleString()}/${_mixYieldUnit(m)}`}); });
             }
             (invItems||[]).forEach(it=>{ if(!q||String(it.name||'').toLowerCase().includes(q)) out.push({value:it.name,label:it.name,sub:`₩${_invUnitPrice(it).toLocaleString()}`}); });
             return out.slice(0,300);
@@ -2809,8 +2827,9 @@
             closeModal('itemPickerModal');
             if(cb) cb(m);
         }
-        async function openItemPicker(source, onPick, title){
+        async function openItemPicker(source, onPick, title, opts){
             _pickerSource=source||'supply'; _pickerOnPick=onPick||null;
+            _pickerExcludeMix=(opts&&opts.excludeMix)||null;
             const t=document.getElementById('itemPickerTitle'); if(t) t.textContent=title||'항목 선택';
             const s=document.getElementById('itemPickerSearch'); if(s) s.value='';
             const m=document.getElementById('itemPickerModal'); if(m) m.classList.add('active');
@@ -2824,9 +2843,9 @@
         function openSupplyPicker(cid, tid, vid, i){
             openItemPicker('supply', (m)=>{ feeVarSupplyName(cid,tid,vid,i,m.value); }, '소모품·믹스 선택');
         }
-        // 재고 아이템 선택 → 믹스 레시피 입력칸 채우기
+        // 재료 선택(재고 + 다른 믹스) → 믹스 레시피 입력칸 채우기 (자기 자신은 제외)
         function openMixIngPicker(mixId){
-            openItemPicker('inv', (m)=>{ const el=document.getElementById('mixRecipeAddName-'+mixId); if(el) el.value=m.value; }, '재고 아이템 선택');
+            openItemPicker('supply', (m)=>{ const el=document.getElementById('mixRecipeAddName-'+mixId); if(el) el.value=m.value; }, '재료 선택 (재고·믹스)', {excludeMix:mixId});
         }
         async function _mixSaveDoc(m){
             try{
@@ -2871,7 +2890,7 @@
                     ? (_vEach>0
                         ? `<span style="min-width:62px;text-align:right;font-size:.7rem;color:#6d28d9;white-space:nowrap" title="병수 × 1개 용량(${_vEach}${_esc(r.unit==='ml'?'ml':'cc')}, 재고 등록값)">= ${_vol.toLocaleString()}cc</span>`
                         : `<span style="min-width:62px;text-align:right;font-size:.64rem;color:#c084fc;white-space:nowrap" title="재고에서 이 품목의 '1개 용량(ml)'을 등록하면 총 생성량에 자동 반영됩니다">용량 미등록</span>`)
-                    : `<span style="min-width:62px;text-align:right;font-size:.66rem;color:#9ca3af">${_vEach>0?`@₩${Math.round(_invUnitPrice(r.itemId?((invItems||[]).find(x=>x.id===r.itemId)):_findInvByName(r.itemName))/_vEach).toLocaleString()}/cc`:''}</span>`;
+                    : `<span style="min-width:62px;text-align:right;font-size:.66rem;color:#9ca3af">${_vEach>0?`@₩${Math.round(_recipeResolve(r).up/_vEach).toLocaleString()}/cc`:''}</span>`;
                 return `<div style="display:flex;align-items:center;gap:.3rem">
                     <span style="flex:1;min-width:0;font-size:.78rem;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(r.itemName||'(재료)')}</span>
                     <input type="number" value="${r.qty??0}" step="0.1" title="${_u==='개'?'병수':'용량(cc)'}" onchange="mixRecipeUpdate('${m.id}',${i},'qty',this.value)" style="width:50px;text-align:right;padding:.25rem .3rem;font-size:.78rem;border:1px solid #d1d5db;border-radius:4px">
@@ -2884,7 +2903,7 @@
             return `<div style="border:1px solid #ddd6fe;border-top:none;border-radius:0 0 8px 8px;background:#faf5ff;padding:.55rem .6rem;margin-top:-.35rem">
                 <div style="display:flex;flex-direction:column;gap:.3rem;margin-bottom:.4rem">${rows}</div>
                 <div style="display:flex;gap:.35rem;align-items:center;margin-bottom:.5rem">
-                    <input type="text" readonly id="mixRecipeAddName-${m.id}" placeholder="🔍 재고 아이템 선택 (예: 리도카인, N/S)"
+                    <input type="text" readonly id="mixRecipeAddName-${m.id}" placeholder="🔍 재료 선택 (재고·믹스 · 예: 리도카인, TS)"
                         onclick="openMixIngPicker('${m.id}')"
                         style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.78rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff;cursor:pointer">
                     <input type="number" id="mixRecipeAddQty-${m.id}" placeholder="cc/개" step="0.1"
@@ -2931,13 +2950,16 @@
         function mixRecipeAddItem(id){
             const nameEl=document.getElementById('mixRecipeAddName-'+id);
             const qtyEl=document.getElementById('mixRecipeAddQty-'+id);
-            const name=(nameEl?.value||'').trim(); if(!name){ alert('재고 아이템을 선택하세요.'); return; }
+            const name=(nameEl?.value||'').trim(); if(!name){ alert('재료를 선택하세요.'); return; }
             const m=_mixes.find(x=>x.id===id); if(!m) return;
+            if(name===m.name){ alert('자기 자신은 재료로 넣을 수 없습니다.'); return; }
             const inv=_findInvByName(name);
+            const mix=inv?null:_findMixByName(name); // 재고에 없으면 다른 믹스(중첩)로 해석
             m.recipe=m.recipe||[];
-            // 기본 단위 cc(용량 직접 입력). 1개 용량(재고/이름)은 cc당 단가 환산·병 단위 전환에 사용.
-            const _vol=Number(inv&&inv.volumeMl)||_parseVolFromName(inv?inv.name:name);
-            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:name,qty:Number(qtyEl?.value)||0,unit:'cc',volEach:_vol>0?_vol:0,memo:''});
+            // 기본 단위 cc(용량 직접 입력). 1개(1배치) 용량은 cc당 단가 환산·병 단위 전환에 사용.
+            const _vol = inv ? (Number(inv.volumeMl)||_parseVolFromName(inv.name))
+                             : (mix ? _mixYield(mix) : _parseVolFromName(name));
+            m.recipe.push({itemId:inv?inv.id:'',itemName:inv?inv.name:(mix?mix.name:name),qty:Number(qtyEl?.value)||0,unit:'cc',volEach:_vol>0?_vol:0,memo:''});
             _mixSaveDoc(m); _renderMixList();
         }
         function mixRecipeUpdate(id,idx,field,val){
