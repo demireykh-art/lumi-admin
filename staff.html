@@ -918,13 +918,12 @@
                             </select>
                             <button onclick="showInvHome()" title="뒤로가기" aria-label="뒤로가기" style="flex:0 0 auto;font-size:1rem;line-height:1;padding:.35rem .5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">←</button>
                         </div>
-                        <!-- 2행: 검색 · 신규 -->
-                        <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.45rem">
-                            <input type="text" id="invSearchInput" placeholder="🔍 품목명 검색..." oninput="filterInventoryItems()" style="flex:1 1 auto;min-width:0;padding:.5rem .6rem;border:1px solid var(--border);border-radius:6px;font-size:.9rem">
-                            <button class="btn btn-primary" style="width:auto;margin-bottom:0;font-size:.8rem;padding:.5rem .85rem;flex:0 0 auto;white-space:nowrap;border-radius:6px" onclick="openNewItemModal()">+ 신규</button>
+                        <!-- 2행: 검색 · 신규 · 실사결과제출 -->
+                        <div style="display:flex;align-items:center;gap:.35rem;margin-bottom:.45rem">
+                            <input type="text" id="invSearchInput" placeholder="🔍 품목명 검색..." oninput="filterInventoryItems()" style="flex:1 1 auto;min-width:0;padding:.5rem .55rem;border:1px solid var(--border);border-radius:6px;font-size:.88rem">
+                            <button class="btn btn-primary" style="width:auto;margin-bottom:0;font-size:.76rem;padding:.5rem .6rem;flex:0 0 auto;white-space:nowrap;border-radius:6px" onclick="openNewItemModal()">+ 신규</button>
+                            <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()" style="width:auto;margin-bottom:0;padding:.5rem .6rem;font-size:.76rem;letter-spacing:0;flex:0 0 auto;white-space:nowrap;border-radius:6px">실사 결과 제출</button>
                         </div>
-                        <!-- 실사 결과 제출 -->
-                        <button class="inv-submit-btn disabled" id="invSubmitBtn" onclick="submitInventoryAudit()" style="width:100%;margin-bottom:0;padding:.5rem;font-size:.82rem;letter-spacing:0;border-radius:6px">실사 결과 제출</button>
                     </div>
 
                     <!-- 카테고리 chips / 발주 알림 / 30일 미사용 토글은 홈 카드로 대체되어 숨김 -->
