@@ -567,15 +567,16 @@
 
             <!-- === 시술 수가표 (localStorage 편집, seed 기반) === -->
             <div class="tab-content" id="tab-feeschedule">
-                <div class="card" style="margin-bottom:0;overflow-x:hidden">
+                <div class="card" style="margin-bottom:0;overflow-x:clip">
                     <div class="card-title" id="feeStickyBar" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;position:sticky;top:0;z-index:20;background:var(--bg-card);margin:-1.25rem -1.25rem .6rem;padding:.7rem 1rem;border-bottom:1px solid var(--border)">
-                        <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="_feeBack()" id="feeBackBtn">← 홈</button>
                         <span style="flex:1;min-width:80px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.95rem" id="feeTitle">시술 수가표</span>
                         <button onclick="openMixManager()" title="주사제 믹스 관리 (주사마취 등)" style="font-size:.95rem;line-height:1;padding:.25rem .4rem;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">🧪</button>
                         <button id="feeAnesToggle" onclick="feeToggleInclAnes()" title="분당수익 계산에 연고마취 시간 포함/제외" style="font-size:.95rem;line-height:1;padding:.25rem .4rem;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">🧴</button>
-                        <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .5rem;flex-shrink:0;white-space:nowrap" onclick="feeAddMajor()">+ 대분류</button>
+                        <button id="feeBadgesToggle" onclick="feeToggleBadges()" title="가격 외 정보(회차·시간·소모품·분당수익) 표시/숨김" style="font-size:.95rem;line-height:1;padding:.25rem .4rem;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">👁</button>
                         <input type="text" id="feeQ" placeholder="검색" oninput="renderFeeList()"
-                            style="width:92px;padding:.35rem .5rem;font-size:.8rem;border:1px solid var(--border);border-radius:6px;flex-shrink:0">
+                            style="width:88px;padding:.35rem .5rem;font-size:.8rem;border:1px solid var(--border);border-radius:6px;flex-shrink:0">
+                        <button class="btn btn-secondary" style="font-size:.7rem;padding:.3rem .5rem;flex-shrink:0;white-space:nowrap" onclick="feeAddMajor()">+ 대분류</button>
+                        <button onclick="_feeBack()" id="feeBackBtn" title="뒤로가기" aria-label="뒤로가기" style="font-size:1rem;line-height:1;padding:.25rem .5rem;flex-shrink:0;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">←</button>
                     </div>
                     <div id="feeList" style="margin-top:.6rem;max-width:100%;overflow-x:hidden"></div>
                 </div>
@@ -6953,7 +6954,7 @@
                 const q=document.getElementById('feeQ');
                 if(q) q.value=(opts.search!=null?opts.search:'');
                 const btn=document.getElementById('feeBackBtn');
-                if(btn) btn.textContent=(_feeOrigin==='consult')?'← 상담':'← 홈';
+                if(btn) btn.title=(_feeOrigin==='consult')?'상담으로':'홈으로';
                 renderFeeList();
             }else if(view==='consult'){
                 await ensureConsultData();
@@ -7548,13 +7549,14 @@
                             ${_vMove}
                             <div style="flex:1 1 40%;min-width:100px;font-size:.85rem;color:#374151;word-break:break-word;line-height:1.4">
                                 ${_esc(v.label)}
-                                ${_feeTagsHtml(v.tags)}
+                                ${_feeShowBadges?_feeTagsHtml(v.tags):''}
                             </div>
+                            ${_feeShowBadges?`
                             ${v.sessions?`<div style="font-size:.74rem;color:#6d28d9;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;padding:1px 7px;flex-shrink:0;font-weight:600">${v.sessions}회</div>`:''}
                             ${_timeBadge}
                             ${_supBadge}
                             ${_planBadge}
-                            ${_recBadge}
+                            ${_recBadge}`:''}
                             <div style="font-size:.85rem;color:#111827;font-weight:600;flex-shrink:0">${v.unitPriced?`₩${(Number(v.unitPrice)||0).toLocaleString()}<span style="font-size:.68rem;color:var(--text-muted)">/${_esc(v.unit||'단위')}</span>`:`₩${priceWon.toLocaleString()}`}</div>
                         </div>`;
                     }).join('');
@@ -7611,6 +7613,7 @@
         function renderFeeList(){
             const wrap=document.getElementById('feeList');
             if(!wrap) return;
+            _feeSyncBadgeBtn();
             const cats=_feeData||[];
             const q=(document.getElementById('feeQ')?.value||'').toLowerCase().trim();
             if(!cats.length){
@@ -7766,6 +7769,20 @@
         function feeToggleInclAnes(){
             _feeInclAnes=!_feeInclAnes;
             try{ localStorage.setItem('staff_fee_incl_anes_v1', _feeInclAnes?'1':'0'); }catch(_){}
+            renderFeeList();
+        }
+        // 보기 모드에서 가격 외 배지(회차·시간·소모품·분당수익·태그) 표시 여부 — 가시성 토글
+        let _feeShowBadges=(function(){ try{return localStorage.getItem('staff_fee_show_badges_v1')!=='0';}catch(_){return true;} })();
+        function _feeSyncBadgeBtn(){
+            const b=document.getElementById('feeBadgesToggle'); if(!b) return;
+            b.textContent=_feeShowBadges?'👁':'🙈';
+            b.style.opacity=_feeShowBadges?'1':'.55';
+            b.title=_feeShowBadges?'가격 외 정보 숨기기 (현재: 표시 중)':'가격 외 정보 표시하기 (현재: 가격만)';
+        }
+        function feeToggleBadges(){
+            _feeShowBadges=!_feeShowBadges;
+            try{ localStorage.setItem('staff_fee_show_badges_v1', _feeShowBadges?'1':'0'); }catch(_){}
+            _feeSyncBadgeBtn();
             renderFeeList();
         }
         // 순수익(1회당) = (정가÷회차) − 소모품비, 분당수익 = 순수익 ÷ 소요시간
