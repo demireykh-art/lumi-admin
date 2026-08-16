@@ -350,14 +350,16 @@
             <!-- 식사 탭 v3 (출근일 기준 일할 적립) -->
             <div class="tab-content" id="tab-meal">
                 <div class="card">
-                    <div class="card-title">이번 달 식대 현황</div>
-                    <div class="info-row"><span class="info-label">출근 일수 × 1일 지급액</span><span class="info-value" id="mealAccrualBasis">0일 × ₩14,000</span></div>
-                    <div class="info-row"><span class="info-label">누적 지급액</span><span class="info-value" id="mealAccrued">₩0</span></div>
+                    <div class="card-title" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">이번 달 식대 현황
+                        <span id="mealModeBadge" style="font-size:.68rem;font-weight:600;padding:.1rem .45rem;border-radius:99px;background:#ede9fe;color:#5b21b6">월 한도제</span>
+                    </div>
+                    <div class="info-row"><span class="info-label" id="mealBasisLabel">월 한도</span><span class="info-value" id="mealAccrualBasis">₩0</span></div>
+                    <div class="info-row" id="mealAccruedRow" style="display:none"><span class="info-label">누적 지급액</span><span class="info-value" id="mealAccrued">₩0</span></div>
                     <div class="info-row"><span class="info-label">사용 금액</span><span class="info-value" id="mealUsed">₩0</span></div>
-                    <div class="info-row"><span class="info-label">남은 금액 <span style="font-size:.7rem;color:var(--text-muted)">(다음날 이월)</span></span><span class="info-value" id="mealRemain" style="color:var(--green);font-weight:700">₩0</span></div>
+                    <div class="info-row"><span class="info-label">남은 금액 <span id="mealRemainCarry" style="font-size:.7rem;color:var(--text-muted);display:none">(다음날 이월)</span></span><span class="info-value" id="mealRemain" style="color:var(--green);font-weight:700">₩0</span></div>
                     <div class="progress-bar"><div class="progress-fill" id="mealProgress" style="width:0%"></div></div>
                     <div id="mealTodayNotice" style="font-size:.75rem;margin-top:.5rem;line-height:1.5"></div>
-                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:.4rem;line-height:1.5">※ 출근한 날에만 1일 지급액이 적립되며, 남은 금액은 같은 달 안에서 이월·누적됩니다. 매월 1일 리셋되고 출근하지 않은 날짜로는 사용할 수 없습니다.</div>
+                    <div id="mealPolicyNote" style="font-size:.7rem;color:var(--text-muted);margin-top:.4rem;line-height:1.5"></div>
                 </div>
                 <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
                     <button class="btn btn-primary" onclick="openPersonalMealModal()" style="flex:1;margin:0">🍽 개인 식사</button>
@@ -1177,9 +1179,17 @@
                     <label class="form-label" style="font-weight:700">참여 인원 선택</label>
                     <div id="mealStaffList" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem"></div>
                 </div>
-                <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+                <div style="font-size:.75rem;color:var(--text-secondary);font-weight:600;margin-bottom:.3rem">음식 금액 분배</div>
+                <div style="display:flex;gap:.5rem;margin-bottom:.6rem">
                     <button class="btn btn-outline" id="mealModeEven" style="flex:1;font-size:.85rem" onclick="setMealMode('even')">1/N 균등</button>
                     <button class="btn btn-outline" id="mealModeManual" style="flex:1;font-size:.85rem" onclick="setMealMode('manual')">개별 입력</button>
+                </div>
+                <div id="mealDeliveryModeRow" style="display:none;margin-bottom:.75rem">
+                    <div style="font-size:.75rem;color:var(--text-secondary);font-weight:600;margin-bottom:.3rem">배달비 분배</div>
+                    <div style="display:flex;gap:.5rem">
+                        <button class="btn btn-outline" id="mealDelivEven" style="flex:1;font-size:.85rem" onclick="setMealDeliveryMode('even')">1/N 균등</button>
+                        <button class="btn btn-outline" id="mealDelivRatio" style="flex:1;font-size:.85rem" onclick="setMealDeliveryMode('ratio')">음식값 비율</button>
+                    </div>
                 </div>
                 <div id="mealSplitDetail"></div>
                 <div id="mealValidation" style="font-size:.8rem;margin-top:.5rem;min-height:1.2rem"></div>
@@ -2148,7 +2158,14 @@
                     <label class="form-label">퇴사일 <span style="font-size:.75rem;color:var(--text-muted)">(다음날부터 자동 '퇴사' 처리 · 이후 신청 연차 자동 정리)</span></label>
                     <input type="date" class="form-input" id="seEmpResignDate">
                 </div>
-                <div class="form-group"><label class="form-label">식대 1일 지급액 (원) <span style="font-size:.72rem;color:var(--text-muted)">출근한 날만 적립</span></label><input type="number" class="form-input" id="seEmpMealDaily" value="14000" placeholder="기본 14,000원"><div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">출근일수 × 지급액이 그 달의 한도가 됩니다. 남은 금액은 같은 달 안에서 이월·누적되고 매월 1일 리셋됩니다.</div></div>
+                <div class="form-group" style="border-top:1px dashed var(--border);padding-top:.75rem">
+                    <label class="form-label" style="font-weight:600">🍚 식대</label>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin:.15rem 0 .5rem">적용 방식(월 한도제 / 출근일 일할 적립제)은 STAFF 관리 &gt; OT·식사 탭에서 전환합니다. 아래는 이 직원의 개별 금액이며, 비워두면 정책 기본값을 씁니다.</div>
+                    <label class="form-label" style="font-size:.8rem">월 한도 (원) <span style="font-size:.72rem;color:var(--text-muted)">— 월 한도제일 때</span></label>
+                    <input type="number" class="form-input" id="seEmpMealLimit" placeholder="기본 300,000원" style="margin-bottom:.5rem">
+                    <label class="form-label" style="font-size:.8rem">1일 지급액 (원) <span style="font-size:.72rem;color:var(--text-muted)">— 일할 적립제일 때 (출근한 날만)</span></label>
+                    <input type="number" class="form-input" id="seEmpMealDaily" placeholder="기본 14,000원">
+                </div>
                 <div class="form-group">
                     <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem">
                         <input type="checkbox" id="seEmpLocationExempt" style="width:16px;height:16px;accent-color:var(--primary)">
@@ -3675,6 +3692,7 @@
                     loadLunchOT(),
                     loadMealRecords(),
                     loadMealAttendance(),
+                    loadMealPolicy(),
                     loadIncentiveItems(),
                     loadIncentiveRecords(),
                     loadLeaveRequests(),
@@ -4001,15 +4019,49 @@
         }
         
         // ═══════════════════════════════════════════════════════════
-        // 식대 정책 v3 — 출근일 기준 일할 적립 · 월 내 이월 누적 · 월초 리셋
-        //   · 출근(checkIn) 기록이 있는 날마다 MEAL_DAILY_DEFAULT(기본 14,000원) 적립
+        // 식대 정책 v4 — 투트랙 (월 한도 / 출근일 일할 적립), 적용 시작 월 기준 전환
+        //
+        //  [monthly] 월 한도제 (기존 방식)
+        //   · 직원별 월 한도(employees.mealLimit, 기본 300,000원) 안에서 자유 사용
+        //   · 출근 여부와 무관 · 매월 1일 리셋
+        //
+        //  [daily] 출근일 일할 적립제
+        //   · 출근(checkIn) 기록이 있는 날마다 1일 지급액(employees.mealDaily, 기본 14,000원) 적립
         //   · 쓰고 남은 금액은 같은 달 안에서 다음날로 이월되어 누적 사용 가능
-        //   · 매월 1일 리셋 (적립·사용 모두 해당 월 기준으로만 집계)
-        //   · 출근하지 않은 날짜로는 사용 불가 (그 날짜에 적립 자체가 없음)
+        //   · 매월 1일 리셋 · 출근하지 않은 날짜로는 사용 불가(그 날짜에 적립 자체가 없음)
+        //
+        //  전환은 settings/mealPolicy.history 에 {mode, from:'YYYY-MM'} 로 쌓인다.
+        //  어떤 달의 모드는 "from <= 그 달" 중 가장 늦은 항목으로 결정되므로,
+        //  모드를 바꿔도 과거 달의 집계는 그때의 방식 그대로 유지된다.
         // ═══════════════════════════════════════════════════════════
-        const MEAL_DAILY_DEFAULT=14000;   // 출근 1일당 지급액 (원)
-        let mealAttendance=[];            // 전 직원 출근 기록 평탄화 (식대 적립 계산용)
-        let mealAttendanceByYm={};        // {ym: [attendance...]} — 월 단위로 갱신
+        const MEAL_DAILY_DEFAULT=14000;    // 출근 1일당 지급액 기본값 (원)
+        const MEAL_MONTHLY_DEFAULT=300000; // 월 한도 기본값 (원)
+        let mealAttendance=[];             // 전 직원 출근 기록 평탄화 (식대 적립 계산용)
+        let mealAttendanceByYm={};         // {ym: [attendance...]} — 월 단위로 갱신
+        let mealPolicy={mode:'monthly', history:[], monthlyLimit:MEAL_MONTHLY_DEFAULT, dailyAmount:MEAL_DAILY_DEFAULT};
+
+        async function loadMealPolicy(){
+            try{
+                const d=await db.collection('settings').doc('mealPolicy').get();
+                if(d.exists) mealPolicy=Object.assign({mode:'monthly',history:[],monthlyLimit:MEAL_MONTHLY_DEFAULT,dailyAmount:MEAL_DAILY_DEFAULT}, d.data());
+            }catch(e){console.error('식대 정책 로드 오류:',e);}
+        }
+
+        // 해당 월에 적용되는 정책 — history 에서 from <= ym 중 가장 늦은 항목.
+        // 전환 이력보다 앞선 달은 항상 기존 방식(월 한도제)으로 남는다.
+        function getMealPolicyForMonth(ym){
+            const all=(mealPolicy.history||[]).filter(h=>h&&h.mode&&h.from);
+            const hist=all.filter(h=>String(h.from)<=String(ym))
+                .sort((a,b)=>String(a.from).localeCompare(String(b.from)));
+            const mode=hist.length ? hist[hist.length-1].mode
+                     : (all.length ? 'monthly' : (mealPolicy.mode||'monthly'));
+            return {
+                mode: mode==='daily'?'daily':'monthly',
+                monthlyLimit: Number(mealPolicy.monthlyLimit)>0?Number(mealPolicy.monthlyLimit):MEAL_MONTHLY_DEFAULT,
+                dailyAmount: Number(mealPolicy.dailyAmount)>0?Number(mealPolicy.dailyAmount):MEAL_DAILY_DEFAULT
+            };
+        }
+        function getMealModeLabel(mode){ return mode==='daily'?'출근일 일할 적립제':'월 한도제'; }
 
         async function loadMealAttendance(ym){
             const target=ym||getYM();
@@ -4034,11 +4086,18 @@
                 || null;
         }
 
-        // 1일 지급액 — employees.mealDaily 로 개별 설정 가능, 없으면 기본 14,000원
-        function getMealDailyRate(empOrId){
+        // 1일 지급액 — employees.mealDaily 로 개별 설정 가능, 없으면 정책 기본값
+        function getMealDailyRate(empOrId, pol){
             const emp=(empOrId&&typeof empOrId==='object')?empOrId:getMealEmp(empOrId);
             const v=Number(emp?.mealDaily);
-            return (Number.isFinite(v)&&v>0)?v:MEAL_DAILY_DEFAULT;
+            return (Number.isFinite(v)&&v>0)?v:((pol&&pol.dailyAmount)||MEAL_DAILY_DEFAULT);
+        }
+
+        // 월 한도 — employees.mealLimit 로 개별 설정 가능, 없으면 정책 기본값
+        function getMealMonthlyLimit(empOrId, pol){
+            const emp=(empOrId&&typeof empOrId==='object')?empOrId:getMealEmp(empOrId);
+            const v=Number(emp?.mealLimit);
+            return (Number.isFinite(v)&&v>0)?v:((pol&&pol.monthlyLimit)||MEAL_MONTHLY_DEFAULT);
         }
 
         // 해당 월(선택적으로 throughDate 까지)의 출근일 집합 — checkIn 이 있는 날만 인정
@@ -4057,11 +4116,19 @@
             return days;
         }
 
-        // 해당 날짜에 출근 기록이 있는지 (없으면 그 날짜로는 식대 사용 불가)
+        // 해당 날짜에 출근 기록이 있는지 (일할 적립제에서만 사용 가능 여부를 좌우)
         function hasMealWorkDay(empId, date){
             const d=String(date||'');
             if(!d) return false;
             return getMealWorkDays(empId, d.substring(0,7), d).has(d);
+        }
+
+        // 그 날짜에 식대 사용이 허용되는지 — 월 한도제는 출근 여부와 무관
+        function isMealDateAllowed(empId, date){
+            const d=String(date||'');
+            if(!d) return false;
+            if(getMealPolicyForMonth(d.substring(0,7)).mode!=='daily') return true;
+            return hasMealWorkDay(empId, d);
         }
 
         function getMealUsed(empId, ym, throughDate){
@@ -4074,37 +4141,53 @@
             }).reduce((sum,m)=>sum+(Number(m.amount)||0),0);
         }
 
-        // 식대 잔액 — throughDate 를 주면 그 날짜까지 누적 기준(이월분 포함)으로 계산
+        // 식대 잔액 — 그 달의 정책 모드에 따라 계산.
+        //   monthly: 월 한도 − 그 달 사용액 (throughDate 무시 — 한도가 날짜에 따라 늘지 않음)
+        //   daily  : throughDate 까지의 출근일 적립 − 그때까지 사용액 (이월분 포함)
         function getMealBalance(empId, ym, throughDate){
-            const rate=getMealDailyRate(empId);
+            const pol=getMealPolicyForMonth(ym);
+            if(pol.mode!=='daily'){
+                const limit=getMealMonthlyLimit(empId, pol);
+                const used=getMealUsed(empId, ym, null);
+                return {mode:'monthly', limit, rate:null, days:null, accrued:limit, used, remain:limit-used};
+            }
+            const rate=getMealDailyRate(empId, pol);
             const days=getMealWorkDays(empId, ym, throughDate).size;
             const accrued=rate*days;
             const used=getMealUsed(empId, ym, throughDate);
-            return {rate, days, accrued, used, remain:accrued-used};
+            return {mode:'daily', limit:accrued, rate, days, accrued, used, remain:accrued-used};
         }
 
         function renderMeal(){
             const ym=getYM();
             const today=getToday();
+            const daily=getMealPolicyForMonth(ym).mode==='daily';
             const bal=getMealBalance(currentUser.id, ym);
             const used=bal.used;
             const remain=Math.max(0,bal.remain);
             const percent=bal.accrued>0?Math.min(100,(used/bal.accrued)*100):(used>0?100:0);
 
-            document.getElementById('mealAccrualBasis').textContent=bal.days+'일 × '+formatCurrency(bal.rate);
+            document.getElementById('mealModeBadge').textContent=daily?'출근일 일할 적립제':'월 한도제';
+            document.getElementById('mealBasisLabel').textContent=daily?'출근 일수 × 1일 지급액':'월 한도';
+            document.getElementById('mealAccrualBasis').textContent=daily?(bal.days+'일 × '+formatCurrency(bal.rate)):formatCurrency(bal.limit);
+            document.getElementById('mealAccruedRow').style.display=daily?'':'none';
             document.getElementById('mealAccrued').textContent=formatCurrency(bal.accrued);
+            document.getElementById('mealRemainCarry').style.display=daily?'':'none';
             document.getElementById('mealUsed').textContent=formatCurrency(used);
             document.getElementById('mealRemain').textContent=formatCurrency(remain);
             document.getElementById('mealRemain').style.color=remain>0?'var(--green)':'var(--red)';
+            document.getElementById('mealPolicyNote').textContent=daily
+                ? '※ 출근한 날에만 1일 지급액이 적립되며, 남은 금액은 같은 달 안에서 이월·누적됩니다. 매월 1일 리셋되고 출근하지 않은 날짜로는 사용할 수 없습니다.'
+                : '※ 월 한도 안에서 자유롭게 사용하며, 매월 1일 리셋됩니다. (출근 여부와 무관)';
 
             const notice=document.getElementById('mealTodayNotice');
             if(notice){
-                if(today.startsWith(ym)&&!hasMealWorkDay(currentUser.id, today)){
-                    notice.innerHTML='<span style="color:var(--red)">⚠ 오늘 출근 기록이 없어 오늘 날짜로는 식대를 사용할 수 없습니다.</span>';
-                }else if(today.startsWith(ym)){
-                    notice.innerHTML='<span style="color:var(--green)">✅ 오늘 출근 완료 — 오늘 지급액 '+formatCurrency(bal.rate)+' 적립됨 (이월 포함 사용 가능액 '+formatCurrency(remain)+')</span>';
-                }else{
+                if(!daily||!today.startsWith(ym)){
                     notice.innerHTML='';
+                }else if(!hasMealWorkDay(currentUser.id, today)){
+                    notice.innerHTML='<span style="color:var(--red)">⚠ 오늘 출근 기록이 없어 오늘 날짜로는 식대를 사용할 수 없습니다.</span>';
+                }else{
+                    notice.innerHTML='<span style="color:var(--green)">✅ 오늘 출근 완료 — 오늘 지급액 '+formatCurrency(bal.rate)+' 적립됨 (이월 포함 사용 가능액 '+formatCurrency(remain)+')</span>';
                 }
             }
 
@@ -4758,7 +4841,8 @@
         }
         
         // ===== 식사 모듈 v3 (SSoT: mealRecords 합산 · 출근일 기준 적립) =====
-        let mealMode='even';
+        let mealMode='even';            // 음식 금액 분배: 'even' | 'manual'
+        let mealDeliveryMode='even';    // 배달비 분배: 'even'(1/N) | 'ratio'(음식값 비율)
         let mealAllStaff=[];
         let mealSelectedStaff={};
         let mealManualAmounts={};
@@ -4770,11 +4854,13 @@
             return Math.max(0, getMealBalance(empId, ym, d||null).remain);
         }
 
-        // 해당 날짜에 입력 가능한지 + 사유 — 출근 안 한 날은 사용 불가
+        // 해당 날짜에 입력 가능한지 + 사유
+        //   · 일할 적립제: 출근 안 한 날은 사용 불가 + 그 날짜까지 누적 잔액 안에서만
+        //   · 월 한도제: 출근 무관, 월 한도 안에서만
         function checkMealEligibility(empId, date, amount){
             const name=getMealEmp(empId)?.name||empId;
             if(!date) return {ok:false, reason:'날짜를 선택해주세요.'};
-            if(!hasMealWorkDay(empId, date))
+            if(!isMealDateAllowed(empId, date))
                 return {ok:false, reason:`${name}: ${date} 출근 기록이 없어 식대를 사용할 수 없습니다.`};
             const ym=date.substring(0,7);
             const atDate=getMealBalance(empId, ym, date);      // 해당 날짜까지 누적 잔액
@@ -4809,6 +4895,7 @@
             mealManualAmounts={};
             loadMealStaffList();
             setMealMode('even');
+            setMealDeliveryMode('even');
             document.getElementById('mealSplitDetail').innerHTML='';
             document.getElementById('mealValidation').innerHTML='';
             document.getElementById('mealSaveBtn').disabled=true;
@@ -4824,7 +4911,7 @@
             if(date) await loadMealAttendance(date.substring(0,7));
             // 출근하지 않은 직원이 선택돼 있으면 해제
             Object.keys(mealSelectedStaff).forEach(id=>{
-                if(!hasMealWorkDay(id, date)) delete mealSelectedStaff[id];
+                if(!isMealDateAllowed(id, date)) delete mealSelectedStaff[id];
             });
             renderMealStaffList();
             renderMealSplit();
@@ -4852,7 +4939,7 @@
             const hint=document.getElementById('personalMealRemainHint');
             if(!hint) return;
             if(!date){hint.innerHTML='날짜를 선택해주세요.';return;}
-            if(!hasMealWorkDay(currentUser.id, date)){
+            if(!isMealDateAllowed(currentUser.id, date)){
                 hint.innerHTML=`<span style="color:var(--red)">${date} 출근 기록 없음 — 사용 불가</span>`;
                 return;
             }
@@ -4860,9 +4947,11 @@
             const bal=getMealBalance(currentUser.id, ym, date);
             const usable=Math.max(0, Math.min(bal.remain, getMealBalance(currentUser.id, ym, null).remain));
             const over=total>usable;
+            const basis=bal.mode==='daily'
+                ? `${date} 기준 · 출근 ${bal.days}일 × ${formatCurrency(bal.rate)} = ${formatCurrency(bal.accrued)} − 사용 ${formatCurrency(bal.used)}`
+                : `${ym} 월 한도 ${formatCurrency(bal.limit)} − 사용 ${formatCurrency(bal.used)}`;
             hint.innerHTML=`<strong style="${over?'color:var(--red)':''}">${formatCurrency(usable)}</strong>`
-                +`<div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem">`
-                +`${date} 기준 · 출근 ${bal.days}일 × ${formatCurrency(bal.rate)} = ${formatCurrency(bal.accrued)} − 사용 ${formatCurrency(bal.used)}</div>`
+                +`<div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem">${basis}</div>`
                 +(over?`<div style="font-size:.72rem;color:var(--red);margin-top:.2rem">⚠ 잔액 초과</div>`:'');
         }
 
@@ -4919,7 +5008,7 @@
             let absent=0;
             container.innerHTML=mealAllStaff.map(emp=>{
                 const sel=!!mealSelectedStaff[emp.id];
-                const worked=date?hasMealWorkDay(emp.id, date):true;
+                const worked=date?isMealDateAllowed(emp.id, date):true;
                 if(!worked) absent++;
                 if(!worked){
                     return `<button disabled title="${date} 출근 기록 없음 — 식대 사용 불가" style="padding:.4rem .7rem;border:1px dashed var(--border);background:var(--bg);color:var(--text-muted);font-size:.8rem;border-radius:4px;cursor:not-allowed;text-decoration:line-through">${emp.name||emp.id}</button>`;
@@ -4933,7 +5022,7 @@
 
         function toggleMealStaff(id){
             const date=document.getElementById('mealDate')?.value||'';
-            if(date&&!hasMealWorkDay(id, date)){
+            if(date&&!isMealDateAllowed(id, date)){
                 alert((getMealEmp(id)?.name||id)+': '+date+' 출근 기록이 없어 식대를 사용할 수 없습니다.');
                 return;
             }
@@ -4956,48 +5045,93 @@
             const remainder=total-(base*count);
             return Array.from({length:count},(_,i)=>base+(i<remainder?1:0));
         }
-        
+
+        // 가중치(=각자 음식값) 비율로 나누되 1원 단위까지 정확히 합이 맞도록 배분
+        function splitByRatio(total, weights){
+            const n=weights.length;
+            if(n<=0) return [];
+            const sum=weights.reduce((s,v)=>s+v,0);
+            if(sum<=0) return splitEvenly(total, n);
+            const raw=weights.map(w=>total*w/sum);
+            const out=raw.map(v=>Math.floor(v));
+            let rest=total-out.reduce((s,v)=>s+v,0);
+            const order=raw.map((v,i)=>({i, frac:v-Math.floor(v)})).sort((a,b)=>b.frac-a.frac);
+            for(let k=0;k<rest;k++) out[order[k%n].i]++;
+            return out;
+        }
+
+        // 참여자별 음식/배달비 분배 계산 — 음식과 배달비를 따로 나눈 뒤 합산한다.
+        //   음식  : 1/N 균등 또는 개별 입력
+        //   배달비: 1/N 균등 또는 음식값 비율 (mealDeliveryMode)
+        function computeMealSplit(selected){
+            const food=parseInt(document.getElementById('mealFoodAmount')?.value)||0;
+            const delivery=parseInt(document.getElementById('mealDeliveryFee')?.value)||0;
+            const n=selected.length;
+            const foods=(mealMode==='even')
+                ? splitEvenly(food, n)
+                : selected.map(id=>Number(mealManualAmounts[id])||0);
+            const foodSum=foods.reduce((s,v)=>s+v,0);
+            const deliveries=(delivery<=0)
+                ? foods.map(()=>0)
+                : (mealDeliveryMode==='ratio' ? splitByRatio(delivery, foods) : splitEvenly(delivery, n));
+            return {
+                food, delivery, foods, deliveries, foodSum,
+                amounts: foods.map((f,i)=>f+deliveries[i]),
+                total: food+delivery
+            };
+        }
+
         function renderMealSplit(){
             const container=document.getElementById('mealSplitDetail');
             const selected=Object.keys(mealSelectedStaff);
             const total=getMealTotal();
-            const food=parseInt(document.getElementById('mealFoodAmount')?.value)||0;
-            const delivery=parseInt(document.getElementById('mealDeliveryFee')?.value)||0;
             const date=document.getElementById('mealDate')?.value||'';
+
+            // 배달비 분배 방식 선택줄은 배달비가 있을 때만 노출
+            const delivery=parseInt(document.getElementById('mealDeliveryFee')?.value)||0;
+            const dRow=document.getElementById('mealDeliveryModeRow');
+            if(dRow) dRow.style.display=delivery>0?'':'none';
 
             if(!selected.length||!total){container.innerHTML='';validateMeal();return;}
 
-            if(mealMode==='even'){
-                const amounts=splitEvenly(total, selected.length);
-                const foodSplit=splitEvenly(food, selected.length);
-                const deliverySplit=splitEvenly(delivery, selected.length);
-                container.innerHTML=selected.map((id,i)=>{
-                    const emp=mealAllStaff.find(e=>e.id===id);
-                    const name=emp?.name||id;
-                    const remain=getMealRemain(id, date);
-                    const over=amounts[i]>remain;
-                    const deliveryNote=deliverySplit[i]>0?` <span style="font-size:.7rem;color:var(--text-muted)">(배달 ${deliverySplit[i].toLocaleString()})</span>`:'';
+            const sp=computeMealSplit(selected);
+            container.innerHTML=selected.map((id,i)=>{
+                const emp=mealAllStaff.find(e=>e.id===id);
+                const name=emp?.name||id;
+                const remain=getMealRemain(id, date);
+                const over=sp.amounts[i]>remain;
+                const deliveryNote=sp.deliveries[i]>0
+                    ? `<span style="font-size:.7rem;color:var(--text-muted)"> + 배달 ${sp.deliveries[i].toLocaleString()}</span>` : '';
+                const left=`<span style="min-width:50px">${name} <span style="font-size:.7rem;color:var(--text-muted)">잔액 ${formatCurrency(remain)}</span></span>`;
+                if(mealMode==='even'){
                     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
-                        <span>${name} <span style="font-size:.7rem;color:var(--text-muted)">잔액 ${formatCurrency(remain)}</span></span>
-                        <span style="font-weight:600;${over?'color:var(--red)':''}">₩${amounts[i].toLocaleString()}${deliveryNote}${over?' ⚠':''}
-                        </span>
+                        ${left}
+                        <span style="font-weight:600;${over?'color:var(--red)':''}">₩${sp.amounts[i].toLocaleString()}${deliveryNote}${over?' ⚠':''}</span>
                     </div>`;
-                }).join('');
-            }else{
-                container.innerHTML=selected.map(id=>{
-                    const emp=mealAllStaff.find(e=>e.id===id);
-                    const name=emp?.name||id;
-                    const remain=getMealRemain(id, date);
-                    const val=mealManualAmounts[id]||'';
-                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);gap:.5rem">
-                        <span style="min-width:50px">${name} <span style="font-size:.7rem;color:var(--text-muted)">잔액 ${formatCurrency(remain)}</span></span>
-                        <input type="number" value="${val}" placeholder="금액" style="width:90px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="mealManualAmounts['${id}']=parseInt(this.value)||0;validateMeal()">
-                    </div>`;
-                }).join('');
+                }
+                const val=mealManualAmounts[id]||'';
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);gap:.5rem">
+                    ${left}
+                    <span style="display:flex;align-items:center;gap:.35rem">
+                        <input type="number" value="${val}" placeholder="음식" style="width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="mealManualAmounts['${id}']=parseInt(this.value)||0;renderMealSplit()">
+                        <span style="font-size:.72rem;${over?'color:var(--red)':'color:var(--text-muted)'};min-width:74px;text-align:right">${deliveryNote?'배달 '+sp.deliveries[i].toLocaleString()+' · ':''}계 ${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
+                    </span>
+                </div>`;
+            }).join('');
+
+            if(sp.delivery>0){
+                container.innerHTML+=`<div style="font-size:.72rem;color:var(--text-muted);padding:.4rem 0">배달비 ${formatCurrency(sp.delivery)} → ${mealDeliveryMode==='ratio'?'음식값 비율':'1/N 균등'} 분배 후 각자 음식값에 합산</div>`;
             }
             validateMeal();
         }
-        
+
+        function setMealDeliveryMode(mode){
+            mealDeliveryMode=mode;
+            document.getElementById('mealDelivEven').className='btn '+(mode==='even'?'btn-primary':'btn-outline');
+            document.getElementById('mealDelivRatio').className='btn '+(mode==='ratio'?'btn-primary':'btn-outline');
+            renderMealSplit();
+        }
+
         function validateMeal(){
             const el=document.getElementById('mealValidation');
             const selected=Object.keys(mealSelectedStaff);
@@ -5007,19 +5141,14 @@
             if(!selected.length||!total){el.innerHTML='';btn.disabled=true;return;}
 
             let errors=[];
+            const sp=computeMealSplit(selected);
             if(!date){
                 errors.push('날짜를 선택해주세요.');
-            }else if(mealMode==='even'){
-                const amounts=splitEvenly(total, selected.length);
-                selected.forEach((id,i)=>{
-                    const chk=checkMealEligibility(id, date, amounts[i]);
-                    if(!chk.ok) errors.push(chk.reason);
-                });
             }else{
-                const sum=selected.reduce((s,id)=>s+(mealManualAmounts[id]||0),0);
-                if(sum!==total) errors.push(`입력 합계(${formatCurrency(sum)}) ≠ 총액(${formatCurrency(total)})`);
-                selected.forEach(id=>{
-                    const chk=checkMealEligibility(id, date, mealManualAmounts[id]||0);
+                if(mealMode==='manual'&&sp.foodSum!==sp.food)
+                    errors.push(`음식 개별 입력 합계(${formatCurrency(sp.foodSum)}) ≠ 음식 금액(${formatCurrency(sp.food)})`);
+                selected.forEach((id,i)=>{
+                    const chk=checkMealEligibility(id, date, sp.amounts[i]);
                     if(!chk.ok) errors.push(chk.reason);
                 });
             }
@@ -5042,17 +5171,19 @@
             if(!date||!total||!selected.length){alert('날짜, 금액, 인원을 모두 입력해주세요.');return;}
             
             const groupId=Date.now().toString(36)+Math.random().toString(36).substr(2,4);
-            
-            // 각 직원별 차감 금액 계산
-            const amounts=mealMode==='even'?splitEvenly(total,selected.length):selected.map(id=>mealManualAmounts[id]||0);
-            const foodAmounts=mealMode==='even'?splitEvenly(food,selected.length):null;
-            const deliveryAmounts=mealMode==='even'?splitEvenly(delivery,selected.length):null;
-            
+
+            // 각 직원별 음식·배달비 분배 (배달비는 따로 나눈 뒤 음식값에 합산)
+            const sp=computeMealSplit(selected);
+            if(mealMode==='manual'&&sp.foodSum!==food){
+                alert(`음식 개별 입력 합계(${formatCurrency(sp.foodSum)})가 음식 금액(${formatCurrency(food)})과 다릅니다.`);
+                return;
+            }
+
             // 출근 여부 + 잔액 재검증 (최신 데이터 기준)
             await loadMealAttendance(date.substring(0,7));
             await loadMealRecords();
             for(let i=0;i<selected.length;i++){
-                const chk=checkMealEligibility(selected[i], date, amounts[i]);
+                const chk=checkMealEligibility(selected[i], date, sp.amounts[i]);
                 if(!chk.ok){ alert(chk.reason); renderMealStaffList(); renderMealSplit(); return; }
             }
 
@@ -5066,15 +5197,16 @@
                         employeeId:empId,
                         employeeName:emp?.name||empId,
                         date:date,
-                        amount:amounts[i],
-                        foodAmount:foodAmounts?foodAmounts[i]:amounts[i],
-                        deliveryFee:deliveryAmounts?deliveryAmounts[i]:0,
+                        amount:sp.amounts[i],
+                        foodAmount:sp.foods[i],
+                        deliveryFee:sp.deliveries[i],
                         memo:memo,
                         yearMonth:date.substring(0,7),
                         groupId:groupId,
                         totalFoodAmount:food,
                         totalDeliveryFee:delivery,
                         splitMode:mealMode,
+                        deliverySplitMode:mealDeliveryMode,
                         headCount:selected.length,
                         createdBy:currentUser?.name||currentUser?.id||'staff',
                         createdAt:new Date().toISOString()
@@ -10739,6 +10871,7 @@
                     db.collection('revenue').get().catch(()=>({docs:[]})),
                     db.collection('mealRecords').get().catch(()=>({docs:[]}))
                 ]);
+                await loadMealPolicy();
                 _staffAdminEmployees=empS.docs.map(d=>({id:d.id,...d.data()}))
                     .filter(e=>e.id!==SHARED_ACCOUNT_ID)
                     .sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
@@ -11003,7 +11136,7 @@
             g('seEmpRole').value='esthetician'; g('seEmpJoinDate').value='';
             g('seEmpSalary').value=''; g('seEmpHourly').value='12000';
             g('seEmpBirthday').value=''; g('seEmpStatus').value='active';
-            g('seEmpResignDate').value=''; g('seEmpMealDaily').value=String(MEAL_DAILY_DEFAULT);
+            g('seEmpResignDate').value=''; g('seEmpMealLimit').value=''; g('seEmpMealDaily').value='';
             g('seEmpLocationExempt').checked=false;
             g('seEmpIncType').value='none'; g('seEmpIncPercent').value='0';
             g('seEmpIncRounding').value='0'; g('seEmpIncJapan').checked=false;
@@ -11031,7 +11164,8 @@
                     g('seEmpBirthday').value=emp.birthday||'';
                     g('seEmpStatus').value=emp.status||'active';
                     g('seEmpResignDate').value=emp.resignDate||'';
-                    g('seEmpMealDaily').value=emp.mealDaily||MEAL_DAILY_DEFAULT;
+                    g('seEmpMealLimit').value=emp.mealLimit||'';
+                    g('seEmpMealDaily').value=emp.mealDaily||'';
                     g('seEmpLocationExempt').checked=!!emp.locationExempt;
                     g('seEmpIncType').value=emp.incType||'none';
                     g('seEmpIncPercent').value=emp.incPercent||0;
@@ -11142,7 +11276,9 @@
                 name, matchName:g('seEmpMatchName').value.trim(), role:g('seEmpRole').value, joinDate,
                 salary, hourly:parseInt(g('seEmpHourly').value)||12000, birthday:g('seEmpBirthday').value,
                 status:g('seEmpStatus').value, resignDate:g('seEmpResignDate').value||'',
-                annualLeave, usedLeave, mealDaily:parseInt(g('seEmpMealDaily').value)||MEAL_DAILY_DEFAULT,
+                annualLeave, usedLeave,
+                mealLimit:parseInt(g('seEmpMealLimit').value)||0,   // 0 = 정책 기본값 사용
+                mealDaily:parseInt(g('seEmpMealDaily').value)||0,
                 locationExempt:g('seEmpLocationExempt').checked, incType:g('seEmpIncType').value||'none',
                 incPercent:parseFloat(g('seEmpIncPercent').value)||0, incRounding:parseInt(g('seEmpIncRounding').value)||0,
                 incJapan:g('seEmpIncJapan').checked, personalSalesSource:g('seEmpPersonalSalesSource').value||'manual',
@@ -11464,6 +11600,79 @@
         // ─────────────────────────────
         // ⏰ OT · 식사
         // ─────────────────────────────
+        // ── 🍚 식대 정책 전환 카드 (STAFF 관리 > OT·식사) ──
+        function _seNextYm(){
+            const d=new Date();
+            const y=d.getFullYear(), m=d.getMonth()+1;   // 1~12
+            return (m===12) ? (y+1)+'-01' : y+'-'+String(m+1).padStart(2,'0');
+        }
+        function _seMealPolicyCard(){
+            const cur=getMealPolicyForMonth(getYM());
+            const hist=(mealPolicy.history||[]).slice()
+                .filter(h=>h&&h.mode&&h.from)
+                .sort((a,b)=>String(a.from).localeCompare(String(b.from)));
+            const next=_seNextYm();
+            const nextPol=getMealPolicyForMonth(next);
+
+            let h='<div style="margin-top:1.4rem;padding:.9rem;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa">';
+            h+='<div style="font-weight:700;font-size:.9rem;color:#111827;margin-bottom:.5rem">🍚 식대 정책 (투트랙)</div>';
+            h+=`<div style="font-size:.78rem;color:#374151;margin-bottom:.6rem;line-height:1.6">
+                이번 달(${getYM()}) 적용 중: <strong>${getMealModeLabel(cur.mode)}</strong><br>
+                다음 달(${next}) 적용 예정: <strong>${getMealModeLabel(nextPol.mode)}</strong>
+            </div>`;
+            h+='<div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.5rem">';
+            h+=`<label style="font-size:.75rem;color:#6b7280">전환할 방식<br>
+                <select id="seMealModeSel" style="margin-top:.2rem;padding:.35rem;border:1px solid #d1d5db;border-radius:6px;font-size:.8rem">
+                    <option value="monthly"${nextPol.mode==='monthly'?' selected':''}>월 한도제 (기존)</option>
+                    <option value="daily"${nextPol.mode==='daily'?' selected':''}>출근일 일할 적립제</option>
+                </select></label>`;
+            h+=`<label style="font-size:.75rem;color:#6b7280">적용 시작 월<br>
+                <input type="month" id="seMealFromYm" value="${next}" style="margin-top:.2rem;padding:.35rem;border:1px solid #d1d5db;border-radius:6px;font-size:.8rem"></label>`;
+            h+=`<button onclick="_seSaveMealPolicy()" style="padding:.45rem .9rem;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">적용</button>`;
+            h+='</div>';
+            h+='<div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.5rem">';
+            h+=`<label style="font-size:.75rem;color:#6b7280">기본 월 한도 (원)<br>
+                <input type="number" id="seMealMonthlyDefault" value="${cur.monthlyLimit}" style="margin-top:.2rem;padding:.35rem;border:1px solid #d1d5db;border-radius:6px;font-size:.8rem;width:120px"></label>`;
+            h+=`<label style="font-size:.75rem;color:#6b7280">기본 1일 지급액 (원)<br>
+                <input type="number" id="seMealDailyDefault" value="${cur.dailyAmount}" style="margin-top:.2rem;padding:.35rem;border:1px solid #d1d5db;border-radius:6px;font-size:.8rem;width:120px"></label>`;
+            h+='</div>';
+            h+='<div style="font-size:.7rem;color:#9ca3af;line-height:1.6">';
+            h+='※ 적용 시작 월부터 그 방식이 적용되고, <strong>그 이전 달의 집계는 그때 방식 그대로 유지</strong>됩니다.<br>';
+            h+='※ 직원별로 월 한도·1일 지급액을 따로 지정하면 위 기본값 대신 그 값이 쓰입니다.';
+            h+='</div>';
+            if(hist.length){
+                h+='<div style="margin-top:.6rem;font-size:.72rem;color:#6b7280">전환 이력: '
+                    +hist.map(x=>`${_esc(x.from)}~ ${getMealModeLabel(x.mode)}`).join(' → ')+'</div>';
+            }
+            h+='</div>';
+            return h;
+        }
+        async function _seSaveMealPolicy(){
+            const mode=document.getElementById('seMealModeSel').value==='daily'?'daily':'monthly';
+            const from=document.getElementById('seMealFromYm').value;
+            const monthlyLimit=parseInt(document.getElementById('seMealMonthlyDefault').value)||MEAL_MONTHLY_DEFAULT;
+            const dailyAmount=parseInt(document.getElementById('seMealDailyDefault').value)||MEAL_DAILY_DEFAULT;
+            if(!/^\d{4}-\d{2}$/.test(from)){ alert('적용 시작 월을 선택해주세요.'); return; }
+            if(from<getYM()&&!confirm(`${from} 은 지난 달입니다. 과거 달의 식대 집계 방식이 바뀝니다. 계속할까요?`)) return;
+            if(!confirm(`${from} 부터 "${getMealModeLabel(mode)}" 로 전환합니다.\n(${from} 이전 달은 기존 방식 유지)`)) return;
+
+            // 같은 시작 월 항목은 교체, 아니면 추가
+            const hist=(mealPolicy.history||[]).filter(x=>x&&x.mode&&x.from&&x.from!==from);
+            hist.push({mode, from});
+            hist.sort((a,b)=>String(a.from).localeCompare(String(b.from)));
+            try{
+                await db.collection('settings').doc('mealPolicy').set({
+                    mode, effectiveFrom:from, history:hist, monthlyLimit, dailyAmount,
+                    updatedAt:new Date().toISOString(),
+                    updatedBy:currentUser?.name||currentUser?.id||'admin'
+                }, {merge:true});
+                await loadMealPolicy();
+                alert('✅ 식대 정책 저장 완료 — '+from+'부터 '+getMealModeLabel(mode));
+                _renderStaffAdminBody();
+                renderMeal();
+            }catch(e){ alert('저장 실패: '+e.message); }
+        }
+
         function _renderStaffOT(el){
             const monthPrefix=_staffPayrollYm;
             const active=_staffAdminEmployees.filter(e=>!e.status||e.status==='active');
@@ -11523,27 +11732,34 @@
                 });
                 html+='</tbody></table></div>';
             }
-            // 직원별 선택 월 식대 합계 — 한도 = 그 달 출근일수 × 1일 지급액
-            html+='<div style="margin:.9rem 0 .4rem;font-weight:700;font-size:.9rem;color:#111827">📊 직원별 '+monthPrefix+' 식대 합계 <span style="font-weight:400;font-size:.72rem;color:#9ca3af">(출근일수 × 1일 지급액 기준)</span></div>';
+            // 직원별 선택 월 식대 합계 — 그 달에 적용된 정책 기준
+            const pol=getMealPolicyForMonth(monthPrefix);
+            const polDaily=pol.mode==='daily';
+            html+='<div style="margin:.9rem 0 .4rem;font-weight:700;font-size:.9rem;color:#111827">📊 직원별 '+monthPrefix+' 식대 합계 '
+                +'<span style="font-weight:400;font-size:.72rem;color:#9ca3af">('+(polDaily?'출근일수 × 1일 지급액':'월 한도')+' 기준)</span></div>';
             html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.35rem">';
             active.forEach(e=>{
                 const sum=monthMeals.filter(m=>m.employeeId===e.id).reduce((s,m)=>s+(Number(m.amount||0)),0);
-                const rate=Number(e.mealDaily)>0?Number(e.mealDaily):MEAL_DAILY_DEFAULT;
+                const rate=Number(e.mealDaily)>0?Number(e.mealDaily):pol.dailyAmount;
                 const workDays=new Set((_staffAdminAttendance||[])
                     .filter(a=>a.employeeId===e.id&&String(a.date||'').startsWith(monthPrefix)&&a.checkIn)
                     .map(a=>a.date)).size;
-                const limit=rate*workDays;
+                const limit=polDaily?rate*workDays:(Number(e.mealLimit)>0?Number(e.mealLimit):pol.monthlyLimit);
                 const over=sum>limit;
                 html+=`<div style="padding:.5rem;background:${over?'#fef2f2':(sum>0?'#ecfdf5':'#f9fafb')};color:${over?'#b91c1c':(sum>0?'#047857':'#6b7280')};border-radius:6px;font-size:.78rem">
                     <div style="font-weight:700">${_esc(e.name||e.id)}</div>
                     <div>${formatCurrency(sum)} <span style="font-size:.68rem;color:#9ca3af">/ ${formatCurrency(limit)}</span></div>
-                    <div style="font-size:.66rem;color:#9ca3af">출근 ${workDays}일 × ${formatCurrency(rate)}</div>
+                    <div style="font-size:.66rem;color:#9ca3af">${polDaily?('출근 '+workDays+'일 × '+formatCurrency(rate)):'월 한도'}</div>
                 </div>`;
             });
             html+='</div>';
 
-            html+='<div style="font-size:.7rem;color:#9ca3af;margin-top:.4rem">※ 식대는 출근한 날만 1일 지급액이 적립되고, 남은 금액은 같은 달 안에서 이월·누적됩니다 (매월 1일 리셋).</div>';
+            html+='<div style="font-size:.7rem;color:#9ca3af;margin-top:.4rem">※ '+(polDaily
+                ? '출근한 날만 1일 지급액이 적립되고, 남은 금액은 같은 달 안에서 이월·누적됩니다 (매월 1일 리셋).'
+                : '월 한도 안에서 자유롭게 사용하며 매월 1일 리셋됩니다 (출근 여부 무관).')+'</div>';
             html+='<div style="font-size:.7rem;color:#9ca3af;margin-top:.2rem">※ 상세 편집·삭제는 경영관리 앱(index.html) 또는 각 직원 앱에서.</div>';
+
+            html+=_seMealPolicyCard();
             el.innerHTML=html;
         }
 

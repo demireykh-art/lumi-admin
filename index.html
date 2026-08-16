@@ -644,9 +644,12 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">식대 1일 지급액 (원)</label>
-                        <input type="number" class="form-input" id="empMealDaily" value="14000" placeholder="기본 14,000원">
-                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">출근한 날만 적립 · 미입력시 기본 14,000원<br>월 한도 = 출근일수 × 지급액, 남은 금액은 같은 달 안에서 이월·누적(매월 1일 리셋)</p>
+                        <label class="form-label">식대 월 한도 (원)</label>
+                        <input type="number" class="form-input" id="empMealLimit" placeholder="기본 300,000원">
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">월 한도제일 때 사용 · 미입력시 정책 기본값</p>
+                        <label class="form-label" style="margin-top:.6rem">식대 1일 지급액 (원)</label>
+                        <input type="number" class="form-input" id="empMealDaily" placeholder="기본 14,000원">
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">출근일 일할 적립제일 때 사용 · 미입력시 정책 기본값<br>적용 방식 전환은 통합앱 STAFF 관리 &gt; OT·식사 탭에서</p>
                     </div>
                     <div class="form-group">
                         <label class="form-label">&nbsp;</label>
