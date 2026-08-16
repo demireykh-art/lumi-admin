@@ -10,9 +10,19 @@
 | --- | --- | --- |
 | **통합앱** | https://staff.lumiclinic.co.kr/staff.html | `staff.html` |
 | **관리자앱** | https://lumi-staff.vercel.app/ | `index.html` |
+| **환자앱** | https://lumi-staff.vercel.app/m | `patient.html` |
 
 - "통합앱"이라고 하면 `staff.html`(직원·공용계정용 통합 앱)을 의미합니다.
 - "관리자앱"이라고 하면 `index.html`(관리자 웹)을 의미합니다.
+- "환자앱"이라고 하면 `patient.html`(환자용 QR 메뉴 열람)을 의미합니다.
+  **비로그인 공개 페이지**이므로 Firestore 에 직접 붙이지 않고 Cloud Function
+  `getPatientMenu` 로만 읽습니다. 기획·설계는 `docs/patient-app-qr-order.md` 참고.
+
+## 가격 정책 (중요)
+
+시술 수가표(`settings/feeSchedule`)의 정가는 **부가세 10% 별도**입니다.
+(`treatments-seed.json` `_meta.vat = "별도"` 기준, 2026-08 확정)
+환자에게 금액을 보여주는 화면에서는 「시술가 · 부가세 · 합계」를 함께 표기합니다.
 
 ## 배포 모델
 

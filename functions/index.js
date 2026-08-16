@@ -272,6 +272,62 @@ async function _findOrCreateThread(provider, externalId, displayName, text) {
   return ref;
 }
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * 환자앱(patient.html) — 공개 메뉴 조회
+ *
+ * 환자는 비로그인이므로 Firestore 에 직접 붙이지 않는다(규칙은 직원 전용 유지).
+ * 이 엔드포인트만 공개하고, 읽는 문서는 통합앱 [📱 환자앱 메뉴] 에서 발행한
+ * 공개 전용 사본(patientMenu/current) 하나뿐이다.
+ *
+ * 발행 시점에 원가·소모품·재고·분당수익 등 내부 필드는 이미 제외되어 있으며,
+ * 여기서도 화이트리스트한 필드만 응답에 담는다(이중 방어).
+ * ─────────────────────────────────────────────────────────────
+ */
+exports.getPatientMenu = onRequest(
+  {region: 'asia-northeast3', cors: true},
+  async (req, res) => {
+    try {
+      if (req.method !== 'GET') {
+        return res.status(405).json({error: 'method_not_allowed'});
+      }
+      const doc = await admin.firestore().collection('patientMenu').doc('current').get();
+      if (!doc.exists) {
+        return res.status(404).json({error: 'not_published'});
+      }
+      const d = doc.data() || {};
+      if (d.published === false) {
+        return res.status(404).json({error: 'not_published'});
+      }
+
+      // dataJson: {byCategory:[...], byConcern:{...}} — feeSchedule 과 같은 문자열 저장 방식
+      let data = {byCategory: [], byConcern: null};
+      try {
+        if (d.dataJson) data = JSON.parse(d.dataJson);
+      } catch (e) {
+        logger.error('getPatientMenu: dataJson 파싱 실패', e);
+        return res.status(500).json({error: 'bad_payload'});
+      }
+
+      // 브라우저 1분 · CDN 5분 캐시 (메뉴 발행은 자주 일어나지 않음)
+      res.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+      return res.status(200).json({
+        version: Number(d.version) || 0,
+        publishedAt: d.publishedAt || null,
+        clinicName: d.clinicName || '루미의원',
+        notice: d.notice || '',
+        vatMode: 'exclusive', // 표시가는 부가세 별도 (수가표 정가 기준)
+        vatRate: 0.1,
+        byCategory: Array.isArray(data.byCategory) ? data.byCategory : [],
+        byConcern: data.byConcern || null,
+      });
+    } catch (e) {
+      logger.error('getPatientMenu error', e);
+      return res.status(500).json({error: 'internal'});
+    }
+  }
+);
+
 // 카카오 상담톡 웹훅
 // 실제 payload 예시(심사 통과 시 확정): { user_key, content, message_id, user_name, ... }
 exports.webhookKakao = onRequest(

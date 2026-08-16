@@ -74,6 +74,12 @@ service cloud.firestore {
     match /config/{id}                          { allow read, write: if signedIn(); }
     match /admins/{id}                          { allow read, write: if signedIn(); }
 
+    // ── 환자앱(patient.html) 공개 메뉴 ──
+    //    ⚠️ 환자는 비로그인 — Firestore 에 직접 붙지 않고 Cloud Function(getPatientMenu) 으로만 읽는다.
+    //    patientMenu/current 는 "공개 전용 사본" — 원가·소모품·재고·분당수익 등 내부 필드는
+    //    발행 시점에 제외되며, 이 문서에 넣어서는 안 된다.
+    match /patientMenu/{id}                     { allow read, write: if signedIn(); }
+
     // ── 고객 채팅 (카카오·네이버) ──
     match /chatThreads/{id}                     { allow read, write: if signedIn(); }
     match /chatThreads/{threadId}/messages/{m}  { allow read, write: if signedIn(); }
