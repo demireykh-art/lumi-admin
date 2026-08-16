@@ -1,4 +1,9 @@
 /* ===== hr-attendance.js - LUMI ERP v11 - 직원/근태/인센티브 ===== */
+
+// 식대 정책 v3 — 출근한 날에만 1일 지급액이 적립되고, 남은 금액은 같은 달 안에서
+// 이월·누적되며 매월 1일 리셋된다. 월 한도 = 그 달 출근일수 × 1일 지급액.
+const MEAL_DAILY_DEFAULT=14000;   // 출근 1일당 지급액 (원)
+
 function renderEmployees(){
     const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
     const filter=document.getElementById('attendanceFilter');
@@ -627,7 +632,7 @@ function openEmployeeModal(id=null){
     document.getElementById('empUsedLeave').value='0';
     document.getElementById('autoAnnualLeave').textContent='0';
     document.getElementById('empId').value='';
-    document.getElementById('empMealLimit').value='300000';
+    document.getElementById('empMealDaily').value=String(MEAL_DAILY_DEFAULT);
     document.getElementById('empLocationExempt').checked=false;
     // Firebase Auth 관련 입력 초기화
     // 신규: 입력 가능. 수정: staffId 이미 있으면 비활성화, 없으면 입력 가능 (기존 직원 마이그레이션)
@@ -678,7 +683,7 @@ function openEmployeeModal(id=null){
             toggleResignDateField();
             document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
-            document.getElementById('empMealLimit').value=emp.mealLimit||300000;
+            document.getElementById('empMealDaily').value=emp.mealDaily||MEAL_DAILY_DEFAULT;
             document.getElementById('empLocationExempt').checked=!!emp.locationExempt;
             // 인센티브 설정 복원
             document.getElementById('empIncType').value=emp.incType||'none';
@@ -843,7 +848,7 @@ async function saveEmployee(){
         resignDate:document.getElementById('empResignDate').value||'',
         annualLeave:annualLeave,
         usedLeave:usedLeave,
-        mealLimit:parseInt(document.getElementById('empMealLimit').value)||300000,
+        mealDaily:parseInt(document.getElementById('empMealDaily').value)||MEAL_DAILY_DEFAULT,
         locationExempt:document.getElementById('empLocationExempt').checked,
         incType:document.getElementById('empIncType').value||'none',
         incPercent:parseFloat(document.getElementById('empIncPercent').value)||0,
