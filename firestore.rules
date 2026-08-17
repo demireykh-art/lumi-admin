@@ -13,6 +13,37 @@ service cloud.firestore {
         && (request.auth.token.email in get(/databases/$(database)/documents/settings/bizAdmins).data.emails);
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  공개 홈페이지(lumiclinic.co.kr, 비로그인 방문자) — 콘텐츠는 누구나 "읽기"만
+    //  · 쓰기는 여전히 로그인(직원/관리자) 전용
+    //  · 홈페이지가 이 컬렉션을 익명으로 읽어 시술안내·이벤트·B&A·의료진 등을 표시
+    // ══════════════════════════════════════════════════════════════════
+    match /doctors/{id}        { allow read: if true; allow write: if signedIn(); }
+    match /solutions/{id}      { allow read: if true; allow write: if signedIn(); }
+    match /events/{id}         { allow read: if true; allow write: if signedIn(); }
+    match /treatmentCards/{id} { allow read: if true; allow write: if signedIn(); }
+    match /equipment/{id}      { allow read: if true; allow write: if signedIn(); }
+    match /ba_items/{id}       { allow read: if true; allow write: if signedIn(); }
+    match /schedules/{id}      { allow read: if true; allow write: if signedIn(); }
+
+    // 단축 URL: 공개 읽기(리다이렉트) + 클릭수 갱신, 생성/삭제는 직원
+    match /shortUrls/{id} {
+      allow read:           if true;
+      allow update:         if true;   // go.html 클릭 카운트 증가
+      allow create, delete: if signedIn();
+    }
+
+    // 예약 신청: 누구나 생성(신청) 가능, 조회/변경/삭제는 직원
+    match /reservations/{id} {
+      allow create:               if true;
+      allow read, update, delete: if signedIn();
+    }
+
+    // 방문 통계: 익명 방문자도 기록 생성, 열람/수정은 직원
+    match /analytics_visits/{id} { allow create: if true; allow read, update, delete: if signedIn(); }
+    match /analytics_events/{id} { allow create: if true; allow read, update, delete: if signedIn(); }
+    match /analytics_daily/{id}  { allow read, write: if true; }  // 방문 카운터 트랜잭션(get+set)
+
     // ── 상담 차팅 v2 (신규 포함) ──
     match /visits/{id}                        { allow read, write: if signedIn(); }
     match /visits/{visitId}/followups/{fu}    { allow read, write: if signedIn(); }
@@ -70,7 +101,15 @@ service cloud.firestore {
     match /notices/{id}                         { allow read, write: if signedIn(); }
     match /handovers/{id}                       { allow read, write: if signedIn(); }
     match /consultTreeBackups/{id}              { allow read, write: if signedIn(); }
-    match /settings/{id}                        { allow read, write: if signedIn(); }
+
+    // 설정: 홈페이지 공개 콘텐츠 문서만 비로그인 읽기 허용, 나머지(bizAdmins 등)는 직원 전용
+    match /settings/{docId} {
+      allow read: if signedIn()
+        || docId in ['treatmentMenu','heroSlider','spaceGallery','schedule',
+                     'feeInfo','pageLayout','gallery','clinicHours'];
+      allow write: if signedIn();
+    }
+
     match /config/{id}                          { allow read, write: if signedIn(); }
     match /admins/{id}                          { allow read, write: if signedIn(); }
 
@@ -81,7 +120,7 @@ service cloud.firestore {
     // ── 레거시/호환 (기존 규칙 유지) ──
     match /patients/{id}                        { allow read, write: if signedIn(); }
     match /channels/{id}                        { allow read, write: if signedIn(); }
-    match /treatments/{id}                       { allow read, write: if signedIn(); }
+    match /treatments/{id}                       { allow read: if true; allow write: if signedIn(); }  // 홈페이지 예약페이지가 시술목록을 공개로 읽음
     match /feeSchedule/{id}                      { allow read, write: if signedIn(); }
 
     // 위 화이트리스트에 없는 모든 경로는 기본 거부(명시적으로 차단)
