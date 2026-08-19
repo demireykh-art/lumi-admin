@@ -2035,7 +2035,8 @@
                     주사마취처럼 자주 쓰는 믹스를 등록하세요. <b>믹스 원가</b>가 자동 계산되고, 시술 수가표 옵션의 <b>소모품</b>에서 바로 선택할 수 있습니다.<br>
                     · <b>cc 단위</b>: 넣은 cc = 용량 (원가 = cc당 단가 × cc)<br>
                     · <b>개(병) 단위</b>: <b>병수만</b> 입력 → 원가 = 병당 단가 × 병수, 용량 = 병수 × <b>1개 용량</b>(재고에 등록한 값 자동)<br>
-                    <span style="color:#7c3aed">※ 병당 용량이 있는 주사제는 재고 ✏️수정에서 '1개 용량(ml)'을 먼저 등록하세요.</span>
+                    <span style="color:#7c3aed">※ 병당 용량이 있는 주사제는 재고 ✏️수정에서 '1개 용량(ml)'을 먼저 등록하세요.</span><br>
+                    <span style="color:#6d28d9">💡 각 믹스 카드를 <b>더블탭</b>하면 믹스방법 편집이 열립니다.</span>
                 </div>
                 <button onclick="mixAdd()" style="width:100%;background:#7c3aed;color:#fff;border:none;padding:.55rem;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;margin-bottom:.6rem">+ 새 주사제 믹스</button>
                 <div id="mixList" style="display:flex;flex-direction:column;gap:.4rem">
@@ -2880,12 +2881,12 @@
             wrap.innerHTML=_mixes.map(m=>{
                 const editing=(_mixEditingId===m.id);
                 const cost=_mixCost(m);
-                const head=`<div style="display:flex;align-items:center;gap:.5rem;padding:.45rem .55rem;background:${editing?'#faf5ff':'#fff'};border:1px solid ${editing?'#ddd6fe':'#e5e7eb'};border-radius:8px">
+                const head=`<div ondblclick="mixEditToggle('${m.id}')" title="더블탭하여 편집" style="display:flex;align-items:center;gap:.5rem;padding:.45rem .55rem;background:${editing?'#faf5ff':'#fff'};border:1px solid ${editing?'#ddd6fe':'#e5e7eb'};border-radius:8px;cursor:pointer;user-select:none;-webkit-user-select:none">
                     <div style="flex:1;min-width:0">
                         <div style="font-size:.88rem;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🧪 ${_esc(m.name||'(무명)')}</div>
                         <div style="font-size:.72rem;color:#6b7280">원가 ₩${cost.toLocaleString()} · 재료 ${(m.recipe||[]).length}종${_mixYield(m)>0?` · ₩${_mixUnitPrice(m).toLocaleString()}/${_esc(_mixYieldUnit(m))}`:''}</div>
                     </div>
-                    <button onclick="mixEditToggle('${m.id}')" style="background:${editing?'#6d28d9':'#f5f3ff'};color:${editing?'#fff':'#6d28d9'};border:1px solid ${editing?'#6d28d9':'#ddd6fe'};padding:.3rem .7rem;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;flex-shrink:0">${editing?'닫기':'편집'}</button>
+                    ${editing?`<button onclick="event.stopPropagation();mixEditToggle('${m.id}')" style="background:#6d28d9;color:#fff;border:1px solid #6d28d9;padding:.3rem .7rem;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;flex-shrink:0">닫기</button>`:''}
                 </div>`;
                 return head + (editing ? _mixRecipeEditor(m) : '');
             }).join('');
