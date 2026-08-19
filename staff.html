@@ -177,6 +177,35 @@
         .tl-cal-evt.approved{background:#c8e6c9;color:#2e7d32}
         .tl-cal-evt.pending{background:#fff9c4;color:#f57f17}
         .tl-cal-evt.me{font-weight:700}
+
+        /* ── 공지 달력 (진료일정 + 연차 + 공지) ── */
+        .nc-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+        .nc-hdr{text-align:center;padding:.25rem 0;font-weight:700;color:var(--text-muted);font-size:.62rem}
+        .nc-hdr.sun{color:#e53935}
+        .nc-hdr.sat{color:#1565c0}
+        .nc-cell{display:block;width:100%;min-height:66px;border:1px solid var(--border);border-radius:5px;padding:2px;background:var(--bg-card);cursor:pointer;overflow:hidden;text-align:left;font:inherit;color:inherit}
+        .nc-cell.other{opacity:.35}
+        .nc-cell.today{border-color:var(--primary);border-width:2px}
+        .nc-cell.sel{outline:2px solid #4338ca;outline-offset:-2px}
+        .nc-cell.off{background:#fef2f2}
+        .nc-cell.opn{background:#ecfdf5}
+        .nc-num{font-size:.68rem;font-weight:600;line-height:1.15;padding-left:1px}
+        .nc-cell.sun .nc-num{color:#e53935}
+        .nc-cell.sat .nc-num{color:#1565c0}
+        .nc-cell.holi .nc-num{color:#e53935}
+        .nc-chip{display:block;font-size:.5rem;line-height:1.3;padding:0 2px;border-radius:2px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .nc-chip.sc-holiday{background:#fee2e2;color:#991b1b;font-weight:700}
+        .nc-chip.sc-closed{background:#fde68a;color:#92400e;font-weight:700}
+        .nc-chip.sc-open{background:#d1fae5;color:#065f46;font-weight:700}
+        .nc-chip.sc-work{background:#dbeafe;color:#1e40af;font-weight:700}
+        .nc-chip.lv{background:#ede9fe;color:#5b21b6}
+        .nc-chip.lv.pend{background:#fff7ed;color:#c2410c}
+        .nc-chip.nt{background:#fef3c7;color:#78350f}
+        .nc-more{display:block;font-size:.5rem;color:var(--text-muted);padding-left:2px;line-height:1.3}
+        .nc-legend{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.45rem;font-size:.6rem;color:var(--text-muted);align-items:center}
+        .nc-legend span.k{padding:1px 5px;border-radius:3px;font-weight:700}
+        .nc-sbtn{padding:.3rem .55rem;font-size:.72rem;font-weight:700;border:1px solid #d1d5db;background:#fff;color:#4b5563;border-radius:999px;cursor:pointer}
+        .nc-sbtn.on{border-color:transparent;color:#fff;background:#4338ca}
         .golden-slider::-webkit-scrollbar{height:4px}
         .golden-slider::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
         .golden-card{flex:0 0 140px;scroll-snap-align:start;background:linear-gradient(135deg,#fff9f0,#fff);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:8px;padding:.6rem}
@@ -473,6 +502,19 @@
             <div class="tab-content" id="tab-tophome">
                 <div class="card" style="margin-bottom:0">
                     <div style="display:grid;grid-template-columns:1fr;gap:.9rem;margin-top:.5rem">
+                        <!-- 공지 블록(최상단): 헤더 클릭 → 공지 뷰, 아래는 오늘 진료일정·연차 + 오늘 공지 인라인 -->
+                        <div style="border:1px solid #e5e7eb;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                            <button type="button" onclick="showTop('notice')" id="topHomeNoticeHeader"
+                                style="width:100%;display:flex;align-items:center;gap:.9rem;padding:.9rem 1.1rem;background:#fef3c7;border:none;border-bottom:1px solid #fde68a;cursor:pointer;text-align:left">
+                                <span style="font-size:1.6rem">📢</span>
+                                <div style="flex:1">
+                                    <div style="font-weight:700;font-size:1rem;color:#78350f">공지 <span id="topHomeNoticeToday" style="font-weight:500;font-size:.8rem;color:#92400e;margin-left:.25rem"></span></div>
+                                </div>
+                                <span style="color:#9ca3af">→</span>
+                            </button>
+                            <div id="topHomeTodayStatus" style="padding:.5rem .75rem;border-bottom:1px solid #f3f4f6;display:flex;flex-wrap:wrap;gap:.3rem;align-items:center"></div>
+                            <div id="topHomeNoticeInline" style="max-height:320px;overflow-y:auto;padding:.6rem .75rem"></div>
+                        </div>
                         <a href="https://www.lumiclinic.co.kr" target="_blank" rel="noopener"
                             style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <span style="font-size:2.25rem">🌐</span>
@@ -565,18 +607,6 @@
                             <span id="staffAdminPendingBadge" style="display:none;background:#f59e0b;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:12px;min-width:22px;text-align:center">0</span>
                             <span style="color:#9ca3af;margin-left:.35rem">→</span>
                         </button>
-                        <!-- 공지 블록: 헤더 클릭 → 관리 뷰, 아래는 오늘 공지 인라인 -->
-                        <div style="border:1px solid #e5e7eb;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <button type="button" onclick="showTop('notice')" id="topHomeNoticeHeader"
-                                style="width:100%;display:flex;align-items:center;gap:.9rem;padding:.9rem 1.1rem;background:#fef3c7;border:none;border-bottom:1px solid #fde68a;cursor:pointer;text-align:left">
-                                <span style="font-size:1.6rem">📢</span>
-                                <div style="flex:1">
-                                    <div style="font-weight:700;font-size:1rem;color:#78350f">공지 <span id="topHomeNoticeToday" style="font-weight:500;font-size:.8rem;color:#92400e;margin-left:.25rem"></span></div>
-                                </div>
-                                <span style="color:#9ca3af">→</span>
-                            </button>
-                            <div id="topHomeNoticeInline" style="max-height:320px;overflow-y:auto;padding:.6rem .75rem"></div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -648,29 +678,70 @@
                 <datalist id="ptOrderDL"></datalist>
             </div>
 
-            <!-- === 공지 · 할일 뷰 === -->
+            <!-- === 공지 · 일정 뷰 (달력: 병원 진료일정 + 직원 연차 + 공지) === -->
             <div class="tab-content" id="tab-notice">
-                <div class="card" style="margin-bottom:0">
+                <div class="card" style="margin-bottom:.75rem">
                     <div class="card-title" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap">
                         <button class="btn btn-secondary" style="font-size:.75rem;padding:.3rem .55rem;flex-shrink:0" onclick="showTopHome()">← 홈</button>
-                        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">공지 · 할일</span>
+                        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📢 공지 · 일정</span>
                     </div>
-                    <!-- 공지 추가 폼 -->
-                    <div style="margin-top:.6rem;padding:.65rem;background:#fef3c7;border:1px solid #fde68a;border-radius:10px">
-                        <div style="display:flex;gap:.35rem;margin-bottom:.4rem;align-items:center">
-                            <label style="font-size:.72rem;color:#92400e;font-weight:600;flex-shrink:0">날짜</label>
-                            <input type="date" id="noticeDateInput" style="padding:.4rem .5rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;flex:1;min-width:0;box-sizing:border-box">
+                    <!-- 오늘 요약: 병원 진료일정 + 직원 연차 -->
+                    <div id="noticeTodayBar" style="margin-top:.6rem;padding:.55rem .65rem;background:var(--bg);border:1px solid var(--border);border-radius:10px;display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;font-size:.75rem"></div>
+                    <!-- 월 이동 -->
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin:.7rem 0 .45rem">
+                        <button onclick="moveNoticeCalMonth(-1)" style="background:none;border:none;font-size:1.1rem;cursor:pointer;padding:.2rem .6rem;color:inherit">◀</button>
+                        <button onclick="noticeCalToday()" id="noticeCalTitle" style="background:none;border:none;font-size:.9rem;font-weight:700;cursor:pointer;color:inherit;padding:.2rem .5rem">-</button>
+                        <button onclick="moveNoticeCalMonth(1)" style="background:none;border:none;font-size:1.1rem;cursor:pointer;padding:.2rem .6rem;color:inherit">▶</button>
+                    </div>
+                    <div id="noticeCal"></div>
+                    <div class="nc-legend">
+                        <span class="k" style="background:#fee2e2;color:#991b1b">공휴일</span>
+                        <span class="k" style="background:#fde68a;color:#92400e">자체휴무</span>
+                        <span class="k" style="background:#d1fae5;color:#065f46">대체진료</span>
+                        <span class="k" style="background:#dbeafe;color:#1e40af">진료일</span>
+                        <span class="k" style="background:#ede9fe;color:#5b21b6">연차</span>
+                        <span class="k" style="background:#fef3c7;color:#78350f">공지</span>
+                        <span>· 날짜를 누르면 상세 · 공지 작성</span>
+                    </div>
+
+                    <!-- 선택한 날짜 상세 (진료일정 · 연차 · 공지 작성) -->
+                    <div id="noticeDayPanel" style="display:none;margin-top:.75rem;border:1px solid #fde68a;background:#fffbeb;border-radius:12px;overflow:hidden">
+                        <div style="display:flex;align-items:center;gap:.4rem;padding:.5rem .7rem;background:#fef3c7;border-bottom:1px solid #fde68a">
+                            <span id="noticeDayTitle" style="flex:1;min-width:0;font-weight:700;font-size:.9rem;color:#78350f"></span>
+                            <button type="button" onclick="closeNoticeDay()" style="background:none;border:1px solid #d97706;color:#92400e;border-radius:6px;font-size:.7rem;padding:.15rem .45rem;cursor:pointer">닫기 ✕</button>
                         </div>
-                        <textarea id="noticeTextInput" placeholder="공지·할일 내용 (긴 내용도 가능, 여러 줄 입력 시 Shift+Enter)" rows="2"
-                            oninput="this.style.height='auto';this.style.height=(this.scrollHeight)+'px'"
-                            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addNotice();}"
-                            style="display:block;width:100%;padding:.5rem .6rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;resize:vertical;min-height:44px;font-family:inherit;line-height:1.4;margin-bottom:.4rem"></textarea>
-                        <div style="text-align:right">
-                            <button type="button" onclick="addNotice()" style="display:inline-block;padding:.45rem 1.1rem;font-size:.85rem;font-weight:700;background:#4338ca;color:#fff;border:none;border-radius:6px;cursor:pointer">추가</button>
+                        <div style="padding:.6rem .7rem">
+                            <!-- 병원 진료일정 -->
+                            <div style="font-size:.72rem;font-weight:700;color:#92400e;margin-bottom:.3rem">🏥 병원 진료일정</div>
+                            <div id="noticeDaySchedBtns" style="display:flex;flex-wrap:wrap;gap:.3rem"></div>
+                            <div style="display:flex;gap:.3rem;margin-top:.35rem">
+                                <input type="text" id="noticeDaySchedLabel" placeholder="일정 이름 (예: 추석 연휴, 오전만 진료)"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();saveClinicSchedLabel();}"
+                                    style="flex:1;min-width:0;padding:.35rem .5rem;font-size:.8rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box">
+                                <button type="button" onclick="saveClinicSchedLabel()" style="flex-shrink:0;padding:.35rem .7rem;font-size:.75rem;font-weight:700;background:#fff;border:1px solid #d97706;color:#92400e;border-radius:6px;cursor:pointer">저장</button>
+                            </div>
+                            <!-- 직원 연차 -->
+                            <div style="font-size:.72rem;font-weight:700;color:#5b21b6;margin:.7rem 0 .3rem">🏖 직원 연차 · 오프</div>
+                            <div id="noticeDayLeaves"></div>
+                            <!-- 공지 -->
+                            <div style="font-size:.72rem;font-weight:700;color:#78350f;margin:.7rem 0 .3rem">📢 이 날짜의 공지 · 할일</div>
+                            <div id="noticeDayList"></div>
+                            <input type="hidden" id="noticeDateInput">
+                            <textarea id="noticeTextInput" placeholder="이 날짜에 공지·할일 작성 (여러 줄 입력 시 Shift+Enter)" rows="2"
+                                oninput="this.style.height='auto';this.style.height=(this.scrollHeight)+'px'"
+                                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addNotice();}"
+                                style="display:block;width:100%;margin-top:.4rem;padding:.5rem .6rem;font-size:.9rem;border:1px solid #d1d5db;border-radius:6px;background:#fff;box-sizing:border-box;resize:vertical;min-height:44px;font-family:inherit;line-height:1.4"></textarea>
+                            <div style="text-align:right;margin-top:.4rem">
+                                <button type="button" onclick="addNotice()" style="display:inline-block;padding:.45rem 1.1rem;font-size:.85rem;font-weight:700;background:#4338ca;color:#fff;border:none;border-radius:6px;cursor:pointer">이 날짜에 추가</button>
+                            </div>
                         </div>
                     </div>
-                    <!-- 검색 + 필터 -->
-                    <div style="margin-top:.6rem;display:flex;gap:.4rem;flex-wrap:wrap">
+                </div>
+
+                <!-- 전체 공지 목록 -->
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title" style="font-size:.9rem">📋 전체 공지 · 할일</div>
+                    <div style="margin-top:.5rem;display:flex;gap:.4rem;flex-wrap:wrap">
                         <input type="text" id="noticeSearch" placeholder="🔍 검색" oninput="renderNoticeList()" style="flex:1;min-width:120px;padding:.4rem .55rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
                         <select id="noticeFilter" onchange="renderNoticeList()" style="padding:.4rem .5rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:6px">
                             <option value="all">전체</option>
@@ -3393,6 +3464,9 @@
             document.getElementById('userName').textContent=currentUser.name||currentUser.id;
             // 공지 실시간 동기화 시작 (전 기기 즉시 반영)
             _migrateLocalNoticesToFirestore().finally(()=>_initNoticesRealtime());
+            // 병원 진료일정 · 직원 연차(달력 표시용) 실시간 동기화
+            _initClinicSchedRealtime();
+            _initCalLeaveRealtime();
             // 직원 교육·인계 실시간 동기화
             _initHandoverRealtime();
             // 상담 트리·마취연고 실시간 동기화
@@ -6523,8 +6597,9 @@
             if(top){ top.style.display=''; top.classList.add('active'); }
             // 하단 nav 항목 활성 표시 리셋
             document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-            // 오늘 공지 인라인 갱신
+            // 오늘 진료일정·연차 + 오늘 공지 인라인 갱신
             if(typeof _renderHomeNoticeInline==='function') _renderHomeNoticeInline();
+            if(typeof _renderHomeTodayStatus==='function') _renderHomeTodayStatus();
         }
         function openInventoryFromTop(){
             document.querySelectorAll('.tab-content').forEach(t=>{
@@ -7347,9 +7422,12 @@
                 if(!opts.keepPath){ _consultDraft=[]; }
                 renderConsult();
             }else if(view==='notice'){
-                // 진입 시 오늘 날짜 기본 세팅
-                const di=document.getElementById('noticeDateInput');
-                if(di) di.value=_todayYmd();
+                // 진입 시 오늘 날짜 선택 + 달력(진료일정·연차·공지) 렌더
+                _initClinicSchedRealtime();
+                _initCalLeaveRealtime();
+                if(!_noticeSelDate) _noticeCalMonth=new Date();
+                openNoticeDay(_noticeSelDate||_todayYmd());
+                _renderNoticeTodayBar();
                 renderNoticeList();
             }else if(view==='handover'){
                 _openHandover();
@@ -9016,8 +9094,7 @@
                 _noticeUnsub=db.collection('notices').onSnapshot(snap=>{
                     _notices=snap.docs.map(d=>({id:d.id, ...d.data()}));
                     try{ localStorage.setItem(NOTICE_LS_KEY,JSON.stringify(_notices)); }catch(_){}
-                    _renderHomeNoticeInline();
-                    if(document.getElementById('noticeList')) renderNoticeList();
+                    _renderAllNoticeViews();
                 }, err=>console.error('notices 스냅샷 실패:', err));
             }catch(e){ console.error('notices 실시간 구독 초기화 실패:',e); }
         }
@@ -9042,7 +9119,7 @@
         async function addNotice(){
             const dateEl=document.getElementById('noticeDateInput');
             const textEl=document.getElementById('noticeTextInput');
-            const date=(dateEl?.value||_todayYmd());
+            const date=(dateEl?.value||_noticeSelDate||_todayYmd());
             const text=(textEl?.value||'').trim();
             if(!text){ alert('공지 내용을 입력하세요.'); textEl?.focus(); return; }
             try{
@@ -9059,7 +9136,7 @@
             const n=_notices.find(x=>x.id===id); if(!n) return;
             const newDone=!n.done;
             // 즉각 로컬 반영 (반응 속도)
-            n.done=newDone; _renderHomeNoticeInline(); if(document.getElementById('noticeList')) renderNoticeList();
+            n.done=newDone; _renderAllNoticeViews();
             try{ await db.collection('notices').doc(id).update({done:newDone, updatedAt:new Date().toISOString()}); }
             catch(e){ alert('상태 변경 실패: '+(e?.message||e)); }
         }
@@ -9139,16 +9216,48 @@
                 </div>`;
             }).join('');
         }
+        // ── 공지 본문: 앞부분만 미리보기 → 클릭 시 펼침 ──
+        const NOTICE_PREVIEW_LEN=42;
+        let _noticeOpen=new Set();          // 펼쳐진 공지 id
+        function _noticePreview(text, len){
+            const one=String(text||'').replace(/\s+/g,' ').trim();
+            const L=len||NOTICE_PREVIEW_LEN;
+            return one.length>L ? one.slice(0,L)+'…' : one;
+        }
+        function _noticeIsLong(text){
+            const raw=String(text||'');
+            return raw.trim().includes('\n') || raw.replace(/\s+/g,' ').trim().length>NOTICE_PREVIEW_LEN;
+        }
+        function toggleNoticeExpand(id){
+            if(_noticeOpen.has(id)) _noticeOpen.delete(id); else _noticeOpen.add(id);
+            _renderAllNoticeViews();
+        }
+        // 공지·달력 관련 모든 화면 갱신
+        function _renderAllNoticeViews(){
+            _renderHomeNoticeInline();
+            _renderHomeTodayStatus();
+            if(document.getElementById('noticeList')) renderNoticeList();
+            _renderNoticeCalendar();
+            _renderNoticeTodayBar();
+            if(_noticeSelDate) _renderNoticeDayPanel();
+        }
         function _noticeRowHtml(n, home){
             const done=!!n.done;
             const strike=done?'text-decoration:line-through;color:#9ca3af':'';
             const bg=done?'#f9fafb':'#fff';
+            const expanded=_noticeOpen.has(n.id);
+            const long=_noticeIsLong(n.text);
+            const bodyText=(expanded||!long)?String(n.text||''):_noticePreview(n.text);
+            const wrapStyle=(expanded||!long)?'white-space:pre-wrap':'white-space:normal';
+            const caret=long?`<span style="color:#6b7280;font-size:.7rem;font-weight:600;margin-left:.3rem;white-space:nowrap">${expanded?'접기 ▲':'더보기 ▼'}</span>`:'';
+            const meta=(expanded&&(n.createdBy||n.date))
+                ? `<div style="margin-top:.3rem;font-size:.68rem;color:#9ca3af">${_esc(n.date||'')}${n.createdBy?' · '+_esc(n.createdBy):''}</div>` : '';
             const actions=home?'':`
-                <button onclick="editNotice('${n.id}')" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">수정</button>
-                <button onclick="deleteNotice('${n.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">×</button>`;
+                <button onclick="event.stopPropagation();editNotice('${n.id}')" style="background:none;border:1px solid #d1d5db;color:#4b5563;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">수정</button>
+                <button onclick="event.stopPropagation();deleteNotice('${n.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.15rem .45rem;border-radius:4px;font-size:.7rem;cursor:pointer">×</button>`;
             return `<div style="display:flex;align-items:flex-start;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:8px;background:${bg};margin-bottom:.3rem">
-                <input type="checkbox" ${done?'checked':''} onchange="toggleNoticeDone('${n.id}')" style="margin-top:.15rem;width:18px;height:18px;flex-shrink:0;cursor:pointer">
-                <div style="flex:1;min-width:0;font-size:.85rem;word-break:break-word;white-space:pre-wrap;line-height:1.4;${strike}">${_esc(n.text)}</div>
+                <input type="checkbox" ${done?'checked':''} onclick="event.stopPropagation()" onchange="toggleNoticeDone('${n.id}')" style="margin-top:.15rem;width:18px;height:18px;flex-shrink:0;cursor:pointer">
+                <div onclick="toggleNoticeExpand('${n.id}')" style="flex:1;min-width:0;font-size:.85rem;word-break:break-word;${wrapStyle};line-height:1.4;cursor:pointer;${strike}">${_esc(bodyText)}${caret}${meta}</div>
                 <div style="display:flex;gap:.2rem;flex-shrink:0">${actions}</div>
             </div>`;
         }
@@ -9164,6 +9273,314 @@
                 return;
             }
             box.innerHTML=today.map(n=>_noticeRowHtml(n,true)).join('');
+        }
+
+        // ================================================================
+        //  🏥 병원 진료일정 (Firestore 'clinicSchedule' — 문서ID = YYYY-MM-DD)
+        //   · 공휴일 / 자체휴무 / 대체진료 / 진료일 을 날짜별로 지정
+        //   · 지정이 없으면 기본 공휴일표(아래) → 요일 기본값(일요일 휴무) 순으로 판단
+        // ================================================================
+        const CLINIC_SCHED_LS_KEY='staff_clinic_sched_v1';
+        const CLINIC_SCHED_TYPES={
+            holiday:{label:'공휴일',   short:'공휴일',   icon:'🔴', cls:'sc-holiday', off:true },
+            closed :{label:'자체휴무', short:'휴무',     icon:'⛔', cls:'sc-closed',  off:true },
+            open   :{label:'대체진료', short:'대체진료', icon:'🟢', cls:'sc-open',    off:false},
+            work   :{label:'진료일',   short:'진료',     icon:'🏥', cls:'sc-work',    off:false}
+        };
+        const CLINIC_SCHED_ORDER=['holiday','closed','open','work'];
+        // 기본 표시용 공휴일표(참고). 해당 날짜에 일정을 직접 지정하면 그 값이 우선됩니다.
+        // ※ 새 연도는 여기에 추가하거나, 달력에서 날짜별로 직접 지정하세요.
+        const KR_HOLIDAYS_DEFAULT={
+            '2026-01-01':'신정',
+            '2026-02-16':'설날 연휴','2026-02-17':'설날','2026-02-18':'설날 연휴',
+            '2026-03-01':'삼일절','2026-03-02':'삼일절 대체공휴일',
+            '2026-05-05':'어린이날','2026-05-24':'부처님오신날','2026-05-25':'부처님오신날 대체공휴일',
+            '2026-06-03':'지방선거일','2026-06-06':'현충일',
+            '2026-08-15':'광복절','2026-08-17':'광복절 대체공휴일',
+            '2026-09-24':'추석 연휴','2026-09-25':'추석','2026-09-26':'추석 연휴',
+            '2026-10-03':'개천절','2026-10-05':'개천절 대체공휴일','2026-10-09':'한글날',
+            '2026-12-25':'성탄절'
+        };
+        let _clinicSched={};              // {YYYY-MM-DD: {type,label,note,...}}
+        let _clinicSchedUnsub=null;
+        try{ _clinicSched=JSON.parse(localStorage.getItem(CLINIC_SCHED_LS_KEY))||{}; }catch(_){ _clinicSched={}; }
+        function _initClinicSchedRealtime(){
+            if(_clinicSchedUnsub) return;
+            try{
+                _clinicSchedUnsub=db.collection('clinicSchedule').onSnapshot(snap=>{
+                    const m={};
+                    snap.docs.forEach(d=>{ m[d.id]={id:d.id, ...d.data()}; });
+                    _clinicSched=m;
+                    try{ localStorage.setItem(CLINIC_SCHED_LS_KEY,JSON.stringify(m)); }catch(_){}
+                    _renderNoticeCalendar();
+                    _renderNoticeTodayBar();
+                    _renderHomeTodayStatus();
+                    if(_noticeSelDate) _renderNoticeDayPanel();
+                }, err=>console.warn('clinicSchedule 스냅샷 실패:', err));
+            }catch(e){ console.warn('clinicSchedule 실시간 구독 초기화 실패:', e); }
+        }
+        // 날짜 → 진료일정 (없으면 null). custom=false 는 기본 공휴일표에서 온 값
+        function _clinicSchedOf(dateStr){
+            const rec=_clinicSched[dateStr];
+            if(rec&&rec.type&&CLINIC_SCHED_TYPES[rec.type]){
+                return {type:rec.type, label:rec.label||CLINIC_SCHED_TYPES[rec.type].label, note:rec.note||'', custom:true};
+            }
+            const h=KR_HOLIDAYS_DEFAULT[dateStr];
+            if(h) return {type:'holiday', label:h, note:'', custom:false};
+            return null;
+        }
+        function _dowOf(dateStr){ const [y,m,d]=String(dateStr).split('-').map(Number); return new Date(y,(m||1)-1,d||1).getDay(); }
+        const _DOW_KO=['일','월','화','수','목','금','토'];
+        // 그날 진료 여부 (지정 없으면 일요일만 휴무)
+        function _isClinicOff(dateStr){
+            const s=_clinicSchedOf(dateStr);
+            if(s) return !!CLINIC_SCHED_TYPES[s.type].off;
+            return _dowOf(dateStr)===0;
+        }
+        async function setClinicSched(dateStr, type){
+            if(!dateStr) return;
+            const cur=_clinicSched[dateStr];
+            try{
+                if(!type || (cur&&cur.type===type)){
+                    // 같은 항목 다시 누르면 해제(지정 없음)
+                    if(cur) await db.collection('clinicSchedule').doc(dateStr).delete();
+                    delete _clinicSched[dateStr];
+                }else{
+                    const label=(document.getElementById('noticeDaySchedLabel')?.value||'').trim()
+                        || (cur&&cur.label) || KR_HOLIDAYS_DEFAULT[dateStr] || CLINIC_SCHED_TYPES[type].label;
+                    const rec={date:dateStr, type, label, updatedAt:new Date().toISOString(),
+                               updatedBy:currentUser?.name||currentUser?.id||'staff'};
+                    await db.collection('clinicSchedule').doc(dateStr).set(rec,{merge:true});
+                    _clinicSched[dateStr]={id:dateStr, ...rec};
+                }
+                _noticeDayLabelFor=null;   // 라벨 입력값 갱신 허용
+                _renderNoticeDayPanel(); _renderNoticeCalendar(); _renderNoticeTodayBar(); _renderHomeTodayStatus();
+            }catch(e){ alert('진료일정 저장 실패: '+(e?.message||e)); }
+        }
+        async function saveClinicSchedLabel(){
+            const dateStr=_noticeSelDate; if(!dateStr) return;
+            const label=(document.getElementById('noticeDaySchedLabel')?.value||'').trim();
+            const cur=_clinicSched[dateStr];
+            if(!cur||!cur.type){ alert('먼저 진료일정 종류(공휴일 · 자체휴무 · 대체진료 · 진료일)를 선택하세요.'); return; }
+            try{
+                await db.collection('clinicSchedule').doc(dateStr).set({
+                    label, updatedAt:new Date().toISOString(),
+                    updatedBy:currentUser?.name||currentUser?.id||'staff'
+                },{merge:true});
+                _clinicSched[dateStr]={..._clinicSched[dateStr], label};
+                _renderNoticeCalendar(); _renderNoticeTodayBar(); _renderHomeTodayStatus();
+            }catch(e){ alert('일정 이름 저장 실패: '+(e?.message||e)); }
+        }
+
+        // ================================================================
+        //  🏖 직원 연차 (leaveRequests) — 달력 표시용 실시간 구독
+        // ================================================================
+        let _calLeaves=[];
+        let _calLeaveUnsub=null;
+        function _initCalLeaveRealtime(){
+            if(_calLeaveUnsub) return;
+            try{
+                _calLeaveUnsub=db.collection('leaveRequests').where('status','in',['approved','pending'])
+                    .onSnapshot(snap=>{
+                        _calLeaves=snap.docs.map(d=>({id:d.id, ...d.data()}));
+                        _renderNoticeCalendar(); _renderNoticeTodayBar(); _renderHomeTodayStatus();
+                        if(_noticeSelDate) _renderNoticeDayPanel();
+                    }, err=>console.warn('leaveRequests 스냅샷 실패:', err));
+            }catch(e){ console.warn('연차 실시간 구독 초기화 실패:', e); }
+        }
+        function _leavesOn(dateStr){
+            const out=[];
+            (_calLeaves||[]).forEach(r=>{
+                if(!Array.isArray(r.dates)||!r.dates.includes(dateStr)) return;
+                out.push({name:r.employeeName||r.employeeId||'직원', type:r.type||'연차', status:r.status||'pending'});
+            });
+            return out.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
+        }
+        function _noticesOn(dateStr){
+            return (_loadNotices()||[]).filter(n=>n.date===dateStr)
+                .sort((a,b)=>(a.done?1:0)-(b.done?1:0)||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+        }
+
+        // ================================================================
+        //  📅 공지 달력 (병원 진료일정 + 직원 연차 + 공지 미리보기)
+        // ================================================================
+        let _noticeCalMonth=new Date();
+        let _noticeSelDate=null;
+        let _noticeDayLabelFor=null;   // 라벨 입력칸에 값을 채워 넣은 날짜 (입력 중 덮어쓰기 방지)
+        function moveNoticeCalMonth(delta){
+            _noticeCalMonth=new Date(_noticeCalMonth.getFullYear(), _noticeCalMonth.getMonth()+delta, 1);
+            _renderNoticeCalendar();
+        }
+        function noticeCalToday(){
+            _noticeCalMonth=new Date();
+            openNoticeDay(_todayYmd());
+        }
+        function _ymd(y,m,d){ return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
+        function _renderNoticeCalendar(){
+            const wrap=document.getElementById('noticeCal');
+            if(!wrap) return;
+            const year=_noticeCalMonth.getFullYear(), month=_noticeCalMonth.getMonth();
+            const title=document.getElementById('noticeCalTitle');
+            if(title) title.textContent=`${year}년 ${month+1}월`;
+            const today=_todayYmd();
+            const firstDow=new Date(year,month,1).getDay();
+            const lastDate=new Date(year,month+1,0).getDate();
+            const prevLast=new Date(year,month,0).getDate();
+
+            let html='<div class="nc-cal">';
+            _DOW_KO.forEach((d,i)=>{
+                html+=`<div class="nc-hdr ${i===0?'sun':i===6?'sat':''}">${d}</div>`;
+            });
+            for(let i=firstDow-1;i>=0;i--){
+                html+=`<div class="nc-cell other"><div class="nc-num">${prevLast-i}</div></div>`;
+            }
+            for(let d=1;d<=lastDate;d++){
+                const ds=_ymd(year,month+1,d);
+                const dow=(firstDow+d-1)%7;
+                const sched=_clinicSchedOf(ds);
+                const off=_isClinicOff(ds);
+                let cls='nc-cell';
+                if(ds===today) cls+=' today';
+                if(ds===_noticeSelDate) cls+=' sel';
+                if(dow===0) cls+=' sun'; else if(dow===6) cls+=' sat';
+                if(sched&&sched.type==='holiday') cls+=' holi';
+                if(sched){ cls+=CLINIC_SCHED_TYPES[sched.type].off?' off':' opn'; }
+                else if(off) cls+=' off';
+
+                let inner=`<div class="nc-num">${d}</div>`;
+                if(sched){
+                    const t=CLINIC_SCHED_TYPES[sched.type];
+                    inner+=`<span class="nc-chip ${t.cls}">${_esc(sched.label||t.short)}</span>`;
+                }else if(off){
+                    inner+=`<span class="nc-chip sc-closed">정기휴무</span>`;
+                }
+                const lv=_leavesOn(ds);
+                lv.slice(0,2).forEach(l=>{
+                    inner+=`<span class="nc-chip lv ${l.status==='pending'?'pend':''}">${_esc(l.name)}${l.type&&l.type!=='연차'?' '+_esc(l.type):''}</span>`;
+                });
+                if(lv.length>2) inner+=`<span class="nc-more">연차 +${lv.length-2}</span>`;
+                const nt=_noticesOn(ds);
+                nt.slice(0,2).forEach(n=>{
+                    inner+=`<span class="nc-chip nt" style="${n.done?'opacity:.5;text-decoration:line-through':''}">${_esc(_noticePreview(n.text,10))}</span>`;
+                });
+                if(nt.length>2) inner+=`<span class="nc-more">공지 +${nt.length-2}</span>`;
+
+                html+=`<button type="button" class="${cls}" onclick="openNoticeDay('${ds}')">${inner}</button>`;
+            }
+            const total=firstDow+lastDate;
+            const rest=(7-total%7)%7;
+            for(let i=1;i<=rest;i++){
+                html+=`<div class="nc-cell other"><div class="nc-num">${i}</div></div>`;
+            }
+            html+='</div>';
+            wrap.innerHTML=html;
+        }
+        // 그날의 진료상태·연차를 칩으로 요약
+        function _dayStatusChipsHtml(dateStr){
+            const sched=_clinicSchedOf(dateStr);
+            const off=_isClinicOff(dateStr);
+            let html='';
+            if(sched){
+                const t=CLINIC_SCHED_TYPES[sched.type];
+                const label=(sched.label&&sched.label!==t.label)?`${t.label} · ${sched.label}`:t.label;
+                html+=`<span style="padding:2px 8px;border-radius:999px;font-weight:700;font-size:.72rem;${t.off?'background:#fee2e2;color:#991b1b':'background:#d1fae5;color:#065f46'}">${t.icon} ${_esc(label)}</span>`;
+            }else{
+                html+=off
+                    ? '<span style="padding:2px 8px;border-radius:999px;font-weight:700;font-size:.72rem;background:#fde68a;color:#92400e">⛔ 정기휴무</span>'
+                    : '<span style="padding:2px 8px;border-radius:999px;font-weight:700;font-size:.72rem;background:#dbeafe;color:#1e40af">🏥 진료일</span>';
+            }
+            const lv=_leavesOn(dateStr);
+            if(lv.length){
+                lv.slice(0,4).forEach(l=>{
+                    html+=`<span style="padding:2px 8px;border-radius:999px;font-size:.72rem;${l.status==='pending'?'background:#fff7ed;color:#c2410c':'background:#ede9fe;color:#5b21b6'}">🏖 ${_esc(l.name)} ${_esc(l.type)}${l.status==='pending'?'(대기)':''}</span>`;
+                });
+                if(lv.length>4) html+=`<span style="font-size:.72rem;color:#6b7280">외 ${lv.length-4}명</span>`;
+            }else{
+                html+='<span style="font-size:.72rem;color:#9ca3af">연차 없음</span>';
+            }
+            return html;
+        }
+        function _renderNoticeTodayBar(){
+            const box=document.getElementById('noticeTodayBar');
+            if(!box) return;
+            const d=_todayYmd();
+            box.innerHTML=`<span style="font-weight:700;color:var(--text-secondary);font-size:.72rem">오늘 ${d}(${_DOW_KO[_dowOf(d)]})</span>`+_dayStatusChipsHtml(d);
+        }
+        function _renderHomeTodayStatus(){
+            const box=document.getElementById('topHomeTodayStatus');
+            if(!box) return;
+            box.innerHTML=_dayStatusChipsHtml(_todayYmd());
+        }
+        // ── 날짜 클릭 → 상세(진료일정·연차·공지 작성) ──
+        function openNoticeDay(dateStr){
+            if(!dateStr) return;
+            _noticeSelDate=dateStr;
+            const di=document.getElementById('noticeDateInput'); if(di) di.value=dateStr;
+            const panel=document.getElementById('noticeDayPanel'); if(panel) panel.style.display='';
+            // 다른 달의 날짜를 열면 달력도 그 달로 이동
+            const [y,m]=dateStr.split('-').map(Number);
+            if(y!==_noticeCalMonth.getFullYear()||m-1!==_noticeCalMonth.getMonth()) _noticeCalMonth=new Date(y,m-1,1);
+            _noticeDayLabelFor=null;
+            _renderNoticeDayPanel();
+            _renderNoticeCalendar();
+        }
+        function closeNoticeDay(){
+            _noticeSelDate=null;
+            const panel=document.getElementById('noticeDayPanel'); if(panel) panel.style.display='none';
+            _renderNoticeCalendar();
+        }
+        function _renderNoticeDayPanel(){
+            const ds=_noticeSelDate; if(!ds) return;
+            const panel=document.getElementById('noticeDayPanel'); if(!panel) return;
+            const title=document.getElementById('noticeDayTitle');
+            if(title){
+                const isToday=ds===_todayYmd();
+                title.textContent=`${ds} (${_DOW_KO[_dowOf(ds)]})${isToday?' · 오늘':''}`;
+            }
+            const di=document.getElementById('noticeDateInput'); if(di) di.value=ds;
+            // 진료일정 버튼
+            const cur=_clinicSchedOf(ds);
+            const btns=document.getElementById('noticeDaySchedBtns');
+            if(btns){
+                btns.innerHTML=CLINIC_SCHED_ORDER.map(k=>{
+                    const t=CLINIC_SCHED_TYPES[k];
+                    const on=cur&&cur.type===k&&cur.custom;
+                    return `<button type="button" class="nc-sbtn ${on?'on':''}" onclick="setClinicSched('${ds}','${k}')">${t.icon} ${t.label}</button>`;
+                }).join('')
+                + (_clinicSched[ds]?`<button type="button" class="nc-sbtn" onclick="setClinicSched('${ds}','')">지정 해제</button>`:'')
+                + (cur&&!cur.custom
+                    ? `<div style="flex:0 0 100%;font-size:.68rem;color:#92400e;margin-top:.15rem">※ 기본 공휴일표로 <b>${_esc(cur.label)}</b> 표시 중 — 위에서 직접 지정하면 덮어씁니다.</div>`
+                    : (!cur&&_dowOf(ds)===0
+                        ? `<div style="flex:0 0 100%;font-size:.68rem;color:#92400e;margin-top:.15rem">※ 일요일 정기휴무로 표시 중 — 진료하면 <b>대체진료</b>를 지정하세요.</div>`
+                        : ''));
+            }
+            // 일정 이름 입력칸 (입력 중이면 덮어쓰지 않음)
+            const labelEl=document.getElementById('noticeDaySchedLabel');
+            if(labelEl&&_noticeDayLabelFor!==ds){
+                labelEl.value=(_clinicSched[ds]?.label)||'';
+                labelEl.placeholder=cur&&!cur.custom?`기본 표시: ${cur.label}`:'일정 이름 (예: 추석 연휴, 오전만 진료)';
+                _noticeDayLabelFor=ds;
+            }
+            // 연차
+            const lvBox=document.getElementById('noticeDayLeaves');
+            if(lvBox){
+                const lv=_leavesOn(ds);
+                lvBox.innerHTML=lv.length
+                    ? lv.map(l=>`<div style="display:flex;align-items:center;gap:.35rem;padding:.3rem .5rem;border:1px solid #ede9fe;background:#faf5ff;border-radius:6px;margin-bottom:.25rem;font-size:.8rem">
+                        <span style="font-weight:700;color:#5b21b6">${_esc(l.name)}</span>
+                        <span style="color:#6b7280">${_esc(l.type)}</span>
+                        <span style="margin-left:auto;font-size:.68rem;padding:1px 6px;border-radius:999px;${l.status==='approved'?'background:#dcfce7;color:#166534':'background:#fef3c7;color:#92400e'}">${l.status==='approved'?'승인':'대기'}</span>
+                      </div>`).join('')
+                    : '<div style="font-size:.78rem;color:#9ca3af;padding:.2rem 0">연차·오프 없음</div>';
+            }
+            // 공지 목록
+            const list=document.getElementById('noticeDayList');
+            if(list){
+                const items=_noticesOn(ds);
+                list.innerHTML=items.length
+                    ? items.map(n=>_noticeRowHtml(n,false)).join('')
+                    : '<div style="font-size:.78rem;color:#9ca3af;padding:.2rem 0">등록된 공지가 없습니다. 아래에 입력해 추가하세요.</div>';
+            }
         }
 
         // ================================================================
