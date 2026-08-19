@@ -1,4 +1,13 @@
 /* ===== hr-attendance.js - LUMI ERP v11 - 직원/근태/인센티브 ===== */
+
+// 식대 정책 v4 — 투트랙. settings/mealPolicy 의 모드에 따라
+//   monthly: 직원별 월 한도(mealLimit) 안에서 자유 사용, 출근 무관
+//   daily  : 출근한 날마다 1일 지급액(mealDaily) 적립 · 같은 달 안에서 이월 누적
+// 모드 전환(적용 시작 월 지정)은 통합앱 STAFF 관리 > OT·식사 탭에서 한다.
+// 아래 값은 직원별 개별 지정이 없을 때의 표시용 기본값.
+const MEAL_DAILY_DEFAULT=14000;     // 출근 1일당 지급액 (원)
+const MEAL_MONTHLY_DEFAULT=300000;  // 월 한도 (원)
+
 function renderEmployees(){
     const roleLabels={doctor:'원장',nurse:'간호사',coordinator:'코디네이터',marketing:'마케팅',manager:'실장',esthetician:'피부관리사'};
     const filter=document.getElementById('attendanceFilter');
@@ -627,7 +636,8 @@ function openEmployeeModal(id=null){
     document.getElementById('empUsedLeave').value='0';
     document.getElementById('autoAnnualLeave').textContent='0';
     document.getElementById('empId').value='';
-    document.getElementById('empMealLimit').value='300000';
+    document.getElementById('empMealLimit').value='';
+    document.getElementById('empMealDaily').value='';
     document.getElementById('empLocationExempt').checked=false;
     // Firebase Auth 관련 입력 초기화
     // 신규: 입력 가능. 수정: staffId 이미 있으면 비활성화, 없으면 입력 가능 (기존 직원 마이그레이션)
@@ -678,7 +688,8 @@ function openEmployeeModal(id=null){
             toggleResignDateField();
             document.getElementById('empAnnualLeave').value=emp.annualLeave||'';
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
-            document.getElementById('empMealLimit').value=emp.mealLimit||300000;
+            document.getElementById('empMealLimit').value=emp.mealLimit||'';
+            document.getElementById('empMealDaily').value=emp.mealDaily||'';
             document.getElementById('empLocationExempt').checked=!!emp.locationExempt;
             // 인센티브 설정 복원
             document.getElementById('empIncType').value=emp.incType||'none';
@@ -843,7 +854,8 @@ async function saveEmployee(){
         resignDate:document.getElementById('empResignDate').value||'',
         annualLeave:annualLeave,
         usedLeave:usedLeave,
-        mealLimit:parseInt(document.getElementById('empMealLimit').value)||300000,
+        mealLimit:parseInt(document.getElementById('empMealLimit').value)||0,   // 0 = 정책 기본값 사용
+        mealDaily:parseInt(document.getElementById('empMealDaily').value)||0,
         locationExempt:document.getElementById('empLocationExempt').checked,
         incType:document.getElementById('empIncType').value||'none',
         incPercent:parseFloat(document.getElementById('empIncPercent').value)||0,
