@@ -668,3 +668,179 @@ exports.parseRevenueFile = onCall(
     };
   }
 );
+
+/* ═══════════════════════════════════════════════════════════════════
+ * ocrReceipt (HTTPS Callable)
+ *   배달앱(배민 등) 주문상세 스크린샷에서 결제 금액을 읽어 식대 입력을 자동화.
+ *   - 로그인한 직원이면 호출 가능
+ *   - Google Cloud Vision DOCUMENT_TEXT_DETECTION 으로 텍스트 추출
+ *     ※ 사전 준비(1회): GCP 콘솔에서 lumiclinic-c1a95 프로젝트에
+ *       Cloud Vision API 활성화 필요 (월 1,000건 무료)
+ *   - 이미지 자체는 저장하지 않고 인식 후 버린다
+ * ═══════════════════════════════════════════════════════════════════ */
+
+// "14,800원" / "-2,700" 같은 토큰에서 정수 금액을 뽑는다. 실패하면 null.
+function parseWon(token) {
+  if (!token) return null;
+  const m = String(token).replace(/\s/g, '').match(/-?[\d,]+/);
+  if (!m) return null;
+  const n = parseInt(m[0].replace(/,/g, ''), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+// 같은 줄 또는 바로 다음 줄에서 금액을 찾는다 (Vision 은 라벨/값을 줄바꿈으로 나누기도 함)
+function amountNear(lines, idx) {
+  const own = lines[idx].replace(/^[^\d-]*/, '');
+  const here = parseWon(own);
+  if (here !== null && /\d/.test(own)) return here;
+  for (let k = idx + 1; k < Math.min(idx + 3, lines.length); k++) {
+    const v = parseWon(lines[k]);
+    if (v !== null && /^\s*-?[\d,]+\s*원?\s*$/.test(lines[k])) return v;
+  }
+  return null;
+}
+
+/**
+ * 배달앱 영수증 텍스트에서 음식/배달비/결제금액을 뽑는다.
+ *
+ * 배민 예시 — 메뉴금액 14,800 / 배달팁 2,700 / 할인 -2,700 / 결제금액 14,800
+ * 결제금액이 실제로 나간 돈이므로 이를 기준으로 삼고,
+ * 배달비 = 결제금액 − 메뉴금액 (할인이 반영된 실질 배달비) 으로 역산한다.
+ * 그래야 음식+배달 합계가 항상 결제금액과 일치한다.
+ */
+function parseReceiptText(text) {
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const pick = (patterns) => {
+    for (const re of patterns) {
+      for (let i = 0; i < lines.length; i++) {
+        if (re.test(lines[i])) {
+          const v = amountNear(lines, i);
+          if (v !== null) return v;
+        }
+      }
+    }
+    return null;
+  };
+
+  const total = pick([
+    /최종\s*결제\s*금액/, /총\s*결제\s*금액/, /결제\s*금액/, /결제금액/,
+    /총\s*결제/, /합계\s*금액/, /총\s*주문\s*금액/,
+  ]);
+  const menu = pick([/메뉴\s*금액/, /메뉴금액/, /상품\s*금액/, /주문\s*금액/, /음식\s*금액/]);
+  const tip = pick([/배달\s*팁/, /배달팁/, /배달\s*비/, /배달\s*요금/, /배달\s*료/]);
+  const discount = pick([/총\s*할인\s*받은\s*금액/, /할인\s*금액/, /총\s*할인/]);
+
+  // 결제금액을 확정 — 없으면 메뉴+배달팁-할인 으로 추정
+  let totalAmount = total;
+  if (totalAmount === null && menu !== null) {
+    totalAmount = menu + (tip || 0) - Math.abs(discount || 0);
+  }
+  if (totalAmount === null || totalAmount <= 0) {
+    return {ok: false, foodAmount: null, deliveryFee: null, totalAmount: null,
+      menuAmount: menu, deliveryTip: tip, discount, lines};
+  }
+
+  // 음식/배달비 배분 — 합계가 결제금액과 정확히 맞도록
+  let foodAmount;
+  let deliveryFee;
+  if (menu !== null && menu >= 0 && menu <= totalAmount) {
+    foodAmount = menu;
+    deliveryFee = totalAmount - menu;
+  } else if (tip !== null && tip > 0 && tip < totalAmount) {
+    deliveryFee = tip;
+    foodAmount = totalAmount - tip;
+  } else {
+    foodAmount = totalAmount;
+    deliveryFee = 0;
+  }
+
+  return {ok: true, foodAmount, deliveryFee, totalAmount,
+    menuAmount: menu, deliveryTip: tip, discount, lines};
+}
+
+exports.ocrReceipt = onCall(
+  {region: 'asia-northeast3', cors: true, memory: '512MiB', timeoutSeconds: 60},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
+    }
+    const b64 = String((request.data && request.data.imageBase64) || '')
+      .replace(/^data:image\/\w+;base64,/, '');
+    if (!b64) {
+      throw new HttpsError('invalid-argument', '이미지가 없습니다.');
+    }
+    // 대략 8MB 원본까지 (base64 는 약 4/3 배)
+    if (b64.length > 11 * 1024 * 1024) {
+      throw new HttpsError('invalid-argument', '이미지가 너무 큽니다. 더 작게 잘라서 올려주세요.');
+    }
+
+    let token;
+    try {
+      const {GoogleAuth} = require('google-auth-library');
+      const auth = new GoogleAuth({scopes: ['https://www.googleapis.com/auth/cloud-platform']});
+      token = await auth.getAccessToken();
+    } catch (e) {
+      logger.error('ocrReceipt auth 실패', e);
+      throw new HttpsError('internal', 'OCR 인증에 실패했습니다.');
+    }
+
+    let visionJson;
+    try {
+      const res = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+        body: JSON.stringify({
+          requests: [{
+            image: {content: b64},
+            features: [{type: 'DOCUMENT_TEXT_DETECTION'}],
+            imageContext: {languageHints: ['ko', 'en']},
+          }],
+        }),
+      });
+      visionJson = await res.json();
+      if (!res.ok) {
+        const msg = (visionJson && visionJson.error && visionJson.error.message) || `HTTP ${res.status}`;
+        logger.error('Vision API 오류', msg);
+        if (/has not been used|is disabled|SERVICE_DISABLED/i.test(msg)) {
+          throw new HttpsError('failed-precondition',
+            'Cloud Vision API 가 아직 활성화되지 않았습니다. GCP 콘솔에서 lumiclinic-c1a95 프로젝트에 Vision API 를 켜주세요.');
+        }
+        throw new HttpsError('internal', 'OCR 실패: ' + msg);
+      }
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      logger.error('ocrReceipt 호출 실패', e);
+      throw new HttpsError('internal', 'OCR 호출에 실패했습니다: ' + e.message);
+    }
+
+    const r = (visionJson.responses && visionJson.responses[0]) || {};
+    if (r.error && r.error.message) {
+      throw new HttpsError('internal', 'OCR 실패: ' + r.error.message);
+    }
+    const text = (r.fullTextAnnotation && r.fullTextAnnotation.text) || '';
+    if (!text.trim()) {
+      return {ok: false, reason: '이미지에서 글자를 찾지 못했습니다.', text: '', parsed: null};
+    }
+
+    const parsed = parseReceiptText(text);
+    logger.info(`ocrReceipt by ${request.auth.token.email || request.auth.uid}: ` +
+      `total=${parsed.totalAmount} food=${parsed.foodAmount} delivery=${parsed.deliveryFee}`);
+    return {
+      ok: parsed.ok,
+      reason: parsed.ok ? null : '결제 금액을 찾지 못했습니다. 직접 입력해주세요.',
+      text,
+      parsed: {
+        foodAmount: parsed.foodAmount,
+        deliveryFee: parsed.deliveryFee,
+        totalAmount: parsed.totalAmount,
+        menuAmount: parsed.menuAmount,
+        deliveryTip: parsed.deliveryTip,
+        discount: parsed.discount,
+      },
+    };
+  }
+);
