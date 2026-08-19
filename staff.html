@@ -1171,6 +1171,11 @@
                     <input type="date" class="form-input" id="mealDate" onchange="onMealDateChange()">
                 </div>
                 <div class="form-group">
+                    <button type="button" class="btn btn-outline" style="width:100%;margin:0;font-size:.85rem" onclick="document.getElementById('mealReceiptFile').click()">📷 영수증 스크린샷에서 금액 불러오기</button>
+                    <input type="file" id="mealReceiptFile" accept="image/*" style="display:none" onchange="onMealReceiptPicked(this,'group')">
+                    <div id="mealReceiptStatus" style="font-size:.72rem;margin-top:.35rem;line-height:1.5"></div>
+                </div>
+                <div class="form-group">
                     <label class="form-label">음식 금액 (원)</label>
                     <input type="number" class="form-input" id="mealFoodAmount" placeholder="예: 45000" oninput="onMealAmountChange()">
                 </div>
@@ -1224,6 +1229,11 @@
                     <label class="form-label">날짜 *</label>
                     <input type="date" class="form-input" id="personalMealDate" onchange="updatePersonalMealTotal()">
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">출근한 날짜만 사용할 수 있습니다.</div>
+                </div>
+                <div class="form-group">
+                    <button type="button" class="btn btn-outline" style="width:100%;margin:0;font-size:.85rem" onclick="document.getElementById('personalReceiptFile').click()">📷 영수증 스크린샷에서 금액 불러오기</button>
+                    <input type="file" id="personalReceiptFile" accept="image/*" style="display:none" onchange="onMealReceiptPicked(this,'personal')">
+                    <div id="personalReceiptStatus" style="font-size:.72rem;margin-top:.35rem;line-height:1.5"></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">음식 금액 (원) *</label>
@@ -4859,6 +4869,85 @@
         let mealSelectedStaff={};
         let mealManualAmounts={};
 
+        // ── 📷 영수증 스크린샷 → 금액 자동 입력 (Cloud Vision OCR) ──
+        //    배달앱 주문상세 화면을 찍어 올리면 결제금액을 읽어 음식/배달비 칸을 채운다.
+        //    1/N 분배·잔액 검증 로직은 그대로 — 금액 입력만 대신해 준다.
+        function _mealReadFile(file){
+            return new Promise((resolve,reject)=>{
+                const fr=new FileReader();
+                fr.onload=()=>resolve(fr.result);
+                fr.onerror=()=>reject(new Error('파일을 읽지 못했습니다.'));
+                fr.readAsDataURL(file);
+            });
+        }
+
+        // 업로드 용량을 줄이되 글자는 읽히도록 긴 변 2400px 까지만 축소
+        async function _mealCompressImage(file){
+            const dataUrl=await _mealReadFile(file);
+            const img=await new Promise((res,rej)=>{
+                const i=new Image();
+                i.onload=()=>res(i);
+                i.onerror=()=>rej(new Error('이미지를 열지 못했습니다.'));
+                i.src=dataUrl;
+            });
+            const maxDim=2400;
+            const scale=Math.min(1, maxDim/Math.max(img.width, img.height));
+            const w=Math.max(1,Math.round(img.width*scale));
+            const h=Math.max(1,Math.round(img.height*scale));
+            const c=document.createElement('canvas');
+            c.width=w; c.height=h;
+            c.getContext('2d').drawImage(img,0,0,w,h);
+            return c.toDataURL('image/jpeg',0.85).split(',')[1];
+        }
+
+        async function onMealReceiptPicked(input, target){
+            const file=input.files&&input.files[0];
+            input.value='';   // 같은 파일 다시 고를 수 있게
+            if(!file) return;
+            const statusEl=document.getElementById(target==='personal'?'personalReceiptStatus':'mealReceiptStatus');
+            const setStatus=(html)=>{ if(statusEl) statusEl.innerHTML=html; };
+            if(!functions){
+                setStatus('<span style="color:var(--red)">⚠ OCR 기능을 쓸 수 없는 환경입니다. 금액을 직접 입력해주세요.</span>');
+                return;
+            }
+            setStatus('<span style="color:var(--text-muted)">영수증을 읽는 중…</span>');
+            try{
+                const b64=await _mealCompressImage(file);
+                const fn=functions.httpsCallable('ocrReceipt');
+                const res=await fn({imageBase64:b64});
+                const d=res.data||{};
+                const p=d.parsed||{};
+                if(!d.ok||!(p.totalAmount>0)){
+                    setStatus('<span style="color:var(--red)">⚠ '+(d.reason||'금액을 찾지 못했습니다.')+' 직접 입력해주세요.</span>');
+                    return;
+                }
+                const food=Math.max(0, Number(p.foodAmount)||0);
+                const deliv=Math.max(0, Number(p.deliveryFee)||0);
+                if(target==='personal'){
+                    document.getElementById('personalMealAmount').value=food;
+                    document.getElementById('personalMealDelivery').value=deliv;
+                    updatePersonalMealTotal();
+                }else{
+                    document.getElementById('mealFoodAmount').value=food;
+                    document.getElementById('mealDeliveryFee').value=deliv;
+                    onMealAmountChange();   // 총액 표시 + 1/N 재분배
+                }
+                // 읽은 근거를 함께 보여줘서 사람이 바로 검증할 수 있게
+                const parts=[];
+                if(p.menuAmount!=null) parts.push('메뉴 '+formatCurrency(p.menuAmount));
+                if(p.deliveryTip!=null) parts.push('배달팁 '+formatCurrency(p.deliveryTip));
+                if(p.discount!=null&&p.discount!==0) parts.push('할인 '+formatCurrency(p.discount));
+                setStatus('<span style="color:var(--green)">✅ 결제금액 '+formatCurrency(p.totalAmount)+' 인식</span>'
+                    +'<div style="color:var(--text-muted);margin-top:.2rem">'
+                    +(parts.length?parts.join(' · ')+'<br>':'')
+                    +'→ 음식 '+formatCurrency(food)+' + 배달비 '+formatCurrency(deliv)
+                    +'<br>금액이 다르면 아래에서 직접 고쳐주세요.</div>');
+            }catch(e){
+                const msg=(e&&e.message)||'알 수 없는 오류';
+                setStatus('<span style="color:var(--red)">⚠ 영수증 인식 실패: '+msg+'<br>금액을 직접 입력해주세요.</span>');
+            }
+        }
+
         // 특정 날짜 기준 사용 가능 잔액 (그 날짜까지의 적립 − 사용, 이월분 포함)
         function getMealRemain(empId, date){
             const d=String(date||'');
@@ -4911,6 +5000,8 @@
             document.getElementById('mealSplitDetail').innerHTML='';
             document.getElementById('mealValidation').innerHTML='';
             document.getElementById('mealSaveBtn').disabled=true;
+            const gStat=document.getElementById('mealReceiptStatus');
+            if(gStat) gStat.innerHTML='';
             openModal('mealModal');
             await loadMealAttendance();          // 오늘 출근 반영 위해 최신화
             renderMealStaffList();
@@ -4935,6 +5026,8 @@
             document.getElementById('personalMealDelivery').value='0';
             document.getElementById('personalMealTotalDisplay').textContent='₩0';
             document.getElementById('personalMealMemo').value='';
+            const pStat=document.getElementById('personalReceiptStatus');
+            if(pStat) pStat.innerHTML='';
             openModal('personalMealModal');
             await loadMealAttendance();          // 오늘 출근 반영 위해 최신화
             updatePersonalMealTotal();
