@@ -4285,8 +4285,8 @@
             
             if(leaveRequests.length>0){
                 document.getElementById('leaveHistory').innerHTML=leaveRequests.slice(0,10).map(r=>{
-                    const statusClass=r.status==='approved'?'approved':r.status==='rejected'?'rejected':'pending';
-                    const statusLabel=r.status==='approved'?'승인':r.status==='rejected'?'반려':'대기중';
+                    const statusClass=r.status==='approved'?'approved':(r.status==='rejected'||r.status==='cancelled')?'rejected':'pending';
+                    const statusLabel=r.status==='approved'?'승인':r.status==='rejected'?'반려':r.status==='cancelled'?'취소':'대기중';
                     const dates=r.dates?.join(', ')||'-';
                     return `
                         <div class="leave-item ${statusClass}">
@@ -11485,7 +11485,7 @@
             // 오프/연차 데이터 그날 매핑
             const offByDate={}; // 'YYYY-MM-DD' -> [{empName, type, status}]
             _staffAdminLeaves.forEach(r=>{
-                if(r.status==='rejected') return;
+                if(r.status==='rejected'||r.status==='cancelled') return;
                 const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
                 const name=emp?.name||r.employeeName||r.employeeId||'?';
                 const type=r.type||'연차';
@@ -11551,7 +11551,7 @@
         function _staffCalDayClick(dateStr){
             const offs=[];
             _staffAdminLeaves.forEach(r=>{
-                if(r.status==='rejected') return;
+                if(r.status==='rejected'||r.status==='cancelled') return;
                 if(!(r.dates||[]).includes(dateStr)) return;
                 const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
                 offs.push({name:emp?.name||r.employeeId, type:r.type||'연차', status:r.status||'pending', reason:r.reason||'', reqId:r.id});
@@ -11604,6 +11604,18 @@
                 approved:'<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">승인</span>',
                 rejected:'<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">반려</span>'
             }[r.status||'pending'];
+            // 액션: 대기중이면 승인/반려, 승인된 건이면 취소
+            let actionsHtml='';
+            if(r.status==='pending' && showActions){
+                actionsHtml=`<div style="display:flex;gap:.35rem;margin-top:.4rem;justify-content:flex-end">
+                    <button onclick="_staffApproveLeave('${r.id}','rejected')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">반려</button>
+                    <button onclick="_staffApproveLeave('${r.id}','approved')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.75rem;border-radius:5px;cursor:pointer;font-weight:600">✓ 승인</button>
+                </div>`;
+            }else if(r.status==='approved'){
+                actionsHtml=`<div style="display:flex;gap:.35rem;margin-top:.4rem;justify-content:flex-end">
+                    <button onclick="_staffCancelLeave('${r.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">연차 취소</button>
+                </div>`;
+            }
             return `<div style="padding:.6rem .75rem;border:1px solid ${showActions?'#fbbf24':'#e5e7eb'};background:${showActions?'#fffbeb':'#fff'};border-radius:8px;margin-bottom:.4rem">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.25rem">
                     <div style="font-weight:700;font-size:.9rem">${_esc(name)} · <span style="color:#6b7280;font-weight:500">${_esc(r.type||'연차')}</span></div>
@@ -11611,10 +11623,7 @@
                 </div>
                 <div style="font-size:.78rem;color:#374151">${_esc(dateLabel)}</div>
                 ${r.reason?`<div style="font-size:.72rem;color:#6b7280;margin-top:.2rem;white-space:pre-wrap">${_esc(r.reason)}</div>`:''}
-                ${showActions?`<div style="display:flex;gap:.35rem;margin-top:.4rem;justify-content:flex-end">
-                    <button onclick="_staffApproveLeave('${r.id}','rejected')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">반려</button>
-                    <button onclick="_staffApproveLeave('${r.id}','approved')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.75rem;border-radius:5px;cursor:pointer;font-weight:600">✓ 승인</button>
-                </div>`:''}
+                ${actionsHtml}
             </div>`;
         }
         async function _staffApproveLeave(id, next){
@@ -11631,6 +11640,23 @@
                 if(r){ r.status=next; r.updatedAt=new Date().toISOString(); }
                 _renderStaffAdminBody();
             }catch(e){ alert('실패: '+(e?.message||e)); }
+        }
+        // 승인된 연차 취소 (관리자앱 cancelLeave 대응) — status:'cancelled' 로 변경
+        async function _staffCancelLeave(id){
+            if(!confirm('이 승인된 연차를 취소하시겠습니까?\n\n취소하면 해당 직원의 연차 사용에서 제외됩니다.')) return;
+            try{
+                const now=new Date().toISOString();
+                await db.collection('leaveRequests').doc(id).update({
+                    status: 'cancelled',
+                    cancelledAt: now,
+                    updatedAt: now,
+                    updatedBy: currentUser?.name||currentUser?.id||'admin'
+                });
+                // 로컬 캐시 갱신
+                const r=_staffAdminLeaves.find(x=>x.id===id);
+                if(r){ r.status='cancelled'; r.cancelledAt=now; r.updatedAt=now; }
+                _renderStaffAdminBody();
+            }catch(e){ alert('취소 실패: '+(e?.message||e)); }
         }
 
         // 근태·OT·급여 공통 월 이동 헤더
