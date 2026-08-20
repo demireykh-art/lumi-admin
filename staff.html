@@ -529,7 +529,7 @@
                             <span style="font-size:2.25rem">📦</span>
                             <div style="flex:1">
                                 <div style="font-weight:700;font-size:1rem;color:#1f2937">재고 관리</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">파트별 재고 실사 · 발주 · 카탈로그</div>
+                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">파트별 재고 실사 · 발주 · 비품 구입</div>
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
@@ -1790,7 +1790,7 @@
     <div class="modal" id="suppliesCatalogModal">
         <div class="modal-content" style="max-width:900px;width:96vw;max-height:92vh;display:flex;flex-direction:column">
             <div class="modal-header">
-                <div class="modal-title">🛍️ 소모품 구입 카탈로그</div>
+                <div class="modal-title">🛍️ 비품 구입</div>
                 <button class="modal-close" onclick="closeModal('suppliesCatalogModal')">&times;</button>
             </div>
             <div class="modal-body" style="overflow-y:auto;flex:1">
@@ -1808,6 +1808,24 @@
                         <option value="마케팅">마케팅</option>
                         <option value="regular">정기 구매 (2회+)</option>
                     </select>
+                    <button type="button" onclick="toggleCatalogAddForm()" style="background:#16a34a;color:#fff;border:none;padding:.5rem .9rem;border-radius:6px;font-size:.85rem;font-weight:700;cursor:pointer;white-space:nowrap">+ 새 비품</button>
+                </div>
+                <div id="catalogAddForm" style="display:none;margin-bottom:.75rem;padding:.7rem;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px">
+                    <div style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center">
+                        <input type="text" id="catalogAddName" placeholder="비품 이름 (예: 종이컵)" style="flex:2;min-width:140px;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem">
+                        <select id="catalogAddTeam" style="flex:1;min-width:90px;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem">
+                            <option value="공용">공용</option>
+                            <option value="피부">피부</option>
+                            <option value="간호">간호</option>
+                            <option value="데스크">데스크</option>
+                            <option value="마케팅">마케팅</option>
+                        </select>
+                        <input type="url" id="catalogAddLink" placeholder="구매 링크 (선택 · 쿠팡·네이버 등)" style="flex:2;min-width:160px;padding:.5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem">
+                    </div>
+                    <div style="display:flex;gap:.4rem;justify-content:flex-end;margin-top:.5rem">
+                        <button type="button" onclick="toggleCatalogAddForm(false)" style="background:#fff;border:1px solid #d1d5db;color:#4b5563;padding:.4rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">취소</button>
+                        <button type="button" onclick="catalogAddItem()" style="background:#16a34a;color:#fff;border:none;padding:.4rem 1rem;border-radius:6px;font-size:.8rem;font-weight:700;cursor:pointer">추가</button>
+                    </div>
                 </div>
                 <div id="suppliesCatalogList"></div>
                 <div style="font-size:.7rem;color:#9ca3af;margin-top:.5rem;text-align:right">소스: 구매내역 2026-01-29 ~ 2026-07-14</div>
@@ -13336,7 +13354,7 @@
                 {act:'common',label:'공용',icon:'📎',color:'#4b5563',count:_invCatCount('common')},
                 {act:'low',label:'발주 필요',icon:'⚠️',color:'#dc2626',count:_invLowStockCount()},
                 {act:'unused',label:'안쓰는 제품',icon:'😴',color:'#7c3aed',count:_invUnusedCountCard()},
-                {act:'buy',label:'소모품 구입',icon:'🛍️',color:'#16a34a',count:''},
+                {act:'buy',label:'비품 구입',icon:'🛍️',color:'#16a34a',count:''},
                 {act:'mix',label:'주사제 믹스',icon:'🧪',color:'#7c3aed',count:''},
             ];
             grid.innerHTML=cards.map(c=>`
@@ -13470,12 +13488,60 @@
         async function openSuppliesCatalog(){
             openModal('suppliesCatalogModal');
             renderSuppliesCatalog();
-            await _loadCatalogLinkOverrides();
+            await Promise.all([_loadCatalogLinkOverrides(), _loadCatalogCustom()]);
             renderSuppliesCatalog();
+        }
+        // 직원이 직접 추가한 비품 (Firestore: suppliesCatalogCustom)
+        let _catalogCustom=[];
+        async function _loadCatalogCustom(){
+            try{
+                if(typeof db==='undefined') return;
+                const snap=await db.collection('suppliesCatalogCustom').get();
+                _catalogCustom=snap.docs.map(d=>({id:d.id,...d.data(),custom:true}));
+            }catch(e){ console.warn('커스텀 비품 로드 실패', e); _catalogCustom=[]; }
         }
         function _catalogItems(){
             const cat=window.SUPPLIES_CATALOG||{items:[]};
-            return Array.isArray(cat.items)?cat.items:[];
+            const base=Array.isArray(cat.items)?cat.items:[];
+            return base.concat(_catalogCustom||[]);
+        }
+        function toggleCatalogAddForm(show){
+            const f=document.getElementById('catalogAddForm');
+            if(!f) return;
+            const vis=(show===undefined)?(f.style.display==='none'):!!show;
+            f.style.display=vis?'block':'none';
+            if(vis) setTimeout(()=>document.getElementById('catalogAddName')?.focus(),50);
+        }
+        async function catalogAddItem(){
+            const name=(document.getElementById('catalogAddName')?.value||'').trim();
+            if(!name){ alert('비품 이름을 입력하세요.'); return; }
+            const team=document.getElementById('catalogAddTeam')?.value||'공용';
+            let link=(document.getElementById('catalogAddLink')?.value||'').trim();
+            if(link){ const n=_normalizeCatalogUrl(link); if(!n){ alert('구매 링크가 올바른 URL이 아닙니다.\n비워두거나 https://... 형식으로 입력하세요.'); return; } link=n; }
+            try{
+                if(typeof db==='undefined') throw new Error('DB 미준비');
+                await db.collection('suppliesCatalogCustom').add({
+                    name, team, link, purchase_count:0,
+                    createdBy:currentUser?.name||'직원', createdById:currentUser?.id||'',
+                    createdAt:new Date().toISOString()
+                });
+                document.getElementById('catalogAddName').value='';
+                document.getElementById('catalogAddLink').value='';
+                toggleCatalogAddForm(false);
+                await _loadCatalogCustom();
+                renderSuppliesCatalog();
+                alert(`✅ '${name}' 을(를) 비품 목록에 추가했습니다.`);
+            }catch(e){ alert('추가 실패: '+(e.message||e)); }
+        }
+        async function catalogDeleteCustom(id){
+            const it=(_catalogCustom||[]).find(x=>x.id===id);
+            if(!it) return;
+            if(!confirm(`'${it.name}' 을(를) 비품 목록에서 삭제할까요?`)) return;
+            try{
+                await db.collection('suppliesCatalogCustom').doc(id).delete();
+                await _loadCatalogCustom();
+                renderSuppliesCatalog();
+            }catch(e){ alert('삭제 실패: '+(e.message||e)); }
         }
         function _fmtIntervalDays(d){
             if(d==null) return '';
@@ -13556,11 +13622,13 @@
                         : '<span style="color:#9ca3af;font-size:.75rem">링크 없음</span>';
                     const editBtn=`<button onclick="openCatalogLinkEdit('${nameEnc}')" style="background:none;border:1px solid #94a3b8;color:#475569;padding:.3rem .6rem;border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">✏️ 수정</button>`;
                     const wishBtn=`<button onclick="addSupplyToWishlist('${nameEnc}')" style="background:none;border:1px solid #6366f1;color:#6366f1;padding:.3rem .65rem;border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">📝 요청</button>`;
+                    const delBtn=i.custom?`<button onclick="catalogDeleteCustom('${i.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.3rem .55rem;border-radius:6px;font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap">🗑</button>`:'';
+                    const customTag=i.custom?`<span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:8px;font-size:.62rem;margin-left:4px">직접추가</span>`:'';
                     // URL 은 아니지만 참고 메모(상품명 등)가 남아있으면 안내로 표시
                     const noteRow=(rawLink && !url)?`<div style="font-size:.68rem;color:#b45309;margin-top:2px">📝 참고: ${_esc(rawLink)}</div>`:'';
                     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.6rem .7rem;border-bottom:1px solid #f1f5f9;gap:.4rem;flex-wrap:wrap">
                         <div style="flex:1;min-width:180px">
-                            <div style="font-weight:600;font-size:.9rem">${i.name}${dueBadge}${teamsTag}</div>
+                            <div style="font-weight:600;font-size:.9rem">${i.name}${customTag}${dueBadge}${teamsTag}</div>
                             <div style="font-size:.7rem;color:#6b7280;margin-top:2px">
                                 구매 ${cnt}회
                                 ${daysAgo!=null?` · 최근 ${daysAgo}일 전`:''}
@@ -13569,7 +13637,7 @@
                             </div>
                             ${noteRow}
                         </div>
-                        <div style="display:flex;gap:.4rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">${wishBtn}${editBtn}${linkBtn}</div>
+                        <div style="display:flex;gap:.4rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">${wishBtn}${editBtn}${linkBtn}${delBtn}</div>
                     </div>`;
                 }).join('');
                 return `<div style="margin-bottom:1rem;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
