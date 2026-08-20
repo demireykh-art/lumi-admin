@@ -529,7 +529,7 @@
                             <span style="font-size:2.25rem">📦</span>
                             <div style="flex:1">
                                 <div style="font-weight:700;font-size:1rem;color:#1f2937">재고 관리</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">파트별 재고 실사 · 발주 · 카탈로그</div>
+                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">파트별 재고 실사 · 발주 · 비품 구입</div>
                             </div>
                             <span style="color:#9ca3af">→</span>
                         </button>
@@ -1790,7 +1790,7 @@
     <div class="modal" id="suppliesCatalogModal">
         <div class="modal-content" style="max-width:900px;width:96vw;max-height:92vh;display:flex;flex-direction:column">
             <div class="modal-header">
-                <div class="modal-title">🛍️ 소모품 구입 카탈로그</div>
+                <div class="modal-title">🛍️ 비품 구입</div>
                 <button class="modal-close" onclick="closeModal('suppliesCatalogModal')">&times;</button>
             </div>
             <div class="modal-body" style="overflow-y:auto;flex:1">
@@ -13336,7 +13336,7 @@
                 {act:'common',label:'공용',icon:'📎',color:'#4b5563',count:_invCatCount('common')},
                 {act:'low',label:'발주 필요',icon:'⚠️',color:'#dc2626',count:_invLowStockCount()},
                 {act:'unused',label:'안쓰는 제품',icon:'😴',color:'#7c3aed',count:_invUnusedCountCard()},
-                {act:'buy',label:'소모품 구입',icon:'🛍️',color:'#16a34a',count:''},
+                {act:'buy',label:'비품 구입',icon:'🛍️',color:'#16a34a',count:''},
                 {act:'mix',label:'주사제 믹스',icon:'🧪',color:'#7c3aed',count:''},
             ];
             grid.innerHTML=cards.map(c=>`
