@@ -677,6 +677,14 @@ exports.parseRevenueFile = onCall(
  *     ※ 사전 준비(1회): GCP 콘솔에서 lumiclinic-c1a95 프로젝트에
  *       Cloud Vision API 활성화 필요 (월 1,000건 무료)
  *   - 이미지 자체는 저장하지 않고 인식 후 버린다
+ *
+ *   [배포 권한 메모]
+ *   GitHub Actions(deploy-functions.yml)로 배포하려면 FIREBASE_SERVICE_ACCOUNT
+ *   서비스 계정에 "서비스 계정 사용자(roles/iam.serviceAccountUser)" 역할이
+ *   있어야 한다. Editor 역할만으로는 iam.serviceAccounts.actAs 가 없어
+ *   lumiclinic-c1a95@appspot.gserviceaccount.com 을 대신할 수 없고
+ *   "Missing permissions required for functions deploy" 로 실패한다.
+ *   (Firestore 규칙 배포는 이 권한이 필요 없어 문제가 드러나지 않는다.)
  * ═══════════════════════════════════════════════════════════════════ */
 
 // "14,800원" / "-2,700" 같은 토큰에서 정수 금액을 뽑는다. 실패하면 null.
