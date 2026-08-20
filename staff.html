@@ -6277,7 +6277,10 @@
                 return;
             }
 
-            container.innerHTML=items.map(item=>{
+            const _lowBanner=(typeof _invForceLowStock!=='undefined'&&_invForceLowStock)
+                ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:.6rem .75rem;margin-bottom:.6rem"><div style="font-size:.8rem;color:#b91c1c;font-weight:700">⚠️ 발주 필요 ${items.length}건</div><button onclick="requestAllLowStock()" style="background:#dc2626;color:#fff;border:none;padding:.45rem .8rem;border-radius:8px;font-size:.8rem;font-weight:800;cursor:pointer;white-space:nowrap">🛒 부족분 전부 요청함에 담기</button></div>`
+                : '';
+            container.innerHTML=_lowBanner+items.map(item=>{
                 const lastAudit=lastWeekAudits[item.id];
                 const lastQty=lastAudit?lastAudit.actualStock:null;
                 const lastDate=lastAudit?new Date(lastAudit.createdAt).toLocaleDateString('ko-KR',{month:'short',day:'numeric'}):'';
@@ -13736,6 +13739,37 @@
                 alert(`✅ '${item.name}' ${qty}${item.unit||'개'} 을(를) 비품 요청 목록에 추가했습니다.`);
                 if(typeof loadStaffWishlist==='function') await loadStaffWishlist();
             }catch(e){ alert('요청 실패: '+(e.message||e)); }
+        }
+        // 발주 필요(부족분) 전체를 한 번에 구매 요청함에 담기
+        async function requestAllLowStock(){
+            const lows=(invItems||[]).filter(i=>!i.discontinued && i.safetyStock && (Number(i.currentStock)||0)<i.safetyStock);
+            if(!lows.length){ alert('발주 필요 품목이 없습니다.'); return; }
+            const pendingIds=new Set((typeof _pendingPurchaseReqs==='function'?_pendingPurchaseReqs():[]).map(r=>r.itemId).filter(Boolean));
+            const todo=lows.filter(i=>!pendingIds.has(i.id));
+            const skipped=lows.length-todo.length;
+            if(!todo.length){ alert(`발주 필요 ${lows.length}건이 이미 모두 구매 요청함에 담겨 있습니다.`); return; }
+            if(!confirm(`발주 필요 ${todo.length}건을 구매 요청함에 담을까요?`+(skipped?`\n(이미 담긴 ${skipped}건은 제외)`:''))) return;
+            let ok=0;
+            for(const item of todo){
+                const cur=Number(item.currentStock)||0, safe=Number(item.safetyStock)||0;
+                const qty=safe>cur?Math.ceil(safe-cur):1;
+                try{
+                    await db.collection('purchaseRequests').add({
+                        name:item.name, itemId:item.id, qty, unit:item.unit||'개', estimatedPrice:0,
+                        purchaseLink:item.purchaseLink||'',
+                        contactMethod:item.contactMethod||(item.purchaseLink?'link':(item.contactPhone?'sms':'')),
+                        contactPhone:item.contactPhone||'', contactName:item.contactName||'',
+                        vendorId:item.vendorId||'',
+                        vendorName:(item.vendorId&&typeof _vendorById==='function'?(_vendorById(item.vendorId)?.name||''):''),
+                        reason:`발주 필요 일괄 요청 (현재고 ${cur}${item.unit||'개'}, 안전 ${safe})`,
+                        requestedBy:currentUser?.name||'직원', requestedById:currentUser?.id||'',
+                        status:'pending', createdAt:new Date().toISOString()
+                    });
+                    ok++;
+                }catch(e){ console.warn('일괄 요청 실패:', item.name, e); }
+            }
+            alert(`✅ ${ok}건을 구매 요청함에 담았습니다.`+(skipped?` (이미 담긴 ${skipped}건 제외)`:''));
+            if(typeof loadStaffWishlist==='function') await loadStaffWishlist();
         }
 
         // 카탈로그 품목의 구매 링크 수정 모달 열기
