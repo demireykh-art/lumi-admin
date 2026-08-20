@@ -62,6 +62,7 @@ service cloud.firestore {
     match /vendors/{id}                        { allow read, write: if signedIn(); }
     match /purchaseRequests/{id}               { allow read, write: if signedIn(); }
     match /suppliesCatalogLinks/{id}           { allow read, write: if signedIn(); }
+    match /suppliesCatalogCustom/{id}          { allow read, write: if signedIn(); }
     match /categoryRules/{id}                  { allow read, write: if signedIn(); }
     match /productRatings/{id}                  { allow read, write: if signedIn(); }
     match /procedureTimes/{id}                  { allow read, write: if signedIn(); }
