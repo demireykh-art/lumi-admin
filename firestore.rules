@@ -99,6 +99,7 @@ service cloud.firestore {
 
     // ── 공지·교육/인계·상담 트리·설정·관리자 ──
     match /notices/{id}                         { allow read, write: if signedIn(); }
+    match /clinicSchedule/{id}                  { allow read, write: if signedIn(); }  // 병원 진료일정(공휴일·자체휴무·대체진료), 문서ID=YYYY-MM-DD
     match /handovers/{id}                       { allow read, write: if signedIn(); }
     match /consultTreeBackups/{id}              { allow read, write: if signedIn(); }
 
