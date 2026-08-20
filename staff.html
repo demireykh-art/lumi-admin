@@ -6365,6 +6365,7 @@
                                 ${isLow?`<span style="color:var(--red)">안전: ${item.safetyStock}</span>`:''}
                                 ${lastQty!=null?`<span>지난실사: ${lastQty} (${lastDate})</span>`:''}
                                 ${item.lastReceiveDate?`<span style="color:var(--green)">최근입고: ${item.lastReceiveDate}</span>`:''}
+                                <button onclick="requestPurchaseFromInventory('${item.id}')" style="background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;font-weight:700">🛒 요청</button>
                                 <button onclick="openReceiveItemModal('${item.id}')" style="background:none;border:1px solid var(--green);color:var(--green);font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer">📥 입고</button>
                                 <button onclick="openMoveStockModal('${item.id}')" style="background:none;border:1px solid #3b82f6;color:#3b82f6;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">🔄 이동</button>
                                 <button onclick="openConsumptionModal('${item.id}')" style="background:none;border:1px solid #a855f7;color:#7c3aed;font-size:.6rem;padding:1px 6px;border-radius:3px;cursor:pointer;margin-left:3px">📊 소진</button>
@@ -13674,6 +13675,34 @@
             }catch(e){
                 alert('추가 실패: '+(e.message||e));
             }
+        }
+
+        // 재고 목록의 품목을 바로 비품 요청(purchaseRequests) 으로 추가
+        async function requestPurchaseFromInventory(id){
+            const item=(invItems||[]).find(x=>x.id===id);
+            if(!item){ alert('품목을 찾을 수 없습니다.'); return; }
+            if(typeof db==='undefined'){ alert('시스템 초기화 중입니다.'); return; }
+            const cur=Number(item.currentStock)||0, safe=Number(item.safetyStock)||0;
+            const suggest=safe>cur?Math.ceil(safe-cur):1;
+            const qtyStr=prompt(`'${item.name}' 구매 요청 수량 (${item.unit||'개'})`, String(suggest));
+            if(qtyStr==null) return;
+            const qty=Math.max(1,parseInt(qtyStr,10)||1);
+            try{
+                await db.collection('purchaseRequests').add({
+                    name:item.name,
+                    itemId:item.id,
+                    qty,
+                    estimatedPrice:0,
+                    purchaseLink:item.purchaseLink||'',
+                    reason:`재고 요청 (현재고 ${cur}${item.unit||'개'}${safe?`, 안전 ${safe}`:''})`,
+                    requestedBy:currentUser?.name||'직원',
+                    requestedById:currentUser?.id||'',
+                    status:'pending',
+                    createdAt:new Date().toISOString()
+                });
+                alert(`✅ '${item.name}' ${qty}${item.unit||'개'} 을(를) 비품 요청 목록에 추가했습니다.`);
+                if(typeof loadStaffWishlist==='function') await loadStaffWishlist();
+            }catch(e){ alert('요청 실패: '+(e.message||e)); }
         }
 
         // 카탈로그 품목의 구매 링크 수정 모달 열기
