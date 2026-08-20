@@ -961,6 +961,7 @@
                     <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
                         <span>📦 재고</span>
                         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                            <button type="button" onclick="openModal('invHelpModal')" style="font-size:.8rem;padding:.4rem .7rem;border:1px solid #e5e7eb;background:#f9fafb;color:#374151;font-weight:600;border-radius:8px;cursor:pointer">❓ 사용법</button>
                             <button class="btn btn-primary" style="font-size:.8rem;padding:.4rem .8rem" onclick="openNewItemModal()">+ 신규 품목</button>
                         </div>
                     </div>
@@ -2034,6 +2035,55 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('purchaseRequestsModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 재고 사용법 도움말 -->
+    <div class="modal" id="invHelpModal">
+        <div class="modal-content" style="max-width:600px;width:96vw;max-height:92vh;display:flex;flex-direction:column">
+            <div class="modal-header">
+                <div class="modal-title">📦 재고 사용법</div>
+                <button class="modal-close" onclick="closeModal('invHelpModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y:auto;flex:1;font-size:.9rem;line-height:1.65">
+                <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:1rem">스탭이 자주 하는 두 가지부터, 헷갈리는 세 가지 차이까지 정리했어요.</div>
+
+                <!-- 제품 입고 -->
+                <div style="border-left:4px solid #16a34a;background:#f0fdf4;border-radius:0 10px 10px 0;padding:.85rem 1rem;margin-bottom:1rem">
+                    <div style="font-weight:800;font-size:1.02rem;color:#166534;margin-bottom:.6rem">📥 제품 입고 — 물건이 도착했을 때</div>
+                    <ol style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.55rem">
+                        <li style="display:flex;gap:.55rem;align-items:flex-start"><span style="flex:none;width:22px;height:22px;border-radius:50%;background:#16a34a;color:#fff;font-size:.74rem;font-weight:800;display:flex;align-items:center;justify-content:center">1</span><div>재고 목록에서 품목을 찾습니다. (또는 하단 <b>📥 입고</b> 탭)</div></li>
+                        <li style="display:flex;gap:.55rem;align-items:flex-start"><span style="flex:none;width:22px;height:22px;border-radius:50%;background:#16a34a;color:#fff;font-size:.74rem;font-weight:800;display:flex;align-items:center;justify-content:center">2</span><div>품목의 <span style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:1px 6px;border-radius:5px;font-weight:700;white-space:nowrap">📥 입고</span> 버튼을 누릅니다.</div></li>
+                        <li style="display:flex;gap:.55rem;align-items:flex-start"><span style="flex:none;width:22px;height:22px;border-radius:50%;background:#16a34a;color:#fff;font-size:.74rem;font-weight:800;display:flex;align-items:center;justify-content:center">3</span><div><b>입고 수량</b>을 입력합니다. <span style="color:#6b7280">(입고일은 오늘 날짜 자동 · 수정 가능)</span></div></li>
+                        <li style="display:flex;gap:.55rem;align-items:flex-start"><span style="flex:none;width:22px;height:22px;border-radius:50%;background:#16a34a;color:#fff;font-size:.74rem;font-weight:800;display:flex;align-items:center;justify-content:center">4</span><div><b>보관 장소</b>를 선택합니다. <span style="color:#6b7280">(유통기한은 의약품만, 종이컵 등은 비워도 됩니다)</span></div></li>
+                        <li style="display:flex;gap:.55rem;align-items:flex-start"><span style="flex:none;width:22px;height:22px;border-radius:50%;background:#16a34a;color:#fff;font-size:.74rem;font-weight:800;display:flex;align-items:center;justify-content:center">5</span><div><span style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;padding:1px 6px;border-radius:5px;font-weight:700;white-space:nowrap">📥 입고 완료</span> → 현재고가 올라갑니다.</div></li>
+                    </ol>
+                </div>
+
+                <!-- 제품 요청 -->
+                <div style="border-left:4px solid #dc2626;background:#fef2f2;border-radius:0 10px 10px 0;padding:.85rem 1rem;margin-bottom:1rem">
+                    <div style="font-weight:800;font-size:1.02rem;color:#b91c1c;margin-bottom:.6rem">🛒 제품 요청 — 사야 할 때</div>
+                    <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.6rem">
+                        <li><b>재고에 있는 품목</b><br>목록에서 <span style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:1px 6px;border-radius:5px;font-weight:700;white-space:nowrap">🛒 요청</span> → 수량 확인 → 구매 요청함에 담깁니다.</li>
+                        <li><b>쿠팡 등에서 사는 비품</b><br><span style="background:#ecfdf3;color:#15803d;border:1px solid #bbf7d0;padding:1px 6px;border-radius:5px;font-weight:700;white-space:nowrap">🛍️ 비품 구입</span> 열기 → 항목의 <span style="background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;padding:1px 6px;border-radius:5px;font-weight:700;white-space:nowrap">📝 요청</span> <span style="color:#6b7280">(목록에 없으면 <b>+ 새 비품</b>으로 추가 후 요청)</span></li>
+                        <li><b>발주 필요가 여러 개일 때</b><br>발주 필요 목록 상단 <span style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:1px 6px;border-radius:5px;font-weight:700;white-space:nowrap">🛒 부족분 전부 담기</span>로 한 번에.</li>
+                    </ul>
+                </div>
+
+                <!-- 세 가지 차이 -->
+                <div style="border:1px solid var(--border);border-radius:10px;padding:.85rem 1rem">
+                    <div style="font-weight:800;font-size:1.02rem;margin-bottom:.6rem">🧭 헷갈릴 때 — 세 가지 차이</div>
+                    <div style="display:flex;flex-direction:column;gap:.5rem">
+                        <div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:1.05rem">⚠️</span><div><b style="color:#b45309">발주 필요</b> = 재고 부족 <b>자동 감지</b> (안전재고 미달 품목)</div></div>
+                        <div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:1.05rem">🛍️</span><div><b style="color:#15803d">비품 구입</b> = 자주 사는 물건 <b>구매 링크 모음</b> (쿠팡 등)</div></div>
+                        <div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:1.05rem">🛒</span><div><b style="color:#7c3aed">구매 요청함</b> = 요청이 <b>모여 실제로 사는 곳</b> (구매담당자가 ✅ 완료)</div></div>
+                    </div>
+                    <div style="margin-top:.7rem;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.55rem .7rem;font-size:.85rem;color:#92400e"><b>💡 ✅ 완료 ≠ 입고!</b> 완료는 "샀다" 표시일 뿐, 물건이 도착하면 꼭 <b>📥 입고</b> 해야 재고에 반영됩니다.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('invHelpModal')" style="flex:1">닫기</button>
             </div>
         </div>
     </div>
