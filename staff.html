@@ -1058,7 +1058,7 @@
                                     style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
                             </div>
                             <div>
-                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">유통기한 *</label>
+                                <label style="font-weight:600;font-size:.85rem;margin-bottom:.5rem;display:block">유통기한 <span style="font-weight:400;color:var(--text-muted)">(선택)</span></label>
                                 <input type="date" id="receivingExpiry" 
                                     style="width:100%;padding:.6rem;border:1px solid var(--border);border-radius:6px">
                             </div>
@@ -1459,8 +1459,8 @@
                     <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">유통기한 <span style="color:var(--red)">*</span></label>
-                    <input type="date" class="form-input" id="newItemExpiry" required>
+                    <label class="form-label">유통기한 <span style="font-size:.7rem;color:var(--text-muted)">(선택)</span></label>
+                    <input type="date" class="form-input" id="newItemExpiry">
                 </div>
                 <div class="form-group">
                     <label class="form-label">🔗 구매 링크</label>
@@ -1516,8 +1516,8 @@
                         <input type="date" class="form-input" id="receiveDate">
                     </div>
                     <div class="form-group" style="flex:1;margin-bottom:0">
-                        <label class="form-label">유통기한 <span style="color:var(--red)">*</span></label>
-                        <input type="date" class="form-input" id="receiveExpiry" required>
+                        <label class="form-label">유통기한 <span style="font-size:.7rem;color:var(--text-muted)">(선택)</span></label>
+                        <input type="date" class="form-input" id="receiveExpiry">
                     </div>
                 </div>
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:6px;margin-bottom:.75rem">
@@ -14032,10 +14032,9 @@
             const name=document.getElementById('newItemName').value.trim();
             if(!name){alert('품목명을 입력하세요.');return;}
 
-            // 필수: 유통기한 + 구매가격
+            // 필수: 구매가격 (유통기한은 선택)
             const expiry=document.getElementById('newItemExpiry').value;
             const totalPriceCheck=parseFloat(document.getElementById('newItemTotalPrice').value)||0;
-            if(!expiry){alert('유통기한을 입력하세요.');document.getElementById('newItemExpiry').focus();return;}
             if(totalPriceCheck<=0){alert('구매 총 금액을 입력하세요.');document.getElementById('newItemTotalPrice').focus();return;}
 
             // 장소별 재고 수집
@@ -14193,7 +14192,6 @@
             const receiveExpiry = document.getElementById('receiveExpiry').value;
             const receivePriceCheck = parseFloat(document.getElementById('receivePrice').value)||0;
             if(!id || !receiveDate){ alert('입고일을 입력해주세요.'); return; }
-            if(!receiveExpiry){ alert('유통기한은 필수 입력입니다.'); document.getElementById('receiveExpiry').focus(); return; }
             if(receivePriceCheck<=0){ alert('구매 총 금액을 입력하세요.'); document.getElementById('receivePrice').focus(); return; }
 
             const container = document.getElementById('receiveLocationsList');
@@ -15234,8 +15232,8 @@
             const location=document.getElementById('receivingLocation').value;
             const memo=document.getElementById('receivingMemo').value.trim();
             
-            if(!itemId||!qty||!expiry||!location){
-                alert('필수 항목을 모두 입력해주세요.\n(입고 수량, 유통기한, 보관 장소)');
+            if(!itemId||!qty||!location){
+                alert('필수 항목을 모두 입력해주세요.\n(입고 수량, 보관 장소)');
                 return;
             }
             
