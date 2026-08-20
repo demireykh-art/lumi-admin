@@ -1471,8 +1471,8 @@
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보</div>
                     <div style="display:flex;gap:.5rem">
                         <div class="form-group" style="flex:1">
-                            <label class="form-label" style="font-size:.75rem">구매 총액 (원) <span style="color:var(--red)">*</span></label>
-                            <input type="number" class="form-input" id="newItemTotalPrice" min="1" placeholder="500000" oninput="calcNewItemUnit()" required>
+                            <label class="form-label" style="font-size:.75rem">구매 총액 (원) <span style="font-size:.7rem;color:var(--text-muted)">(선택)</span></label>
+                            <input type="number" class="form-input" id="newItemTotalPrice" min="0" placeholder="몰라도 됨" oninput="calcNewItemUnit()">
                         </div>
                         <div class="form-group" style="flex:1">
                             <label class="form-label" style="font-size:.75rem">박스 수</label>
@@ -14178,10 +14178,8 @@
             const name=document.getElementById('newItemName').value.trim();
             if(!name){alert('품목명을 입력하세요.');return;}
 
-            // 필수: 구매가격 (유통기한은 선택)
-            const expiry=document.getElementById('newItemExpiry').value;
-            const totalPriceCheck=parseFloat(document.getElementById('newItemTotalPrice').value)||0;
-            if(totalPriceCheck<=0){alert('구매 총 금액을 입력하세요.');document.getElementById('newItemTotalPrice').focus();return;}
+            // 이름만 있으면 등록 가능 — 가격·유통기한·보관 장소는 모두 선택.
+            // (구매 요청을 하려면 품목이 먼저 존재해야 하므로, 정보 없이도 먼저 만들 수 있게 함)
 
             // 장소별 재고 수집
             const container = document.getElementById('newLocationsList');
