@@ -12161,9 +12161,21 @@
                     <button onclick="_staffApproveLeave('${r.id}','approved')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.75rem;border-radius:5px;cursor:pointer;font-weight:600">✓ 승인</button>
                 </div>`;
             }else if(r.status==='approved'){
-                actionsHtml=`<div style="display:flex;gap:.35rem;margin-top:.4rem;justify-content:flex-end">
-                    <button onclick="_staffCancelLeave('${r.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">연차 취소</button>
-                </div>`;
+                if(dates.length>1){
+                    // 연속(다일) 연차 — 날짜별 취소 + 전체 취소
+                    const perDate=dates.map(d=>`<button onclick="_staffCancelLeaveDate('${r.id}','${d}')" style="background:#fff;border:1px solid #f59e0b;color:#b45309;padding:.25rem .55rem;font-size:.72rem;border-radius:5px;cursor:pointer">${_esc(d)} 취소</button>`).join('');
+                    actionsHtml=`<div style="margin-top:.4rem">
+                        <div style="font-size:.7rem;color:#6b7280;margin-bottom:.25rem">하루만 취소:</div>
+                        <div style="display:flex;gap:.3rem;flex-wrap:wrap">${perDate}</div>
+                        <div style="display:flex;justify-content:flex-end;margin-top:.35rem">
+                            <button onclick="_staffCancelLeave('${r.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">전체 취소</button>
+                        </div>
+                    </div>`;
+                }else{
+                    actionsHtml=`<div style="display:flex;gap:.35rem;margin-top:.4rem;justify-content:flex-end">
+                        <button onclick="_staffCancelLeave('${r.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">연차 취소</button>
+                    </div>`;
+                }
             }
             return `<div style="padding:.6rem .75rem;border:1px solid ${showActions?'#fbbf24':'#e5e7eb'};background:${showActions?'#fffbeb':'#fff'};border-radius:8px;margin-bottom:.4rem">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.25rem">
@@ -12204,6 +12216,40 @@
                 // 로컬 캐시 갱신
                 const r=_staffAdminLeaves.find(x=>x.id===id);
                 if(r){ r.status='cancelled'; r.cancelledAt=now; r.updatedAt=now; }
+                _renderStaffAdminBody();
+            }catch(e){ alert('취소 실패: '+(e?.message||e)); }
+        }
+        // 연속 연차 중 하루만 취소 (관리자앱 cancelLeaveDate 대응)
+        //   통합앱은 신청 단위(dates 배열) 모델이므로, 해당 날짜를 dates 에서 제거한다.
+        //   → 남은 날짜는 그대로 승인 유지, 마지막 한 날까지 빼면 전체 취소(status:'cancelled').
+        //   dates 만 읽는 캘린더·연차 사용일수 집계가 자동으로 맞춰진다.
+        async function _staffCancelLeaveDate(reqId, date){
+            if(!confirm(`${date} 하루만 연차를 취소하시겠습니까?\n\n나머지 날짜는 그대로 유지됩니다.`)) return;
+            try{
+                const ref=db.collection('leaveRequests').doc(reqId);
+                const now=new Date().toISOString();
+                const by=currentUser?.name||currentUser?.id||'admin';
+                await db.runTransaction(async tx=>{
+                    const doc=await tx.get(ref);
+                    if(!doc.exists) throw new Error('연차 신청을 찾을 수 없습니다.');
+                    const data=doc.data()||{};
+                    const dates=(data.dates||[]).filter(d=>d!==date);
+                    const cancelledDates=Array.from(new Set([...(data.cancelledDates||[]), date]));
+                    if(dates.length===0){
+                        tx.update(ref,{ dates:[], status:'cancelled', cancelledDates, cancelledAt:now, updatedAt:now, updatedBy:by });
+                    }else{
+                        tx.update(ref,{ dates, cancelledDates, updatedAt:now, updatedBy:by });
+                    }
+                });
+                // 로컬 캐시 갱신
+                const r=_staffAdminLeaves.find(x=>x.id===reqId);
+                if(r){
+                    const dates=(r.dates||[]).filter(d=>d!==date);
+                    r.cancelledDates=Array.from(new Set([...(r.cancelledDates||[]), date]));
+                    r.dates=dates;
+                    if(dates.length===0){ r.status='cancelled'; r.cancelledAt=now; }
+                    r.updatedAt=now;
+                }
                 _renderStaffAdminBody();
             }catch(e){ alert('취소 실패: '+(e?.message||e)); }
         }
