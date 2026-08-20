@@ -2018,6 +2018,26 @@
         </div>
     </div>
 
+    <!-- 구매 요청함 (구매담당자용 — 채널/거래처별 그룹) -->
+    <div class="modal" id="purchaseRequestsModal">
+        <div class="modal-content" style="max-width:640px;width:96vw;max-height:92vh;display:flex;flex-direction:column">
+            <div class="modal-header">
+                <div class="modal-title">🛒 구매 요청함 <span id="purchaseRequestsSummary" style="font-size:.8rem;color:#dc2626;font-weight:700;margin-left:.4rem">대기 0건</span></div>
+                <button class="modal-close" onclick="closeModal('purchaseRequestsModal')">&times;</button>
+            </div>
+            <div class="modal-body" style="overflow-y:auto;flex:1">
+                <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.6rem">채널·거래처별로 묶어서 보여줍니다. 사이트를 열거나 담당자에게 문자를 보낸 뒤 각 품목의 <strong style="color:#16a34a">✅ 완료</strong>를 눌러주세요.</div>
+                <label style="display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:#6b7280;margin-bottom:.6rem;cursor:pointer">
+                    <input type="checkbox" id="prShowDone" onchange="renderPurchaseRequests()"> 처리 완료 내역 보기
+                </label>
+                <div id="purchaseRequestsGroups"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('purchaseRequestsModal')" style="flex:1">닫기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 관리자 설정 모달 (bizAdmins 전용) -->
     <div class="modal" id="adminSettingsModal">
         <div class="modal-content" style="max-width:560px">
@@ -3491,6 +3511,8 @@
             _migrateConsultToFirestore().finally(()=>_initConsultRealtime());
             // 거래처(vendors) 실시간 동기화
             _migrateVendorsToFirestore().finally(()=>_initVendorsRealtime());
+            // 구매 요청함(purchaseRequests) 실시간 배지
+            if(typeof _initPurchaseRequestsRealtime==='function') _initPurchaseRequestsRealtime();
             // 시술 수가표 실시간 동기화 + procedures 파생(초기 1회 동기화는 adminHigh 전용)
             _migrateFeeToFirestore().finally(()=>{
                 _initFeeRealtime();
@@ -13343,6 +13365,7 @@
             unused:()=>showInvListUnused(),
             buy:()=>openSuppliesCatalog(),
             mix:()=>openMixManager(),
+            requests:()=>openPurchaseRequestsView(),
         };
         function renderInvHome(){
             const grid=document.getElementById('invHomeGrid');
@@ -13357,9 +13380,11 @@
                 {act:'unused',label:'안쓰는 제품',icon:'😴',color:'#7c3aed',count:_invUnusedCountCard()},
                 {act:'buy',label:'비품 구입',icon:'🛍️',color:'#16a34a',count:''},
                 {act:'mix',label:'주사제 믹스',icon:'🧪',color:'#7c3aed',count:''},
+                {act:'requests',label:'구매 요청함',icon:'🛒',color:'#dc2626',count:'',badge:_pendingPurchaseCount()},
             ];
             grid.innerHTML=cards.map(c=>`
-                <button type="button" data-inv-home-act="${c.act}" style="border:1px solid #e5e7eb;background:#fff;padding:1rem .75rem;border-radius:14px;cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:.35rem;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform .1s;touch-action:manipulation">
+                <button type="button" data-inv-home-act="${c.act}" style="position:relative;border:1px solid #e5e7eb;background:#fff;padding:1rem .75rem;border-radius:14px;cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;gap:.35rem;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:transform .1s;touch-action:manipulation">
+                    ${c.badge!==undefined?`<span data-purchase-badge style="position:absolute;top:8px;right:10px;min-width:20px;height:20px;padding:0 5px;background:#dc2626;color:#fff;border-radius:10px;font-size:.72rem;font-weight:800;align-items:center;justify-content:center;display:${c.badge>0?'flex':'none'}">${c.badge}</span>`:''}
                     <span style="font-size:2rem">${c.icon}</span>
                     <span style="font-weight:700;color:${c.color};font-size:1rem">${c.label}</span>
                     ${c.count!==''?`<span style="font-size:.72rem;color:#6b7280">${c.count}건</span>`:''}
@@ -13378,6 +13403,8 @@
             if(dcEl) dcEl.textContent=dcCount;
             // 거래처 카운트 (localStorage)
             if(typeof _updateVendorHomeCount==='function') _updateVendorHomeCount();
+            // 구매 요청함 배지
+            if(typeof _updatePurchaseReqBadge==='function') _updatePurchaseReqBadge();
         }
 
         function showInvHome(){
@@ -13692,8 +13719,14 @@
                     name:item.name,
                     itemId:item.id,
                     qty,
+                    unit:item.unit||'개',
                     estimatedPrice:0,
                     purchaseLink:item.purchaseLink||'',
+                    contactMethod:item.contactMethod||(item.purchaseLink?'link':(item.contactPhone?'sms':'')),
+                    contactPhone:item.contactPhone||'',
+                    contactName:item.contactName||'',
+                    vendorId:item.vendorId||'',
+                    vendorName:(item.vendorId&&typeof _vendorById==='function'?(_vendorById(item.vendorId)?.name||''):''),
                     reason:`재고 요청 (현재고 ${cur}${item.unit||'개'}${safe?`, 안전 ${safe}`:''})`,
                     requestedBy:currentUser?.name||'직원',
                     requestedById:currentUser?.id||'',
@@ -14884,6 +14917,172 @@
                     </div>`;
                 }).join('');
             }catch(e){container.innerHTML='불러오기 실패: '+e.message;}
+        }
+
+        // ================================================================
+        //  구매 요청함 (purchaseRequests) — 채널/거래처별 그룹 + 실시간 배지
+        //  · 직원: 재고/카탈로그에서 '요청' → 요청함에 담김
+        //  · 구매담당자: 사이트 열기/문자 보내기 → 품목별 '✅ 완료'
+        // ================================================================
+        let _purchaseReqs=null;
+        let _purchaseReqUnsub=null;
+        function _initPurchaseRequestsRealtime(){
+            if(_purchaseReqUnsub) return;
+            try{
+                _purchaseReqUnsub=db.collection('purchaseRequests').orderBy('createdAt','desc').limit(200)
+                    .onSnapshot(snap=>{
+                        _purchaseReqs=snap.docs.map(d=>({id:d.id,...d.data()}));
+                        _updatePurchaseReqBadge();
+                        if(document.getElementById('purchaseRequestsModal')?.classList.contains('active')) renderPurchaseRequests();
+                        if(document.getElementById('staffWishlistHistory')) renderStaffWishlistFromCache();
+                    }, err=>console.warn('purchaseRequests 스냅샷 실패:', err));
+            }catch(e){ console.warn('purchaseRequests 실시간 초기화 실패:', e); }
+        }
+        function _allPurchaseReqs(){ return Array.isArray(_purchaseReqs)?_purchaseReqs:[]; }
+        function _pendingPurchaseReqs(){ return _allPurchaseReqs().filter(r=>(r.status||'pending')==='pending'); }
+        function _pendingPurchaseCount(){ return _pendingPurchaseReqs().length; }
+        function _updatePurchaseReqBadge(){
+            const n=_pendingPurchaseCount();
+            document.querySelectorAll('[data-purchase-badge]').forEach(el=>{ el.textContent=n; el.style.display=n>0?'flex':'none'; });
+        }
+        function _siteLabelFromUrl(url){
+            let host='';
+            try{ host=new URL(String(url).startsWith('http')?url:'https://'+url).hostname.replace(/^www\./,''); }catch(_){ host=''; }
+            if(/coupang/.test(host)) return {key:'coupang',label:'쿠팡'};
+            if(/plandocs|플랜닥스/.test(host)) return {key:'plandocs',label:'플랜닥스'};
+            if(/naver/.test(host)) return {key:'naver',label:'네이버'};
+            if(/11st/.test(host)) return {key:'11st',label:'11번가'};
+            if(/gmarket/.test(host)) return {key:'gmarket',label:'G마켓'};
+            if(host) return {key:host,label:host};
+            return {key:'link',label:'구매 링크'};
+        }
+        function _reqChannelInfo(r){
+            const method=r.contactMethod||(r.purchaseLink?'link':(r.contactPhone?'sms':''));
+            const phone=String(r.contactPhone||'').replace(/[^0-9+]/g,'');
+            if((method==='sms'||method==='phone')&&phone){
+                const nm=r.vendorName||r.contactName||'담당자';
+                return {key:'contact:'+phone, label:nm, icon:method==='phone'?'📞':'💬', method, target:phone};
+            }
+            if(r.purchaseLink){
+                const site=_siteLabelFromUrl(r.purchaseLink);
+                const key=r.vendorId?('vendor:'+r.vendorId):('site:'+site.key);
+                return {key, label:r.vendorName||site.label, icon:'🛒', method:'link', target:r.purchaseLink};
+            }
+            if(r.vendorName||r.vendorId){
+                return {key:'vendor:'+(r.vendorId||r.vendorName), label:r.vendorName||'거래처', icon:'🏷️', method:'', target:''};
+            }
+            return {key:'etc', label:'기타 요청', icon:'📦', method:'', target:''};
+        }
+        function openPurchaseRequestsView(){ renderPurchaseRequests(); openModal('purchaseRequestsModal'); }
+        function renderPurchaseRequests(){
+            const box=document.getElementById('purchaseRequestsGroups');
+            const sum=document.getElementById('purchaseRequestsSummary');
+            if(!box) return;
+            const pending=_pendingPurchaseReqs();
+            if(sum) sum.textContent=`대기 ${pending.length}건`;
+            const showDone=document.getElementById('prShowDone')?.checked;
+            const groups=new Map();
+            pending.forEach(r=>{
+                const info=_reqChannelInfo(r);
+                if(!groups.has(info.key)) groups.set(info.key,{info,items:[]});
+                groups.get(info.key).items.push(r);
+            });
+            let html='';
+            if(!pending.length){
+                html+='<div style="text-align:center;color:var(--text-muted);padding:1.8rem 1rem">대기 중인 구매 요청이 없습니다.<br><span style="font-size:.8rem">재고 목록의 <strong>🛒 요청</strong> 또는 비품 구입의 <strong>📝 요청</strong>으로 담아보세요.</span></div>';
+            }else{
+                html+=Array.from(groups.values()).map(_renderReqGroup).join('');
+            }
+            if(showDone){
+                const done=_allPurchaseReqs().filter(r=>['purchased','approved','rejected'].includes(r.status));
+                html+=`<div style="margin:1rem 0 .4rem;font-weight:800;font-size:.82rem;color:#6b7280">처리 완료 (${done.length})</div>`;
+                html+=done.slice(0,40).map(r=>{
+                    const badge={purchased:'✅ 구매완료',approved:'✅ 승인',rejected:'❌ 거절'}[r.status]||r.status;
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:.4rem;padding:.4rem .5rem;border-bottom:1px solid #f1f5f9;font-size:.82rem">
+                        <span style="flex:1;min-width:0">${_esc(r.name)} <span style="color:#9ca3af">×${r.qty||1}</span></span>
+                        <span style="color:#6b7280;font-size:.72rem;white-space:nowrap">${badge}</span>
+                        <button onclick="_reqReopen('${r.id}')" title="다시 대기로" style="background:none;border:1px solid #d1d5db;color:#4b5563;font-size:.66rem;padding:1px 5px;border-radius:3px;cursor:pointer">↩︎</button>
+                        ${isBizAdmin?`<button onclick="_reqDelete('${r.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;font-size:.66rem;padding:1px 6px;border-radius:3px;cursor:pointer">×</button>`:''}
+                    </div>`;
+                }).join('');
+            }
+            box.innerHTML=html;
+        }
+        function _renderReqGroup(g){
+            const {info,items}=g;
+            const links=[...new Set(items.map(r=>r.purchaseLink).filter(Boolean))];
+            const sharedLink=links.length===1?links[0]:'';
+            let groupBtn='';
+            if(info.method==='sms'&&info.target){
+                const body=encodeURIComponent('[루미 구매요청]\n'+items.map(r=>`- ${r.name} ${r.qty||1}${r.unit||''}`).join('\n'));
+                groupBtn=`<a href="sms:${info.target}?&body=${body}" style="background:#0ea5e9;color:#fff;padding:.35rem .7rem;border-radius:6px;text-decoration:none;font-size:.75rem;font-weight:700;white-space:nowrap">💬 문자 보내기</a>`;
+            }else if(info.method==='phone'&&info.target){
+                groupBtn=`<a href="tel:${info.target}" style="background:#3b82f6;color:#fff;padding:.35rem .7rem;border-radius:6px;text-decoration:none;font-size:.75rem;font-weight:700;white-space:nowrap">📞 전화</a>`;
+            }else if(info.method==='link'&&sharedLink){
+                groupBtn=`<a href="${_esc(sharedLink)}" target="_blank" rel="noopener" style="background:#f97316;color:#fff;padding:.35rem .7rem;border-radius:6px;text-decoration:none;font-size:.75rem;font-weight:700;white-space:nowrap">🛒 ${_esc(info.label)} 열기</a>`;
+            }
+            const multiHint=(info.method==='link'&&!sharedLink)
+                ? `<div style="font-size:.7rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:.35rem .55rem;border-radius:6px;margin:.35rem 0">각 품목의 <strong>🛒 열기</strong>로 사이트를 열어 장바구니에 담은 뒤 <strong>✅ 완료</strong>를 눌러주세요.</div>` : '';
+            const rows=items.map(r=>{
+                const own=(r.purchaseLink&&r.purchaseLink!==sharedLink)
+                    ? `<a href="${_esc(r.purchaseLink)}" target="_blank" rel="noopener" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:.25rem .55rem;border-radius:5px;text-decoration:none;font-size:.7rem;font-weight:600;white-space:nowrap">🛒 열기</a>` : '';
+                const reason=r.reason?`<div style="font-size:.68rem;color:#9ca3af;margin-top:1px">${_esc(r.reason)}</div>`:'';
+                return `<div style="display:flex;justify-content:space-between;align-items:center;gap:.4rem;padding:.5rem .1rem;border-top:1px solid #f1f5f9">
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:.86rem;font-weight:600">${_esc(r.name)} <span style="color:#9ca3af;font-weight:500">×${r.qty||1}${_esc(r.unit||'')}</span></div>
+                        <div style="font-size:.68rem;color:#9ca3af">요청 ${_esc(r.requestedBy||'-')}</div>
+                        ${reason}
+                    </div>
+                    <div style="display:flex;gap:.3rem;flex-shrink:0;align-items:center">
+                        ${own}
+                        <button onclick="_reqComplete('${r.id}')" style="background:#16a34a;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.72rem;font-weight:800;cursor:pointer;white-space:nowrap">✅ 완료</button>
+                        ${isBizAdmin?`<button onclick="_reqDelete('${r.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.25rem .45rem;border-radius:5px;font-size:.72rem;cursor:pointer">×</button>`:''}
+                    </div>
+                </div>`;
+            }).join('');
+            return `<div style="border:1px solid #e5e7eb;border-radius:10px;margin-bottom:.8rem;overflow:hidden">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:#f8fafc;padding:.55rem .7rem">
+                    <div style="font-weight:800;font-size:.9rem;min-width:0;overflow:hidden;text-overflow:ellipsis">${info.icon} ${_esc(info.label)} <span style="color:#9ca3af;font-weight:600;font-size:.75rem">${items.length}건</span></div>
+                    ${groupBtn}
+                </div>
+                <div style="padding:.1rem .7rem .5rem">${multiHint}${rows}</div>
+            </div>`;
+        }
+        async function _reqComplete(id){
+            try{ await db.collection('purchaseRequests').doc(id).update({status:'purchased',processedAt:new Date().toISOString(),purchasedAt:new Date().toISOString(),purchasedBy:currentUser?.name||'구매담당'}); }
+            catch(e){ alert('처리 실패: '+(e.message||e)); }
+        }
+        async function _reqReopen(id){
+            try{ await db.collection('purchaseRequests').doc(id).update({status:'pending',processedAt:null,purchasedAt:null}); }
+            catch(e){ alert('처리 실패: '+(e.message||e)); }
+        }
+        async function _reqDelete(id){
+            if(!isBizAdmin){ alert('삭제는 경영관리자만 가능합니다.\n구매를 마쳤다면 ✅ 완료 버튼을 사용하세요.'); return; }
+            if(!confirm('이 요청을 삭제할까요?')) return;
+            try{ await db.collection('purchaseRequests').doc(id).delete(); }
+            catch(e){ alert('삭제 실패: '+(e.message||e)); }
+        }
+        // 비품 요청 내역(직원 탭) — 실시간 캐시 기반 렌더 (구매완료 포함)
+        function renderStaffWishlistFromCache(){
+            const container=document.getElementById('staffWishlistHistory');
+            if(!container) return;
+            const items=_allPurchaseReqs().slice(0,30);
+            if(!items.length){ container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1.5rem">아직 요청 내역이 없습니다.</div>'; return; }
+            const statusMap={pending:'⏳ 대기중',purchased:'✅ 구매완료',approved:'✅ 승인됨',rejected:'❌ 거절됨'};
+            const statusColor={pending:'#f57f17',purchased:'#16a34a',approved:'#2e7d32',rejected:'#c62828'};
+            container.innerHTML=items.map(r=>{
+                const st=r.status||'pending';
+                const linkBtn=r.purchaseLink?`<a href="${_esc(r.purchaseLink)}" target="_blank" rel="noopener" style="font-size:.7rem;color:#1976d2;text-decoration:none;margin-left:4px">🔗 링크</a>`:'';
+                const dateStr=r.createdAt?new Date(r.createdAt).toLocaleDateString('ko'):'-';
+                return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:#fff">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:.4rem">
+                        <strong style="flex:1;min-width:0">${_esc(r.name)}</strong> <span style="font-size:.75rem;color:#999">×${r.qty||1}</span>
+                        <span style="font-size:.75rem;color:${statusColor[st]||'#666'};font-weight:600;white-space:nowrap">${statusMap[st]||st}</span>
+                    </div>
+                    <div style="font-size:.75rem;color:#888;margin-top:3px">${r.estimatedPrice?'예상 '+Number(r.estimatedPrice).toLocaleString()+'원':''}${linkBtn} · ${_esc(r.requestedBy||'-')} · ${dateStr}</div>
+                    ${r.reason?`<div style="font-size:.75rem;color:#666;margin-top:2px">${_esc(r.reason)}</div>`:''}
+                </div>`;
+            }).join('');
         }
 
         // ===== 입고 시스템 =====
