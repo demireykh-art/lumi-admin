@@ -11438,6 +11438,7 @@
         let _staffAdminLeaves=[];      // leaveRequests 캐시
         let _staffAdminAttendance=[];  // attendance 캐시
         let _staffAttSearch='';        // 근태 기록 수정 - 이름 검색어
+        let _staffLeaveSearch='';      // 연차 승인 - 이름 검색어
         let _staffAdminLunchOT=[];     // lunchOT 캐시
         let _staffAdminMeals=[];       // mealRecords 캐시 (OT·식사 탭)
         let _staffPayslipYm='';        // 급여명세서 귀속월 (급여탭 업로드)
@@ -12087,24 +12088,59 @@
         // 📋 승인 대기
         // ─────────────────────────────
         function _renderStaffPending(el){
-            const pending=_staffAdminLeaves.filter(r=>r.status==='pending')
+            let html='';
+            html+=`<input id="_staffLeaveSearch" type="text" value="${_esc(_staffLeaveSearch)}" oninput="_staffLeaveSearchChange(this.value)" placeholder="🔍 직원 이름 검색"
+                style="width:100%;padding:.5rem .6rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;margin-bottom:.6rem">`;
+            html+='<div id="_staffPendingBox"></div>';
+            html+='<div id="_staffApprovedBox"></div>';
+            html+='<div id="_staffLeaveHistBox"></div>';
+            el.innerHTML=html;
+            _renderStaffLeaveLists();
+        }
+        function _staffLeaveSearchChange(v){
+            _staffLeaveSearch=v;
+            _renderStaffLeaveLists();  // 목록만 다시 그려 입력 포커스 유지
+        }
+        function _renderStaffLeaveLists(){
+            const q=(_staffLeaveSearch||'').trim().toLowerCase();
+            const _lname=(r)=>{ const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId); return emp?.name||r.employeeName||r.employeeId||'?'; };
+            const match=(r)=>!q || _lname(r).toLowerCase().includes(q);
+            // 승인 대기
+            const pending=_staffAdminLeaves.filter(r=>r.status==='pending'&&match(r))
                 .sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
-            const recent=_staffAdminLeaves.filter(r=>r.status==='approved'||r.status==='rejected')
+            // 승인된 연차 (전체 — 오래된 건도 취소 가능)
+            const approved=_staffAdminLeaves.filter(r=>r.status==='approved'&&match(r))
+                .sort((a,b)=>String((b.dates||[])[0]||'').localeCompare(String((a.dates||[])[0]||'')));
+            // 최근 처리 이력 (반려·취소)
+            const hist=_staffAdminLeaves.filter(r=>(r.status==='rejected'||r.status==='cancelled')&&match(r))
                 .sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))
                 .slice(0,10);
-            let html='<div style="font-weight:700;font-size:.9rem;color:#92400e;margin-bottom:.4rem">📋 승인 대기 ('+pending.length+')</div>';
-            if(!pending.length){
-                html+='<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:6px">대기 중인 신청 없음</div>';
-            }else{
-                html+=pending.map(r=>_staffLeaveCard(r,true)).join('');
+
+            const pb=document.getElementById('_staffPendingBox');
+            if(pb){
+                let h='<div style="font-weight:700;font-size:.9rem;color:#92400e;margin-bottom:.4rem">📋 승인 대기 ('+pending.length+')</div>';
+                h+= pending.length ? pending.map(r=>_staffLeaveCard(r,true)).join('')
+                    : '<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:6px">'+(q?'검색 결과 없음':'대기 중인 신청 없음')+'</div>';
+                pb.innerHTML=h;
             }
-            html+='<div style="font-weight:700;font-size:.9rem;color:#4b5563;margin:.9rem 0 .4rem">📁 최근 처리 이력</div>';
-            if(!recent.length){
-                html+='<div style="color:#9ca3af;font-size:.85rem;padding:.5rem;text-align:center">이력 없음</div>';
-            }else{
-                html+=recent.map(r=>_staffLeaveCard(r,false)).join('');
+            const ab=document.getElementById('_staffApprovedBox');
+            if(ab){
+                let h='<div style="font-weight:700;font-size:.9rem;color:#166534;margin:.9rem 0 .4rem">✅ 승인된 연차 ('+approved.length+')</div>';
+                if(!approved.length){
+                    h+='<div style="color:#9ca3af;font-size:.85rem;padding:.5rem;text-align:center">'+(q?'검색 결과 없음':'승인된 연차 없음')+'</div>';
+                }else{
+                    h+=approved.slice(0,100).map(r=>_staffLeaveCard(r,false)).join('');
+                    if(approved.length>100) h+='<div style="font-size:.7rem;color:#9ca3af;text-align:center;padding:.3rem">최근 100건만 표시 (이름 검색으로 좁혀보세요)</div>';
+                }
+                ab.innerHTML=h;
             }
-            el.innerHTML=html;
+            const hb=document.getElementById('_staffLeaveHistBox');
+            if(hb){
+                let h='<div style="font-weight:700;font-size:.9rem;color:#4b5563;margin:.9rem 0 .4rem">📁 최근 처리 이력 (반려·취소)</div>';
+                h+= hist.length ? hist.map(r=>_staffLeaveCard(r,false)).join('')
+                    : '<div style="color:#9ca3af;font-size:.85rem;padding:.5rem;text-align:center">이력 없음</div>';
+                hb.innerHTML=h;
+            }
         }
         function _staffLeaveCard(r, showActions){
             const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
@@ -12114,8 +12150,9 @@
             const statusBadge={
                 pending:'<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">대기</span>',
                 approved:'<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">승인</span>',
-                rejected:'<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">반려</span>'
-            }[r.status||'pending'];
+                rejected:'<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">반려</span>',
+                cancelled:'<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:8px;font-size:.7rem;font-weight:600">취소</span>'
+            }[r.status||'pending']||'';
             // 액션: 대기중이면 승인/반려, 승인된 건이면 취소
             let actionsHtml='';
             if(r.status==='pending' && showActions){
