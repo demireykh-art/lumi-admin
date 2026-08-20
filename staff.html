@@ -5057,7 +5057,14 @@
                     +'→ 음식 '+formatCurrency(food)+' + 배달비 '+formatCurrency(deliv)
                     +'<br>금액이 다르면 아래에서 직접 고쳐주세요.</div>');
             }catch(e){
-                const msg=(e&&e.message)||'알 수 없는 오류';
+                const code=String((e&&e.code)||'');
+                let msg=(e&&e.message)||'알 수 없는 오류';
+                // 함수 미배포/미활성화는 "인식 실패"와 원인이 전혀 달라 따로 안내한다
+                if(/not-found/.test(code)){
+                    msg='OCR 함수가 아직 배포되지 않았습니다. 관리자에게 문의해주세요.';
+                }else if(/unauthenticated/.test(code)){
+                    msg='로그인이 만료되었습니다. 다시 로그인해주세요.';
+                }
                 setStatus('<span style="color:var(--red)">⚠ 영수증 인식 실패: '+msg+'<br>금액을 직접 입력해주세요.</span>');
             }
         }
