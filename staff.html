@@ -5064,6 +5064,16 @@
             return c.toDataURL('image/jpeg',0.85).split(',')[1];
         }
 
+        // 인식된 원문 텍스트를 접어서 보여준다 (금액을 잘못 읽었을 때 원인 파악용)
+        function _mealOcrTextToggle(text){
+            const t=String(text||'').trim();
+            if(!t) return '';
+            return '<details style="margin-top:.35rem">'
+                +'<summary style="cursor:pointer;color:var(--text-muted);font-size:.7rem">인식된 텍스트 보기</summary>'
+                +'<pre style="white-space:pre-wrap;word-break:break-all;font-size:.68rem;color:var(--text-muted);background:var(--bg);padding:.4rem;border-radius:4px;margin:.3rem 0 0;max-height:160px;overflow:auto">'
+                +_esc(t)+'</pre></details>';
+        }
+
         async function onMealReceiptPicked(input, target){
             const file=input.files&&input.files[0];
             input.value='';   // 같은 파일 다시 고를 수 있게
@@ -5082,7 +5092,10 @@
                 const d=res.data||{};
                 const p=d.parsed||{};
                 if(!d.ok||!(p.totalAmount>0)){
-                    setStatus('<span style="color:var(--red)">⚠ '+(d.reason||'금액을 찾지 못했습니다.')+' 직접 입력해주세요.</span>');
+                    // 글자는 읽혔는데 금액만 못 찾은 경우가 대부분 — 원문을 보여주면
+                    // 어떤 라벨을 못 잡았는지 바로 알 수 있어 개선에 도움이 된다
+                    setStatus('<span style="color:var(--red)">⚠ '+(d.reason||'금액을 찾지 못했습니다.')+' 직접 입력해주세요.</span>'
+                        +_mealOcrTextToggle(d.text));
                     return;
                 }
                 const food=Math.max(0, Number(p.foodAmount)||0);
@@ -5101,11 +5114,17 @@
                 if(p.menuAmount!=null) parts.push('메뉴 '+formatCurrency(p.menuAmount));
                 if(p.deliveryTip!=null) parts.push('배달팁 '+formatCurrency(p.deliveryTip));
                 if(p.discount!=null&&p.discount!==0) parts.push('할인 '+formatCurrency(p.discount));
-                setStatus('<span style="color:var(--green)">✅ 결제금액 '+formatCurrency(p.totalAmount)+' 인식</span>'
+                // 라벨을 못 찾아 반복 금액으로 추정한 경우 — 반드시 눈으로 확인시킨다
+                const low=(p.confidence==='low');
+                const head=low
+                    ? '<span style="color:var(--orange,#d97706)">⚠ 결제금액 '+formatCurrency(p.totalAmount)+' 으로 <b>추정</b>했습니다 — 꼭 확인해주세요</span>'
+                    : '<span style="color:var(--green)">✅ 결제금액 '+formatCurrency(p.totalAmount)+' 인식</span>';
+                setStatus(head
                     +'<div style="color:var(--text-muted);margin-top:.2rem">'
                     +(parts.length?parts.join(' · ')+'<br>':'')
                     +'→ 음식 '+formatCurrency(food)+' + 배달비 '+formatCurrency(deliv)
-                    +'<br>금액이 다르면 아래에서 직접 고쳐주세요.</div>');
+                    +'<br>금액이 다르면 아래에서 직접 고쳐주세요.</div>'
+                    +_mealOcrTextToggle(d.text));
             }catch(e){
                 const code=String((e&&e.code)||'');
                 let msg=(e&&e.message)||'알 수 없는 오류';
