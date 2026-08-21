@@ -744,10 +744,12 @@ function parseWon(token) {
  * 그래서 뒤쪽 줄까지 훑되, 몇 줄 떨어져서 찾았는지(distance)를 함께 돌려
  * 호출부가 확신도를 낮출 수 있게 한다.
  */
-// 금액만 적힌 줄인지 (라벨 없이 숫자만 있는 오른쪽 컬럼)
+// 금액만 적힌 줄인지 (라벨 없이 숫자만 있는 오른쪽 컬럼).
+// "원"이 줄 안에 여러 번 나올 수 있다 — 배민은 할인 전/후 금액을 한 줄에
+// 나란히 찍는다: "17,800원 11,700원" (앞은 취소선, 뒤가 실제 결제금액).
 function isAmountOnlyLine(line) {
-  return /^[^\d]{0,2}-?[\d,.'，·\s]+원?\s*$/.test(String(line || '')) &&
-    /\d/.test(String(line || ''));
+  const s = String(line || '');
+  return /^[^\d]{0,2}(?:[\d,.'，·\s]|원|-)+$/.test(s) && /\d/.test(s);
 }
 
 /**
@@ -796,12 +798,32 @@ function amountNear(lines, idx, {prefer = 'last', maxAhead = 8, maxBack = 4, min
     if (okValue(v)) return {value: v, distance: 0};
   }
 
+  // 금액 줄이 연달아 나오면 하나만 보고 끝내지 않는다.
+  //   배민 세로 배치 : 제금액 / 17,800원 / 11,700원   → 뒤(할인 후)가 정답
+  //   POS 컬럼 배치  : 청구금액·받은금액·거스름돈 / 2,900 / 2,900 / 0
+  //                    → 0 은 하한선에서 걸러지고 2,900 이 남는다
+  // 그래서 연속 구간을 모아 prefer 에 따라 앞/뒤를 고른다.
+  const runFrom = (start, step) => {
+    let k = start;
+    const vals = [];
+    while (k >= 0 && k < lines.length && Math.abs(k - idx) <= (step > 0 ? maxAhead : maxBack)) {
+      if (!isAmountOnlyLine(lines[k])) break;
+      const v = amountFromLine(lines[k], {strict: false, prefer});
+      if (okValue(v)) vals.push({v, k});
+      k += step;
+    }
+    return vals;
+  };
+
   for (const strict of (strictOnly ? [true] : [true, false])) {
     // 아래쪽 먼저 (라벨 다음에 금액이 오는 일반적인 배치)
     const fwdEnd = Math.min(idx + maxAhead, lines.length - 1);
     for (let k = idx + 1; k <= fwdEnd; k++) {
       const v = amountFromLine(lines[k], {strict, prefer});
-      if (okValue(v)) return {value: v, distance: k - idx};
+      if (!okValue(v)) continue;
+      const run = runFrom(k, 1);
+      const hit = (prefer === 'first' || !run.length) ? {v, k} : run[run.length - 1];
+      return {value: hit.v, distance: hit.k - idx};
     }
     // 그다음 위쪽 (CU 처럼 "결제금액:" 라벨이 값보다 아래 찍히는 형식)
     const backEnd = Math.max(idx - maxBack, 0);
