@@ -680,11 +680,27 @@ exports.parseRevenueFile = onCall(
  *
  *   [배포 권한 메모]
  *   GitHub Actions(deploy-functions.yml)로 배포하려면 FIREBASE_SERVICE_ACCOUNT
- *   서비스 계정에 "서비스 계정 사용자(roles/iam.serviceAccountUser)" 역할이
- *   있어야 한다. Editor 역할만으로는 iam.serviceAccounts.actAs 가 없어
- *   lumiclinic-c1a95@appspot.gserviceaccount.com 을 대신할 수 없고
- *   "Missing permissions required for functions deploy" 로 실패한다.
- *   (Firestore 규칙 배포는 이 권한이 필요 없어 문제가 드러나지 않는다.)
+ *   서비스 계정에 아래 역할이 모두 필요하다. 하나씩 빠질 때마다 배포가
+ *   다른 지점에서 멈추므로, 신규 환경을 셋업할 땐 한 번에 부여할 것.
+ *
+ *     · 서비스 계정 사용자      roles/iam.serviceAccountUser
+ *         없으면: "Missing permissions required for functions deploy.
+ *                 You must have permission iam.serviceAccounts.ActAs on
+ *                 service account lumiclinic-c1a95@appspot.gserviceaccount.com"
+ *         ※ 편집자(Editor)에 actAs 가 포함되지 않으므로 반드시 별도 부여.
+ *
+ *     · Secret Manager 관리자   roles/secretmanager.admin
+ *         없으면: "Permission 'secretmanager.secrets.get' denied on
+ *                 .../secrets/DRIVE_SERVICE_KEY"
+ *         ※ 배포 시 코드베이스 전체의 시크릿을 검사하므로, ocrReceipt 처럼
+ *           시크릿을 안 쓰는 함수만 올릴 때도 필요하다.
+ *
+ *     · 편집자                  roles/editor
+ *         없으면: "Permissions denied enabling cloudbilling.googleapis.com"
+ *         (API 활성화 · Cloud Build · Artifact Registry · Cloud Run 용)
+ *
+ *   Firestore 규칙 배포(deploy-firestore-rules.yml)는 위 권한이 하나도
+ *   필요 없어서, 규칙 배포가 잘 된다고 해서 함수 배포도 되는 건 아니다.
  * ═══════════════════════════════════════════════════════════════════ */
 
 // "14,800원" / "-2,700" 같은 토큰에서 정수 금액을 뽑는다. 실패하면 null.
