@@ -704,25 +704,54 @@ exports.parseRevenueFile = onCall(
  * ═══════════════════════════════════════════════════════════════════ */
 
 // "14,800원" / "-2,700" 같은 토큰에서 정수 금액을 뽑는다. 실패하면 null.
-function parseWon(token) {
-  if (!token) return null;
-  // 공백을 먼저 지우면 "2,900 1 2,900"(단가·수량·금액) 같은 줄에서 숫자가
-  // 서로 붙어 하나의 거대한 수가 되므로, 원문에서 토큰 단위로 뽑는다.
-  // 영수증 금액은 오른쪽 정렬이라 마지막 토큰이 우리가 찾는 값이다.
-  const matches = String(token).match(/-?\d[\d,]*/g);
-  if (!matches) return null;
-  const n = parseInt(matches[matches.length - 1].replace(/,/g, ''), 10);
+/**
+ * 한 줄에서 금액 토큰을 순서대로 뽑는다.
+ *
+ * 주의 두 가지:
+ *  · 공백을 먼저 지우면 "2,900 1 2,900"(단가·수량·금액) 이 하나의 거대한
+ *    수로 뭉친다. 그래서 원문에서 토큰 단위로 뽑는다.
+ *  · 반대로 OCR 이 천 단위 콤마 뒤를 띄워 "2, 900" 으로 읽는 일이 잦다.
+ *    이때 그냥 쪼개면 900 이 금액이 되어버리므로, 콤마(+선택적 공백)로
+ *    이어지는 3자리 묶음은 하나의 수로 합친다.
+ */
+function moneyTokens(line) {
+  //  ① 콤마로 이어진 천 단위 묶음 (콤마 뒤 공백 허용)  ② 그 외 연속 숫자
+  const re = /-?\d{1,3}(?:[,，]\s?\d{3})+|-?\d+/g;
+  return String(line || '').match(re) || [];
+}
+
+function tokenToWon(tok) {
+  const n = parseInt(String(tok).replace(/[^\d-]/g, ''), 10);
   return Number.isFinite(n) ? n : null;
 }
 
-// 같은 줄 또는 바로 다음 줄에서 금액을 찾는다 (Vision 은 라벨/값을 줄바꿈으로 나누기도 함)
-function amountNear(lines, idx) {
-  const own = lines[idx].replace(/^[^\d-]*/, '');
-  const here = parseWon(own);
-  if (here !== null && /\d/.test(own)) return here;
-  for (let k = idx + 1; k < Math.min(idx + 3, lines.length); k++) {
+function parseWon(token) {
+  const tokens = moneyTokens(token);
+  if (!tokens.length) return null;
+  // 영수증 금액은 오른쪽 정렬이라 마지막 토큰이 우리가 찾는 값이다.
+  return tokenToWon(tokens[tokens.length - 1]);
+}
+
+/**
+ * 라벨 줄에서 금액을 찾는다. {value, distance} 또는 null.
+ *
+ * 종이 영수증은 라벨이 왼쪽, 금액이 오른쪽에 정렬돼 있어 Vision 이
+ * 라벨 묶음과 금액 묶음을 따로 읽어내는 일이 있다.
+ *   청구금액: / 받은금액: / 거스름돈: / 2,900 / 2,900 / 0
+ * 그래서 뒤쪽 줄까지 훑되, 몇 줄 떨어져서 찾았는지(distance)를 함께 돌려
+ * 호출부가 확신도를 낮출 수 있게 한다.
+ */
+function amountNear(lines, idx, maxAhead = 5) {
+  const ownTokens = moneyTokens(lines[idx]);
+  if (ownTokens.length) {
+    const v = tokenToWon(ownTokens[ownTokens.length - 1]);
+    if (v !== null) return {value: v, distance: 0};
+  }
+  const end = Math.min(idx + maxAhead, lines.length - 1);
+  for (let k = idx + 1; k <= end; k++) {
+    if (!/^[^\d]{0,2}-?[\d,，\s]+원?\s*$/.test(lines[k])) continue;  // 숫자만 있는 줄
     const v = parseWon(lines[k]);
-    if (v !== null && /^\s*-?[\d,]+\s*원?\s*$/.test(lines[k])) return v;
+    if (v !== null) return {value: v, distance: k - idx};
   }
   return null;
 }
@@ -747,16 +776,15 @@ function guessTotalByRepetition(lines) {
   const counts = new Map();
   for (const line of lines) {
     if (RECEIPT_EXCLUDE.some((re) => re.test(line))) continue;
-    const tokens = String(line).match(/\d[\d,]*/g);   // 공백을 지우면 숫자가 붙는다
-    if (!tokens) continue;
-    for (const tok of tokens) {
-      const n = parseInt(tok.replace(/,/g, ''), 10);
+    for (const tok of moneyTokens(line)) {
+      const n = tokenToWon(tok);
       // 식대로 볼 수 있는 범위만 — 전화번호·사업자번호·승인번호 배제
-      if (!Number.isFinite(n) || n < 500 || n > 1000000) continue;
-      if (!/,/.test(tok) && n >= 10000) continue;   // 콤마 없는 큰 수는 번호일 확률이 높다
+      if (n === null || n < 500 || n > 1000000) continue;
+      if (!/[,，]/.test(tok) && n >= 10000) continue;  // 콤마 없는 큰 수는 번호일 확률이 높다
       counts.set(n, (counts.get(n) || 0) + 1);
     }
   }
+  // 같은 횟수라면 큰 금액을 택한다 — 총액이 항목 금액보다 작을 수 없다
   let best = null;
   let bestCount = 0;
   counts.forEach((c, n) => {
@@ -788,13 +816,18 @@ function parseReceiptText(text) {
     .map((s) => s.trim())
     .filter(Boolean);
 
+  // 라벨에서 몇 줄 떨어진 금액을 끌어다 쓴 적이 있으면 확신도를 낮춘다
+  let farMatch = false;
   const pick = (patterns, {skipExcluded = false} = {}) => {
     for (const re of patterns) {
       for (let i = 0; i < lines.length; i++) {
         if (!re.test(lines[i])) continue;
         if (skipExcluded && RECEIPT_EXCLUDE.some((x) => x.test(lines[i]))) continue;
-        const v = amountNear(lines, i);
-        if (v !== null) return v;
+        const hit = amountNear(lines, i);
+        if (hit) {
+          if (hit.distance >= 3) farMatch = true;
+          return hit.value;
+        }
       }
     }
     return null;
@@ -819,6 +852,7 @@ function parseReceiptText(text) {
   if (totalAmount === null && menu !== null) {
     totalAmount = menu + (tip || 0) - Math.abs(discount || 0);
   }
+  if (farMatch) confidence = 'low';
   if (totalAmount === null || totalAmount <= 0) {
     totalAmount = guessTotalByRepetition(lines);
     confidence = 'low';
