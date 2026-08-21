@@ -757,29 +757,58 @@ function isAmountOnlyLine(line) {
  *   'first' 항목용. 값 뒤에 홍보 문구가 붙는 줄이 있다.
  *           배민 "배달팁 0원! 배민클럽 6,020원 할인" → 배달팁은 0.
  */
-function amountNear(lines, idx, {prefer = 'last', maxAhead = 4, maxBack = 3, min = null} = {}) {
+/**
+ * 금액이 확실한 줄인지 — 천 단위 구분자가 있거나 "원"이 붙어 있는 줄.
+ * 주문번호(222)·수량(1)처럼 맨숫자만 있는 줄과 구분하기 위한 기준이다.
+ */
+function isMoneyLikeLine(line) {
+  return /[,.'，·]\s?\d{3}|원/.test(String(line || ''));
+}
+
+function amountFromLine(line, {strict, prefer}) {
+  if (!isAmountOnlyLine(line)) return null;
+  if (strict && !isMoneyLikeLine(line)) return null;
+  const toks = moneyTokens(line);
+  if (!toks.length) return null;
+  return tokenToWon(prefer === 'first' ? toks[0] : toks[toks.length - 1]);
+}
+
+/**
+ * 라벨 줄 주변에서 금액을 찾는다.
+ *
+ * 기울어져 찍은 사진은 Vision 이 줄 순서를 뒤섞어 읽는다. 실제 예:
+ *   [주문(대기)번호] / 주문내역 / 상품명 / 222 / [포장](ICE)카페라떼 /
+ *   총주문금액 / [포장하기] / 수량 / 구분 / 1 / 신규 / 2,900원 / 2026-08-19
+ * "총주문금액" 바로 앞줄이 주문번호 222, 뒷줄이 수량 1 이라 가까운 순서로만
+ * 찾으면 엉뚱한 수를 집는다. 그래서 두 번에 나눠 훑는다.
+ *   1차 — 구분자나 "원"이 붙어 금액이 확실한 줄만
+ *   2차 — 그래도 없으면 맨숫자 줄까지 허용
+ */
+function amountNear(lines, idx, {prefer = 'last', maxAhead = 8, maxBack = 4, min = null,
+  strictOnly = false} = {}) {
   const okValue = (v) => v !== null && (min === null || v >= min);
+
+  // 같은 줄에 있으면 그게 답
   const ownTokens = moneyTokens(lines[idx]);
   if (ownTokens.length) {
     const tok = prefer === 'first' ? ownTokens[0] : ownTokens[ownTokens.length - 1];
     const v = tokenToWon(tok);
     if (okValue(v)) return {value: v, distance: 0};
   }
-  // 라벨과 금액이 별도 블록으로 읽힌 경우 — 아래쪽을 먼저 훑는다
-  const fwdEnd = Math.min(idx + maxAhead, lines.length - 1);
-  for (let k = idx + 1; k <= fwdEnd; k++) {
-    if (!isAmountOnlyLine(lines[k])) continue;
-    const v = parseWon(lines[k]);
-    if (okValue(v)) return {value: v, distance: k - idx};
-  }
-  // 그래도 없으면 위쪽 — 영수증 맨 아래 "결제금액:" 처럼 라벨이 값보다
-  // 뒤에 인쇄되는 형식이 있다. 기울어져 찍힌 사진은 Vision 이 라벨과 금액을
-  // 같은 줄로 묶지 못해 이 경로로 오는 일이 많다.
-  const backEnd = Math.max(idx - maxBack, 0);
-  for (let k = idx - 1; k >= backEnd; k--) {
-    if (!isAmountOnlyLine(lines[k])) continue;
-    const v = parseWon(lines[k]);
-    if (okValue(v)) return {value: v, distance: idx - k};
+
+  for (const strict of (strictOnly ? [true] : [true, false])) {
+    // 아래쪽 먼저 (라벨 다음에 금액이 오는 일반적인 배치)
+    const fwdEnd = Math.min(idx + maxAhead, lines.length - 1);
+    for (let k = idx + 1; k <= fwdEnd; k++) {
+      const v = amountFromLine(lines[k], {strict, prefer});
+      if (okValue(v)) return {value: v, distance: k - idx};
+    }
+    // 그다음 위쪽 (CU 처럼 "결제금액:" 라벨이 값보다 아래 찍히는 형식)
+    const backEnd = Math.max(idx - maxBack, 0);
+    for (let k = idx - 1; k >= backEnd; k--) {
+      const v = amountFromLine(lines[k], {strict, prefer});
+      if (okValue(v)) return {value: v, distance: idx - k};
+    }
   }
   return null;
 }
@@ -879,7 +908,7 @@ function parseReceiptText(text) {
     for (const re of patterns) {
       for (let i = 0; i < lines.length; i++) {
         if (!re.test(lines[i])) continue;
-        const hit = amountNear(lines, i, {prefer: 'first'});
+        const hit = amountNear(lines, i, {prefer: 'first', maxAhead: 2, maxBack: 0});
         if (hit) return hit.value;
       }
     }
@@ -889,12 +918,12 @@ function parseReceiptText(text) {
   // 총액은 아래에서부터 찾는다.
   // 영수증은 항목 → 소계 → 세액 → 결제금액 → 카드승인 순으로 인쇄되므로
   // 같은 라벨이 여러 번 나와도 "맨 아래 것"이 실제 결제금액이다.
-  const pickBottomUp = (tiers) => {
+  const pickBottomUp = (tiers, {strictOnly = false} = {}) => {
     for (const {re, name} of tiers) {
       for (let i = lines.length - 1; i >= 0; i--) {
         if (!re.test(lines[i])) continue;
         if (RECEIPT_EXCLUDE.some((x) => x.test(lines[i]))) continue;
-        const hit = amountNear(lines, i, {min: MIN_TOTAL_WON});
+        const hit = amountNear(lines, i, {min: MIN_TOTAL_WON, strictOnly});
         if (hit) {
           if (hit.distance >= 2) farMatch = true;
           matchedLabel = name;
@@ -907,7 +936,7 @@ function parseReceiptText(text) {
 
   // 총액 라벨 — 확실한 것부터. 마지막 단계는 앞글자가 잘려도 잡히도록
   // "…금액" 으로만 끝나는 줄을 본다(제외 목록이 받은금액·할인금액 등을 걸러준다).
-  const total = pickBottomUp([
+  const TOTAL_TIERS = [
     {re: /결제\s*금\s*액/, name: '결제금액'},
     {re: /청구\s*금\s*액/, name: '청구금액'},
     {re: /승인\s*금\s*액/, name: '승인금액'},
@@ -920,7 +949,11 @@ function parseReceiptText(text) {
     {re: /현\s*금\s*(결제|승인)/, name: '현금결제'},
     {re: /총\s*주문\s*금\s*액|주문\s*금\s*액|총\s*금\s*액/, name: '총주문금액'},
     {re: /금\s*액\s*[:：]?\s*$|금\s*액/, name: '금액'},
-  ]);
+  ];
+
+  // 1차 — 라벨 주변에서 "금액이 확실한 줄"(구분자·원 표기)만 본다.
+  // 기울어진 사진처럼 줄 순서가 뒤섞여도 주문번호·수량을 집지 않는다.
+  const total = pickBottomUp(TOTAL_TIERS, {strictOnly: true});
 
   const menu = pick([/메뉴\s*금액/, /메뉴금액/, /상품\s*금액/, /음식\s*금액/]);
   const tip = pick([/배달\s*팁/, /배달팁/, /배달\s*비/, /배달\s*요금/, /배달\s*료/]);
@@ -933,14 +966,34 @@ function parseReceiptText(text) {
     totalAmount = menu + (tip || 0) - Math.abs(discount || 0);
   }
   if (farMatch) confidence = 'low';
+
+  // 라벨에서 멀리 떨어진 금액을 끌어온 경우(줄 순서가 뒤섞인 사진)에는
+  // 인접성을 믿기 어렵다. 같은 금액이 3번 이상 인쇄된 POS 영수증이라면
+  // 그쪽이 더 확실하므로 바꿔 쓴다.
+  if (totalAmount !== null && farMatch) {
+    const repeated = guessTotalByRepetition(lines);
+    if (repeated !== null && repeated !== totalAmount) {
+      totalAmount = repeated;
+      matchedLabel = '반복 금액 추정';
+    }
+  }
+
+  // 2차 — 영수증에 구분자 붙은 금액이 딱 하나면 그것. 항목 하나짜리 간이
+  // 영수증은 라벨을 못 찾아도 이 단계에서 정확히 잡힌다.
+  if (totalAmount === null || totalAmount < MIN_TOTAL_WON) {
+    totalAmount = guessSingleCommaAmount(lines);
+    matchedLabel = totalAmount !== null ? '유일한 금액 추정' : matchedLabel;
+    confidence = 'low';
+  }
+  // 3차 — 같은 금액이 여러 번 인쇄된 POS 영수증
   if (totalAmount === null || totalAmount < MIN_TOTAL_WON) {
     totalAmount = guessTotalByRepetition(lines);
     matchedLabel = totalAmount !== null ? '반복 금액 추정' : matchedLabel;
     confidence = 'low';
   }
+  // 4차 — 여기까지 오면 구분자 없는 맨숫자라도 라벨 옆에서 찾아본다
   if (totalAmount === null || totalAmount < MIN_TOTAL_WON) {
-    totalAmount = guessSingleCommaAmount(lines);
-    matchedLabel = totalAmount !== null ? '유일한 금액 추정' : matchedLabel;
+    totalAmount = pickBottomUp(TOTAL_TIERS);
     confidence = 'low';
   }
   if (totalAmount === null || totalAmount < MIN_TOTAL_WON) {
