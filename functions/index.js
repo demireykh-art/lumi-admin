@@ -757,29 +757,57 @@ function isAmountOnlyLine(line) {
  *   'first' 항목용. 값 뒤에 홍보 문구가 붙는 줄이 있다.
  *           배민 "배달팁 0원! 배민클럽 6,020원 할인" → 배달팁은 0.
  */
-function amountNear(lines, idx, {prefer = 'last', maxAhead = 4, maxBack = 3} = {}) {
+function amountNear(lines, idx, {prefer = 'last', maxAhead = 4, maxBack = 3, min = null} = {}) {
+  const okValue = (v) => v !== null && (min === null || v >= min);
   const ownTokens = moneyTokens(lines[idx]);
   if (ownTokens.length) {
     const tok = prefer === 'first' ? ownTokens[0] : ownTokens[ownTokens.length - 1];
     const v = tokenToWon(tok);
-    if (v !== null) return {value: v, distance: 0};
+    if (okValue(v)) return {value: v, distance: 0};
   }
   // 라벨과 금액이 별도 블록으로 읽힌 경우 — 아래쪽을 먼저 훑는다
   const fwdEnd = Math.min(idx + maxAhead, lines.length - 1);
   for (let k = idx + 1; k <= fwdEnd; k++) {
     if (!isAmountOnlyLine(lines[k])) continue;
     const v = parseWon(lines[k]);
-    if (v !== null) return {value: v, distance: k - idx};
+    if (okValue(v)) return {value: v, distance: k - idx};
   }
   // 그래도 없으면 위쪽 — 영수증 맨 아래 "결제금액:" 처럼 라벨이 값보다
-  // 뒤에 인쇄되는 형식이 있다
+  // 뒤에 인쇄되는 형식이 있다. 기울어져 찍힌 사진은 Vision 이 라벨과 금액을
+  // 같은 줄로 묶지 못해 이 경로로 오는 일이 많다.
   const backEnd = Math.max(idx - maxBack, 0);
   for (let k = idx - 1; k >= backEnd; k--) {
     if (!isAmountOnlyLine(lines[k])) continue;
     const v = parseWon(lines[k]);
-    if (v !== null) return {value: v, distance: idx - k};
+    if (okValue(v)) return {value: v, distance: idx - k};
   }
   return null;
+}
+
+// 식사 영수증의 총액으로 볼 수 있는 최소 금액.
+// 이보다 작으면 수량(1)·거스름돈(0)·개수 같은 다른 숫자를 집은 것이다.
+const MIN_TOTAL_WON = 100;
+
+/**
+ * 라벨을 못 찾고 반복도 없을 때의 마지막 추정 —
+ * 영수증 전체에서 천 단위 구분자가 붙은 금액이 딱 하나뿐이면 그게 총액이다.
+ *
+ * 주문번호표처럼 항목이 하나뿐인 간이 영수증이 여기 해당한다.
+ *   [포장](ICE)카페라떼 / 2,900 원 / 총주문금액
+ * 수량·주문번호·날짜는 구분자가 없으므로 자연히 걸러진다.
+ */
+function guessSingleCommaAmount(lines) {
+  const found = new Set();
+  for (const line of lines) {
+    if (RECEIPT_EXCLUDE.some((re) => re.test(line))) continue;
+    for (const tok of moneyTokens(line)) {
+      if (!/[,.'，·]/.test(tok)) continue;
+      const n = tokenToWon(tok);
+      if (n === null || n < MIN_TOTAL_WON || n > 1000000) continue;
+      found.add(n);
+    }
+  }
+  return found.size === 1 ? [...found][0] : null;
 }
 
 // 금액을 읽어서는 안 되는 줄 — 세부 내역·세액·거스름돈 등
@@ -866,7 +894,7 @@ function parseReceiptText(text) {
       for (let i = lines.length - 1; i >= 0; i--) {
         if (!re.test(lines[i])) continue;
         if (RECEIPT_EXCLUDE.some((x) => x.test(lines[i]))) continue;
-        const hit = amountNear(lines, i);
+        const hit = amountNear(lines, i, {min: MIN_TOTAL_WON});
         if (hit) {
           if (hit.distance >= 2) farMatch = true;
           matchedLabel = name;
@@ -890,6 +918,7 @@ function parseReceiptText(text) {
     {re: /신\s*용\s*카\s*드/, name: '신용카드'},
     {re: /체\s*크\s*카\s*드/, name: '체크카드'},
     {re: /현\s*금\s*(결제|승인)/, name: '현금결제'},
+    {re: /총\s*주문\s*금\s*액|주문\s*금\s*액|총\s*금\s*액/, name: '총주문금액'},
     {re: /금\s*액\s*[:：]?\s*$|금\s*액/, name: '금액'},
   ]);
 
@@ -904,11 +933,17 @@ function parseReceiptText(text) {
     totalAmount = menu + (tip || 0) - Math.abs(discount || 0);
   }
   if (farMatch) confidence = 'low';
-  if (totalAmount === null || totalAmount <= 0) {
+  if (totalAmount === null || totalAmount < MIN_TOTAL_WON) {
     totalAmount = guessTotalByRepetition(lines);
+    matchedLabel = totalAmount !== null ? '반복 금액 추정' : matchedLabel;
     confidence = 'low';
   }
-  if (totalAmount === null || totalAmount <= 0) {
+  if (totalAmount === null || totalAmount < MIN_TOTAL_WON) {
+    totalAmount = guessSingleCommaAmount(lines);
+    matchedLabel = totalAmount !== null ? '유일한 금액 추정' : matchedLabel;
+    confidence = 'low';
+  }
+  if (totalAmount === null || totalAmount < MIN_TOTAL_WON) {
     return {ok: false, confidence: null, matchedLabel: null, foodAmount: null,
       deliveryFee: null, totalAmount: null, menuAmount: menu, deliveryTip: tip,
       discount, lines};
