@@ -987,16 +987,20 @@ function parseReceiptText(text) {
   if (totalAmount === null && menu !== null) {
     totalAmount = menu + (tip || 0) - Math.abs(discount || 0);
   }
-  if (farMatch) confidence = 'low';
-
   // 라벨에서 멀리 떨어진 금액을 끌어온 경우(줄 순서가 뒤섞인 사진)에는
   // 인접성을 믿기 어렵다. 같은 금액이 3번 이상 인쇄된 POS 영수증이라면
   // 그쪽이 더 확실하므로 바꿔 쓴다.
+  //
+  // confidence 는 "값을 어떻게 얻었는가"만 본다. 총액 라벨을 찾았고 금액이
+  // 확실한 줄에서 읽었다면 몇 줄 떨어져 있었는지는 따지지 않는다(high).
+  // 라벨 없이 추측했거나 다른 값으로 바꿔 쓴 때만 low 로 내려 화면에
+  // "확인 필요"를 띄운다.
   if (totalAmount !== null && farMatch) {
     const repeated = guessTotalByRepetition(lines);
     if (repeated !== null && repeated !== totalAmount) {
       totalAmount = repeated;
       matchedLabel = '반복 금액 추정';
+      confidence = 'low';
     }
   }
 

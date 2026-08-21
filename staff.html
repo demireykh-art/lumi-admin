@@ -5111,57 +5111,42 @@
             }
         }
 
+        // 직원이 보는 화면이라 군더더기 없이 "품목 / 금액 / 합계"만 보여준다.
+        // 진단용 원문 텍스트는 인식에 실패했을 때만 펼칠 수 있게 남긴다.
         function _renderMealReceipts(target, busyNote){
             const el=_mealReceiptStatusEl(target);
             if(!el) return;
             const list=_mealReceipts[target];
+            const cell='padding:.45rem .55rem;border-bottom:1px solid var(--border)';
             let html='';
             if(list.length){
                 html+='<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:.15rem">';
                 list.forEach((r,i)=>{
-                    const label='영수증 '+(i+1);
+                    const del='<button type="button" onclick="removeMealReceipt(\''+target+'\','+i+')" '
+                        +'style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.9rem;padding:0 .1rem" title="빼기">✕</button>';
                     if(!r.ok){
-                        html+='<div style="padding:.4rem .5rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:.4rem;align-items:flex-start">'
-                            +'<span style="color:var(--red)">⚠ '+label+' — '+_esc(r.reason||'금액을 찾지 못했습니다')+'</span>'
-                            +'<button type="button" onclick="removeMealReceipt(\''+target+'\','+i+')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.9rem;padding:0 .1rem">✕</button>'
+                        html+='<div style="'+cell+'">'
+                            +'<div style="display:flex;justify-content:space-between;gap:.4rem;align-items:flex-start">'
+                            +'<span style="color:var(--red)">영수증 '+(i+1)+' — '+_esc(r.reason||'금액을 찾지 못했습니다')+'</span>'+del+'</div>'
+                            +(r.text?_mealOcrTextToggle(r.text):'')
                             +'</div>';
-                        if(r.text) html+='<div style="padding:0 .5rem .4rem">'+_mealOcrTextToggle(r.text)+'</div>';
                         return;
                     }
-                    const low=(r.confidence==='low');
-                    const parts=[];
-                    if(r.matchedLabel) parts.push('"'+_esc(r.matchedLabel)+'" 줄에서 읽음');
-                    if(r.menuAmount!=null) parts.push('메뉴 '+formatCurrency(r.menuAmount));
-                    if(r.deliveryTip!=null) parts.push('배달팁 '+formatCurrency(r.deliveryTip));
-                    if(r.discount!=null&&r.discount!==0) parts.push('할인 '+formatCurrency(r.discount));
-                    html+='<div style="padding:.4rem .5rem;border-bottom:1px solid var(--border)">'
-                        +'<div style="display:flex;justify-content:space-between;align-items:center;gap:.4rem">'
-                        +'<span>'+(low?'<span style="color:#d97706">⚠</span> ':'<span style="color:var(--green)">✓</span> ')+label
-                        +(low?' <span style="color:#d97706">(추정)</span>':'')+'</span>'
-                        +'<span style="display:flex;align-items:center;gap:.4rem">'
-                        +'<strong>'+formatCurrency(r.total)+'</strong>'
-                        +'<button type="button" onclick="removeMealReceipt(\''+target+'\','+i+')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.9rem;padding:0 .1rem">✕</button>'
-                        +'</span></div>'
-                        +(parts.length?'<div style="color:var(--text-muted);font-size:.68rem">'+parts.join(' · ')+'</div>':'')
-                        +(r.deliv>0?'<div style="color:var(--text-muted);font-size:.68rem">음식 '+formatCurrency(r.food)+' + 배달비 '+formatCurrency(r.deliv)+'</div>':'')
-                        +(low&&r.text?_mealOcrTextToggle(r.text):'')
+                    // 값을 추측한 경우에만 확인 표시를 남긴다
+                    const warn=(r.confidence==='low')
+                        ? ' <span style="color:#d97706;font-size:.68rem">확인 필요</span>' : '';
+                    html+='<div style="'+cell+';display:flex;justify-content:space-between;align-items:center;gap:.4rem">'
+                        +'<span>영수증 '+(i+1)+warn+'</span>'
+                        +'<span style="display:flex;align-items:center;gap:.5rem"><strong>'+formatCurrency(r.total)+'</strong>'+del+'</span>'
                         +'</div>';
                 });
                 const ok=list.filter(r=>r.ok);
                 if(ok.length){
-                    const food=ok.reduce((s,r)=>s+r.food,0);
-                    const deliv=ok.reduce((s,r)=>s+r.deliv,0);
-                    html+='<div style="padding:.45rem .5rem;background:var(--bg);display:flex;justify-content:space-between;font-weight:700">'
-                        +'<span>합계 ('+ok.length+'장)</span><span>'+formatCurrency(food+deliv)+'</span></div>';
-                    if(deliv>0){
-                        html+='<div style="padding:0 .5rem .4rem;background:var(--bg);color:var(--text-muted);font-size:.68rem">'
-                            +'음식 '+formatCurrency(food)+' + 배달비 '+formatCurrency(deliv)+'</div>';
-                    }
+                    const sum=ok.reduce((t,r)=>t+r.total,0);
+                    html+='<div style="padding:.5rem .55rem;background:var(--bg);display:flex;justify-content:space-between;font-weight:700">'
+                        +'<span>합계 ('+ok.length+'장)</span><span>'+formatCurrency(sum)+'</span></div>';
                 }
                 html+='</div>';
-                if(list.some(r=>r.ok)){
-                    html+='<div style="color:var(--text-muted);margin-top:.25rem">금액이 다르면 아래 칸에서 직접 고쳐주세요. 영수증을 더 올리면 합산됩니다.</div>';
-                }
             }
             if(busyNote) html+='<div style="color:var(--text-muted);margin-top:.25rem">'+_esc(busyNote)+'</div>';
             el.innerHTML=html;
@@ -5195,8 +5180,7 @@
                             total:Math.max(0, Number(p.totalAmount)||0),
                             food:Math.max(0, Number(p.foodAmount)||0),
                             deliv:Math.max(0, Number(p.deliveryFee)||0),
-                            confidence:p.confidence, matchedLabel:p.matchedLabel,
-                            menuAmount:p.menuAmount, deliveryTip:p.deliveryTip, discount:p.discount,
+                            confidence:p.confidence,
                             text:d.text
                         };
                     }
