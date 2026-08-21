@@ -12270,6 +12270,11 @@
                         <button onclick="_staffCancelLeave('${r.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">연차 취소</button>
                     </div>`;
                 }
+            }else if(r.status==='rejected' || r.status==='cancelled'){
+                // 취소·반려된 건 → 다시 승인으로 복원
+                actionsHtml=`<div style="display:flex;gap:.35rem;margin-top:.4rem;justify-content:flex-end">
+                    <button onclick="_staffRestoreLeave('${r.id}')" style="background:#fff;border:1px solid #059669;color:#047857;padding:.3rem .7rem;font-size:.75rem;border-radius:5px;cursor:pointer">↩ 승인 복원</button>
+                </div>`;
             }
             return `<div style="padding:.6rem .75rem;border:1px solid ${showActions?'#fbbf24':'#e5e7eb'};background:${showActions?'#fffbeb':'#fff'};border-radius:8px;margin-bottom:.4rem">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.25rem">
@@ -12346,6 +12351,27 @@
                 }
                 _renderStaffAdminBody();
             }catch(e){ alert('취소 실패: '+(e?.message||e)); }
+        }
+        // 취소·반려된 연차를 다시 승인으로 복원
+        //   취소했던 날짜(cancelledDates)가 있으면 dates 로 되돌리고, status:'approved' 로 전환.
+        async function _staffRestoreLeave(id){
+            const r=_staffAdminLeaves.find(x=>x.id===id);
+            // 현재 남은 날짜 + 취소됐던 날짜 = 원래 신청 날짜로 복원
+            const restored=Array.from(new Set([...((r?.dates)||[]), ...((r?.cancelledDates)||[])])).sort();
+            if(!confirm(`이 연차를 다시 "승인" 상태로 되돌리시겠습니까?${restored.length?'\n\n대상 날짜: '+restored.join(', '):''}`)) return;
+            try{
+                const now=new Date().toISOString();
+                await db.collection('leaveRequests').doc(id).update({
+                    status: 'approved',
+                    dates: restored,
+                    cancelledDates: [],
+                    updatedAt: now,
+                    updatedBy: currentUser?.name||currentUser?.id||'admin'
+                });
+                // 로컬 캐시 갱신
+                if(r){ r.status='approved'; r.dates=restored; r.cancelledDates=[]; r.updatedAt=now; }
+                _renderStaffAdminBody();
+            }catch(e){ alert('복원 실패: '+(e?.message||e)); }
         }
 
         // 근태·OT·급여 공통 월 이동 헤더
