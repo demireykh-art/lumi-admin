@@ -715,8 +715,11 @@ exports.parseRevenueFile = onCall(
  *    이어지는 3자리 묶음은 하나의 수로 합친다.
  */
 function moneyTokens(line) {
-  //  ① 콤마로 이어진 천 단위 묶음 (콤마 뒤 공백 허용)  ② 그 외 연속 숫자
-  const re = /-?\d{1,3}(?:[,，]\s?\d{3})+|-?\d+/g;
+  // ① 천 단위 구분자로 이어진 3자리 묶음  ② 그 외 연속 숫자
+  // 구분자는 콤마뿐 아니라 마침표·아포스트로피까지 받는다. 감열지 영수증은
+  // 콤마가 흐려 OCR 이 "2.900" / "2'900" / "2, 900" 으로 읽는 일이 잦은데,
+  // 원화는 소수점을 쓰지 않으므로 전부 천 단위로 봐도 안전하다.
+  const re = /-?\d{1,3}(?:[,.'，·]\s?\d{3})+|-?\d+/g;
   return String(line || '').match(re) || [];
 }
 
@@ -741,17 +744,40 @@ function parseWon(token) {
  * 그래서 뒤쪽 줄까지 훑되, 몇 줄 떨어져서 찾았는지(distance)를 함께 돌려
  * 호출부가 확신도를 낮출 수 있게 한다.
  */
-function amountNear(lines, idx, maxAhead = 5) {
+// 금액만 적힌 줄인지 (라벨 없이 숫자만 있는 오른쪽 컬럼)
+function isAmountOnlyLine(line) {
+  return /^[^\d]{0,2}-?[\d,.'，·\s]+원?\s*$/.test(String(line || '')) &&
+    /\d/.test(String(line || ''));
+}
+
+/**
+ * @param {string} prefer 같은 줄에 숫자가 여럿일 때 어느 것을 쓸지
+ *   'last'  총액용. 오른쪽 정렬이라 맨 오른쪽이 최종 금액이다.
+ *           배민 "총 결제금액  35,900원  29,880원" → 할인 후 29,880.
+ *   'first' 항목용. 값 뒤에 홍보 문구가 붙는 줄이 있다.
+ *           배민 "배달팁 0원! 배민클럽 6,020원 할인" → 배달팁은 0.
+ */
+function amountNear(lines, idx, {prefer = 'last', maxAhead = 4, maxBack = 3} = {}) {
   const ownTokens = moneyTokens(lines[idx]);
   if (ownTokens.length) {
-    const v = tokenToWon(ownTokens[ownTokens.length - 1]);
+    const tok = prefer === 'first' ? ownTokens[0] : ownTokens[ownTokens.length - 1];
+    const v = tokenToWon(tok);
     if (v !== null) return {value: v, distance: 0};
   }
-  const end = Math.min(idx + maxAhead, lines.length - 1);
-  for (let k = idx + 1; k <= end; k++) {
-    if (!/^[^\d]{0,2}-?[\d,，\s]+원?\s*$/.test(lines[k])) continue;  // 숫자만 있는 줄
+  // 라벨과 금액이 별도 블록으로 읽힌 경우 — 아래쪽을 먼저 훑는다
+  const fwdEnd = Math.min(idx + maxAhead, lines.length - 1);
+  for (let k = idx + 1; k <= fwdEnd; k++) {
+    if (!isAmountOnlyLine(lines[k])) continue;
     const v = parseWon(lines[k]);
     if (v !== null) return {value: v, distance: k - idx};
+  }
+  // 그래도 없으면 위쪽 — 영수증 맨 아래 "결제금액:" 처럼 라벨이 값보다
+  // 뒤에 인쇄되는 형식이 있다
+  const backEnd = Math.max(idx - maxBack, 0);
+  for (let k = idx - 1; k >= backEnd; k--) {
+    if (!isAmountOnlyLine(lines[k])) continue;
+    const v = parseWon(lines[k]);
+    if (v !== null) return {value: v, distance: idx - k};
   }
   return null;
 }
@@ -818,14 +844,32 @@ function parseReceiptText(text) {
 
   // 라벨에서 몇 줄 떨어진 금액을 끌어다 쓴 적이 있으면 확신도를 낮춘다
   let farMatch = false;
-  const pick = (patterns, {skipExcluded = false} = {}) => {
+  let matchedLabel = null;
+
+  // 위에서부터 첫 매치 — 메뉴금액·배달팁·할인처럼 상단에 한 번 나오는 항목용
+  const pick = (patterns) => {
     for (const re of patterns) {
       for (let i = 0; i < lines.length; i++) {
         if (!re.test(lines[i])) continue;
-        if (skipExcluded && RECEIPT_EXCLUDE.some((x) => x.test(lines[i]))) continue;
+        const hit = amountNear(lines, i, {prefer: 'first'});
+        if (hit) return hit.value;
+      }
+    }
+    return null;
+  };
+
+  // 총액은 아래에서부터 찾는다.
+  // 영수증은 항목 → 소계 → 세액 → 결제금액 → 카드승인 순으로 인쇄되므로
+  // 같은 라벨이 여러 번 나와도 "맨 아래 것"이 실제 결제금액이다.
+  const pickBottomUp = (tiers) => {
+    for (const {re, name} of tiers) {
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (!re.test(lines[i])) continue;
+        if (RECEIPT_EXCLUDE.some((x) => x.test(lines[i]))) continue;
         const hit = amountNear(lines, i);
         if (hit) {
-          if (hit.distance >= 3) farMatch = true;
+          if (hit.distance >= 2) farMatch = true;
+          matchedLabel = name;
           return hit.value;
         }
       }
@@ -833,16 +877,23 @@ function parseReceiptText(text) {
     return null;
   };
 
-  // 총액 — 배달앱 라벨 먼저, 그다음 POS 영수증 라벨
-  const total = pick([
-    /최종\s*결제\s*금액/, /총\s*결제\s*금액/, /결제\s*금액/, /결제금액/,
-    /총\s*결제/, /총\s*주문\s*금액/,
-    /청구\s*금액/, /받을\s*금액/, /승인\s*금액/, /판매\s*총액/,
-    /합계\s*금액/, /총\s*합계/, /합\s*계/, /총\s*액/,
-    /신용\s*카드/, /체크\s*카드/, /카드\s*결제/, /현금\s*결제/,
-  ], {skipExcluded: true});
+  // 총액 라벨 — 확실한 것부터. 마지막 단계는 앞글자가 잘려도 잡히도록
+  // "…금액" 으로만 끝나는 줄을 본다(제외 목록이 받은금액·할인금액 등을 걸러준다).
+  const total = pickBottomUp([
+    {re: /결제\s*금\s*액/, name: '결제금액'},
+    {re: /청구\s*금\s*액/, name: '청구금액'},
+    {re: /승인\s*금\s*액/, name: '승인금액'},
+    {re: /받을\s*금\s*액/, name: '받을금액'},
+    {re: /총\s*구\s*매\s*액/, name: '총구매액'},
+    {re: /판매\s*총액/, name: '판매총액'},
+    {re: /총\s*합\s*계|합\s*계\s*금\s*액|^\s*합\s*계/, name: '합계'},
+    {re: /신\s*용\s*카\s*드/, name: '신용카드'},
+    {re: /체\s*크\s*카\s*드/, name: '체크카드'},
+    {re: /현\s*금\s*(결제|승인)/, name: '현금결제'},
+    {re: /금\s*액\s*[:：]?\s*$|금\s*액/, name: '금액'},
+  ]);
 
-  const menu = pick([/메뉴\s*금액/, /메뉴금액/, /상품\s*금액/, /주문\s*금액/, /음식\s*금액/]);
+  const menu = pick([/메뉴\s*금액/, /메뉴금액/, /상품\s*금액/, /음식\s*금액/]);
   const tip = pick([/배달\s*팁/, /배달팁/, /배달\s*비/, /배달\s*요금/, /배달\s*료/]);
   const discount = pick([/총\s*할인\s*받은\s*금액/, /할인\s*금액/, /총\s*할인/]);
 
@@ -858,8 +909,9 @@ function parseReceiptText(text) {
     confidence = 'low';
   }
   if (totalAmount === null || totalAmount <= 0) {
-    return {ok: false, confidence: null, foodAmount: null, deliveryFee: null,
-      totalAmount: null, menuAmount: menu, deliveryTip: tip, discount, lines};
+    return {ok: false, confidence: null, matchedLabel: null, foodAmount: null,
+      deliveryFee: null, totalAmount: null, menuAmount: menu, deliveryTip: tip,
+      discount, lines};
   }
 
   // 음식/배달비 배분 — 합계가 항상 결제금액과 정확히 맞도록.
@@ -881,7 +933,7 @@ function parseReceiptText(text) {
   deliveryFee = Math.min(deliveryFee, totalAmount);
   const foodAmount = totalAmount - deliveryFee;
 
-  return {ok: true, confidence, foodAmount, deliveryFee, totalAmount,
+  return {ok: true, confidence, matchedLabel, foodAmount, deliveryFee, totalAmount,
     menuAmount: menu, deliveryTip: tip, discount, lines};
 }
 
@@ -958,6 +1010,7 @@ exports.ocrReceipt = onCall(
       text,
       parsed: {
         confidence: parsed.confidence,
+        matchedLabel: parsed.matchedLabel,
         foodAmount: parsed.foodAmount,
         deliveryFee: parsed.deliveryFee,
         totalAmount: parsed.totalAmount,

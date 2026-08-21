@@ -5130,6 +5130,7 @@
                     }
                     const low=(r.confidence==='low');
                     const parts=[];
+                    if(r.matchedLabel) parts.push('"'+_esc(r.matchedLabel)+'" 줄에서 읽음');
                     if(r.menuAmount!=null) parts.push('메뉴 '+formatCurrency(r.menuAmount));
                     if(r.deliveryTip!=null) parts.push('배달팁 '+formatCurrency(r.deliveryTip));
                     if(r.discount!=null&&r.discount!==0) parts.push('할인 '+formatCurrency(r.discount));
@@ -5194,7 +5195,7 @@
                             total:Math.max(0, Number(p.totalAmount)||0),
                             food:Math.max(0, Number(p.foodAmount)||0),
                             deliv:Math.max(0, Number(p.deliveryFee)||0),
-                            confidence:p.confidence,
+                            confidence:p.confidence, matchedLabel:p.matchedLabel,
                             menuAmount:p.menuAmount, deliveryTip:p.deliveryTip, discount:p.discount,
                             text:d.text
                         };
