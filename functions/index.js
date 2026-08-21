@@ -843,6 +843,7 @@ const MIN_TOTAL_WON = 100;
 const ITEM_SKIP = [
   /결\s*제/, /청\s*구/, /승\s*인/, /합\s*계/, /소\s*계/, /총\s*구\s*매/, /총\s*액/,
   /총\s*주\s*문/, /카\s*드/, /현\s*금/, /물품\s*가액/,
+  /금\s*액/,                       // "금액" 표 머리글·"청구금액" 등
   /영수증/, /사업자/, /등록번호/, /주\s*소/, /성\s*명/, /전\s*화/, /일\s*자/,
   /TEL/i, /POS/i, /KIOSK/i, /키오스크/, /가맹점/, /\bNO\b\s*[:：]?/i,
   /할부/, /담당/, /객층/, /품\s*명/, /상\s*품\s*명/, /주문\s*내역/, /번\s*호/,
@@ -865,6 +866,7 @@ function cleanItemName(raw) {
   return String(raw || '')
     .replace(/(\s+-?\d[\d,.'，·]*\s*원?)+\s*$/, '')
     .replace(/^[*\-•·\s]+/, '')
+    .replace(/[\s:：]+$/, '')
     .trim();
 }
 
@@ -888,7 +890,8 @@ function extractItems(lines) {
     RECEIPT_EXCLUDE.some((re) => re.test(line)) || ITEM_SKIP.some((re) => re.test(line));
   const push = (rawName, amount) => {
     const name = cleanItemName(rawName);
-    if (!name || !/[가-힣A-Za-z]/.test(name)) return;
+    // 글자 두 자 이상이어야 품목으로 본다 — "부"·"세" 같은 조각을 걸러낸다
+    if (!name || (name.match(/[가-힣A-Za-z]/g) || []).length < 2) return;
     if (amount === null || amount < MIN_TOTAL_WON) return;
     items.push({name: name.slice(0, 40), amount});
   };
@@ -908,27 +911,54 @@ function extractItems(lines) {
     !skip(line) && !isAmountOnlyLine(line) &&
     !trailingAmount(line) && /[가-힣A-Za-z]/.test(line);
 
+  // 품목 구역은 소계·세액·청구금액 같은 정산 줄에서 끝난다. 그 아래를 계속
+  // 훑으면 "부 6,910"(부가세) · "액액돈 7,600"(청구/받은금액/거스름돈이 뭉개진
+  // 것) 같은 조각이 품목으로 잡힌다.
+  // 안내 문구에도 "결제카드 지참" 처럼 같은 낱말이 나오므로, 정산 줄에만
+  // 쓰이는 표현으로 좁혀서 경계를 잡는다.
+  const end = (() => {
+    for (let k = 0; k < lines.length; k++) {
+      if (/소\s*계|총\s*구\s*매|합\s*계|물품\s*가액|부\s*가\s*세\s*[:：]|청\s*구\s*금\s*액|받은\s*금액|거스름/.test(lines[k])) {
+        return k;
+      }
+    }
+    return lines.length;
+  })();
+
   let i = 0;
-  while (i < lines.length && items.length < 20) {
+  while (i < end && items.length < 20) {
     const line = lines[i];
     if (skip(line) || isAmountOnlyLine(line)) { i++; continue; }
 
     const ta = trailingAmount(line);
     if (ta) { push(ta.name, ta.value); i++; continue; }   // 한 줄형
 
-    // 품명 묶음 → 뒤따르는 금액 묶음과 순서대로 짝짓는다
+    // 품명 묶음 → 뒤따르는 금액 묶음과 짝짓는다
     const names = [];
     let j = i;
-    while (j < lines.length && isNameOnly(lines[j])) { names.push(lines[j]); j++; }
+    while (j < end && isNameOnly(lines[j])) { names.push(lines[j]); j++; }
     const amounts = [];
-    while (j < lines.length && isAmountOnlyLine(lines[j])) {
+    while (j < end && isAmountOnlyLine(lines[j])) {
       const t = itemAmountTokens(lines[j]);
       amounts.push(t.length ? tokenToWon(t[t.length - 1]) : null);
       j++;
     }
     if (names.length && amounts.length) {
-      const n = Math.min(names.length, amounts.length);
-      for (let k = 0; k < n; k++) push(names[k], amounts[k]);
+      // 금액 줄이 품명보다 많으면 한 품목이 단가·수량·금액으로 여러 줄에
+      // 걸쳐 읽힌 것이다. 품목 수만큼 등분해 각 묶음의 마지막(=금액)을 쓴다.
+      //   품명 1개 / 금액 "1","2,700"  → 2,700
+      //   품명 2개 / 금액 1,800·0      → 각각 1,800·0
+      const n = names.length;
+      const per = Math.floor(amounts.length / n);
+      if (per >= 1 && per * n === amounts.length) {
+        for (let k = 0; k < n; k++) {
+          const chunk = amounts.slice(k * per, (k + 1) * per).filter((v) => v !== null);
+          push(names[k], chunk.length ? chunk[chunk.length - 1] : null);
+        }
+      } else {
+        const m = Math.min(n, amounts.length);
+        for (let k = 0; k < m; k++) push(names[k], amounts[k]);
+      }
       i = j;
     } else {
       i += Math.max(names.length, 1);
