@@ -839,6 +839,65 @@ function amountNear(lines, idx, {prefer = 'last', maxAhead = 8, maxBack = 4, min
 // 이보다 작으면 수량(1)·거스름돈(0)·개수 같은 다른 숫자를 집은 것이다.
 const MIN_TOTAL_WON = 100;
 
+// 품목 줄에서 걸러낼 것들 — 총액·세액·매장정보·카드승인 등
+const ITEM_SKIP = [
+  /결\s*제/, /청\s*구/, /승\s*인/, /합\s*계/, /소\s*계/, /총\s*구\s*매/, /총\s*액/,
+  /총\s*주\s*문/, /카\s*드/, /현\s*금/, /물품\s*가액/,
+  /영수증/, /사업자/, /등록번호/, /주\s*소/, /성\s*명/, /전\s*화/, /TEL/i, /POS/i,
+  /할부/, /담당/, /객층/, /품\s*명/, /상\s*품\s*명/, /주문\s*내역/, /번\s*호/,
+  /교환|환불|방문|점포|면세 품목/,
+];
+
+/**
+ * 영수증에서 "품목 이름 + 금액"을 뽑는다. 직원에게 무엇을 샀는지 보여주기 위한
+ * 것이라, 확실한 줄만 담고 애매하면 아예 넣지 않는다.
+ *
+ * 대응하는 배치
+ *   한 줄형 : "햇반작은공기130g   1   2,000"  (품명·수량·금액)
+ *            "카페라떼(ICE) 2,900 1 2,900"   (품명·단가·수량·금액)
+ *   두 줄형 : "[포장]바닐라라떼(ICE)" / "3,300 1 3,300"
+ *
+ * 배달앱 주문내역처럼 품목당 금액이 없는 형식은 걸러져 빈 배열이 된다.
+ */
+function extractItems(lines) {
+  const items = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (RECEIPT_EXCLUDE.some((re) => re.test(line))) continue;
+    if (ITEM_SKIP.some((re) => re.test(line))) continue;
+    if (isAmountOnlyLine(line)) continue;          // 금액만 있는 줄엔 품명이 없다
+
+    const toks = moneyTokens(line);
+    let amount = null;
+    let name = line;
+    if (toks.length) {
+      const last = toks[toks.length - 1];
+      const at = line.lastIndexOf(last);
+      // 금액은 오른쪽 정렬이라 줄 끝에 온다. 뒤에 글자가 더 있으면 금액이
+      // 아니다 — "컴포즈커피 1809호점 송파삼전점" 의 1809 를 걸러낸다.
+      if (!/^\s*원?\s*$/.test(line.slice(at + last.length))) continue;
+      amount = tokenToWon(last);
+      name = line.slice(0, at);
+    } else if (i + 1 < lines.length && isAmountOnlyLine(lines[i + 1])) {
+      const next = moneyTokens(lines[i + 1]);
+      if (next.length) amount = tokenToWon(next[next.length - 1]);
+    } else {
+      continue;
+    }
+
+    // 이름 뒤에 남은 단가·수량을 떼어낸다. 공백으로 끊긴 순수 숫자만 지우므로
+    // "햇반작은공기130g" 처럼 이름에 붙은 숫자는 살아남는다.
+    name = name.replace(/(\s+-?\d[\d,.'，·]*\s*원?)+\s*$/, '').trim();
+    name = name.replace(/^[*\-•·\s]+/, '').trim();
+
+    if (!name || !/[가-힣A-Za-z]/.test(name)) continue;
+    if (amount === null || amount < MIN_TOTAL_WON) continue;
+    items.push({name: name.slice(0, 40), amount});
+    if (items.length >= 20) break;
+  }
+  return items;
+}
+
 /**
  * 라벨을 못 찾고 반복도 없을 때의 마지막 추정 —
  * 영수증 전체에서 천 단위 구분자가 붙은 금액이 딱 하나뿐이면 그게 총액이다.
@@ -864,7 +923,7 @@ function guessSingleCommaAmount(lines) {
 // 금액을 읽어서는 안 되는 줄 — 세부 내역·세액·거스름돈 등
 // (예: "부가세 과세물품가액 2,636" 을 결제금액으로 오인하면 안 된다)
 const RECEIPT_EXCLUDE = [
-  /부가\s*세/, /과세/, /면세/, /공급\s*가/, /봉사료/,
+  /부\s*가\s*세/, /과\s*세/, /면\s*세/, /공급\s*가/, /봉사료/,
   /거스름/, /받은\s*금액/, /잔액/, /포인트/, /적립/, /마일리지/,
   /할인/, /쿠폰/, /단가/, /수량/,
 ];
@@ -1048,7 +1107,7 @@ function parseReceiptText(text) {
   const foodAmount = totalAmount - deliveryFee;
 
   return {ok: true, confidence, matchedLabel, foodAmount, deliveryFee, totalAmount,
-    menuAmount: menu, deliveryTip: tip, discount, lines};
+    menuAmount: menu, deliveryTip: tip, discount, items: extractItems(lines), lines};
 }
 
 exports.ocrReceipt = onCall(
@@ -1125,6 +1184,7 @@ exports.ocrReceipt = onCall(
       parsed: {
         confidence: parsed.confidence,
         matchedLabel: parsed.matchedLabel,
+        items: parsed.items || [],
         foodAmount: parsed.foodAmount,
         deliveryFee: parsed.deliveryFee,
         totalAmount: parsed.totalAmount,
