@@ -5654,7 +5654,24 @@
             const reason=document.getElementById('leaveReason').value.trim();
             
             if(selectedLeaveDates.length===0){alert('날짜를 추가해주세요.');return;}
-            
+
+            // 중복 날짜 확인 — 이미 신청(대기·승인)된 날짜와 겹치면 차단
+            //   단일 날짜 재신청, 7/17 과 7/15~7/18 같은 범위 겹침 모두 날짜 단위로 감지.
+            //   (취소·반려된 건의 날짜는 재신청 허용)
+            const _activeReqs=leaveRequests.filter(r=>r.status==='approved'||r.status==='pending');
+            const _existingByDate={};
+            _activeReqs.forEach(r=>{ (r.dates||[]).forEach(d=>{ if(!_existingByDate[d]) _existingByDate[d]=r; }); });
+            const _dups=selectedLeaveDates.filter(d=>_existingByDate[d]);
+            if(_dups.length){
+                const _lines=_dups.map(d=>{
+                    const r=_existingByDate[d];
+                    const st=r.status==='approved'?'승인됨':'대기중';
+                    return `· ${d} (기존 ${r.type||'연차'} · ${st})`;
+                });
+                alert(`이미 신청된 날짜와 중복됩니다.\n\n${_lines.join('\n')}\n\n중복된 날짜는 기존 신청을 취소하거나, 이번 신청에서 그 날짜를 빼고 신청해주세요.`);
+                return;
+            }
+
             // 잔여 연차 확인
             const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
             const myRequests=leaveRequests.filter(r=>r.status==='approved'||r.status==='pending');
