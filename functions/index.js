@@ -706,9 +706,12 @@ exports.parseRevenueFile = onCall(
 // "14,800원" / "-2,700" 같은 토큰에서 정수 금액을 뽑는다. 실패하면 null.
 function parseWon(token) {
   if (!token) return null;
-  const m = String(token).replace(/\s/g, '').match(/-?[\d,]+/);
-  if (!m) return null;
-  const n = parseInt(m[0].replace(/,/g, ''), 10);
+  // 공백을 먼저 지우면 "2,900 1 2,900"(단가·수량·금액) 같은 줄에서 숫자가
+  // 서로 붙어 하나의 거대한 수가 되므로, 원문에서 토큰 단위로 뽑는다.
+  // 영수증 금액은 오른쪽 정렬이라 마지막 토큰이 우리가 찾는 값이다.
+  const matches = String(token).match(/-?\d[\d,]*/g);
+  if (!matches) return null;
+  const n = parseInt(matches[matches.length - 1].replace(/,/g, ''), 10);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -724,13 +727,60 @@ function amountNear(lines, idx) {
   return null;
 }
 
+// 금액을 읽어서는 안 되는 줄 — 세부 내역·세액·거스름돈 등
+// (예: "부가세 과세물품가액 2,636" 을 결제금액으로 오인하면 안 된다)
+const RECEIPT_EXCLUDE = [
+  /부가\s*세/, /과세/, /면세/, /공급\s*가/, /봉사료/,
+  /거스름/, /받은\s*금액/, /잔액/, /포인트/, /적립/, /마일리지/,
+  /할인/, /쿠폰/, /단가/, /수량/,
+];
+
 /**
- * 배달앱 영수증 텍스트에서 음식/배달비/결제금액을 뽑는다.
+ * 라벨을 하나도 못 찾았을 때의 추정 — 같은 금액이 3번 이상 반복되면 그게 총액.
  *
- * 배민 예시 — 메뉴금액 14,800 / 배달팁 2,700 / 할인 -2,700 / 결제금액 14,800
- * 결제금액이 실제로 나간 돈이므로 이를 기준으로 삼고,
- * 배달비 = 결제금액 − 메뉴금액 (할인이 반영된 실질 배달비) 으로 역산한다.
- * 그래야 음식+배달 합계가 항상 결제금액과 일치한다.
+ * POS 종이 영수증은 같은 값이 단가·금액·청구금액·카드승인액에 반복 인쇄된다.
+ * (예: 카페라떼 2,900 → 단가/금액/청구금액/신용카드 에 각각 2,900)
+ * 세액·거스름돈·받은금액 줄은 제외하고 센다. 확신이 낮으므로 호출부에서
+ * confidence:'low' 로 표시해 사람이 반드시 확인하게 한다.
+ */
+function guessTotalByRepetition(lines) {
+  const counts = new Map();
+  for (const line of lines) {
+    if (RECEIPT_EXCLUDE.some((re) => re.test(line))) continue;
+    const tokens = String(line).match(/\d[\d,]*/g);   // 공백을 지우면 숫자가 붙는다
+    if (!tokens) continue;
+    for (const tok of tokens) {
+      const n = parseInt(tok.replace(/,/g, ''), 10);
+      // 식대로 볼 수 있는 범위만 — 전화번호·사업자번호·승인번호 배제
+      if (!Number.isFinite(n) || n < 500 || n > 1000000) continue;
+      if (!/,/.test(tok) && n >= 10000) continue;   // 콤마 없는 큰 수는 번호일 확률이 높다
+      counts.set(n, (counts.get(n) || 0) + 1);
+    }
+  }
+  let best = null;
+  let bestCount = 0;
+  counts.forEach((c, n) => {
+    if (c > bestCount || (c === bestCount && n > (best || 0))) {
+      best = n;
+      bestCount = c;
+    }
+  });
+  return bestCount >= 3 ? best : null;
+}
+
+/**
+ * 영수증 텍스트에서 음식/배달비/결제금액을 뽑는다.
+ *
+ * 1) 배달앱(배민 등) — 메뉴금액 / 배달팁 / 할인 / 결제금액
+ *    예: 메뉴 14,500 + 배달팁 3,400 − 할인 4,400 = 결제 13,500
+ *    결제금액이 실제로 나간 돈이므로 이를 기준으로 삼고
+ *    배달비 = 결제금액 − 메뉴금액 으로 역산한다(할인이 반영된 실질 배달비).
+ *    그래야 음식+배달 합계가 항상 결제금액과 일치한다.
+ *
+ * 2) POS 종이 영수증 — 합계 / 청구금액 / 신용카드 / 승인금액
+ *    배달비 개념이 없으므로 전액을 음식값으로 잡는다.
+ *
+ * 3) 라벨을 못 찾으면 반복 금액으로 추정하고 confidence:'low' 로 알린다.
  */
 function parseReceiptText(text) {
   const lines = String(text || '')
@@ -738,51 +788,66 @@ function parseReceiptText(text) {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const pick = (patterns) => {
+  const pick = (patterns, {skipExcluded = false} = {}) => {
     for (const re of patterns) {
       for (let i = 0; i < lines.length; i++) {
-        if (re.test(lines[i])) {
-          const v = amountNear(lines, i);
-          if (v !== null) return v;
-        }
+        if (!re.test(lines[i])) continue;
+        if (skipExcluded && RECEIPT_EXCLUDE.some((x) => x.test(lines[i]))) continue;
+        const v = amountNear(lines, i);
+        if (v !== null) return v;
       }
     }
     return null;
   };
 
+  // 총액 — 배달앱 라벨 먼저, 그다음 POS 영수증 라벨
   const total = pick([
     /최종\s*결제\s*금액/, /총\s*결제\s*금액/, /결제\s*금액/, /결제금액/,
-    /총\s*결제/, /합계\s*금액/, /총\s*주문\s*금액/,
-  ]);
+    /총\s*결제/, /총\s*주문\s*금액/,
+    /청구\s*금액/, /받을\s*금액/, /승인\s*금액/, /판매\s*총액/,
+    /합계\s*금액/, /총\s*합계/, /합\s*계/, /총\s*액/,
+    /신용\s*카드/, /체크\s*카드/, /카드\s*결제/, /현금\s*결제/,
+  ], {skipExcluded: true});
+
   const menu = pick([/메뉴\s*금액/, /메뉴금액/, /상품\s*금액/, /주문\s*금액/, /음식\s*금액/]);
   const tip = pick([/배달\s*팁/, /배달팁/, /배달\s*비/, /배달\s*요금/, /배달\s*료/]);
   const discount = pick([/총\s*할인\s*받은\s*금액/, /할인\s*금액/, /총\s*할인/]);
 
-  // 결제금액을 확정 — 없으면 메뉴+배달팁-할인 으로 추정
+  // 결제금액 확정 — 라벨 → 메뉴+배달팁-할인 추정 → 반복 금액 추정
+  let confidence = 'high';
   let totalAmount = total;
   if (totalAmount === null && menu !== null) {
     totalAmount = menu + (tip || 0) - Math.abs(discount || 0);
   }
   if (totalAmount === null || totalAmount <= 0) {
-    return {ok: false, foodAmount: null, deliveryFee: null, totalAmount: null,
-      menuAmount: menu, deliveryTip: tip, discount, lines};
+    totalAmount = guessTotalByRepetition(lines);
+    confidence = 'low';
+  }
+  if (totalAmount === null || totalAmount <= 0) {
+    return {ok: false, confidence: null, foodAmount: null, deliveryFee: null,
+      totalAmount: null, menuAmount: menu, deliveryTip: tip, discount, lines};
   }
 
-  // 음식/배달비 배분 — 합계가 결제금액과 정확히 맞도록
-  let foodAmount;
+  // 음식/배달비 배분 — 합계가 항상 결제금액과 정확히 맞도록.
+  //
+  // 실질 배달비 = 결제금액 − 메뉴금액. 다만 할인이 음식값에도 걸리면
+  // 메뉴금액이 결제금액보다 커져 음수가 나오므로 0 으로 깎고,
+  // 원래 배달팁보다 클 수는 없으므로 배달팁으로도 한 번 더 깎는다.
+  //   예) 메뉴 14,500 + 배달팁 3,400 − 할인 4,400 = 결제 13,500
+  //       → 13,500 − 14,500 = −1,000 → 배달비 0, 음식 13,500
   let deliveryFee;
-  if (menu !== null && menu >= 0 && menu <= totalAmount) {
-    foodAmount = menu;
-    deliveryFee = totalAmount - menu;
-  } else if (tip !== null && tip > 0 && tip < totalAmount) {
+  if (menu !== null && menu >= 0) {
+    deliveryFee = Math.max(0, totalAmount - menu);
+    if (tip !== null && tip >= 0) deliveryFee = Math.min(deliveryFee, tip);
+  } else if (tip !== null && tip > 0) {
     deliveryFee = tip;
-    foodAmount = totalAmount - tip;
   } else {
-    foodAmount = totalAmount;
     deliveryFee = 0;
   }
+  deliveryFee = Math.min(deliveryFee, totalAmount);
+  const foodAmount = totalAmount - deliveryFee;
 
-  return {ok: true, foodAmount, deliveryFee, totalAmount,
+  return {ok: true, confidence, foodAmount, deliveryFee, totalAmount,
     menuAmount: menu, deliveryTip: tip, discount, lines};
 }
 
@@ -858,6 +923,7 @@ exports.ocrReceipt = onCall(
       reason: parsed.ok ? null : '결제 금액을 찾지 못했습니다. 직접 입력해주세요.',
       text,
       parsed: {
+        confidence: parsed.confidence,
         foodAmount: parsed.foodAmount,
         deliveryFee: parsed.deliveryFee,
         totalAmount: parsed.totalAmount,
