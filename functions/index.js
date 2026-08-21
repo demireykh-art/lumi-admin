@@ -744,6 +744,90 @@ function parseWon(token) {
  * 그래서 뒤쪽 줄까지 훑되, 몇 줄 떨어져서 찾았는지(distance)를 함께 돌려
  * 호출부가 확신도를 낮출 수 있게 한다.
  */
+/**
+ * Vision 응답의 글자 좌표로 "실제 인쇄된 줄"을 복원한다.
+ *
+ * fullTextAnnotation.text 는 Vision 이 판단한 읽기 순서를 줄바꿈으로 이어붙인
+ * 것이라, 사진이 기울거나 표 간격이 넓으면 한 줄이 쪼개지거나 서로 다른 줄이
+ * 붙는다. 지금까지 겪은 오류가 대부분 여기서 나왔다.
+ *   · 표 머리글과 품명이 한 줄로 붙음  → 품명이 통째로 사라짐
+ *   · 수량과 금액이 다른 줄로 쪼개짐   → 이름이 수량과 짝지어짐
+ *   · 라벨 열과 금액 열이 따로 읽힘    → 엉뚱한 금액과 짝지어짐
+ *
+ * 단어마다 붙어 있는 boundingBox 를 쓰면 이런 건 생기지 않는다.
+ *   1) 모든 단어의 중심 좌표를 모으고
+ *   2) 사진 기울기(기울어진 영수증)를 최소제곱으로 추정해 보정한 뒤
+ *   3) 보정된 y 로 같은 줄을 묶고, 줄 안에서는 x 순으로 이어 붙인다.
+ * Vision 호출은 그대로라 추가 비용이 없다.
+ */
+function layoutLines(fullTextAnnotation) {
+  const words = [];
+  const pages = (fullTextAnnotation && fullTextAnnotation.pages) || [];
+  for (const page of pages) {
+    for (const block of page.blocks || []) {
+      for (const para of block.paragraphs || []) {
+        for (const word of para.words || []) {
+          const text = (word.symbols || []).map((sym) => sym.text || '').join('');
+          const verts = (word.boundingBox && (word.boundingBox.vertices ||
+            word.boundingBox.normalizedVertices)) || [];
+          if (!text || verts.length < 4) continue;
+          const xs = verts.map((v) => v.x || 0);
+          const ys = verts.map((v) => v.y || 0);
+          // 글상자의 윗변(vertices[0]→[1])이 글자가 놓인 방향이다.
+          // 기울여 찍은 사진은 이 변도 같이 기울어 있으므로 여기서 각도를 얻는다.
+          const dx = (verts[1].x || 0) - (verts[0].x || 0);
+          const dy = (verts[1].y || 0) - (verts[0].y || 0);
+          words.push({
+            text,
+            x: (Math.min(...xs) + Math.max(...xs)) / 2,
+            y: (Math.min(...ys) + Math.max(...ys)) / 2,
+            h: Math.max(...ys) - Math.min(...ys),
+            w: Math.max(...xs) - Math.min(...xs),
+            slope: Math.abs(dx) > 4 ? dy / dx : null,
+          });
+        }
+      }
+    }
+  }
+  if (words.length < 2) return null;
+
+  // 기울기 보정 — 단어 상자들의 기울기 중앙값을 빼서 수평으로 편다.
+  // 단어 전체를 회귀하면 표 배치(왼쪽 라벨·오른쪽 금액)에 끌려가 값이 틀어지므로
+  // 배치와 무관한 "글자가 놓인 각도"를 쓴다.
+  const slopes = words
+    .filter((w) => w.slope !== null && w.w >= 8 && Math.abs(w.slope) <= 1)
+    .map((w) => w.slope)
+    .sort((a, b) => a - b);
+  let slope = slopes.length ? slopes[Math.floor(slopes.length / 2)] : 0;
+  if (!Number.isFinite(slope)) slope = 0;
+  words.forEach((w) => { w.ry = w.y - slope * w.x; });
+
+  // 같은 줄 묶기 — 글자 높이의 60% 안이면 같은 줄로 본다
+  const heights = words.map((w) => w.h).filter((h) => h > 0).sort((a, b) => a - b);
+  const medianH = heights.length ? heights[Math.floor(heights.length / 2)] : 10;
+  const tol = Math.max(medianH * 0.6, 4);
+
+  words.sort((a, b) => a.ry - b.ry);
+  const rows = [];
+  let cur = [];
+  let base = null;
+  for (const w of words) {
+    if (base === null || Math.abs(w.ry - base) <= tol) {
+      cur.push(w);
+      base = base === null ? w.ry : (base * (cur.length - 1) + w.ry) / cur.length;
+    } else {
+      rows.push(cur);
+      cur = [w];
+      base = w.ry;
+    }
+  }
+  if (cur.length) rows.push(cur);
+
+  return rows.map((row) =>
+    row.sort((a, b) => a.x - b.x).map((w) => w.text).join(' ').replace(/\s+/g, ' ').trim()
+  ).filter(Boolean);
+}
+
 // 금액만 적힌 줄인지 (라벨 없이 숫자만 있는 오른쪽 컬럼).
 // "원"이 줄 안에 여러 번 나올 수 있다 — 배민은 할인 전/후 금액을 한 줄에
 // 나란히 찍는다: "17,800원 11,700원" (앞은 취소선, 뒤가 실제 결제금액).
@@ -1043,10 +1127,11 @@ function guessTotalByRepetition(lines) {
  *
  * 3) 라벨을 못 찾으면 반복 금액으로 추정하고 confidence:'low' 로 알린다.
  */
-function parseReceiptText(text) {
-  const lines = String(text || '')
-    .split(/\r?\n/)
-    .map((s) => s.trim())
+function parseReceiptText(text, layoutRows) {
+  // 좌표로 복원한 줄이 있으면 그걸 쓴다 (Vision 의 읽기 순서보다 정확하다)
+  const lines = (Array.isArray(layoutRows) && layoutRows.length ? layoutRows
+    : String(text || '').split(/\r?\n/))
+    .map((s) => String(s).trim())
     .filter(Boolean);
 
   // 라벨에서 몇 줄 떨어진 금액을 끌어다 쓴 적이 있으면 확신도를 낮춘다
@@ -1243,7 +1328,14 @@ exports.ocrReceipt = onCall(
       return {ok: false, reason: '이미지에서 글자를 찾지 못했습니다.', text: '', parsed: null};
     }
 
-    const parsed = parseReceiptText(text);
+    // 좌표로 줄을 복원해서 넘긴다. 실패하면 Vision 의 기본 줄바꿈을 쓴다.
+    let rows = null;
+    try {
+      rows = layoutLines(r.fullTextAnnotation);
+    } catch (e) {
+      logger.warn('layoutLines 실패, 기본 줄바꿈 사용', e);
+    }
+    const parsed = parseReceiptText(text, rows);
     logger.info(`ocrReceipt by ${request.auth.token.email || request.auth.uid}: ` +
       `total=${parsed.totalAmount} food=${parsed.foodAmount} delivery=${parsed.deliveryFee}`);
     return {
