@@ -10,3 +10,7 @@ firebase-debug.*.log
 
 # fix-currentstock.js 백업 덤프 — 실데이터. 커밋 금지
 backup/
+
+# 에뮬레이터 스냅샷 — 실데이터. 커밋 금지
+snapshot/
+firestore-debug.log

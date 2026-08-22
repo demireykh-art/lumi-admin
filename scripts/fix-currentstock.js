@@ -35,8 +35,20 @@
  *    node scripts/fix-currentstock.js apply --confirm
  *
  *  에뮬레이터에서 먼저 검증하려면
- *    export FIRESTORE_EMULATOR_HOST=localhost:8080
- *    (admin SDK 가 자동으로 에뮬레이터를 바라봅니다)
+ *    # 터미널 1 — 에뮬레이터
+ *    npm install                 # firebase-tools (devDependency)
+ *    npm run emu
+ *
+ *    # 터미널 2 — 합성 데이터로 파이프라인 확인
+ *    export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+ *    npm run emu:seed
+ *    npm run stock:report
+ *
+ *    프로덕션 스냅샷을 쓰려면 seed 대신:
+ *      firebase firestore:export gs://<bucket>/snapshot-YYYYMMDD
+ *      gsutil -m cp -r gs://<bucket>/snapshot-YYYYMMDD ./snapshot
+ *      firebase emulators:start --only firestore --import ./snapshot
+ *    ※ 스냅샷에는 실데이터가 들어 있습니다. 커밋하지 마세요.
  * ========================================================================= */
 
 'use strict';
@@ -306,6 +318,49 @@ function loadAdmin() {
   process.exit(2);
 }
 
+/**
+ * admin SDK 초기화.
+ *
+ * 에뮬레이터를 쓸 때는 일회용 자격증명을 만들어 넣습니다. 이유가 둘 있습니다.
+ *   1) firebase-admin 의 Firestore 클라이언트는 credential 이 ServiceAccountCredential
+ *      인스턴스이거나 ADC 여야 합니다. 평범한 객체는 거부합니다.
+ *   2) 아무것도 주지 않으면 ADC 를 찾으러 GCE 메타데이터 서버를 두드리는데,
+ *      프록시 뒤 환경에서는 여기서 멈춥니다.
+ * 에뮬레이터는 토큰을 검증하지 않으므로 이 키는 서명에만 쓰이고 아무 권한도 없습니다.
+ */
+function initAdmin(admin, projectId) {
+  if (admin.apps.length) return admin;
+  if (process.env.FIRESTORE_EMULATOR_HOST) {
+    // grpc-js 는 NO_PROXY 를 보지 않고 no_grpc_proxy 만 봅니다. 회사망처럼
+    // HTTPS_PROXY 가 걸린 환경에서는 에뮬레이터(localhost) 통신까지 프록시로
+    // 나가려다 멈추므로, 에뮬레이터 호스트를 예외 목록에 넣어 줍니다.
+    const host = String(process.env.FIRESTORE_EMULATOR_HOST).split(':')[0];
+    const skip = new Set(
+      String(process.env.no_grpc_proxy || '').split(',').map((s) => s.trim()).filter(Boolean)
+    );
+    ['127.0.0.1', 'localhost', '::1', host].forEach((h) => skip.add(h));
+    process.env.no_grpc_proxy = [...skip].join(',');
+
+    const { generateKeyPairSync } = require('crypto');
+    const { privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+    });
+    admin.initializeApp({
+      projectId,
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail: `emulator@${projectId}.iam.gserviceaccount.com`,
+        privateKey,
+      }),
+    });
+  } else {
+    admin.initializeApp({ projectId });
+  }
+  return admin;
+}
+
 async function fetchAll(db) {
   const snap = await db.collection(COLLECTION).get();
   return snap.docs.map((d) => ({ id: d.id, data: d.data() || {} }));
@@ -365,10 +420,7 @@ async function main() {
     process.exit(2);
   }
 
-  const admin = loadAdmin();
-  if (!admin.apps.length) {
-    admin.initializeApp({ projectId: PROJECT_ID });
-  }
+  const admin = initAdmin(loadAdmin(), PROJECT_ID);
   const db = admin.firestore();
 
   const target = process.env.FIRESTORE_EMULATOR_HOST
@@ -438,4 +490,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { sumLocations, classifyItem, analyze, renderReport };
+module.exports = { sumLocations, classifyItem, analyze, renderReport, loadAdmin, initAdmin };
