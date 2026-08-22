@@ -7,3 +7,6 @@ firebase-debug.*.log
 *.log
 .env
 .env.local
+
+# fix-currentstock.js 백업 덤프 — 실데이터. 커밋 금지
+backup/
