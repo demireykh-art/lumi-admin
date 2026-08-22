@@ -928,6 +928,10 @@ const ITEM_SKIP = [
   /결\s*제/, /청\s*구/, /승\s*인/, /합\s*계/, /소\s*계/, /총\s*구\s*매/, /총\s*액/,
   /총\s*주\s*문/, /카\s*드/, /현\s*금/, /물품\s*가액/,
   /금\s*액/,                       // "금액" 표 머리글·"청구금액" 등
+  /가\s*격/,                       // 배민 "· 가격: (11,000원)" 단가 줄
+  /배달\s*팁|배달\s*비|배달\s*료|배달\s*요금/,   // 배달비는 품목이 아니다
+  /주문\s*상세|주문\s*메뉴|결제\s*정보|배달\s*정보/,  // 배달앱 화면의 제목·탭
+  /\d{1,2}\s*:\s*\d{2}/,           // 휴대폰 상태바의 시각("4:23")·영수증 시각
   /영수증/, /사업자/, /등록번호/, /주\s*소/, /성\s*명/, /전\s*화/, /일\s*자/,
   /TEL/i, /POS/i, /KIOSK/i, /키오스크/, /가맹점/, /\bNO\b\s*[:：]?/i,
   /할부/, /담당/, /객층/, /품\s*명/, /상\s*품\s*명/, /주문\s*내역/, /번\s*호/,
@@ -1002,17 +1006,21 @@ function extractItems(lines) {
   // 쓰이는 표현으로 좁혀서 경계를 잡는다.
   const end = (() => {
     for (let k = 0; k < lines.length; k++) {
-      if (/소\s*계|총\s*구\s*매|합\s*계|물품\s*가액|부\s*가\s*세\s*[:：]|청\s*구\s*금\s*액|받은\s*금액|거스름/.test(lines[k])) {
+      if (/소\s*계|총\s*구\s*매|합\s*계|물품\s*가액|부\s*가\s*세\s*[:：]|청\s*구\s*금\s*액|받은\s*금액|거스름|메뉴\s*금액|총\s*결제/.test(lines[k])) {
         return k;
       }
     }
     return lines.length;
   })();
 
+  // 배달앱은 금액 뒤에 개수를 붙인다("44,000원 4개"). 품목을 볼 때만 떼어낸다.
+  const stripQty = (line) => String(line).replace(/\s*\d+\s*개\s*$/, '').trim();
+
   let i = 0;
   while (i < end && items.length < 20) {
-    const line = lines[i];
+    const line = stripQty(lines[i]);
     if (skip(line) || isAmountOnlyLine(line)) { i++; continue; }
+
 
     const ta = trailingAmount(line);
     if (ta) { push(ta.name, ta.value); i++; continue; }   // 한 줄형
@@ -1020,10 +1028,18 @@ function extractItems(lines) {
     // 품명 묶음 → 뒤따르는 금액 묶음과 짝짓는다
     const names = [];
     let j = i;
-    while (j < end && isNameOnly(lines[j])) { names.push(lines[j]); j++; }
+    while (j < end && isNameOnly(stripQty(lines[j]))) { names.push(stripQty(lines[j])); j++; }
+    // 품명과 금액 사이에 걸러야 할 줄이 끼기도 한다
+    //   앙버터 호두과자 20알 / · 가격: (11,000원) / 44,000원 4개
+    // 그런 줄은 건너뛰고 금액을 찾되, 너무 멀리 가지 않도록 3줄까지만 넘긴다.
+    let hopped = 0;
+    while (j < end && hopped < 3 && skip(lines[j]) && !isAmountOnlyLine(stripQty(lines[j]))) {
+      j++;
+      hopped++;
+    }
     const amounts = [];
-    while (j < end && isAmountOnlyLine(lines[j])) {
-      const t = itemAmountTokens(lines[j]);
+    while (j < end && isAmountOnlyLine(stripQty(lines[j]))) {
+      const t = itemAmountTokens(stripQty(lines[j]));
       amounts.push(t.length ? tokenToWon(t[t.length - 1]) : null);
       j++;
     }
