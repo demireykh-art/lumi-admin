@@ -19,56 +19,11 @@
 
 | ID | 항목 | 심각도 | 처리 시점 | 상태 |
 |---|---|---|---|---|
-| **ISSUE-1** | Webhook 서명 검증 부재 — 누구나 `chatThreads` 생성 가능 | **높음** | 별건 (D-5) | 미착수 |
 | **ISSUE-6** | `resetUserPassword`/`updateUserEmail` 소속 미검사 | **높음** | Phase 2 (D-4) | 미착수 |
 | **ISSUE-5** | `payslips` PDF를 base64로 문서에 인라인 | 중간 | Phase 2 (D-2) | 미착수 |
 | **ISSUE-4** | 죽은 인센티브 유형 2종 — 만들 수는 있으나 정산 미반영 | 중간 | Phase 3 | 미착수 |
+| **ISSUE-1** | 상담톡 웹훅 3종 배포 해제 (서명 검증 미구현) | 낮음(정리) | **Phase 0.5** | 미착수 |
 | **ISSUE-7** | `currentStock` / `totalStock` 중복 필드 | 낮음(구조) | **이번 프로젝트 제외** | 보류 |
-
----
-
-## ISSUE-1 — Webhook 서명 검증 부재 🔴
-
-**심각도: 높음 (현재 프로덕션에 열려 있는 구멍)**
-**처리: 이번 리팩터링과 분리. 별도 작업으로 요청 예정 (`DECISIONS.md` D-5)**
-
-### 현상
-
-카카오·네이버 상담톡 웹훅이 **인증·서명 검증 없이 공개 엔드포인트로 열려 있습니다.**
-URL만 알면 누구나 임의의 `chatThreads` 문서와 메시지를 생성할 수 있습니다.
-
-### 근거
-
-`functions/index.js:277-306` — `webhookKakao`
-
-```js
-exports.webhookKakao = onRequest(
-  {region: 'asia-northeast3', cors: false},
-  async (req, res) => {
-    try {
-      // TODO: 서명 검증 — 심사 통과 후 카카오 시크릿으로 HMAC 확인
-      // const signature = req.headers['x-kakao-signature'];
-      // if (!_verifyKakaoSig(req.rawBody, signature)) return res.status(401).send('bad sig');
-```
-
-검증 코드가 **주석 처리된 TODO**로 남아 있습니다.
-
-`functions/index.js:310-338` — `webhookNaver`
-
-**서명 검증 코드가 주석으로도 존재하지 않습니다.** `body.event === 'send'` 인지만 확인하고
-바로 `_findOrCreateThread()` 를 호출합니다.
-
-### 영향
-
-- 임의의 스레드·메시지 대량 생성 (스토리지·읽기 과금, 상담 화면 오염)
-- 직원이 가짜 상담을 진짜로 오인
-- `chatThreads` 는 CRM이므로 SaaS 배포본에는 미배포지만, **루미에서는 지금 열려 있습니다**
-
-### 처리
-
-- CRM이라 SaaS 판매 대상이 아니고, 리팩터링과 성격이 다릅니다
-- 카카오·네이버 각각의 시크릿으로 HMAC 검증을 붙이는 별건 작업
-- 심사 상태(주석의 "심사 통과 후")를 먼저 확인해야 함
 
 ---
 
@@ -217,6 +172,104 @@ hr-attendance.js   495,  551,  1111
 - 인센티브 v2 전환 시 `salesPercent` / `japanSales` **생성 옵션을 UI에서 제거**
 - 기존 데이터에 해당 유형 문서가 있으면 목록을 보고 (정산에 안 들어갔으므로 삭제해도 금액 영향 없음)
 - v2의 `percent / base` 3종으로 같은 의도를 표현할 수 있으므로 기능 후퇴가 아님
+
+---
+
+## ISSUE-1 — 상담톡 웹훅 3종 배포 해제
+
+**심각도: 낮음 (정리 작업)**
+**처리: Phase 0.5 에 묶어서 처리. 별건 우선처리 하지 않음**
+
+> **심각도 조정 (2026-08-22)** — 당초 "높음(프로덕션에 열려 있는 구멍)"으로 올렸으나,
+> 원장 확인 결과 **루미는 카카오·네이버 채널을 자체 웹훅에 연결한 적이 없습니다.**
+> 콜백 URL이 어디에도 등록되어 있지 않아 **정상 트래픽 경로가 존재하지 않습니다.**
+> 다만 URL이 노출되면 여전히 호출 가능하므로, 서명 검증을 붙이는 대신 **배포를 해제**합니다.
+> (Functions 호출 횟수 확인은 원장 판단으로 생략)
+
+### 현상
+
+카카오·네이버 상담톡 웹훅이 서명 검증 없이 공개 엔드포인트로 배포되어 있습니다.
+채널에 연결된 적이 없어 실제로 들어오는 트래픽은 없지만, URL을 아는 사람은
+임의의 `chatThreads` 문서와 메시지를 만들 수 있습니다.
+
+### 근거
+
+`functions/index.js:277-306` — `webhookKakao` (`onRequest`, 공개)
+
+```js
+exports.webhookKakao = onRequest(
+  {region: 'asia-northeast3', cors: false},
+  async (req, res) => {
+    try {
+      // TODO: 서명 검증 — 심사 통과 후 카카오 시크릿으로 HMAC 확인
+      // const signature = req.headers['x-kakao-signature'];
+      // if (!_verifyKakaoSig(req.rawBody, signature)) return res.status(401).send('bad sig');
+```
+
+검증 코드가 **주석 처리된 TODO**로 남아 있습니다.
+
+`functions/index.js:310-338` — `webhookNaver` (`onRequest`, 공개)
+
+**서명 검증 코드가 주석으로도 존재하지 않습니다.** `body.event === 'send'` 인지만 확인하고
+바로 `_findOrCreateThread()` 를 호출합니다.
+
+`functions/index.js:341-360` — `sendChatReply` (`onCall`)
+
+**이 함수는 공개 엔드포인트가 아닙니다.** `if (!request.auth) throw` 로 로그인을 요구합니다
+(`functions/index.js:344`). 배포 해제 대상에 포함하는 이유는 보안 구멍이라서가 아니라
+**CRM 표면을 배포본에서 걷어내기 위해서**입니다.
+
+### 처리 방침 (확정)
+
+| 항목 | 결정 |
+|---|---|
+| `webhookKakao` / `webhookNaver` / `sendChatReply` | **배포 해제** |
+| 함수 코드 | **보존** (`functions/index.js` 에 그대로 둠) |
+| `chatThreads` 데이터 | **보존** (삭제하지 않음) |
+| HMAC 서명 검증 | **재개발 시점으로 연기.** 지금 구현하지 않음 |
+| 시점 | **Phase 0.5** — CRM 격리와 함께 |
+
+### ⚠️ 구현 시 반드시 확인할 것 — "배포 대상에서 제외"만으로는 안 내려갑니다
+
+`.github/workflows/deploy-functions.yml:58-61` 이 현재 이렇게 배포합니다.
+
+```yaml
+firebase deploy --only functions --project lumiclinic-c1a95 --non-interactive
+```
+
+여기서 배포 목록을 명시적으로 좁혀도(`--only functions:a,functions:b`)
+**이미 GCP에 떠 있는 `webhookKakao` / `webhookNaver` 는 그대로 살아 있습니다.**
+`--only functions:X` 는 X만 갱신할 뿐, 목록에 없는 함수를 삭제하지 않습니다.
+URL도 그대로 유효합니다. 즉 **목표("URL 노출 시 호출 가능하므로 배포 해제")가 달성되지 않습니다.**
+
+실제로 내리려면 다음 순서가 필요합니다.
+
+1. `functions/index.js` 에서 3개 `exports` 를 `CRM_ENABLED` 플래그 뒤로 옮긴다 (코드 자체는 보존)
+2. **최초 1회 명시적 삭제** — 배포 파이프라인이 아니라 손으로 한 번:
+   ```
+   firebase functions:delete webhookKakao webhookNaver sendChatReply \
+     --region asia-northeast3 --project lumiclinic-c1a95 --force
+   ```
+3. 이후에는 source 에 export 가 없으므로 워크플로우가 다시 올리지 않습니다
+
+> `firebase deploy --only functions --force` 로도 삭제되지만, 그 플래그는 **소스에 없는 모든
+> 함수를 지웁니다.** 의도치 않은 함수까지 날아갈 수 있으므로 `functions:delete` 로
+> 대상을 명시하는 편이 안전합니다.
+
+### 부수 영향 — Phase 0.5 와 자연히 맞물립니다
+
+통합앱의 채팅 전송 버튼(`staff.html:895`)이 `sendChatReply` 를 호출합니다
+(`staff.html:11453`). 함수를 지우면 이 버튼이 실패하는데,
+
+- 호출부가 이미 `try/catch` 로 감싸여 경고만 찍습니다 (`staff.html:11458`)
+- Phase 0.5 의 `CRM_ENABLED=false` 가 채팅 UI 자체를 숨깁니다
+
+→ **두 작업을 같은 Phase 에서 하면 사용자에게 보이는 오류가 없습니다.** 순서는
+UI 숨김(`CRM_ENABLED`)을 먼저 배포하고, 그다음 함수 삭제입니다.
+
+> 루미 인스턴스는 `CRM_ENABLED=true` 로 채팅 UI가 남지만, 애초에 채널이 연결된 적이
+> 없어 스레드가 유입되지 않으므로 전송 버튼을 쓸 일이 없습니다. 상담톡을 실제로
+> 쓰기로 결정하는 시점에 HMAC 검증과 함께 재배포합니다.
 
 ---
 
