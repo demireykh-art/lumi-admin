@@ -1259,7 +1259,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">금액 (원)</label>
-                    <input type="number" class="form-input" id="mealAmount" placeholder="예: 45000" oninput="onMealAmountChange()">
+                    <input type="text" inputmode="numeric" class="form-input" id="mealAmount" placeholder="예: 45,000" oninput="formatMoneyInput(this);onMealAmountChange()">
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">배달비가 있으면 포함된 결제 금액입니다. 영수증을 올리면 자동으로 채워집니다.</div>
                 </div>
                 <div style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.5rem">
@@ -1302,7 +1302,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">금액 (원) *</label>
-                    <input type="number" class="form-input" id="personalMealAmount" min="0" placeholder="예: 12000" oninput="updatePersonalMealHint()">
+                    <input type="text" inputmode="numeric" class="form-input" id="personalMealAmount" placeholder="예: 12,000" oninput="formatMoneyInput(this);updatePersonalMealHint()">
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">배달비가 있으면 포함된 결제 금액입니다. 영수증을 올리면 자동으로 채워집니다.</div>
                 </div>
                 <div style="background:var(--bg);padding:.75rem;border-radius:6px;margin-top:.5rem">
@@ -5095,6 +5095,44 @@
             _renderMealReceipts(target);
         }
 
+        // ── 금액 입력칸 1,000 단위 쉼표 ──
+        // type=number 는 쉼표를 표시하지 못하므로 금액 칸은 type=text +
+        // inputmode=numeric 을 쓴다. 숫자 키패드는 그대로 뜬다.
+
+        // 1234567 → "1,234,567" (빈 값은 빈 문자열)
+        function moneyText(n){
+            const v=Number(n)||0;
+            return v?v.toLocaleString('en-US'):'';
+        }
+
+        // 쉼표가 섞인 입력값에서 정수만 뽑는다
+        function moneyValue(el){
+            if(typeof el==='string') el=document.getElementById(el);
+            return el?(parseInt(String(el.value).replace(/[^\d]/g,''),10)||0):0;
+        }
+
+        // 타이핑 중 쉼표를 다시 찍어 준다. 쉼표가 끼면 글자 수가 늘어 커서가
+        // 밀리므로, "커서 왼쪽에 있던 숫자 개수"를 기준으로 위치를 되돌린다.
+        // 이걸 안 하면 한 자 칠 때마다 커서가 맨 뒤로 튄다.
+        function formatMoneyInput(input){
+            const before=String(input.value||'');
+            const caret=(input.selectionStart==null)?before.length:input.selectionStart;
+            const digitsLeft=before.slice(0,caret).replace(/[^\d]/g,'').length;
+
+            const digits=before.replace(/[^\d]/g,'').replace(/^0+(?=\d)/,'');
+            const after=digits?Number(digits).toLocaleString('en-US'):'';
+            if(after!==before) input.value=after;
+
+            // 왼쪽 숫자 개수가 같아지는 지점으로 커서를 옮긴다
+            let pos=0, seen=0;
+            while(pos<after.length && seen<digitsLeft){
+                if(after.charCodeAt(pos)>=48 && after.charCodeAt(pos)<=57) seen++;
+                pos++;
+            }
+            try{ input.setSelectionRange(pos,pos); }catch(e){}   // type=text 가 아니면 조용히 무시
+            return digits?parseInt(digits,10):0;
+        }
+
         // 인식에 성공한 영수증들의 결제금액 합계를 금액 칸에 반영.
         // 영수증의 결제금액에는 배달비가 이미 들어 있어서 따로 나눠 담지 않는다.
         // (1/N 분배는 기존 로직 그대로)
@@ -5103,10 +5141,10 @@
             if(!ok.length) return;
             const total=ok.reduce((s,r)=>s+r.total,0);
             if(target==='personal'){
-                document.getElementById('personalMealAmount').value=total;
+                document.getElementById('personalMealAmount').value=moneyText(total);
                 updatePersonalMealHint();
             }else{
-                document.getElementById('mealAmount').value=total;
+                document.getElementById('mealAmount').value=moneyText(total);
                 onMealAmountChange();   // 1/N 재분배
             }
         }
@@ -5229,7 +5267,7 @@
         }
 
         function getMealTotal(){
-            return parseInt(document.getElementById('mealAmount')?.value)||0;
+            return moneyValue('mealAmount');
         }
 
         function onMealAmountChange(){
@@ -5277,7 +5315,7 @@
 
         // 선택 날짜 기준 잔액/출근 여부 안내 갱신
         function updatePersonalMealHint(){
-            const total=parseInt(document.getElementById('personalMealAmount').value)||0;
+            const total=moneyValue('personalMealAmount');
             const date=document.getElementById('personalMealDate').value;
             const hint=document.getElementById('personalMealRemainHint');
             if(!hint) return;
@@ -5300,7 +5338,7 @@
 
         async function savePersonalMeal(){
             const date=document.getElementById('personalMealDate').value;
-            const amount=parseInt(document.getElementById('personalMealAmount').value)||0;
+            const amount=moneyValue('personalMealAmount');
 
             if(!date||!amount){alert('날짜와 금액을 입력해주세요.');return;}
             if(amount<=0){alert('금액은 0보다 커야 합니다.');return;}
@@ -5420,11 +5458,11 @@
                         <span style="font-weight:600;${over?'color:var(--red)':''}">₩${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
                     </div>`;
                 }
-                const val=mealManualAmounts[id]||'';
+                const val=moneyText(mealManualAmounts[id]);
                 return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);gap:.5rem">
                     ${left}
                     <span style="display:flex;align-items:center;gap:.35rem">
-                        <input type="number" inputmode="numeric" value="${val}" placeholder="금액" data-emp="${_esc(id)}" style="width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="onMealManualInput(this)">
+                        <input type="text" inputmode="numeric" value="${val}" placeholder="금액" data-emp="${_esc(id)}" style="width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="onMealManualInput(this)">
                         <span id="mealRowSum-${i}" style="font-size:.72rem;${over?'color:var(--red)':'color:var(--text-muted)'};min-width:74px;text-align:right">계 ${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
                     </span>
                 </div>`;
@@ -5437,7 +5475,7 @@
         // 입력칸 자체가 새로 만들어져 포커스가 빠진다. 입력칸은 그대로 두고
         // 옆의 "계" 숫자와 아래 검증 문구만 고쳐 쓴다.
         function onMealManualInput(input){
-            mealManualAmounts[input.dataset.emp]=parseInt(input.value)||0;
+            mealManualAmounts[input.dataset.emp]=formatMoneyInput(input);
             refreshMealRowSums();
         }
 
