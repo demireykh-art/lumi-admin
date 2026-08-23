@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// The Clinic Lumi — Firebase Storage 보안 규칙
+// firestore.rules 와 동일하게 main 푸시 시 GitHub Actions로 자동 배포됩니다.
+//
+// 원칙:
+//  - 공개 사이트(lumiclinic.co.kr)가 익명으로 이미지를 표시해야 하므로 읽기는 공개
+//  - 업로드/수정/삭제는 로그인한(직원) 사용자만
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read: if true;                    // 사이트에서 이미지 표시(익명 방문자 포함)
+      allow write: if request.auth != null;   // 로그인한 직원만 업로드/삭제
+    }
+  }
+}
