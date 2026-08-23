@@ -113,13 +113,37 @@
         
         .modal{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem}
         .modal.active{display:flex}
-        .modal-content{background:var(--bg-card);width:100%;max-width:400px;max-height:90vh;overflow-y:auto}
+        /* overflow-y:auto 만 주면 overflow-x 도 auto 로 계산돼 가로로도 스크롤된다.
+           내용이 조금만 넘쳐도 창이 좌우로 밀리므로 가로축은 아예 막는다.
+           scrollbar-gutter:stable 은 세로 스크롤바가 생겼다 없어질 때
+           내용 너비가 15px 씩 출렁이는 것을 막는다. */
+        .modal-content{background:var(--bg-card);width:100%;max-width:400px;max-height:90vh;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable}
         .modal-header{padding:1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
         .modal-title{font-weight:600}
         .modal-close{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-muted)}
         .modal-body{padding:1rem}
         .modal-footer{padding:1rem;border-top:1px solid var(--border);display:flex;gap:.5rem}
         .modal-footer .btn{margin-bottom:0}
+
+        /* ── 식사 입력창: 글자·칸이 좌우로 흔들리지 않게 고정 ──
+           금액은 타이핑할 때마다 자릿수가 바뀐다. 자리를 잡아 주는 것은
+           아래 고정폭 칸들이고, tabular-nums 는 거들 뿐이다.
+           (Noto Sans KR 은 tnum 을 지원하지 않아 이 서체에서는 효과가 없다.
+            시스템 서체로 대체되는 환경에서만 숫자 폭이 같아진다.) */
+        #mealModal, #personalMealModal{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+        /* 한 줄: 이름은 남는 만큼만 쓰고 넘치면 …, 오른쪽 묶음은 폭 고정 */
+        .meal-row{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.4rem 0;border-bottom:1px solid var(--border)}
+        .meal-row .meal-who{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .meal-row .meal-right{flex:0 0 auto;display:flex;align-items:center;gap:.35rem}
+        .meal-row .meal-input{width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem}
+        /* ⚠ 가 붙어도 폭이 변하지 않도록 min-width 가 아니라 고정 폭 */
+        .meal-row .meal-sum{width:84px;flex:0 0 84px;text-align:right;font-size:.72rem;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .meal-row .meal-even{font-weight:600;flex:0 0 auto}
+        /* 영수증 품목: 긴 이름이 칸을 밀어내지 않고 줄바꿈되게 */
+        .rcpt-row{display:flex;justify-content:space-between;gap:.4rem;align-items:flex-start}
+        .rcpt-row .rcpt-name{min-width:0;overflow-wrap:anywhere}
+        .rcpt-row .rcpt-amt{flex:0 0 auto;white-space:nowrap}
         
         .form-group{margin-bottom:1rem}
         .form-label{display:block;font-size:.85rem;color:var(--text-secondary);margin-bottom:.5rem}
@@ -5164,8 +5188,9 @@
                         +'style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.9rem;padding:0 .1rem" title="빼기">✕</button>';
                     if(!r.ok){
                         html+='<div style="'+cell+'">'
-                            +'<div style="display:flex;justify-content:space-between;gap:.4rem;align-items:flex-start">'
-                            +'<span style="color:var(--red)">영수증 '+(i+1)+' — '+_esc(r.reason||'금액을 찾지 못했습니다')+'</span>'+del+'</div>'
+                            +'<div class="rcpt-row">'
+                            +'<span class="rcpt-name" style="color:var(--red)">영수증 '+(i+1)+' — '+_esc(r.reason||'금액을 찾지 못했습니다')+'</span>'
+                            +'<span class="rcpt-amt">'+del+'</span></div>'
                             +(r.text?_mealOcrTextToggle(r.text):'')
                             +'</div>';
                         return;
@@ -5174,12 +5199,13 @@
                     const warn=(r.confidence==='low')
                         ? ' <span style="color:#d97706;font-size:.68rem">확인 필요</span>' : '';
                     const items=(r.items||[]).map(it=>
-                        '<div style="display:flex;justify-content:space-between;gap:.4rem;color:var(--text-muted);font-size:.72rem;padding-top:.15rem">'
-                        +'<span>'+_esc(it.name)+'</span><span>'+formatCurrency(it.amount)+'</span></div>').join('');
+                        '<div class="rcpt-row" style="color:var(--text-muted);font-size:.72rem;padding-top:.15rem">'
+                        +'<span class="rcpt-name">'+_esc(it.name)+'</span>'
+                        +'<span class="rcpt-amt">'+formatCurrency(it.amount)+'</span></div>').join('');
                     html+='<div style="'+cell+'">'
-                        +'<div style="display:flex;justify-content:space-between;align-items:center;gap:.4rem">'
-                        +'<span>영수증 '+(i+1)+warn+'</span>'
-                        +'<span style="display:flex;align-items:center;gap:.5rem"><strong>'+formatCurrency(r.total)+'</strong>'+del+'</span>'
+                        +'<div class="rcpt-row" style="align-items:center">'
+                        +'<span class="rcpt-name">영수증 '+(i+1)+warn+'</span>'
+                        +'<span class="rcpt-amt" style="display:flex;align-items:center;gap:.5rem"><strong>'+formatCurrency(r.total)+'</strong>'+del+'</span>'
                         +'</div>'+items+'</div>';
                 });
                 const ok=list.filter(r=>r.ok);
@@ -5451,19 +5477,19 @@
                 const name=emp?.name||id;
                 const remain=getMealRemain(id, date);
                 const over=sp.amounts[i]>remain;
-                const left=`<span style="min-width:50px">${name} <span style="font-size:.7rem;color:var(--text-muted)">잔액 ${formatCurrency(remain)}</span></span>`;
+                const left=`<span class="meal-who">${_esc(name)} <span style="font-size:.7rem;color:var(--text-muted)">잔액 ${formatCurrency(remain)}</span></span>`;
                 if(mealMode==='even'){
-                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
+                    return `<div class="meal-row">
                         ${left}
-                        <span style="font-weight:600;${over?'color:var(--red)':''}">₩${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
+                        <span class="meal-even" style="${over?'color:var(--red)':''}">₩${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
                     </div>`;
                 }
                 const val=moneyText(mealManualAmounts[id]);
-                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);gap:.5rem">
+                return `<div class="meal-row">
                     ${left}
-                    <span style="display:flex;align-items:center;gap:.35rem">
-                        <input type="text" inputmode="numeric" value="${val}" placeholder="금액" data-emp="${_esc(id)}" style="width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="onMealManualInput(this)">
-                        <span id="mealRowSum-${i}" style="font-size:.72rem;${over?'color:var(--red)':'color:var(--text-muted)'};min-width:74px;text-align:right">계 ${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
+                    <span class="meal-right">
+                        <input type="text" inputmode="numeric" class="meal-input" value="${val}" placeholder="금액" data-emp="${_esc(id)}" oninput="onMealManualInput(this)">
+                        <span id="mealRowSum-${i}" class="meal-sum" style="${over?'color:var(--red)':'color:var(--text-muted)'}">계 ${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
                     </span>
                 </div>`;
             }).join('');
