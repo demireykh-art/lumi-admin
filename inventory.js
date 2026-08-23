@@ -498,7 +498,11 @@ function renderPurchaseRequests(){
     if(processed.length){
         html+=`<div style="margin-top:1.5rem;margin-bottom:.5rem"><strong>처리 완료</strong></div>`;
         html+=processed.slice(0,10).map(r=>{
-            const statusBadge=r.status==='purchased'
+            const statusBadge=r.status==='received'
+                ?'<span style="font-size:.7rem;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:3px">입고완료</span>'
+                :r.status==='ordered'
+                ?'<span style="font-size:.7rem;background:#dbeafe;color:#2563eb;padding:1px 6px;border-radius:3px">주문됨</span>'
+                :r.status==='purchased'
                 ?'<span style="font-size:.7rem;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:3px">구매완료</span>'
                 :r.status==='approved'
                 ?'<span style="font-size:.7rem;background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:3px">승인됨</span>'
