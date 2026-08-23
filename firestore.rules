@@ -25,6 +25,7 @@ service cloud.firestore {
     match /equipment/{id}      { allow read: if true; allow write: if signedIn(); }
     match /ba_items/{id}       { allow read: if true; allow write: if signedIn(); }
     match /schedules/{id}      { allow read: if true; allow write: if signedIn(); }
+    match /activities/{id}     { allow read: if true; allow write: if signedIn(); }  // 학술활동(activity.html에 표시)
 
     // 단축 URL: 공개 읽기(리다이렉트) + 클릭수 갱신, 생성/삭제는 직원
     match /shortUrls/{id} {
