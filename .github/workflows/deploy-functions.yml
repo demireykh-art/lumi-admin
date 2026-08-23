@@ -29,7 +29,20 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'   # functions/package.json engines 와 맞춰야 함
+
+      # 런타임 버전이 firebase.json·package.json·이 워크플로우 세 군데에 적혀 있다.
+      # 하나만 올리고 나머지를 잊으면 배포는 성공하는데 엉뚱한 버전으로 뜬다.
+      - name: Check Node runtime pins agree
+        run: |
+          RUNTIME=$(node -p "require('./firebase.json').functions[0].runtime")   # nodejs22
+          ENGINE=$(node -p "require('./functions/package.json').engines.node")   # 22
+          ACTUAL=$(node -p "process.versions.node.split('.')[0]")                # 22
+          echo "firebase.json=$RUNTIME  package.json=$ENGINE  runner=$ACTUAL"
+          if [ "$RUNTIME" != "nodejs$ENGINE" ] || [ "$ENGINE" != "$ACTUAL" ]; then
+            echo "::error::Node 버전이 어긋납니다. firebase.json(runtime)·functions/package.json(engines)·워크플로우(setup-node)를 같은 버전으로 맞춰주세요."
+            exit 1
+          fi
 
       - name: Install function dependencies
         working-directory: functions

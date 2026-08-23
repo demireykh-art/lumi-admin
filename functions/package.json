@@ -2,7 +2,7 @@
   "name": "lumiclinic-functions",
   "description": "Cloud Functions for Lumi Clinic admin (lumiclinic-c1a95)",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {
