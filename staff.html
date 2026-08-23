@@ -15675,7 +15675,9 @@
             
             container.innerHTML=results.map(item=>{
                 const catLabel=INV_CATEGORIES[item.category]||'';
-                const stock=item.totalStock||0;
+                // currentStock 이 정본. totalStock 은 일부 문서에만 있는 그림자 필드라
+                // 그것만 읽으면 대부분 품목의 현재고가 0 으로 표시된다.
+                const stock=item.currentStock??item.totalStock??0;
                 return `<div onclick="selectItemForReceiving('${item.id}')" 
                     style="padding:.6rem .75rem;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer;background:#fff;display:flex;justify-content:space-between;align-items:center"
                     onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='#fff'">
@@ -15700,7 +15702,7 @@
             document.getElementById('receivingForm').style.display='block';
             document.getElementById('receivingItemId').value=itemId;
             document.getElementById('receivingItemName').textContent=item.name;
-            document.getElementById('receivingCurrentStock').textContent=(item.totalStock||0)+' '+(item.unit||'개');
+            document.getElementById('receivingCurrentStock').textContent=(item.currentStock??item.totalStock??0)+' '+(item.unit||'개');
             document.getElementById('receivingItemUnit').textContent=item.unit||'개';
             
             // 입력 초기화
