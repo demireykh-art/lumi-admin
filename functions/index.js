@@ -932,6 +932,7 @@ const ITEM_SKIP = [
   /배달\s*팁|배달\s*비|배달\s*료|배달\s*요금/,   // 배달비는 품목이 아니다
   /주문\s*상세|주문\s*메뉴|결제\s*정보|배달\s*정보/,  // 배달앱 화면의 제목·탭
   /\d{1,2}\s*:\s*\d{2}/,           // 휴대폰 상태바의 시각("4:23")·영수증 시각
+  /^\s*(신규|기존|추가|증정|취소|반품)\s*$/,   // POS 구분 칸 값만 있는 줄
   /영수증/, /사업자/, /등록번호/, /주\s*소/, /성\s*명/, /전\s*화/, /일\s*자/,
   /TEL/i, /POS/i, /KIOSK/i, /키오스크/, /가맹점/, /\bNO\b\s*[:：]?/i,
   /할부/, /담당/, /객층/, /품\s*명/, /상\s*품\s*명/, /주문\s*내역/, /번\s*호/,
@@ -952,6 +953,8 @@ function cleanItemName(raw) {
   // 이름 뒤에 남은 단가·수량을 떼어낸다. 공백으로 끊긴 순수 숫자만 지우므로
   // "햇반작은공기130g" 처럼 이름에 붙은 숫자는 살아남는다.
   return String(raw || '')
+    // POS 구분 칸 값 — "[포장](ICE)카페라떼 1 신규" 의 "1 신규"
+    .replace(/\s+\d*\s*(신규|기존|추가|증정|취소|반품)\s*$/, '')
     .replace(/(\s+-?\d[\d,.'，·]*\s*원?)+\s*$/, '')
     .replace(/^[*\-•·\s]+/, '')
     .replace(/[\s:：]+$/, '')
@@ -1016,9 +1019,35 @@ function extractItems(lines) {
   // 배달앱은 금액 뒤에 개수를 붙인다("44,000원 4개"). 품목을 볼 때만 떼어낸다.
   const stripQty = (line) => String(line).replace(/\s*\d+\s*개\s*$/, '').trim();
 
-  let i = 0;
+  // 표 머리글 낱말만 떼어낸다. "청구금액"·"총주문금액" 처럼 다른 글자에 붙은
+  // "금액" 은 건드리지 않아야 총액 라벨이 품목으로 새지 않는다.
+  const stripHeaderWords = (line) => String(line)
+    .replace(/(?<![가-힣])(주문내역|상품명|품명|단가|수량|구분|금액)(?![가-힣])/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  const looksHeader = (line) =>
+    /(품\s*명|상\s*품\s*명|주문\s*내역)/.test(line) &&
+    /(수\s*량|단\s*가|금\s*액|구\s*분)/.test(line);
+  const hasName = (t) => (String(t).match(/[가-힣A-Za-z]/g) || []).length >= 2;
+
+  // 표 머리글 줄부터가 품목 구역이다. 그 위(매장명 "컴포즈커피 1809호점",
+  // 주문번호, 사업자 정보)를 품목으로 잡던 문제가 이걸로 사라진다.
+  // 머리글만 있는 줄이면 그 다음 줄부터, 상품명이 붙어 읽혔으면 그 줄부터.
+  let start = 0;
+  for (let k = 0; k < end; k++) {
+    if (!looksHeader(lines[k])) continue;
+    start = hasName(stripHeaderWords(stripQty(lines[k]))) ? k : k + 1;
+  }
+
+  // 머리글이 상품명과 한 줄로 붙어 읽히면(구겨진 영수증에서 자주 난다)
+  // 머리글 낱말만 떼고 나머지를 품목 줄로 쓴다.
+  const prep = (raw) => {
+    const line = stripQty(raw);
+    return looksHeader(line) ? stripHeaderWords(line) : line;
+  };
+
+  let i = start;
   while (i < end && items.length < 20) {
-    const line = stripQty(lines[i]);
+    const line = prep(lines[i]);
     if (skip(line) || isAmountOnlyLine(line)) { i++; continue; }
 
 
@@ -1028,18 +1057,18 @@ function extractItems(lines) {
     // 품명 묶음 → 뒤따르는 금액 묶음과 짝짓는다
     const names = [];
     let j = i;
-    while (j < end && isNameOnly(stripQty(lines[j]))) { names.push(stripQty(lines[j])); j++; }
+    while (j < end && isNameOnly(prep(lines[j]))) { names.push(prep(lines[j])); j++; }
     // 품명과 금액 사이에 걸러야 할 줄이 끼기도 한다
     //   앙버터 호두과자 20알 / · 가격: (11,000원) / 44,000원 4개
     // 그런 줄은 건너뛰고 금액을 찾되, 너무 멀리 가지 않도록 3줄까지만 넘긴다.
     let hopped = 0;
-    while (j < end && hopped < 3 && skip(lines[j]) && !isAmountOnlyLine(stripQty(lines[j]))) {
+    while (j < end && hopped < 3 && skip(prep(lines[j])) && !isAmountOnlyLine(prep(lines[j]))) {
       j++;
       hopped++;
     }
     const amounts = [];
-    while (j < end && isAmountOnlyLine(stripQty(lines[j]))) {
-      const t = itemAmountTokens(stripQty(lines[j]));
+    while (j < end && isAmountOnlyLine(prep(lines[j]))) {
+      const t = itemAmountTokens(prep(lines[j]));
       amounts.push(t.length ? tokenToWon(t[t.length - 1]) : null);
       j++;
     }
@@ -1056,8 +1085,11 @@ function extractItems(lines) {
           push(names[k], chunk.length ? chunk[chunk.length - 1] : null);
         }
       } else {
+        // 이름이 금액보다 많으면 금액에 가까운 뒤쪽부터 맞춘다.
+        // 앞쪽에는 "[포장하기]" 같은 안내가 섞여 들어오기 쉽다.
         const m = Math.min(n, amounts.length);
-        for (let k = 0; k < m; k++) push(names[k], amounts[k]);
+        const offset = n - m;
+        for (let k = 0; k < m; k++) push(names[offset + k], amounts[k]);
       }
       i = j;
     } else {
