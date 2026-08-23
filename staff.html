@@ -1258,16 +1258,9 @@
                     <div id="mealReceiptStatus" style="font-size:.72rem;margin-top:.35rem;line-height:1.5"></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">음식 금액 (원)</label>
-                    <input type="number" class="form-input" id="mealFoodAmount" placeholder="예: 45000" oninput="onMealAmountChange()">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">배달비 (원)</label>
-                    <input type="number" class="form-input" id="mealDeliveryFee" placeholder="0" value="0" oninput="onMealAmountChange()">
-                </div>
-                <div style="background:var(--bg);padding:.5rem .75rem;border-radius:4px;margin-bottom:.75rem;display:flex;justify-content:space-between">
-                    <span style="font-size:.85rem;color:var(--text-secondary)">총액 (음식+배달)</span>
-                    <span style="font-size:.85rem;font-weight:700" id="mealTotalDisplay">₩0</span>
+                    <label class="form-label">금액 (원)</label>
+                    <input type="number" class="form-input" id="mealAmount" placeholder="예: 45000" oninput="onMealAmountChange()">
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">배달비가 있으면 포함된 결제 금액입니다. 영수증을 올리면 자동으로 채워집니다.</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">메모</label>
@@ -1277,17 +1270,10 @@
                     <label class="form-label" style="font-weight:700">참여 인원 선택</label>
                     <div id="mealStaffList" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem"></div>
                 </div>
-                <div style="font-size:.75rem;color:var(--text-secondary);font-weight:600;margin-bottom:.3rem">음식 금액 분배</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);font-weight:600;margin-bottom:.3rem">금액 분배</div>
                 <div style="display:flex;gap:.5rem;margin-bottom:.6rem">
                     <button class="btn btn-outline" id="mealModeEven" style="flex:1;font-size:.85rem" onclick="setMealMode('even')">1/N 균등</button>
                     <button class="btn btn-outline" id="mealModeManual" style="flex:1;font-size:.85rem" onclick="setMealMode('manual')">개별 입력</button>
-                </div>
-                <div id="mealDeliveryModeRow" style="display:none;margin-bottom:.75rem">
-                    <div style="font-size:.75rem;color:var(--text-secondary);font-weight:600;margin-bottom:.3rem">배달비 분배</div>
-                    <div style="display:flex;gap:.5rem">
-                        <button class="btn btn-outline" id="mealDelivEven" style="flex:1;font-size:.85rem" onclick="setMealDeliveryMode('even')">1/N 균등</button>
-                        <button class="btn btn-outline" id="mealDelivRatio" style="flex:1;font-size:.85rem" onclick="setMealDeliveryMode('ratio')">음식값 비율</button>
-                    </div>
                 </div>
                 <div id="mealSplitDetail"></div>
                 <div id="mealValidation" style="font-size:.8rem;margin-top:.5rem;min-height:1.2rem"></div>
@@ -1309,7 +1295,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">날짜 *</label>
-                    <input type="date" class="form-input" id="personalMealDate" onchange="updatePersonalMealTotal()">
+                    <input type="date" class="form-input" id="personalMealDate" onchange="updatePersonalMealHint()">
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">출근한 날짜만 사용할 수 있습니다.</div>
                 </div>
                 <div class="form-group">
@@ -1319,16 +1305,9 @@
                     <div id="personalReceiptStatus" style="font-size:.72rem;margin-top:.35rem;line-height:1.5"></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">음식 금액 (원) *</label>
-                    <input type="number" class="form-input" id="personalMealAmount" min="0" placeholder="예: 12000" oninput="updatePersonalMealTotal()">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">배달비 (원)</label>
-                    <input type="number" class="form-input" id="personalMealDelivery" min="0" placeholder="0" value="0" oninput="updatePersonalMealTotal()">
-                </div>
-                <div style="background:var(--bg);padding:.5rem .75rem;border-radius:4px;margin-bottom:.5rem;display:flex;justify-content:space-between">
-                    <span style="font-size:.85rem;color:var(--text-secondary)">총액</span>
-                    <span style="font-size:.85rem;font-weight:700" id="personalMealTotalDisplay">₩0</span>
+                    <label class="form-label">금액 (원) *</label>
+                    <input type="number" class="form-input" id="personalMealAmount" min="0" placeholder="예: 12000" oninput="updatePersonalMealHint()">
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">배달비가 있으면 포함된 결제 금액입니다. 영수증을 올리면 자동으로 채워집니다.</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">메모</label>
@@ -4397,6 +4376,8 @@
                 document.getElementById('mealList').innerHTML=monthMeals.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(m=>{
                     const isGroup=m.groupId&&m.splitMode!=='personal';
                     const typeLabel=isGroup?`👥 ${m.headCount||'-'}명`:'🍽 개인';
+                    // 배달비를 따로 입력받던 시절(~2026-08)의 기록만 배달비가 따로 있다.
+                    // 지금은 결제금액 하나로 저장하므로 새 기록에는 이 표시가 붙지 않는다.
                     const deliveryInfo=m.deliveryFee?` (배달 ${formatCurrency(m.deliveryFee)})`:'';
                     return `
                     <div class="list-item" style="position:relative">
@@ -5038,14 +5019,13 @@
         }
         
         // ===== 식사 모듈 v3 (SSoT: mealRecords 합산 · 출근일 기준 적립) =====
-        let mealMode='even';            // 음식 금액 분배: 'even' | 'manual'
-        let mealDeliveryMode='even';    // 배달비 분배: 'even'(1/N) | 'ratio'(음식값 비율)
+        let mealMode='even';            // 금액 분배: 'even' | 'manual'
         let mealAllStaff=[];
         let mealSelectedStaff={};
         let mealManualAmounts={};
 
         // ── 📷 영수증 스크린샷 → 금액 자동 입력 (Cloud Vision OCR) ──
-        //    배달앱 주문상세 화면을 찍어 올리면 결제금액을 읽어 음식/배달비 칸을 채운다.
+        //    영수증을 찍어 올리면 결제금액(배달비 포함)을 읽어 금액 칸을 채운다.
         //    1/N 분배·잔액 검증 로직은 그대로 — 금액 입력만 대신해 준다.
         function _mealReadFile(file){
             return new Promise((resolve,reject)=>{
@@ -5105,20 +5085,19 @@
             _renderMealReceipts(target);
         }
 
-        // 인식에 성공한 영수증들의 합계를 금액 칸에 반영 (1/N 분배는 기존 로직 그대로)
+        // 인식에 성공한 영수증들의 결제금액 합계를 금액 칸에 반영.
+        // 영수증의 결제금액에는 배달비가 이미 들어 있어서 따로 나눠 담지 않는다.
+        // (1/N 분배는 기존 로직 그대로)
         function _applyMealReceiptTotals(target){
             const ok=_mealReceipts[target].filter(r=>r.ok);
             if(!ok.length) return;
-            const food=ok.reduce((s,r)=>s+r.food,0);
-            const deliv=ok.reduce((s,r)=>s+r.deliv,0);
+            const total=ok.reduce((s,r)=>s+r.total,0);
             if(target==='personal'){
-                document.getElementById('personalMealAmount').value=food;
-                document.getElementById('personalMealDelivery').value=deliv;
-                updatePersonalMealTotal();
+                document.getElementById('personalMealAmount').value=total;
+                updatePersonalMealHint();
             }else{
-                document.getElementById('mealFoodAmount').value=food;
-                document.getElementById('mealDeliveryFee').value=deliv;
-                onMealAmountChange();   // 총액 표시 + 1/N 재분배
+                document.getElementById('mealAmount').value=total;
+                onMealAmountChange();   // 1/N 재분배
             }
         }
 
@@ -5192,9 +5171,7 @@
                     }else{
                         entry={
                             ok:true,
-                            total:Math.max(0, Number(p.totalAmount)||0),
-                            food:Math.max(0, Number(p.foodAmount)||0),
-                            deliv:Math.max(0, Number(p.deliveryFee)||0),
+                            total:Math.max(0, Number(p.totalAmount)||0),   // 배달비 포함 결제금액
                             confidence:p.confidence,
                             items:Array.isArray(p.items)?p.items:[],
                             text:d.text
@@ -5242,30 +5219,22 @@
         }
 
         function getMealTotal(){
-            const food=parseInt(document.getElementById('mealFoodAmount')?.value)||0;
-            const delivery=parseInt(document.getElementById('mealDeliveryFee')?.value)||0;
-            return food+delivery;
+            return parseInt(document.getElementById('mealAmount')?.value)||0;
         }
-        
+
         function onMealAmountChange(){
-            const total=getMealTotal();
-            const el=document.getElementById('mealTotalDisplay');
-            if(el) el.textContent=formatCurrency(total);
             renderMealSplit();
         }
         
         async function openMealModal(){
             document.getElementById('mealDate').value=getToday();
-            document.getElementById('mealFoodAmount').value='';
-            document.getElementById('mealDeliveryFee').value='0';
-            document.getElementById('mealTotalDisplay').textContent='₩0';
+            document.getElementById('mealAmount').value='';
             document.getElementById('mealMemo').value='';
             mealMode='even';
             mealSelectedStaff={};
             mealManualAmounts={};
             loadMealStaffList();
             setMealMode('even');
-            setMealDeliveryMode('even');
             document.getElementById('mealSplitDetail').innerHTML='';
             document.getElementById('mealValidation').innerHTML='';
             document.getElementById('mealSaveBtn').disabled=true;
@@ -5291,22 +5260,16 @@
         async function openPersonalMealModal(){
             document.getElementById('personalMealDate').value=getToday();
             document.getElementById('personalMealAmount').value='';
-            document.getElementById('personalMealDelivery').value='0';
-            document.getElementById('personalMealTotalDisplay').textContent='₩0';
             document.getElementById('personalMealMemo').value='';
             resetMealReceipts('personal');
             openModal('personalMealModal');
             await loadMealAttendance();          // 오늘 출근 반영 위해 최신화
-            updatePersonalMealTotal();
+            updatePersonalMealHint();
         }
 
         // 선택 날짜 기준 잔액/출근 여부 안내 갱신
-        function updatePersonalMealTotal(){
-            const food=parseInt(document.getElementById('personalMealAmount').value)||0;
-            const delivery=parseInt(document.getElementById('personalMealDelivery').value)||0;
-            const total=food+delivery;
-            document.getElementById('personalMealTotalDisplay').textContent=formatCurrency(total);
-
+        function updatePersonalMealHint(){
+            const total=parseInt(document.getElementById('personalMealAmount').value)||0;
             const date=document.getElementById('personalMealDate').value;
             const hint=document.getElementById('personalMealRemainHint');
             if(!hint) return;
@@ -5329,18 +5292,16 @@
 
         async function savePersonalMeal(){
             const date=document.getElementById('personalMealDate').value;
-            const foodAmount=parseInt(document.getElementById('personalMealAmount').value)||0;
-            const deliveryFee=parseInt(document.getElementById('personalMealDelivery').value)||0;
-            const amount=foodAmount+deliveryFee;
+            const amount=parseInt(document.getElementById('personalMealAmount').value)||0;
             const memo=document.getElementById('personalMealMemo').value.trim();
-            
-            if(!date||!foodAmount){alert('날짜와 음식 금액을 입력해주세요.');return;}
-            if(foodAmount<=0){alert('음식 금액은 0보다 커야 합니다.');return;}
+
+            if(!date||!amount){alert('날짜와 금액을 입력해주세요.');return;}
+            if(amount<=0){alert('금액은 0보다 커야 합니다.');return;}
 
             await loadMealAttendance(date.substring(0,7));   // 저장 직전 최신 출근 기록으로 재검증
             await loadMealRecords();
             const check=checkMealEligibility(currentUser.id, date, amount);
-            if(!check.ok){ alert(check.reason); updatePersonalMealTotal(); return; }
+            if(!check.ok){ alert(check.reason); updatePersonalMealHint(); return; }
 
             try{
                 await db.collection('mealRecords').add({
@@ -5348,8 +5309,6 @@
                     employeeName:currentUser.name,
                     date:date,
                     amount:amount,
-                    foodAmount:foodAmount,
-                    deliveryFee:deliveryFee,
                     memo:memo||'개인 식사',
                     yearMonth:date.substring(0,7),
                     groupId:null,
@@ -5418,38 +5377,18 @@
             return Array.from({length:count},(_,i)=>base+(i<remainder?1:0));
         }
 
-        // 가중치(=각자 음식값) 비율로 나누되 1원 단위까지 정확히 합이 맞도록 배분
-        function splitByRatio(total, weights){
-            const n=weights.length;
-            if(n<=0) return [];
-            const sum=weights.reduce((s,v)=>s+v,0);
-            if(sum<=0) return splitEvenly(total, n);
-            const raw=weights.map(w=>total*w/sum);
-            const out=raw.map(v=>Math.floor(v));
-            let rest=total-out.reduce((s,v)=>s+v,0);
-            const order=raw.map((v,i)=>({i, frac:v-Math.floor(v)})).sort((a,b)=>b.frac-a.frac);
-            for(let k=0;k<rest;k++) out[order[k%n].i]++;
-            return out;
-        }
-
-        // 참여자별 음식/배달비 분배 계산 — 음식과 배달비를 따로 나눈 뒤 합산한다.
-        //   음식  : 1/N 균등 또는 개별 입력
-        //   배달비: 1/N 균등 또는 음식값 비율 (mealDeliveryMode)
+        // 참여자별 분배 계산. 금액은 배달비까지 포함한 결제금액 하나뿐이라
+        // 1/N 균등 또는 개별 입력으로 한 번만 나눈다.
         function computeMealSplit(selected){
-            const food=parseInt(document.getElementById('mealFoodAmount')?.value)||0;
-            const delivery=parseInt(document.getElementById('mealDeliveryFee')?.value)||0;
+            const total=getMealTotal();
             const n=selected.length;
-            const foods=(mealMode==='even')
-                ? splitEvenly(food, n)
+            const amounts=(mealMode==='even')
+                ? splitEvenly(total, n)
                 : selected.map(id=>Number(mealManualAmounts[id])||0);
-            const foodSum=foods.reduce((s,v)=>s+v,0);
-            const deliveries=(delivery<=0)
-                ? foods.map(()=>0)
-                : (mealDeliveryMode==='ratio' ? splitByRatio(delivery, foods) : splitEvenly(delivery, n));
             return {
-                food, delivery, foods, deliveries, foodSum,
-                amounts: foods.map((f,i)=>f+deliveries[i]),
-                total: food+delivery
+                total,
+                amounts,
+                sum: amounts.reduce((s,v)=>s+v,0)
             };
         }
 
@@ -5459,11 +5398,6 @@
             const total=getMealTotal();
             const date=document.getElementById('mealDate')?.value||'';
 
-            // 배달비 분배 방식 선택줄은 배달비가 있을 때만 노출
-            const delivery=parseInt(document.getElementById('mealDeliveryFee')?.value)||0;
-            const dRow=document.getElementById('mealDeliveryModeRow');
-            if(dRow) dRow.style.display=delivery>0?'':'none';
-
             if(!selected.length||!total){container.innerHTML='';validateMeal();return;}
 
             const sp=computeMealSplit(selected);
@@ -5472,36 +5406,24 @@
                 const name=emp?.name||id;
                 const remain=getMealRemain(id, date);
                 const over=sp.amounts[i]>remain;
-                const deliveryNote=sp.deliveries[i]>0
-                    ? `<span style="font-size:.7rem;color:var(--text-muted)"> + 배달 ${sp.deliveries[i].toLocaleString()}</span>` : '';
                 const left=`<span style="min-width:50px">${name} <span style="font-size:.7rem;color:var(--text-muted)">잔액 ${formatCurrency(remain)}</span></span>`;
                 if(mealMode==='even'){
                     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border)">
                         ${left}
-                        <span style="font-weight:600;${over?'color:var(--red)':''}">₩${sp.amounts[i].toLocaleString()}${deliveryNote}${over?' ⚠':''}</span>
+                        <span style="font-weight:600;${over?'color:var(--red)':''}">₩${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
                     </div>`;
                 }
                 const val=mealManualAmounts[id]||'';
                 return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);gap:.5rem">
                     ${left}
                     <span style="display:flex;align-items:center;gap:.35rem">
-                        <input type="number" value="${val}" placeholder="음식" style="width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="mealManualAmounts['${id}']=parseInt(this.value)||0;renderMealSplit()">
-                        <span style="font-size:.72rem;${over?'color:var(--red)':'color:var(--text-muted)'};min-width:74px;text-align:right">${deliveryNote?'배달 '+sp.deliveries[i].toLocaleString()+' · ':''}계 ${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
+                        <input type="number" value="${val}" placeholder="금액" style="width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="mealManualAmounts['${id}']=parseInt(this.value)||0;renderMealSplit()">
+                        <span style="font-size:.72rem;${over?'color:var(--red)':'color:var(--text-muted)'};min-width:74px;text-align:right">계 ${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
                     </span>
                 </div>`;
             }).join('');
 
-            if(sp.delivery>0){
-                container.innerHTML+=`<div style="font-size:.72rem;color:var(--text-muted);padding:.4rem 0">배달비 ${formatCurrency(sp.delivery)} → ${mealDeliveryMode==='ratio'?'음식값 비율':'1/N 균등'} 분배 후 각자 음식값에 합산</div>`;
-            }
             validateMeal();
-        }
-
-        function setMealDeliveryMode(mode){
-            mealDeliveryMode=mode;
-            document.getElementById('mealDelivEven').className='btn '+(mode==='even'?'btn-primary':'btn-outline');
-            document.getElementById('mealDelivRatio').className='btn '+(mode==='ratio'?'btn-primary':'btn-outline');
-            renderMealSplit();
         }
 
         function validateMeal(){
@@ -5517,8 +5439,8 @@
             if(!date){
                 errors.push('날짜를 선택해주세요.');
             }else{
-                if(mealMode==='manual'&&sp.foodSum!==sp.food)
-                    errors.push(`음식 개별 입력 합계(${formatCurrency(sp.foodSum)}) ≠ 음식 금액(${formatCurrency(sp.food)})`);
+                if(mealMode==='manual'&&sp.sum!==sp.total)
+                    errors.push(`개별 입력 합계(${formatCurrency(sp.sum)}) ≠ 금액(${formatCurrency(sp.total)})`);
                 selected.forEach((id,i)=>{
                     const chk=checkMealEligibility(id, date, sp.amounts[i]);
                     if(!chk.ok) errors.push(chk.reason);
@@ -5535,19 +5457,16 @@
         
         async function saveMealGroup(){
             const date=document.getElementById('mealDate').value;
-            const food=parseInt(document.getElementById('mealFoodAmount').value)||0;
-            const delivery=parseInt(document.getElementById('mealDeliveryFee').value)||0;
-            const total=food+delivery;
+            const total=getMealTotal();
             const memo=document.getElementById('mealMemo').value.trim();
             const selected=Object.keys(mealSelectedStaff);
             if(!date||!total||!selected.length){alert('날짜, 금액, 인원을 모두 입력해주세요.');return;}
-            
+
             const groupId=Date.now().toString(36)+Math.random().toString(36).substr(2,4);
 
-            // 각 직원별 음식·배달비 분배 (배달비는 따로 나눈 뒤 음식값에 합산)
             const sp=computeMealSplit(selected);
-            if(mealMode==='manual'&&sp.foodSum!==food){
-                alert(`음식 개별 입력 합계(${formatCurrency(sp.foodSum)})가 음식 금액(${formatCurrency(food)})과 다릅니다.`);
+            if(mealMode==='manual'&&sp.sum!==total){
+                alert(`개별 입력 합계(${formatCurrency(sp.sum)})가 금액(${formatCurrency(total)})과 다릅니다.`);
                 return;
             }
 
@@ -5570,15 +5489,11 @@
                         employeeName:emp?.name||empId,
                         date:date,
                         amount:sp.amounts[i],
-                        foodAmount:sp.foods[i],
-                        deliveryFee:sp.deliveries[i],
                         memo:memo,
                         yearMonth:date.substring(0,7),
                         groupId:groupId,
-                        totalFoodAmount:food,
-                        totalDeliveryFee:delivery,
+                        totalAmount:total,
                         splitMode:mealMode,
-                        deliverySplitMode:mealDeliveryMode,
                         headCount:selected.length,
                         createdBy:currentUser?.name||currentUser?.id||'staff',
                         createdAt:new Date().toISOString()
