@@ -17,7 +17,8 @@
  *    npx firebase emulators:start --only firestore --project lumiclinic-c1a95
  *
  *    # 터미널 2
- *    export FIRESTORE_EMULATOR_HOST=localhost:8080
+ *    export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080        # bash
+ *    $env:FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080"      # Windows PowerShell
  *    node scripts/seed-emulator.js
  *    node scripts/fix-currentstock.js report
  *
@@ -35,7 +36,8 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) {
   console.error(
     '\n🔒 거부: FIRESTORE_EMULATOR_HOST 가 설정되지 않았습니다.\n' +
     '   이 스크립트는 에뮬레이터 전용입니다. 프로덕션에는 절대 쓰지 않습니다.\n\n' +
-    '   export FIRESTORE_EMULATOR_HOST=localhost:8080\n'
+    '   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080        (bash)\n' +
+    '   $env:FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080"      (PowerShell)\n'
   );
   process.exit(2);
 }

@@ -18,21 +18,26 @@
  *      (실사 __total__ 경로로 총량만 기록된 품목 — Σ=0 으로 덮으면 재고 소실)
  *    · 멱등. 두 번 돌려도 두 번째는 0건입니다.
  *
- *  사용법
- *    # 0) 의존성 (firebase-admin 은 functions/ 에 이미 선언되어 있습니다)
- *    cd functions && npm install && cd ..
- *
- *    # 1) 자격증명 — 둘 중 하나
+ *  사용법 — macOS / Linux (bash)
+ *    cd functions && npm install && cd ..                 # firebase-admin
  *    export GOOGLE_APPLICATION_CREDENTIALS=/path/to/serviceAccount.json
- *    #   또는
- *    gcloud auth application-default login
+ *    node scripts/fix-currentstock.js report              # 읽기만
+ *    node scripts/fix-currentstock.js report --out report.json
+ *    node scripts/fix-currentstock.js apply --confirm     # 승인 후에만
  *
- *    # 2) 어긋난 품목 조사 (읽기만 — 아무것도 쓰지 않습니다)
+ *  사용법 — Windows PowerShell
+ *    ※ Windows PowerShell 5.1 은 && 를 지원하지 않습니다. ; 로 나누거나 줄을 나누세요.
+ *    ※ 환경변수는 export 가 아니라 $env: 입니다.
+ *
+ *    cd functions
+ *    npm install
+ *    cd ..
+ *    $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\경로\serviceAccount.json"
  *    node scripts/fix-currentstock.js report
- *    node scripts/fix-currentstock.js report --out report.json   # 공유용 파일 저장
- *
- *    # 3) 보고서 승인 후에만 실행
+ *    node scripts/fix-currentstock.js report --out report.json
  *    node scripts/fix-currentstock.js apply --confirm
+ *
+ *    자격증명 대안 (두 OS 공통):  gcloud auth application-default login
  *
  *  에뮬레이터에서 먼저 검증하려면
  *    # 터미널 1 — 에뮬레이터
@@ -40,9 +45,14 @@
  *    npm run emu
  *
  *    # 터미널 2 — 합성 데이터로 파이프라인 확인
- *    export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+ *    export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080        # bash
+ *    $env:FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080"      # PowerShell
  *    npm run emu:seed
  *    npm run stock:report
+ *
+ *    끝나면 반드시 해제하세요. 남아 있으면 프로덕션 대신 에뮬레이터를 봅니다.
+ *      unset FIRESTORE_EMULATOR_HOST                      # bash
+ *      Remove-Item Env:\FIRESTORE_EMULATOR_HOST           # PowerShell
  *
  *    프로덕션 스냅샷을 쓰려면 seed 대신:
  *      firebase firestore:export gs://<bucket>/snapshot-YYYYMMDD
