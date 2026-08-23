@@ -548,8 +548,8 @@
                             </div>
                             <span style="color:#9ca3af">↗</span>
                         </a>
-                        <a href="https://www.lumiclinic.co.kr/admin.html" target="_blank" rel="noopener"
-                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+                        <a href="https://www.lumiclinic.co.kr/admin.html" target="_blank" rel="noopener" id="topHomeSiteAdminBtn"
+                            style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
                             <span style="font-size:2.25rem">🛠️</span>
                             <div style="flex:1">
                                 <div style="font-weight:700;font-size:1rem">홈페이지 관리자</div>
@@ -2643,6 +2643,9 @@
             if(btn) btn.style.display=isBizAdmin?'':'none';
             const staffBtn=document.getElementById('topHomeStaffAdminBtn');
             if(staffBtn) staffBtn.style.display=isAdminHigh?'flex':'none';
+            // 홈페이지 관리자 타일: 관리자 계정(bizAdmin/adminHigh)에게만 노출
+            const siteAdminBtn=document.getElementById('topHomeSiteAdminBtn');
+            if(siteAdminBtn) siteAdminBtn.style.display=(isBizAdmin||isAdminHigh)?'flex':'none';
         }
 
         function openAdminSettings(){
