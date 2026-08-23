@@ -2038,7 +2038,7 @@
                 <button class="modal-close" onclick="closeModal('purchaseRequestsModal')">&times;</button>
             </div>
             <div class="modal-body" style="overflow-y:auto;flex:1">
-                <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.6rem">채널·거래처별로 묶어서 보여줍니다. 사이트를 열거나 담당자에게 문자를 보낸 뒤 각 품목의 <strong style="color:#16a34a">✅ 완료</strong>를 눌러주세요.</div>
+                <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.6rem">① <strong>대기</strong>: 사이트를 열거나 문자로 <strong>주문</strong> → <strong style="color:#16a34a">📦 주문완료</strong>. ② <strong>주문됨</strong>: 물건이 도착하면 <strong style="color:#2563eb">📥 수령·입고</strong> (재고에 자동 반영).</div>
                 <label style="display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:#6b7280;margin-bottom:.6rem;cursor:pointer">
                     <input type="checkbox" id="prShowDone" onchange="renderPurchaseRequests()"> 처리 완료 내역 보기
                 </label>
@@ -2088,9 +2088,9 @@
                     <div style="display:flex;flex-direction:column;gap:.5rem">
                         <div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:1.05rem">⚠️</span><div><b style="color:#b45309">발주 필요</b> = 재고 부족 <b>자동 감지</b> (안전재고 미달 품목)</div></div>
                         <div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:1.05rem">🛍️</span><div><b style="color:#15803d">비품 구입</b> = 자주 사는 물건 <b>구매 링크 모음</b> (쿠팡 등)</div></div>
-                        <div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:1.05rem">🛒</span><div><b style="color:#7c3aed">구매 요청함</b> = 요청이 <b>모여 실제로 사는 곳</b> (구매담당자가 ✅ 완료)</div></div>
+                        <div style="display:flex;gap:.5rem;align-items:flex-start"><span style="font-size:1.05rem">🛒</span><div><b style="color:#7c3aed">구매 요청함</b> = 요청이 <b>모여 주문·수령하는 곳</b> — <b>📦 주문완료</b> → 도착하면 <b>📥 수령·입고</b></div></div>
                     </div>
-                    <div style="margin-top:.7rem;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.55rem .7rem;font-size:.85rem;color:#92400e"><b>💡 ✅ 완료 ≠ 입고!</b> 완료는 "샀다" 표시일 뿐, 물건이 도착하면 꼭 <b>📥 입고</b> 해야 재고에 반영됩니다.</div>
+                    <div style="margin-top:.7rem;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.55rem .7rem;font-size:.85rem;color:#92400e"><b>💡 구매 요청함은 2단계!</b> <b>①📦 주문완료</b>(주문 넣으면) → <b>②📥 수령·입고</b>(물건 받으면). 재고 품목은 수령·입고 시 <b>현재고에 자동 반영</b>됩니다.</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -15323,8 +15323,8 @@
                     return;
                 }
                 container.innerHTML=items.map(r=>{
-                    const statusMap={pending:'⏳ 대기중',approved:'✅ 승인됨',rejected:'❌ 거절됨'};
-                    const statusColor={pending:'#f57f17',approved:'#2e7d32',rejected:'#c62828'};
+                    const statusMap={pending:'⏳ 대기중',ordered:'📦 주문됨',received:'✅ 입고완료',purchased:'✅ 구매완료',approved:'✅ 승인됨',rejected:'❌ 거절됨'};
+                    const statusColor={pending:'#f57f17',ordered:'#2563eb',received:'#16a34a',purchased:'#16a34a',approved:'#2e7d32',rejected:'#c62828'};
                     const st=r.status||'pending';
                     const linkBtn=r.purchaseLink?`<a href="${r.purchaseLink}" target="_blank" style="font-size:.7rem;color:#1976d2;text-decoration:none;margin-left:4px">🔗 링크</a>`:'';
                     const dateStr=r.createdAt?new Date(r.createdAt).toLocaleDateString('ko'):'-';
@@ -15365,10 +15365,19 @@
         }
         function _allPurchaseReqs(){ return Array.isArray(_purchaseReqs)?_purchaseReqs:[]; }
         function _pendingPurchaseReqs(){ return _allPurchaseReqs().filter(r=>(r.status||'pending')==='pending'); }
-        function _pendingPurchaseCount(){ return _pendingPurchaseReqs().length; }
+        function _orderedPurchaseReqs(){ return _allPurchaseReqs().filter(r=>r.status==='ordered'); }
+        function _openPurchaseCount(){ return _pendingPurchaseReqs().length + _orderedPurchaseReqs().length; }
+        function _pendingPurchaseCount(){ return _openPurchaseCount(); } // 홈 배지 = 처리 대기(대기 + 주문됨)
         function _updatePurchaseReqBadge(){
-            const n=_pendingPurchaseCount();
+            const n=_openPurchaseCount();
             document.querySelectorAll('[data-purchase-badge]').forEach(el=>{ el.textContent=n; el.style.display=n>0?'flex':'none'; });
+        }
+        // 낙관적 반영: 서버 쓰기 성공 후 로컬 캐시를 즉시 갱신 → 화면 바로 반응 (실시간 리스너와 별개 안전장치)
+        function _applyReqLocal(id, patch){
+            if(Array.isArray(_purchaseReqs)){ const it=_purchaseReqs.find(x=>x.id===id); if(it) Object.assign(it, patch); }
+            _updatePurchaseReqBadge();
+            if(document.getElementById('purchaseRequestsModal')?.classList.contains('active')) renderPurchaseRequests();
+            if(document.getElementById('staffWishlistHistory')) renderStaffWishlistFromCache();
         }
         function _siteLabelFromUrl(url){
             let host='';
@@ -15404,25 +15413,45 @@
             const sum=document.getElementById('purchaseRequestsSummary');
             if(!box) return;
             const pending=_pendingPurchaseReqs();
-            if(sum) sum.textContent=`대기 ${pending.length}건`;
+            const ordered=_orderedPurchaseReqs();
+            if(sum) sum.textContent=`대기 ${pending.length} · 주문됨 ${ordered.length}`;
             const showDone=document.getElementById('prShowDone')?.checked;
-            const groups=new Map();
-            pending.forEach(r=>{
-                const info=_reqChannelInfo(r);
-                if(!groups.has(info.key)) groups.set(info.key,{info,items:[]});
-                groups.get(info.key).items.push(r);
-            });
             let html='';
-            if(!pending.length){
-                html+='<div style="text-align:center;color:var(--text-muted);padding:1.8rem 1rem">대기 중인 구매 요청이 없습니다.<br><span style="font-size:.8rem">재고 목록의 <strong>🛒 요청</strong> 또는 비품 구입의 <strong>📝 요청</strong>으로 담아보세요.</span></div>';
-            }else{
+
+            // ① 대기 — 채널/거래처별 그룹 (구매담당자가 주문)
+            if(pending.length){
+                const groups=new Map();
+                pending.forEach(r=>{ const info=_reqChannelInfo(r); if(!groups.has(info.key)) groups.set(info.key,{info,items:[]}); groups.get(info.key).items.push(r); });
+                html+=`<div style="font-weight:800;font-size:.8rem;color:#b91c1c;margin:.1rem 0 .5rem">① 대기 — 주문할 것 (${pending.length})</div>`;
                 html+=Array.from(groups.values()).map(_renderReqGroup).join('');
             }
+
+            // ② 주문됨 — 도착 대기 (파트 직원이 수령·입고)
+            if(ordered.length){
+                html+=`<div style="font-weight:800;font-size:.8rem;color:#2563eb;margin:.9rem 0 .5rem">② 주문됨 — 도착하면 수령·입고 (${ordered.length})</div>`;
+                html+=`<div style="border:1px solid #dbeafe;border-radius:10px;overflow:hidden;margin-bottom:.5rem">`+ordered.map(r=>`
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:.4rem;padding:.55rem .6rem;border-top:1px solid #eff6ff;background:#f8fbff">
+                        <div style="flex:1;min-width:0">
+                            <div style="font-size:.86rem;font-weight:600">${_esc(r.name)} <span style="color:#9ca3af;font-weight:500">×${r.qty||1}${_esc(r.unit||'')}</span></div>
+                            <div style="font-size:.68rem;color:#9ca3af">주문 ${_esc(r.orderedBy||r.requestedBy||'-')}${r.itemId?'':' · 비품'}</div>
+                        </div>
+                        <div style="display:flex;gap:.3rem;flex-shrink:0;align-items:center">
+                            <button onclick="_reqReceive('${r.id}')" style="background:#2563eb;color:#fff;border:none;padding:.32rem .6rem;border-radius:5px;font-size:.72rem;font-weight:800;cursor:pointer;white-space:nowrap">📥 수령·입고</button>
+                            <button onclick="_reqReopen('${r.id}')" title="다시 대기로" style="background:none;border:1px solid #d1d5db;color:#4b5563;font-size:.7rem;padding:.25rem .4rem;border-radius:5px;cursor:pointer">↩︎</button>
+                            ${isBizAdmin?`<button onclick="_reqDelete('${r.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.25rem .45rem;border-radius:5px;font-size:.72rem;cursor:pointer">×</button>`:''}
+                        </div>
+                    </div>`).join('')+`</div>`;
+            }
+
+            if(!pending.length && !ordered.length){
+                html+='<div style="text-align:center;color:var(--text-muted);padding:1.8rem 1rem">처리할 구매 요청이 없습니다.<br><span style="font-size:.8rem">재고 목록의 <strong>🛒 요청</strong> 또는 비품 구입의 <strong>📝 요청</strong>으로 담아보세요.</span></div>';
+            }
+
             if(showDone){
-                const done=_allPurchaseReqs().filter(r=>['purchased','approved','rejected'].includes(r.status));
+                const done=_allPurchaseReqs().filter(r=>['received','purchased','approved','rejected'].includes(r.status));
                 html+=`<div style="margin:1rem 0 .4rem;font-weight:800;font-size:.82rem;color:#6b7280">처리 완료 (${done.length})</div>`;
                 html+=done.slice(0,40).map(r=>{
-                    const badge={purchased:'✅ 구매완료',approved:'✅ 승인',rejected:'❌ 거절'}[r.status]||r.status;
+                    const badge={received:'✅ 입고완료',purchased:'✅ 구매완료',approved:'✅ 승인',rejected:'❌ 거절'}[r.status]||r.status;
                     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:.4rem;padding:.4rem .5rem;border-bottom:1px solid #f1f5f9;font-size:.82rem">
                         <span style="flex:1;min-width:0">${_esc(r.name)} <span style="color:#9ca3af">×${r.qty||1}</span></span>
                         <span style="color:#6b7280;font-size:.72rem;white-space:nowrap">${badge}</span>
@@ -15447,7 +15476,7 @@
                 groupBtn=`<a href="${_esc(sharedLink)}" target="_blank" rel="noopener" style="background:#f97316;color:#fff;padding:.35rem .7rem;border-radius:6px;text-decoration:none;font-size:.75rem;font-weight:700;white-space:nowrap">🛒 ${_esc(info.label)} 열기</a>`;
             }
             const multiHint=(info.method==='link'&&!sharedLink)
-                ? `<div style="font-size:.7rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:.35rem .55rem;border-radius:6px;margin:.35rem 0">각 품목의 <strong>🛒 열기</strong>로 사이트를 열어 장바구니에 담은 뒤 <strong>✅ 완료</strong>를 눌러주세요.</div>` : '';
+                ? `<div style="font-size:.7rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:.35rem .55rem;border-radius:6px;margin:.35rem 0">각 품목의 <strong>🛒 열기</strong>로 사이트를 열어 장바구니에 담고, 주문을 넣은 뒤 <strong>📦 주문완료</strong>를 눌러주세요.</div>` : '';
             const rows=items.map(r=>{
                 const own=(r.purchaseLink&&r.purchaseLink!==sharedLink)
                     ? `<a href="${_esc(r.purchaseLink)}" target="_blank" rel="noopener" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:.25rem .55rem;border-radius:5px;text-decoration:none;font-size:.7rem;font-weight:600;white-space:nowrap">🛒 열기</a>` : '';
@@ -15460,7 +15489,7 @@
                     </div>
                     <div style="display:flex;gap:.3rem;flex-shrink:0;align-items:center">
                         ${own}
-                        <button onclick="_reqComplete('${r.id}')" style="background:#16a34a;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.72rem;font-weight:800;cursor:pointer;white-space:nowrap">✅ 완료</button>
+                        <button onclick="_reqOrder('${r.id}')" title="주문을 넣었으면 누르세요 → '주문됨'으로 이동" style="background:#16a34a;color:#fff;border:none;padding:.3rem .6rem;border-radius:5px;font-size:.72rem;font-weight:800;cursor:pointer;white-space:nowrap">📦 주문완료</button>
                         ${isBizAdmin?`<button onclick="_reqDelete('${r.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;padding:.25rem .45rem;border-radius:5px;font-size:.72rem;cursor:pointer">×</button>`:''}
                     </div>
                 </div>`;
@@ -15473,19 +15502,49 @@
                 <div style="padding:.1rem .7rem .5rem">${multiHint}${rows}</div>
             </div>`;
         }
-        async function _reqComplete(id){
-            try{ await db.collection('purchaseRequests').doc(id).update({status:'purchased',processedAt:new Date().toISOString(),purchasedAt:new Date().toISOString(),purchasedBy:currentUser?.name||'구매담당'}); }
-            catch(e){ alert('처리 실패: '+(e.message||e)); }
+        // ① 주문완료: 구매담당자가 주문을 넣으면 → '주문됨'(도착 대기)
+        async function _reqOrder(id){
+            try{
+                await db.collection('purchaseRequests').doc(id).update({status:'ordered',orderedAt:new Date().toISOString(),orderedBy:currentUser?.name||'구매담당'});
+                _applyReqLocal(id,{status:'ordered',orderedBy:currentUser?.name||'구매담당'});
+            }catch(e){ alert('처리 실패: '+(e.message||e)); }
+        }
+        // ② 수령·입고: 파트 직원이 물건을 받으면 → 재고 품목은 요청 수량만큼 현재고에 더함('미지정' 장소), 비품은 완료 표시
+        async function _reqReceive(id){
+            const r=_allPurchaseReqs().find(x=>x.id===id); if(!r) return;
+            const qty=Number(r.qty)||1;
+            try{
+                if(r.itemId){
+                    await db.runTransaction(async tx=>{
+                        const ref=db.collection('inventory').doc(r.itemId);
+                        const snap=await tx.get(ref);
+                        if(!snap.exists) return;
+                        const d=snap.data()||{};
+                        const locs=Object.assign({}, d.locations||{});
+                        locs['미지정']=(Number(locs['미지정'])||0)+qty;
+                        const newTotal=Object.values(locs).reduce((s,q)=>s+(Number(q)||0),0);
+                        tx.update(ref,{locations:locs,currentStock:newTotal,lastReceiveDate:new Date().toISOString().split('T')[0],updatedAt:new Date().toISOString()});
+                    });
+                }
+                await db.collection('purchaseRequests').doc(id).update({status:'received',receivedAt:new Date().toISOString(),receivedBy:currentUser?.name||'직원'});
+                _applyReqLocal(id,{status:'received',receivedBy:currentUser?.name||'직원'});
+                if(typeof loadInventoryForStaff==='function') loadInventoryForStaff();
+                alert(r.itemId?`✅ '${r.name}' ${qty}${r.unit||'개'} 입고 완료 (현재고에 반영 · 장소: 미지정 — 나중에 🔄 이동 가능)`:`✅ '${r.name}' 수령 완료`);
+            }catch(e){ alert('처리 실패: '+(e.message||e)); }
         }
         async function _reqReopen(id){
-            try{ await db.collection('purchaseRequests').doc(id).update({status:'pending',processedAt:null,purchasedAt:null}); }
+            try{ await db.collection('purchaseRequests').doc(id).update({status:'pending',orderedAt:null,receivedAt:null,processedAt:null,purchasedAt:null}); _applyReqLocal(id,{status:'pending'}); }
             catch(e){ alert('처리 실패: '+(e.message||e)); }
         }
         async function _reqDelete(id){
-            if(!isBizAdmin){ alert('삭제는 경영관리자만 가능합니다.\n구매를 마쳤다면 ✅ 완료 버튼을 사용하세요.'); return; }
+            if(!isBizAdmin){ alert('삭제는 경영관리자만 가능합니다.'); return; }
             if(!confirm('이 요청을 삭제할까요?')) return;
-            try{ await db.collection('purchaseRequests').doc(id).delete(); }
-            catch(e){ alert('삭제 실패: '+(e.message||e)); }
+            try{
+                await db.collection('purchaseRequests').doc(id).delete();
+                if(Array.isArray(_purchaseReqs)) _purchaseReqs=_purchaseReqs.filter(x=>x.id!==id);
+                _updatePurchaseReqBadge();
+                if(document.getElementById('purchaseRequestsModal')?.classList.contains('active')) renderPurchaseRequests();
+            }catch(e){ alert('삭제 실패: '+(e.message||e)); }
         }
         // 비품 요청 내역(직원 탭) — 실시간 캐시 기반 렌더 (구매완료 포함)
         function renderStaffWishlistFromCache(){
@@ -15493,8 +15552,8 @@
             if(!container) return;
             const items=_allPurchaseReqs().slice(0,30);
             if(!items.length){ container.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:1.5rem">아직 요청 내역이 없습니다.</div>'; return; }
-            const statusMap={pending:'⏳ 대기중',purchased:'✅ 구매완료',approved:'✅ 승인됨',rejected:'❌ 거절됨'};
-            const statusColor={pending:'#f57f17',purchased:'#16a34a',approved:'#2e7d32',rejected:'#c62828'};
+            const statusMap={pending:'⏳ 대기중',ordered:'📦 주문됨',received:'✅ 입고완료',purchased:'✅ 구매완료',approved:'✅ 승인됨',rejected:'❌ 거절됨'};
+            const statusColor={pending:'#f57f17',ordered:'#2563eb',received:'#16a34a',purchased:'#16a34a',approved:'#2e7d32',rejected:'#c62828'};
             container.innerHTML=items.map(r=>{
                 const st=r.status||'pending';
                 const linkBtn=r.purchaseLink?`<a href="${_esc(r.purchaseLink)}" target="_blank" rel="noopener" style="font-size:.7rem;color:#1976d2;text-decoration:none;margin-left:4px">🔗 링크</a>`:'';
