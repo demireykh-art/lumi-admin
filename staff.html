@@ -3064,6 +3064,7 @@
                     name:m.name||'',
                     recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'개',volEach:_recipeVolEach(r),memo:r.memo||''})),
                     yield:_mixYield(m), yieldUnit:'cc',
+                    useBy:m.useBy||'', disposalMemo:m.disposalMemo||'',
                     note:m.note||'', updatedAt:new Date().toISOString(), updatedBy:currentUser?.name||currentUser?.id||'staff'
                 });
             }catch(e){ alert('믹스 저장 실패: '+(e?.message||e)); }
@@ -3127,6 +3128,13 @@
                     <span style="font-size:.7rem;color:#9ca3af">(cc 재료 자동 합산)</span>
                     <span style="flex:1;text-align:right;font-size:.74rem;color:#6b7280">${_mixYield(m)>0?`= ₩${_mixUnitPrice(m).toLocaleString()}/cc`:'cc 재료 입력 시 cc당 단가'}</span>
                 </div>
+                <div style="display:flex;align-items:center;gap:.4rem;border-top:1px dashed #ddd6fe;padding-top:.4rem;margin-bottom:.35rem;flex-wrap:wrap">
+                    <span style="font-size:.76rem;color:#5b21b6;font-weight:600;flex-shrink:0">사용기한</span>
+                    <select onchange="mixSetUseBy('${m.id}',this.value)" style="font-size:.76rem;padding:.28rem .3rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff;flex-shrink:0">
+                        ${['','즉시','당일','1주','4주'].map(u=>`<option value="${u}"${(m.useBy||'')===u?' selected':''}>${u||'기한 선택'}</option>`).join('')}
+                    </select>
+                    <input type="text" value="${_esc(m.disposalMemo||'')}" placeholder="폐기 원칙 메모 (수동입력)" onchange="mixSetDisposalMemo('${m.id}',this.value)" style="flex:1;min-width:130px;font-size:.76rem;padding:.3rem .4rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
+                </div>
                 <div style="display:flex;gap:.4rem;align-items:center;justify-content:space-between;border-top:1px dashed #ddd6fe;padding-top:.4rem">
                     <span style="font-size:.82rem;font-weight:700;color:#5b21b6">믹스 원가 ₩${_mixCost(m).toLocaleString()}</span>
                     <span style="display:flex;gap:.35rem">
@@ -3140,7 +3148,7 @@
         async function mixAdd(){
             const name=prompt('새 주사제 믹스 이름 (예: 주사마취):'); if(name==null||!name.trim()) return;
             await _ensureInvItems();
-            const m={id:_uid(),name:name.trim(),recipe:[],yield:0,yieldUnit:'cc',note:''};
+            const m={id:_uid(),name:name.trim(),recipe:[],yield:0,yieldUnit:'cc',useBy:'',disposalMemo:'',note:''};
             _mixes.push(m); _mixes.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
             _mixEditingId=m.id;
             await _mixSaveDoc(m); _renderMixList();
@@ -3195,6 +3203,9 @@
             const m=_mixes.find(x=>x.id===id); if(!m) return;
             m.recipe.splice(idx,1); _mixSaveDoc(m); _renderMixList();
         }
+        // 사용기한(즉시/당일/1주/4주) · 폐기 원칙 메모(수동) — onchange(blur 후)라 재렌더해도 포커스 문제 없음
+        function mixSetUseBy(id,val){ const m=_mixes.find(x=>x.id===id); if(!m) return; m.useBy=val||''; _mixSaveDoc(m); _renderMixList(); }
+        function mixSetDisposalMemo(id,val){ const m=_mixes.find(x=>x.id===id); if(!m) return; m.disposalMemo=String(val||''); _mixSaveDoc(m); _renderMixList(); }
 
         // ================================================================
         //  🎫 바우처 (회차권/금액권) — charting v2 Phase 4
