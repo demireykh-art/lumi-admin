@@ -1262,10 +1262,6 @@
                     <input type="number" class="form-input" id="mealAmount" placeholder="예: 45000" oninput="onMealAmountChange()">
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">배달비가 있으면 포함된 결제 금액입니다. 영수증을 올리면 자동으로 채워집니다.</div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">메모</label>
-                    <input type="text" class="form-input" id="mealMemo" placeholder="예: 점심 - 중국집">
-                </div>
                 <div style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.5rem">
                     <label class="form-label" style="font-weight:700">참여 인원 선택</label>
                     <div id="mealStaffList" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem"></div>
@@ -1308,10 +1304,6 @@
                     <label class="form-label">금액 (원) *</label>
                     <input type="number" class="form-input" id="personalMealAmount" min="0" placeholder="예: 12000" oninput="updatePersonalMealHint()">
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem">배달비가 있으면 포함된 결제 금액입니다. 영수증을 올리면 자동으로 채워집니다.</div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">메모</label>
-                    <input type="text" class="form-input" id="personalMealMemo" placeholder="예: 점심 - 김치찌개">
                 </div>
                 <div style="background:var(--bg);padding:.75rem;border-radius:6px;margin-top:.5rem">
                     <div style="font-size:.8rem;color:var(--text-muted);line-height:1.5">
@@ -5073,6 +5065,24 @@
             return document.getElementById(target==='personal'?'personalReceiptStatus':'mealReceiptStatus');
         }
 
+        // 메모를 직접 적는 칸을 없앤 대신, 영수증에서 읽은 품목 이름을 내역 설명으로 쓴다.
+        // 목록과 STAFF 관리 > 식대 상세에서 무엇을 먹었는지 그대로 보인다.
+        // 품목을 못 읽은 영수증이면 빈 문자열 — 호출한 쪽에서 기본 문구로 채운다.
+        function _mealAutoMemo(target){
+            const names=[];
+            (_mealReceipts[target]||[]).filter(r=>r.ok).forEach(r=>{
+                (r.items||[]).forEach(it=>{
+                    const n=String(it&&it.name||'').trim();
+                    if(n) names.push(n);
+                });
+            });
+            const uniq=[...new Set(names)];
+            if(!uniq.length) return '';
+            return uniq.length>3
+                ? uniq.slice(0,3).join(', ')+' 외 '+(uniq.length-3)+'건'
+                : uniq.join(', ');
+        }
+
         function resetMealReceipts(target){
             _mealReceipts[target]=[];
             const el=_mealReceiptStatusEl(target);
@@ -5229,7 +5239,6 @@
         async function openMealModal(){
             document.getElementById('mealDate').value=getToday();
             document.getElementById('mealAmount').value='';
-            document.getElementById('mealMemo').value='';
             mealMode='even';
             mealSelectedStaff={};
             mealManualAmounts={};
@@ -5260,7 +5269,6 @@
         async function openPersonalMealModal(){
             document.getElementById('personalMealDate').value=getToday();
             document.getElementById('personalMealAmount').value='';
-            document.getElementById('personalMealMemo').value='';
             resetMealReceipts('personal');
             openModal('personalMealModal');
             await loadMealAttendance();          // 오늘 출근 반영 위해 최신화
@@ -5293,7 +5301,6 @@
         async function savePersonalMeal(){
             const date=document.getElementById('personalMealDate').value;
             const amount=parseInt(document.getElementById('personalMealAmount').value)||0;
-            const memo=document.getElementById('personalMealMemo').value.trim();
 
             if(!date||!amount){alert('날짜와 금액을 입력해주세요.');return;}
             if(amount<=0){alert('금액은 0보다 커야 합니다.');return;}
@@ -5309,7 +5316,7 @@
                     employeeName:currentUser.name,
                     date:date,
                     amount:amount,
-                    memo:memo||'개인 식사',
+                    memo:_mealAutoMemo('personal')||'개인 식사',
                     yearMonth:date.substring(0,7),
                     groupId:null,
                     splitMode:'personal',
@@ -5417,12 +5424,35 @@
                 return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);gap:.5rem">
                     ${left}
                     <span style="display:flex;align-items:center;gap:.35rem">
-                        <input type="number" value="${val}" placeholder="금액" style="width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="mealManualAmounts['${id}']=parseInt(this.value)||0;renderMealSplit()">
-                        <span style="font-size:.72rem;${over?'color:var(--red)':'color:var(--text-muted)'};min-width:74px;text-align:right">계 ${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
+                        <input type="number" inputmode="numeric" value="${val}" placeholder="금액" data-emp="${_esc(id)}" style="width:82px;padding:.3rem;border:1px solid var(--border);text-align:right;font-size:.9rem" oninput="onMealManualInput(this)">
+                        <span id="mealRowSum-${i}" style="font-size:.72rem;${over?'color:var(--red)':'color:var(--text-muted)'};min-width:74px;text-align:right">계 ${sp.amounts[i].toLocaleString()}${over?' ⚠':''}</span>
                     </span>
                 </div>`;
             }).join('');
 
+            validateMeal();
+        }
+
+        // 개별 입력 — 한 글자 칠 때마다 renderMealSplit() 으로 전체를 다시 그리면
+        // 입력칸 자체가 새로 만들어져 포커스가 빠진다. 입력칸은 그대로 두고
+        // 옆의 "계" 숫자와 아래 검증 문구만 고쳐 쓴다.
+        function onMealManualInput(input){
+            mealManualAmounts[input.dataset.emp]=parseInt(input.value)||0;
+            refreshMealRowSums();
+        }
+
+        function refreshMealRowSums(){
+            const selected=Object.keys(mealSelectedStaff);
+            if(!selected.length) return;
+            const date=document.getElementById('mealDate')?.value||'';
+            const sp=computeMealSplit(selected);
+            selected.forEach((id,i)=>{
+                const el=document.getElementById('mealRowSum-'+i);
+                if(!el) return;
+                const over=sp.amounts[i]>getMealRemain(id, date);
+                el.textContent='계 '+sp.amounts[i].toLocaleString()+(over?' ⚠':'');
+                el.style.color=over?'var(--red)':'var(--text-muted)';
+            });
             validateMeal();
         }
 
@@ -5458,7 +5488,6 @@
         async function saveMealGroup(){
             const date=document.getElementById('mealDate').value;
             const total=getMealTotal();
-            const memo=document.getElementById('mealMemo').value.trim();
             const selected=Object.keys(mealSelectedStaff);
             if(!date||!total||!selected.length){alert('날짜, 금액, 인원을 모두 입력해주세요.');return;}
 
@@ -5489,7 +5518,7 @@
                         employeeName:emp?.name||empId,
                         date:date,
                         amount:sp.amounts[i],
-                        memo:memo,
+                        memo:_mealAutoMemo('group')||'그룹 식사',
                         yearMonth:date.substring(0,7),
                         groupId:groupId,
                         totalAmount:total,
