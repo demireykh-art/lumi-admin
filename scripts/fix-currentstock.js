@@ -229,6 +229,14 @@ function renderReport(a) {
   L.push(`  ⏸ 장소 미지정 (건너뜀)   : ${a.noLocations.length}`);
   L.push(`  ✗ 값 이상 (건너뜀)       : ${a.invalid.length}`);
   L.push('');
+  // 입고 탭(receivingHistory 경로)을 얼마나 써왔는지 — 전체 품목 기준.
+  // batches[] 는 입고 탭만 씁니다. HOTFIX-3(발주 예측 합산) 필요 여부를 이 숫자가 결정합니다.
+  const batchAll = a.results.filter((r) => r.hasBatches);
+  L.push(`  📦 입고 탭 사용 흔적 (batches[] 보유) : ${batchAll.length} / ${a.total} 품목`);
+  if (batchAll.length) {
+    L.push('     ' + batchAll.map((r) => `${r.name}(${r.batchCount}건)`).join(', '));
+  }
+  L.push('');
 
   if (a.drift.length) {
     const withBatches = a.drift.filter((r) => r.hasBatches).length;
