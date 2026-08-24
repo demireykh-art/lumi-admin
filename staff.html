@@ -2985,10 +2985,10 @@
             return Math.round(s*100)/100;
         }
         function _mixYieldUnit(mix){ return (mix&&mix.yieldUnit)||'cc'; }
-        // 믹스 단위단가 = 총원가 ÷ 총용량 (용량 미입력 시 전체원가) — 소수 2자리
+        // 믹스 단위단가 = 총원가 ÷ 총용량 (용량 미입력 시 전체원가) — 1원 단위 반올림
         function _mixUnitPrice(mix){
             const cost=_mixCost(mix), y=_mixYield(mix);
-            return y>0 ? Math.round(cost/y*100)/100 : cost;
+            return y>0 ? Math.round(cost/y) : cost;
         }
         // 소모품 단가·단위 조회: 믹스 우선(단위단가·용량단위), 없으면 재고 낱개단가(개)
         function _supplyLookup(name){
