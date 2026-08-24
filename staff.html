@@ -2920,7 +2920,7 @@
             try{
                 const s=await db.collection('injectionMixes').get();
                 _mixes=s.docs.map(d=>({id:d.id,...d.data()}));
-                _mixes.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+                _sortMixes();
                 _mixesLoaded=true;
             }catch(e){ console.warn('주사제 믹스 로드 스킵:', e?.message||e); }
             return _mixes;
@@ -3065,6 +3065,7 @@
                     recipe:(m.recipe||[]).map(r=>({itemId:r.itemId||'',itemName:r.itemName||'',qty:Number(r.qty)||0,unit:r.unit||'개',volEach:_recipeVolEach(r),memo:r.memo||''})),
                     yield:_mixYield(m), yieldUnit:'cc',
                     useBy:m.useBy||'', disposalMemo:m.disposalMemo||'',
+                    order:(m.order==null?null:Number(m.order)),
                     note:m.note||'', updatedAt:new Date().toISOString(), updatedBy:currentUser?.name||currentUser?.id||'staff'
                 });
             }catch(e){ alert('믹스 저장 실패: '+(e?.message||e)); }
@@ -3078,10 +3079,16 @@
         function _renderMixList(){
             const wrap=document.getElementById('mixList'); if(!wrap) return;
             if(!_mixes.length){ wrap.innerHTML='<div style="color:#9ca3af;font-size:.85rem;padding:1rem;text-align:center">등록된 믹스가 없습니다. [+ 새 주사제 믹스]로 추가하세요.</div>'; return; }
-            wrap.innerHTML=_mixes.map(m=>{
+            wrap.innerHTML=_mixes.map((m,idx)=>{
                 const editing=(_mixEditingId===m.id);
                 const cost=_mixCost(m);
+                const first=idx===0, last=idx===_mixes.length-1;
+                const move=`<span style="display:inline-flex;flex-direction:column;gap:1px;flex-shrink:0">
+                    <button onclick="event.stopPropagation();mixMove('${m.id}',-1)" ${first?'disabled':''} title="위로(중요도↑)" style="line-height:.9;background:${first?'#f9fafb':'#fff'};border:1px solid #e5e7eb;color:${first?'#d1d5db':'#6b7280'};padding:0 .35rem;border-radius:3px;font-size:.66rem;cursor:${first?'default':'pointer'}">▲</button>
+                    <button onclick="event.stopPropagation();mixMove('${m.id}',1)" ${last?'disabled':''} title="아래로(중요도↓)" style="line-height:.9;background:${last?'#f9fafb':'#fff'};border:1px solid #e5e7eb;color:${last?'#d1d5db':'#6b7280'};padding:0 .35rem;border-radius:3px;font-size:.66rem;cursor:${last?'default':'pointer'}">▼</button>
+                </span>`;
                 const head=`<div ondblclick="mixEditToggle('${m.id}')" title="더블탭하여 편집" style="display:flex;align-items:center;gap:.5rem;padding:.45rem .55rem;background:${editing?'#faf5ff':'#fff'};border:1px solid ${editing?'#ddd6fe':'#e5e7eb'};border-radius:8px;cursor:pointer;user-select:none;-webkit-user-select:none">
+                    ${move}
                     <div style="flex:1;min-width:0">
                         <div style="font-size:.88rem;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">🧪 ${_esc(m.name||'(무명)')}</div>
                         <div style="font-size:.72rem;color:#6b7280">원가 ₩${cost.toLocaleString()} · 재료 ${(m.recipe||[]).length}종${_mixYield(m)>0?` · ₩${_mixUnitPrice(m).toLocaleString()}/${_esc(_mixYieldUnit(m))}`:''}</div>
@@ -3090,6 +3097,8 @@
                 </div>`;
                 return head + (editing ? _mixRecipeEditor(m) : '');
             }).join('');
+            // 메모 textarea 초기 높이를 내용에 맞게 (입력한 만큼 늘어나게)
+            wrap.querySelectorAll('textarea.mix-note-ta').forEach(_mixAutoGrow);
         }
         function _mixRecipeEditor(m){
             const rows=(m.recipe||[]).map((r,i)=>{
@@ -3135,6 +3144,10 @@
                     </select>
                     <input type="text" value="${_esc(m.disposalMemo||'')}" placeholder="폐기 원칙 메모 (수동입력)" onchange="mixSetDisposalMemo('${m.id}',this.value)" style="flex:1;min-width:130px;font-size:.76rem;padding:.3rem .4rem;border:1px solid #c4b5fd;border-radius:5px;background:#fff">
                 </div>
+                <div style="border-top:1px dashed #ddd6fe;padding-top:.4rem;margin-bottom:.35rem">
+                    <div style="font-size:.76rem;color:#5b21b6;font-weight:600;margin-bottom:.25rem">메모 (믹스방법·주사기 선택·보관방법 등)</div>
+                    <textarea class="mix-note-ta" oninput="_mixAutoGrow(this)" onchange="mixSetNote('${m.id}',this.value)" placeholder="예)&#10;① BASE + 증류수를 먼저 섞습니다.&#10;② 에피네프린은 맨 마지막에 1mL 주사기로 0.1mL 정확히.&#10;③ 0.3mL씩 인슐린 주사기에 나눠 담고 캡을 씌웁니다.&#10;④ 지퍼백에 날짜 쓰고 냉장 차광 보관. 오래된 것부터 사용." style="width:100%;box-sizing:border-box;min-height:64px;resize:none;overflow:hidden;font-size:.8rem;line-height:1.55;padding:.5rem .6rem;border:1px solid #c4b5fd;border-radius:6px;background:#fff;white-space:pre-wrap;font-family:inherit">${_esc(m.note||'')}</textarea>
+                </div>
                 <div style="display:flex;gap:.4rem;align-items:center;justify-content:space-between;border-top:1px dashed #ddd6fe;padding-top:.4rem">
                     <span style="font-size:.82rem;font-weight:700;color:#5b21b6">믹스 원가 ₩${_mixCost(m).toLocaleString()}</span>
                     <span style="display:flex;gap:.35rem">
@@ -3148,8 +3161,9 @@
         async function mixAdd(){
             const name=prompt('새 주사제 믹스 이름 (예: 주사마취):'); if(name==null||!name.trim()) return;
             await _ensureInvItems();
-            const m={id:_uid(),name:name.trim(),recipe:[],yield:0,yieldUnit:'cc',useBy:'',disposalMemo:'',note:''};
-            _mixes.push(m); _mixes.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+            const _maxOrder=_mixes.reduce((mx,x)=>Math.max(mx, x.order==null?-1:Number(x.order)), -1);
+            const m={id:_uid(),name:name.trim(),recipe:[],yield:0,yieldUnit:'cc',useBy:'',disposalMemo:'',note:'',order:_maxOrder+1};
+            _mixes.push(m); _sortMixes();
             _mixEditingId=m.id;
             await _mixSaveDoc(m); _renderMixList();
         }
@@ -3206,6 +3220,27 @@
         // 사용기한(즉시/당일/1주/4주) · 폐기 원칙 메모(수동) — onchange(blur 후)라 재렌더해도 포커스 문제 없음
         function mixSetUseBy(id,val){ const m=_mixes.find(x=>x.id===id); if(!m) return; m.useBy=val||''; _mixSaveDoc(m); _renderMixList(); }
         function mixSetDisposalMemo(id,val){ const m=_mixes.find(x=>x.id===id); if(!m) return; m.disposalMemo=String(val||''); _mixSaveDoc(m); _renderMixList(); }
+        // 메모(믹스방법·주사기·보관 등) — 재렌더 없이 저장(입력한 만큼 늘어난 높이 유지)
+        function mixSetNote(id,val){ const m=_mixes.find(x=>x.id===id); if(!m) return; m.note=String(val||''); _mixSaveDoc(m); }
+        function _mixAutoGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=(el.scrollHeight+2)+'px'; }
+        // 중요도 순서 정렬(order 우선, 없으면 이름). 순서 변경은 사용자가 ▲▼로.
+        function _sortMixes(){
+            _mixes.sort((a,b)=>{
+                const ao=(a.order==null?1e9:Number(a.order)), bo=(b.order==null?1e9:Number(b.order));
+                if(ao!==bo) return ao-bo;
+                return String(a.name||'').localeCompare(String(b.name||''));
+            });
+        }
+        function mixMove(id,dir){
+            const i=_mixes.findIndex(x=>x.id===id); if(i<0) return;
+            const j=i+dir; if(j<0||j>=_mixes.length) return;
+            const arr=_mixes.slice();
+            const [it]=arr.splice(i,1); arr.splice(j,0,it);
+            arr.forEach((m,k)=>{ m.order=k; });   // 표시 순서대로 order 재부여
+            _mixes=arr;
+            arr.forEach(m=>_mixSaveDoc(m));         // 전체 저장(순서 영구 반영)
+            _renderMixList();
+        }
 
         // ================================================================
         //  🎫 바우처 (회차권/금액권) — charting v2 Phase 4
