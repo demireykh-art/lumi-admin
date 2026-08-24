@@ -8236,7 +8236,8 @@
                                         <span style="font-size:.78rem;color:#92400e;font-weight:600">회</span>
                                     </div>
                                     <div style="display:flex;align-items:center;gap:.2rem;flex-shrink:0">
-                                        <input type="number" id="feeVarPrice-${v.id}" value="${v.price||0}" step="0.1"
+                                        <span title="권장 소비자가 = 소모품 원가 × 5 (만원 단위 반올림)" style="font-size:.72rem;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:5px;padding:.28rem .4rem;white-space:nowrap;margin-right:.2rem">권장 ₩${_feeRecPrice(v).toLocaleString()}</span>
+                                        <input type="number" id="feeVarPrice-${v.id}" value="${v.price||0}" step="0.1" title="실제 판매가(만원 단위 입력)"
                                             style="width:60px;text-align:right;padding:.35rem .3rem;font-size:.85rem;border:1px solid #f59e0b;border-radius:5px;background:#fff">
                                         <span style="font-size:.78rem;color:#92400e;font-weight:600">만</span>
                                         <span style="font-size:.72rem;color:#a16207;min-width:65px;text-align:right">= ₩${priceWon.toLocaleString()}</span>
@@ -8506,6 +8507,8 @@
             // 소모품 각 줄 금액은 소수점 올림(ceil) 후 합산
             return (v&&Array.isArray(v.supplies)?v.supplies:[]).reduce((a,s)=>a+Math.ceil((Number(s.price)||0)*(Number(s.qty)||0)),0);
         }
+        // 권장 소비자가 = 소모품 원가 × 5, 만원 단위 반올림 (표시용 · 실제 판매가는 수동 입력)
+        function _feeRecPrice(v){ return Math.round((_feeSupplyCost(v)*5)/10000)*10000; }
         function _feeVarSessions(v){ return (v&&Number(v.sessions)>1)?Number(v.sessions):1; }
         // 분당수익 계산 시 마취시간 포함 여부(전역 토글, localStorage 유지)
         let _feeInclAnes=(function(){ try{return localStorage.getItem('staff_fee_incl_anes_v1')==='1';}catch(_){return false;} })();
