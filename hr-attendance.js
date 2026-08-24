@@ -655,6 +655,7 @@ function openEmployeeModal(id=null){
     document.getElementById('empPersonalSalesSource').value='manual';
     // 탭 체크박스 초기화
     document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
+    { const t=document.getElementById('empIsTest'); if(t) t.checked=false; }
     
     if(id){
         const emp=employees.find(e=>e.id===id);
@@ -711,6 +712,7 @@ function openEmployeeModal(id=null){
                 });
             }
             // visibleTabs가 null이거나 없으면 기본값(모두 체크) 유지
+            { const t=document.getElementById('empIsTest'); if(t) t.checked=!!emp.isTestAccount; }
         }
     }
     openModal('employeeModal');
@@ -863,7 +865,9 @@ async function saveEmployee(){
         incJapan:document.getElementById('empIncJapan').checked,
         personalSalesSource:document.getElementById('empPersonalSalesSource').value||'manual',
         isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
-        visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
+        visibleTabs:visibleTabsValue, // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
+        // 테스트 계정은 다른 직원에게 보이는 공용 목록에서 제외된다
+        isTestAccount:!!(document.getElementById('empIsTest')||{}).checked
     };
     if(staffId){ data.staffId=staffId; }
     if(email){ data.email=email; }

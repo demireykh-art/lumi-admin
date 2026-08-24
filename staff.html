@@ -2406,6 +2406,17 @@
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="info" style="width:16px;height:16px" checked>👤 내정보</label>
                     </div>
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.5rem">※ 재고는 통합앱(공용계정)에서 관리하므로 개인 계정은 기본 미노출입니다. 필요한 직원만 체크하세요.</div>
+                    <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;font-size:.9rem;margin-top:.9rem;padding-top:.9rem;border-top:1px dashed var(--border)">
+                        <input type="checkbox" id="seEmpIsTest" style="width:16px;height:16px;margin-top:.15rem">
+                        <span>🧪 <b>테스트 계정</b>
+                            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem;font-weight:400">
+                                직원 앱이 잘 도는지 확인용 계정입니다. 앱 기능은 똑같이 쓰지만,
+                                <b>식사 그룹정산 참여 인원·팀 연차 달력·공지 달력</b> 같이
+                                다른 직원에게 보이는 목록에는 나타나지 않습니다.
+                                (관리 화면에는 🧪 표시와 함께 그대로 보입니다.)
+                            </div>
+                        </span>
+                    </label>
                 </div>
             </div>
             <div class="modal-footer">
@@ -3925,10 +3936,30 @@
             }
         }
         
+        // ── 🧪 테스트 계정 ──
+        // 직원 앱이 잘 도는지 확인하려고 만든 계정. 본인 앱은 똑같이 쓰지만
+        // 다른 직원에게 보이는 공용 목록(식사 그룹정산 인원·팀 연차·공지 달력)
+        // 에서는 빠진다. 관리 화면에는 🧪 표시와 함께 그대로 보인다.
+        let testAccountIds=new Set();
+
+        async function loadTestAccounts(){
+            try{
+                const s=await db.collection('employees').where('isTestAccount','==',true).get();
+                testAccountIds=new Set(s.docs.map(d=>d.id));
+            }catch(e){
+                // 못 읽어도 앱은 그대로 동작해야 하므로 비워 두고 넘어간다
+                console.warn('테스트 계정 목록 로드 실패:',e);
+                testAccountIds=new Set();
+            }
+        }
+
+        function isTestAccount(empId){ return testAccountIds.has(String(empId||'')); }
+
         // Data Loading - 단순 쿼리 사용 (인덱스 불필요)
         async function loadAllData(){
             try{
                 await Promise.all([
+                    loadTestAccounts(),
                     loadAttendance(),
                     loadLunchOT(),
                     loadMealRecords(),
@@ -4549,6 +4580,7 @@
             const leaveMap={};
             teamLeaveData.forEach(r=>{
                 if(!r.dates) return;
+                if(isTestAccount(r.employeeId)) return;   // 테스트 계정은 팀 달력에서 제외
                 r.dates.forEach(d=>{
                     if(!d.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)) return;
                     if(!leaveMap[d]) leaveMap[d]=[];
@@ -5447,7 +5479,8 @@
         async function loadMealStaffList(){
             try{
                 const s=await db.collection('employees').where('status','==','active').get();
-                mealAllStaff=s.docs.map(d=>({id:d.id,...d.data()})).filter(e=>e.id!==SHARED_ACCOUNT_ID&&e.status==='active');
+                mealAllStaff=s.docs.map(d=>({id:d.id,...d.data()}))
+                    .filter(e=>e.id!==SHARED_ACCOUNT_ID&&e.status==='active'&&!e.isTestAccount);
             }catch(e){mealAllStaff=[];}
             renderMealStaffList();
         }
@@ -9666,6 +9699,7 @@
             const out=[];
             (_calLeaves||[]).forEach(r=>{
                 if(!Array.isArray(r.dates)||!r.dates.includes(dateStr)) return;
+                if(isTestAccount(r.employeeId)) return;   // 테스트 계정은 공용 달력에서 제외
                 out.push({name:r.employeeName||r.employeeId||'직원', type:r.type||'연차', status:r.status||'pending'});
             });
             return out.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
@@ -11897,6 +11931,9 @@
                     ?`<span style="background:#fee2e2;color:#b91c1c;font-size:.7rem;padding:1px 7px;border-radius:8px">퇴사</span>${resignInfo}`
                     :'<span style="background:#dcfce7;color:#166534;font-size:.7rem;padding:1px 7px;border-radius:8px">재직</span>';
                 const loginInfo=e.email?_esc(e.email):'<span style="color:#9ca3af">로그인 미설정</span>';
+                // 테스트 계정은 관리 화면에서만 보이므로 여기서 눈에 띄게 표시한다
+                const testBadge=e.isTestAccount
+                    ?' <span style="background:#fef3c7;color:#92400e;font-size:.7rem;padding:1px 7px;border-radius:8px">🧪 테스트</span>':'';
                 const jid=String(e.id).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
                 const hasLogin=!!e.email;   // 이메일 또는 ID(@lumi.local) 계정이 있으면 비번 초기화 가능
                 const pwBtn=hasLogin
@@ -11904,7 +11941,7 @@
                     :'';
                 return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:.7rem .8rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
                     <div style="flex:1;min-width:0">
-                        <div style="font-weight:600;font-size:.92rem">${_esc(e.name||e.id)} <span style="font-weight:400;color:#6b7280;font-size:.78rem">${_esc(roleL)}</span> ${statusBadge}</div>
+                        <div style="font-weight:600;font-size:.92rem">${_esc(e.name||e.id)} <span style="font-weight:400;color:#6b7280;font-size:.78rem">${_esc(roleL)}</span> ${statusBadge}${testBadge}</div>
                         <div style="font-size:.75rem;color:#6b7280;margin-top:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${loginInfo}</div>
                     </div>
                     ${pwBtn}
@@ -11942,6 +11979,7 @@
             g('seEmpAnnualLeave').value=''; g('seEmpUsedLeave').value='0';
             g('seAutoAnnualLeave').textContent='0';
             document.querySelectorAll('.seEmpTab').forEach(cb=>cb.checked=SE_DEFAULT_TABS.includes(cb.getAttribute('data-tab')));
+            g('seEmpIsTest').checked=false;
             _seToggleResignRow();
             _seInitSalaryHistory(null);   // 신규: 빈 이력
             if(id){
@@ -11977,6 +12015,7 @@
                         document.querySelectorAll('.seEmpTab').forEach(cb=>cb.checked=false);
                         emp.visibleTabs.forEach(t=>{const cb=document.querySelector(`.seEmpTab[data-tab="${t}"]`); if(cb)cb.checked=true;});
                     }
+                    g('seEmpIsTest').checked=!!emp.isTestAccount;
                     _seToggleResignRow();
                 }
             }
@@ -12080,7 +12119,9 @@
                 locationExempt:g('seEmpLocationExempt').checked, incType:g('seEmpIncType').value||'none',
                 incPercent:parseFloat(g('seEmpIncPercent').value)||0, incRounding:parseInt(g('seEmpIncRounding').value)||0,
                 incJapan:g('seEmpIncJapan').checked, personalSalesSource:g('seEmpPersonalSalesSource').value||'manual',
-                isIncentiveTarget, visibleTabs:visibleTabsValue, salaryHistory
+                isIncentiveTarget, visibleTabs:visibleTabsValue, salaryHistory,
+                // 테스트 계정은 다른 직원에게 보이는 공용 목록에서 제외된다
+                isTestAccount:!!g('seEmpIsTest').checked
             };
             if(staffId){ data.staffId=staffId; }
             if(email){ data.email=email; }
