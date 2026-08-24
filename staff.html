@@ -3146,7 +3146,7 @@
                 </div>
                 <div style="border-top:1px dashed #ddd6fe;padding-top:.4rem;margin-bottom:.35rem">
                     <div style="font-size:.76rem;color:#5b21b6;font-weight:600;margin-bottom:.25rem">메모 (믹스방법·주사기 선택·보관방법 등)</div>
-                    <textarea class="mix-note-ta" oninput="_mixAutoGrow(this)" onchange="mixSetNote('${m.id}',this.value)" placeholder="예)&#10;① BASE + 증류수를 먼저 섞습니다.&#10;② 에피네프린은 맨 마지막에 1mL 주사기로 0.1mL 정확히.&#10;③ 0.3mL씩 인슐린 주사기에 나눠 담고 캡을 씌웁니다.&#10;④ 지퍼백에 날짜 쓰고 냉장 차광 보관. 오래된 것부터 사용." style="width:100%;box-sizing:border-box;min-height:64px;resize:none;overflow:hidden;font-size:.8rem;line-height:1.55;padding:.5rem .6rem;border:1px solid #c4b5fd;border-radius:6px;background:#fff;white-space:pre-wrap;font-family:inherit">${_esc(m.note||'')}</textarea>
+                    <textarea class="mix-note-ta" oninput="_mixAutoGrow(this)" onchange="mixSetNote('${m.id}',this.value)" placeholder="" style="width:100%;box-sizing:border-box;min-height:64px;resize:none;overflow:hidden;font-size:.8rem;line-height:1.55;padding:.5rem .6rem;border:1px solid #c4b5fd;border-radius:6px;background:#fff;white-space:pre-wrap;font-family:inherit">${_esc(m.note||'')}</textarea>
                 </div>
                 <div style="display:flex;gap:.4rem;align-items:center;justify-content:space-between;border-top:1px dashed #ddd6fe;padding-top:.4rem">
                     <span style="font-size:.82rem;font-weight:700;color:#5b21b6">믹스 원가 ₩${_mixCost(m).toLocaleString()}</span>
