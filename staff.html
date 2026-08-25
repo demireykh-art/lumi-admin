@@ -5479,8 +5479,11 @@
         async function loadMealStaffList(){
             try{
                 const s=await db.collection('employees').where('status','==','active').get();
+                // 테스트 계정은 남의 목록에서만 숨긴다. 본인이 로그인했을 때는
+                // 본인을 골라 정산해 봐야 계정 점검이 되므로 자기 자신은 남긴다.
                 mealAllStaff=s.docs.map(d=>({id:d.id,...d.data()}))
-                    .filter(e=>e.id!==SHARED_ACCOUNT_ID&&e.status==='active'&&!e.isTestAccount);
+                    .filter(e=>e.id!==SHARED_ACCOUNT_ID&&e.status==='active'
+                        &&(!e.isTestAccount||e.id===currentUser?.id));
             }catch(e){mealAllStaff=[];}
             renderMealStaffList();
         }
