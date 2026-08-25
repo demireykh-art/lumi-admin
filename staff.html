@@ -2347,7 +2347,14 @@
                 </div>
                 <div class="form-group" style="border-top:1px dashed var(--border);padding-top:.75rem">
                     <label class="form-label" style="font-weight:600">🍚 식대</label>
-                    <div style="font-size:.72rem;color:var(--text-muted);margin:.15rem 0 .5rem">적용 방식(월 한도제 / 출근일 일할 적립제)은 STAFF 관리 &gt; OT·식사 탭에서 전환합니다. 아래는 이 직원의 개별 금액이며, 비워두면 정책 기본값을 씁니다.</div>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin:.15rem 0 .5rem">비워두거나 &quot;기본&quot;이면 전체 정책(STAFF 관리 &gt; OT·식사)을 따릅니다. 값을 넣은 항목만 이 직원에게 따로 적용됩니다.</div>
+                    <label class="form-label" style="font-size:.8rem">적용 방식</label>
+                    <select class="form-input" id="seEmpMealMode" style="margin-bottom:.15rem" onchange="_seRenderMealModeHint()">
+                        <option value="">기본 — 전체 정책 따름</option>
+                        <option value="monthly">월 한도제 (개별 고정)</option>
+                        <option value="daily">출근일 일할 적립제 (개별 고정)</option>
+                    </select>
+                    <div id="seEmpMealModeHint" style="font-size:.72rem;color:var(--text-muted);margin-bottom:.6rem"></div>
                     <label class="form-label" style="font-size:.8rem">월 한도 (원) <span style="font-size:.72rem;color:var(--text-muted)">— 월 한도제일 때</span></label>
                     <input type="number" class="form-input" id="seEmpMealLimit" placeholder="기본 300,000원" style="margin-bottom:.5rem">
                     <label class="form-label" style="font-size:.8rem">1일 지급액 (원) <span style="font-size:.72rem;color:var(--text-muted)">— 일할 적립제일 때 (출근한 날만)</span></label>
@@ -4321,14 +4328,24 @@
 
         // 해당 월에 적용되는 정책 — history 에서 from <= ym 중 가장 늦은 항목.
         // 전환 이력보다 앞선 달은 항상 기존 방식(월 한도제)으로 남는다.
-        function getMealPolicyForMonth(ym){
+        // 식대 방식 결정 — "전역이 기본, 개인 설정이 있으면 개인이 이긴다".
+        // 금액(mealLimit·mealDaily)이 이미 쓰던 규칙과 같은 방식이라 헷갈릴 일이 없다.
+        // empOrId 를 넘기면 그 직원의 개인 설정(mealMode)을 먼저 본다.
+        function getMealPolicyForMonth(ym, empOrId){
             const all=(mealPolicy.history||[]).filter(h=>h&&h.mode&&h.from);
             const hist=all.filter(h=>String(h.from)<=String(ym))
                 .sort((a,b)=>String(a.from).localeCompare(String(b.from)));
-            const mode=hist.length ? hist[hist.length-1].mode
+            let mode=hist.length ? hist[hist.length-1].mode
                      : (all.length ? 'monthly' : (mealPolicy.mode||'monthly'));
+            let overridden=false;
+            if(empOrId!=null&&empOrId!==''){
+                const emp=(typeof empOrId==='object')?empOrId:getMealEmp(empOrId);
+                const own=String(emp?.mealMode||'');
+                if(own==='monthly'||own==='daily'){ mode=own; overridden=true; }
+            }
             return {
                 mode: mode==='daily'?'daily':'monthly',
+                overridden,                     // 개인 예외로 정해진 값인지
                 monthlyLimit: Number(mealPolicy.monthlyLimit)>0?Number(mealPolicy.monthlyLimit):MEAL_MONTHLY_DEFAULT,
                 dailyAmount: Number(mealPolicy.dailyAmount)>0?Number(mealPolicy.dailyAmount):MEAL_DAILY_DEFAULT
             };
@@ -4399,7 +4416,7 @@
         function isMealDateAllowed(empId, date){
             const d=String(date||'');
             if(!d) return false;
-            if(getMealPolicyForMonth(d.substring(0,7)).mode!=='daily') return true;
+            if(getMealPolicyForMonth(d.substring(0,7), empId).mode!=='daily') return true;
             return hasMealWorkDay(empId, d);
         }
 
@@ -4417,7 +4434,7 @@
         //   monthly: 월 한도 − 그 달 사용액 (throughDate 무시 — 한도가 날짜에 따라 늘지 않음)
         //   daily  : throughDate 까지의 출근일 적립 − 그때까지 사용액 (이월분 포함)
         function getMealBalance(empId, ym, throughDate){
-            const pol=getMealPolicyForMonth(ym);
+            const pol=getMealPolicyForMonth(ym, empId);
             if(pol.mode!=='daily'){
                 const limit=getMealMonthlyLimit(empId, pol);
                 const used=getMealUsed(empId, ym, null);
@@ -4433,7 +4450,7 @@
         function renderMeal(){
             const ym=getYM();
             const today=getToday();
-            const daily=getMealPolicyForMonth(ym).mode==='daily';
+            const daily=getMealPolicyForMonth(ym, currentUser.id).mode==='daily';
             const bal=getMealBalance(currentUser.id, ym);
             const used=bal.used;
             const remain=Math.max(0,bal.remain);
@@ -11975,6 +11992,7 @@
             g('seEmpSalary').value=''; g('seEmpHourly').value='12000';
             g('seEmpBirthday').value=''; g('seEmpStatus').value='active';
             g('seEmpResignDate').value=''; g('seEmpMealLimit').value=''; g('seEmpMealDaily').value='';
+            g('seEmpMealMode').value='';
             g('seEmpLocationExempt').checked=false;
             g('seEmpIncType').value='none'; g('seEmpIncPercent').value='0';
             g('seEmpIncRounding').value='0'; g('seEmpIncJapan').checked=false;
@@ -12005,6 +12023,7 @@
                     g('seEmpResignDate').value=emp.resignDate||'';
                     g('seEmpMealLimit').value=emp.mealLimit||'';
                     g('seEmpMealDaily').value=emp.mealDaily||'';
+                    g('seEmpMealMode').value=(emp.mealMode==='monthly'||emp.mealMode==='daily')?emp.mealMode:'';
                     g('seEmpLocationExempt').checked=!!emp.locationExempt;
                     g('seEmpIncType').value=emp.incType||'none';
                     g('seEmpIncPercent').value=emp.incPercent||0;
@@ -12022,6 +12041,7 @@
                     _seToggleResignRow();
                 }
             }
+            _seRenderMealModeHint();
             openModal('seEmployeeModal');
         }
         // Firebase Auth 계정 생성 (secondary app — 현재 로그인 세션 유지)
@@ -12119,6 +12139,8 @@
                 annualLeave, usedLeave,
                 mealLimit:parseInt(g('seEmpMealLimit').value)||0,   // 0 = 정책 기본값 사용
                 mealDaily:parseInt(g('seEmpMealDaily').value)||0,
+                // '' = 전체 정책 따름, 'monthly'/'daily' = 이 직원만 고정
+                mealMode:(g('seEmpMealMode').value==='monthly'||g('seEmpMealMode').value==='daily')?g('seEmpMealMode').value:'',
                 locationExempt:g('seEmpLocationExempt').checked, incType:g('seEmpIncType').value||'none',
                 incPercent:parseFloat(g('seEmpIncPercent').value)||0, incRounding:parseInt(g('seEmpIncRounding').value)||0,
                 incJapan:g('seEmpIncJapan').checked, personalSalesSource:g('seEmpPersonalSalesSource').value||'manual',
@@ -12663,6 +12685,26 @@
         // ⏰ OT · 식사
         // ─────────────────────────────
         // ── 🍚 식대 정책 전환 카드 (STAFF 관리 > OT·식사) ──
+        // 지금 고른 설정이 "실제로 어떻게 적용되는지"를 그 자리에서 보여준다.
+        // 전역과 개인 설정이 겹칠 때 뭐가 이기는지 헷갈리지 않게 하려는 것.
+        function _seRenderMealModeHint(){
+            const el=document.getElementById('seEmpMealModeHint');
+            const sel=document.getElementById('seEmpMealMode');
+            if(!el||!sel) return;
+            const ym=getYM(), next=_seNextYm();
+            const own=String(sel.value||'');
+            const lab=m=>getMealModeLabel(m);
+            if(!own){
+                const now=getMealPolicyForMonth(ym).mode, then=getMealPolicyForMonth(next).mode;
+                el.innerHTML='전체 정책을 따릅니다 — 이번 달('+ym+') <b>'+lab(now)+'</b>'
+                    +(then!==now?(', 다음 달('+next+')부터 <b>'+lab(then)+'</b>'):'')+'.';
+                el.style.color='var(--text-muted)';
+            }else{
+                el.innerHTML='이 직원은 전체 정책과 무관하게 <b>'+lab(own)+'</b>로 고정됩니다.';
+                el.style.color='#5b21b6';
+            }
+        }
+
         function _seNextYm(){
             const d=new Date();
             const y=d.getFullYear(), m=d.getMonth()+1;   // 1~12
@@ -12700,8 +12742,26 @@
             h+='</div>';
             h+='<div style="font-size:.7rem;color:#9ca3af;line-height:1.6">';
             h+='※ 적용 시작 월부터 그 방식이 적용되고, <strong>그 이전 달의 집계는 그때 방식 그대로 유지</strong>됩니다.<br>';
-            h+='※ 직원별로 월 한도·1일 지급액을 따로 지정하면 위 기본값 대신 그 값이 쓰입니다.';
+            h+='※ 직원별로 방식·월 한도·1일 지급액을 따로 지정하면 위 기본값 대신 그 값이 쓰입니다.';
             h+='</div>';
+
+            // 전역과 다르게 굴러가는 직원을 여기 모아 보여준다.
+            // 안 그러면 "왜 이 사람만 다르지?" 를 찾으러 직원 카드를 하나씩 열어야 한다.
+            const exceptions=(_staffAdminEmployees||[])
+                .filter(e=>(!e.status||e.status==='active')
+                    &&(e.mealMode==='monthly'||e.mealMode==='daily'));
+            if(exceptions.length){
+                h+='<div style="margin-top:.6rem;padding:.5rem .6rem;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;font-size:.74rem;color:#5b21b6">';
+                h+='<b>개별 적용 중 (전체 정책과 무관)</b><br>';
+                h+=exceptions.map(e=>{
+                    const amt=e.mealMode==='monthly'
+                        ? formatCurrency(Number(e.mealLimit)>0?Number(e.mealLimit):cur.monthlyLimit)+'/월'
+                        : formatCurrency(Number(e.mealDaily)>0?Number(e.mealDaily):cur.dailyAmount)+'/일';
+                    return '· '+_esc(e.name||e.id)+' — '+getMealModeLabel(e.mealMode)+' '+amt;
+                }).join('<br>');
+                h+='</div>';
+            }
+
             if(hist.length){
                 h+='<div style="margin-top:.6rem;font-size:.72rem;color:#6b7280">전환 이력: '
                     +hist.map(x=>`${_esc(x.from)}~ ${getMealModeLabel(x.mode)}`).join(' → ')+'</div>';
@@ -12801,17 +12861,22 @@
                 +'<span style="font-weight:400;font-size:.72rem;color:#9ca3af">('+(polDaily?'출근일수 × 1일 지급액':'월 한도')+' 기준)</span></div>';
             html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.35rem">';
             active.forEach(e=>{
+                // 직원마다 방식이 다를 수 있다(개인 예외). 전역이 아니라 본인 기준으로 계산.
+                const ePol=getMealPolicyForMonth(monthPrefix, e);
+                const eDaily=ePol.mode==='daily';
                 const sum=monthMeals.filter(m=>m.employeeId===e.id).reduce((s,m)=>s+(Number(m.amount||0)),0);
-                const rate=Number(e.mealDaily)>0?Number(e.mealDaily):pol.dailyAmount;
+                const rate=Number(e.mealDaily)>0?Number(e.mealDaily):ePol.dailyAmount;
                 const workDays=new Set((_staffAdminAttendance||[])
                     .filter(a=>a.employeeId===e.id&&String(a.date||'').startsWith(monthPrefix)&&a.checkIn)
                     .map(a=>a.date)).size;
-                const limit=polDaily?rate*workDays:(Number(e.mealLimit)>0?Number(e.mealLimit):pol.monthlyLimit);
+                const limit=eDaily?rate*workDays:(Number(e.mealLimit)>0?Number(e.mealLimit):ePol.monthlyLimit);
                 const over=sum>limit;
+                const mark=ePol.overridden
+                    ?' <span style="font-size:.62rem;background:#ede9fe;color:#5b21b6;padding:0 4px;border-radius:4px">개별</span>':'';
                 html+=`<div style="padding:.5rem;background:${over?'#fef2f2':(sum>0?'#ecfdf5':'#f9fafb')};color:${over?'#b91c1c':(sum>0?'#047857':'#6b7280')};border-radius:6px;font-size:.78rem">
-                    <div style="font-weight:700">${_esc(e.name||e.id)}</div>
+                    <div style="font-weight:700">${_esc(e.name||e.id)}${mark}</div>
                     <div>${formatCurrency(sum)} <span style="font-size:.68rem;color:#9ca3af">/ ${formatCurrency(limit)}</span></div>
-                    <div style="font-size:.66rem;color:#9ca3af">${polDaily?('출근 '+workDays+'일 × '+formatCurrency(rate)):'월 한도'}</div>
+                    <div style="font-size:.66rem;color:#9ca3af">${eDaily?('출근 '+workDays+'일 × '+formatCurrency(rate)):'월 한도'}</div>
                 </div>`;
             });
             html+='</div>';
