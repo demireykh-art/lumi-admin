@@ -108,7 +108,8 @@
         .tab-content.active{display:block}
         
         .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg-card);border-top:1px solid var(--border);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:100}
-        .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:.5rem .15rem;cursor:pointer;color:var(--text-muted);font-size:.6rem;transition:color .2s}
+        /* 탭이 10개까지 늘어난다. 라벨이 두 줄로 깨지지 않도록 한 줄 고정 + 넘치면 … */
+        .nav-item{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;padding:.5rem .1rem;cursor:pointer;color:var(--text-muted);font-size:.58rem;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .2s}
         .nav-item.active{color:var(--primary)}
         .nav-item .nav-icon{font-size:1.2rem;margin-bottom:.2rem}
         
@@ -276,6 +277,56 @@
         .inv-submit-btn{width:100%;padding:.9rem;font-size:1rem;font-weight:600;border:none;cursor:pointer;letter-spacing:1px;border-radius:6px}
         .inv-submit-btn.ready{background:var(--primary);color:#fff}
         .inv-submit-btn.disabled{background:var(--border);color:var(--text-muted);pointer-events:none}
+        /* ══ 첫 화면(홈) 레이아웃 ═══════════════════════════════════════
+           .content 는 좌우 1rem 패딩을 갖는다. 홈은 화면 폭을 가득 써야 하므로
+           같은 크기의 음수 마진으로 그 패딩을 상쇄하고, 여백은 섹션 카드가
+           직접(.home-sec 의 margin) 갖는다. 카드 밖 바탕은 살짝 더 짙게 깔아
+           흰 카드가 떠 보이게 한다. */
+        #tab-tophome{background:#f1efec;min-height:calc(100% + 1rem);
+            margin:-1rem -1rem calc(-1 * (70px + env(safe-area-inset-bottom)));
+            padding:.6rem 0 calc(70px + env(safe-area-inset-bottom) + .75rem)}
+        body.nav-hidden #tab-tophome{margin-bottom:calc(-1rem - env(safe-area-inset-bottom));
+            padding-bottom:calc(1rem + env(safe-area-inset-bottom) + .75rem)}
+        .home-sec{background:var(--bg-card);border-radius:14px;margin:0 .7rem .7rem;overflow:hidden;
+            box-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 12px rgba(0,0,0,.03)}
+        .home-sec:last-child{margin-bottom:0}
+        .home-sec-title{font-size:1.05rem;font-weight:700;letter-spacing:-.3px;padding:1rem 1.1rem .3rem}
+        .home-sec-list{padding:.2rem 0 .5rem}
+
+        /* 한 줄 = 아이콘 · (제목+설명) · 배지 · 화살표. a/button 둘 다 같은 모양. */
+        .home-row{display:flex;align-items:center;gap:.85rem;width:100%;padding:.8rem 1.1rem;
+            background:none;border:none;cursor:pointer;text-align:left;text-decoration:none;
+            color:var(--text);font-family:inherit;-webkit-tap-highlight-color:transparent}
+        .home-row:active{background:#f6f4f1}
+        .home-row-icon{flex:0 0 1.9rem;width:1.9rem;text-align:center;font-size:1.45rem;line-height:1.2}
+        .home-row-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem}
+        .home-row-title{font-weight:600;font-size:1rem;letter-spacing:-.3px}
+        .home-row-tag{font-size:.66rem;color:var(--purple);font-weight:600;margin-left:.25rem}
+        .home-row-desc{font-size:.72rem;color:var(--text-muted);line-height:1.35;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .home-row-arrow{flex:0 0 auto;color:#c3bdb5;font-size:1.15rem;line-height:1}
+        .home-badge{flex:0 0 auto;background:var(--red);color:#fff;font-size:.7rem;font-weight:700;
+            padding:2px 8px;border-radius:12px;min-width:22px;text-align:center}
+        .home-badge-amber{background:var(--orange)}
+
+        /* 공지 섹션: 제목줄 대신 눌리는 헤더가 카드 맨 위를 채운다 */
+        .home-sec-notice .home-notice-head{display:flex;align-items:center;gap:.85rem;width:100%;
+            padding:.9rem 1.1rem;background:#fdf6e7;border:none;border-bottom:1px solid #f1e4c6;
+            cursor:pointer;text-align:left;font-family:inherit}
+        .home-notice-title{flex:1;min-width:0;font-weight:700;font-size:1.05rem;color:#78350f;letter-spacing:-.3px}
+        .home-notice-date{font-weight:500;font-size:.8rem;color:#92400e;margin-left:.25rem}
+        .home-notice-status{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;padding:.5rem .8rem}
+        .home-notice-status:empty{display:none}
+        .home-notice-body{max-height:320px;overflow-y:auto;padding:.5rem .8rem .7rem;border-top:1px solid #f3f4f6}
+
+        @media(min-width:768px){
+            .home-sec{margin:0 1rem 1rem;border-radius:16px}
+            .home-sec-title{font-size:1.15rem;padding:1.1rem 1.3rem .35rem}
+            .home-row{padding:.95rem 1.3rem;gap:1rem}
+            .home-row-title{font-size:1.05rem}
+            .home-row-desc{font-size:.78rem}
+            .home-row-icon{flex-basis:2.1rem;width:2.1rem;font-size:1.6rem}
+        }
         /* 태블릿/아이패드 반응형 */
         @media(min-width:768px){
             .inv-item-row{padding:.8rem 1rem}
@@ -287,7 +338,7 @@
             .inv-cat-filters{gap:.5rem}
             .card{padding:1.2rem}
             .bottom-nav{padding:.5rem 1rem;gap:.5rem}
-            .nav-item{font-size:.75rem;padding:.5rem .5rem}
+            .nav-item{font-size:.75rem;padding:.5rem .5rem;letter-spacing:normal}
             .inv-loc-input-row{padding:.4rem .6rem}
             .inv-loc-label{font-size:.82rem}
             .inv-stock-input{width:82px}
@@ -526,125 +577,134 @@
             </div>
 
             <!-- === 최상위 홈 (로고 클릭 시 진입) === -->
+            <!-- ══ 첫 화면(홈) ══
+                 가로 폭을 화면에 꽉 채우는 섹션형 메뉴. .content 의 좌우 패딩은
+                 #tab-tophome 의 음수 마진으로 상쇄하고, 섹션 카드가 직접 여백을 갖는다. -->
             <div class="tab-content" id="tab-tophome">
-                <div class="card" style="margin-bottom:0">
-                    <div style="display:grid;grid-template-columns:1fr;gap:.9rem;margin-top:.5rem">
-                        <!-- 공지 블록(최상단): 헤더 클릭 → 공지 뷰, 아래는 오늘 진료일정·연차 + 오늘 공지 인라인 -->
-                        <div style="border:1px solid #e5e7eb;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <button type="button" onclick="showTop('notice')" id="topHomeNoticeHeader"
-                                style="width:100%;display:flex;align-items:center;gap:.9rem;padding:.9rem 1.1rem;background:#fef3c7;border:none;border-bottom:1px solid #fde68a;cursor:pointer;text-align:left">
-                                <span style="font-size:1.6rem">📢</span>
-                                <div style="flex:1">
-                                    <div style="font-weight:700;font-size:1rem;color:#78350f">공지 <span id="topHomeNoticeToday" style="font-weight:500;font-size:.8rem;color:#92400e;margin-left:.25rem"></span></div>
-                                </div>
-                                <span style="color:#9ca3af">→</span>
-                            </button>
-                            <div id="topHomeTodayStatus" style="padding:.5rem .75rem;border-bottom:1px solid #f3f4f6;display:flex;flex-wrap:wrap;gap:.3rem;align-items:center"></div>
-                            <div id="topHomeNoticeInline" style="max-height:320px;overflow-y:auto;padding:.6rem .75rem"></div>
-                        </div>
-                        <a href="https://www.lumiclinic.co.kr" target="_blank" rel="noopener"
-                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">🌐</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem">홈페이지</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">lumiclinic.co.kr — 새 창으로 열림</div>
-                            </div>
-                            <span style="color:#9ca3af">↗</span>
-                        </a>
-                        <a href="https://www.lumiclinic.co.kr/admin.html" target="_blank" rel="noopener" id="topHomeSiteAdminBtn"
-                            style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;text-decoration:none;color:#1f2937;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">🛠️</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem">홈페이지 관리자</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">시술메뉴·이벤트·B&amp;A·의료진 등 홈페이지 콘텐츠 관리 — 새 창</div>
-                            </div>
-                            <span style="color:#9ca3af">↗</span>
-                        </a>
-                        <button type="button" onclick="openInventoryFromTop()"
-                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">📦</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">재고 관리</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">파트별 재고 실사 · 발주 · 비품 구입</div>
-                            </div>
-                            <span style="color:#9ca3af">→</span>
+                <!-- 공지: 헤더 클릭 → 공지 뷰 · 아래는 오늘 진료일정·연차 + 오늘 공지 인라인 -->
+                <section class="home-sec home-sec-notice">
+                    <button type="button" class="home-notice-head" id="topHomeNoticeHeader" onclick="showTop('notice')">
+                        <span class="home-row-icon">📢</span>
+                        <span class="home-notice-title">공지 <span id="topHomeNoticeToday" class="home-notice-date"></span></span>
+                        <span class="home-row-arrow">→</span>
+                    </button>
+                    <div id="topHomeTodayStatus" class="home-notice-status"></div>
+                    <div id="topHomeNoticeInline" class="home-notice-body"></div>
+                </section>
+
+                <section class="home-sec">
+                    <div class="home-sec-title">업무</div>
+                    <div class="home-sec-list">
+                        <button type="button" class="home-row" onclick="openInventoryFromTop()">
+                            <span class="home-row-icon">📦</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">재고 관리</span>
+                                <span class="home-row-desc">파트별 재고 실사 · 발주 · 비품 구입</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
                         </button>
-                        <button type="button" onclick="showTop('feeschedule')"
-                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">💊</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">시술 수가표</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">카테고리별 정가·옵션 목록</div>
-                            </div>
-                            <span style="color:#9ca3af">→</span>
+                        <button type="button" class="home-row" onclick="showTop('feeschedule')">
+                            <span class="home-row-icon">💊</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">시술 수가표</span>
+                                <span class="home-row-desc">카테고리별 정가·옵션 목록</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
                         </button>
-                        <button type="button" onclick="showTop('rating')"
-                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">⭐</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">제품 평점</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">상품·오더별 수분·피부결·모공 별점 평가</div>
-                            </div>
-                            <span style="color:#9ca3af">→</span>
+                        <button type="button" class="home-row" onclick="showTop('proctime')">
+                            <span class="home-row-icon">⏱️</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">시술시간</span>
+                                <span class="home-row-desc">고객별 체류·시술·마취 시간 기록 → 분당 수익 분석</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
                         </button>
-                        <button type="button" onclick="showTop('proctime')"
-                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">⏱️</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">시술시간</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">고객별 체류·시술·마취 시간 기록 → 분당 수익 분석</div>
-                            </div>
-                            <span style="color:#9ca3af">→</span>
+                        <button type="button" class="home-row" onclick="showTop('consult')">
+                            <span class="home-row-icon">🩺</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">상담</span>
+                                <span class="home-row-desc">피부퀄리티 · 쳐짐 · 꺼짐 → 세부문제 → 시술 → 오더</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
                         </button>
-                        <button type="button" onclick="showTop('consult')"
-                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">🩺</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">상담</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">피부퀄리티 · 쳐짐 · 꺼짐 → 세부문제 → 시술 → 오더</div>
-                            </div>
-                            <span style="color:#9ca3af">→</span>
-                        </button>
-                        <button type="button" onclick="showTop('handover')"
-                            style="display:flex;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">📚</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">직원 교육 · 인계</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">부서별(원장·데스크·피부·간호·공통) 교육자료 · 인수인계 메모</div>
-                            </div>
-                            <span style="color:#9ca3af">→</span>
-                        </button>
-                        <button type="button" onclick="showTop('charting')" id="topHomeChartingBtn"
-                            style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-                            <span style="font-size:2.25rem">📋</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">상담 차팅</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">환자별 진단·플랜·오더·경과 기록 (Vegas 보조)</div>
-                            </div>
-                            <span style="color:#9ca3af">→</span>
-                        </button>
-                        <button type="button" onclick="showTop('chat')" id="topHomeChatBtn"
-                            style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06);position:relative">
-                            <span style="font-size:2.25rem">💬</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">고객 채팅</div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">카카오·네이버 문의 통합 상담</div>
-                            </div>
-                            <span id="chatUnreadBadge" style="display:none;background:#dc2626;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:12px;min-width:22px;text-align:center">0</span>
-                            <span style="color:#9ca3af;margin-left:.35rem">→</span>
-                        </button>
-                        <button type="button" onclick="showTop('staffAdmin')" id="topHomeStaffAdminBtn"
-                            style="display:none;align-items:center;gap:.9rem;padding:1.35rem;border:1px solid #e5e7eb;background:#fff;border-radius:14px;cursor:pointer;text-align:left;box-shadow:0 1px 3px rgba(0,0,0,.06);position:relative">
-                            <span style="font-size:2.25rem">👥</span>
-                            <div style="flex:1">
-                                <div style="font-weight:700;font-size:1rem;color:#1f2937">STAFF <span style="font-size:.68rem;color:#7c3aed;font-weight:600;margin-left:.25rem">원장 전용</span></div>
-                                <div style="font-size:.72rem;color:#6b7280;margin-top:.15rem">직원 근태·연차 승인·오프 캘린더·급여</div>
-                            </div>
-                            <span id="staffAdminPendingBadge" style="display:none;background:#f59e0b;color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:12px;min-width:22px;text-align:center">0</span>
-                            <span style="color:#9ca3af;margin-left:.35rem">→</span>
+                        <button type="button" class="home-row" id="topHomeChartingBtn" style="display:none" onclick="showTop('charting')">
+                            <span class="home-row-icon">📋</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">상담 차팅</span>
+                                <span class="home-row-desc">환자별 진단·플랜·오더·경과 기록 (Vegas 보조)</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
                         </button>
                     </div>
-                </div>
+                </section>
+
+                <section class="home-sec">
+                    <div class="home-sec-title">자료 · 소통</div>
+                    <div class="home-sec-list">
+                        <button type="button" class="home-row" onclick="showTop('handover')">
+                            <span class="home-row-icon">📚</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">직원 교육 · 인계</span>
+                                <span class="home-row-desc">부서별(원장·데스크·피부·간호·공통) 교육자료 · 인수인계 메모</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
+                        </button>
+                        <button type="button" class="home-row" onclick="showTop('rating')">
+                            <span class="home-row-icon">⭐</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">제품 평점</span>
+                                <span class="home-row-desc">상품·오더별 수분·피부결·모공 별점 평가</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
+                        </button>
+                        <button type="button" class="home-row" id="topHomeChatBtn" style="display:none" onclick="showTop('chat')">
+                            <span class="home-row-icon">💬</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">고객 채팅</span>
+                                <span class="home-row-desc">카카오·네이버 문의 통합 상담</span>
+                            </span>
+                            <span id="chatUnreadBadge" class="home-badge" style="display:none">0</span>
+                            <span class="home-row-arrow">›</span>
+                        </button>
+                    </div>
+                </section>
+
+                <section class="home-sec">
+                    <div class="home-sec-title">바로가기</div>
+                    <div class="home-sec-list">
+                        <a class="home-row" href="https://www.lumiclinic.co.kr" target="_blank" rel="noopener">
+                            <span class="home-row-icon">🌐</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">홈페이지</span>
+                                <span class="home-row-desc">lumiclinic.co.kr — 새 창으로 열림</span>
+                            </span>
+                            <span class="home-row-arrow">↗</span>
+                        </a>
+                        <a class="home-row" id="topHomeSiteAdminBtn" style="display:none" href="https://www.lumiclinic.co.kr/admin.html" target="_blank" rel="noopener">
+                            <span class="home-row-icon">🛠️</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">홈페이지 관리자</span>
+                                <span class="home-row-desc">시술메뉴·이벤트·B&amp;A·의료진 등 홈페이지 콘텐츠 관리 — 새 창</span>
+                            </span>
+                            <span class="home-row-arrow">↗</span>
+                        </a>
+                    </div>
+                </section>
+
+                <section class="home-sec">
+                    <div class="home-sec-title">관리</div>
+                    <div class="home-sec-list">
+                        <button type="button" class="home-row" id="topHomeStaffAdminBtn" style="display:none" onclick="showTop('staffAdmin')">
+                            <span class="home-row-icon">👥</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">STAFF <span class="home-row-tag">원장 전용</span></span>
+                                <span class="home-row-desc">직원 근태·연차 승인·오프 캘린더·급여</span>
+                            </span>
+                            <span id="staffAdminPendingBadge" class="home-badge home-badge-amber" style="display:none">0</span>
+                            <span class="home-row-arrow">›</span>
+                        </button>
+                    </div>
+                </section>
             </div>
 
             <!-- === 시술 수가표 (localStorage 편집, seed 기반) === -->
@@ -2670,6 +2730,7 @@
             // 홈페이지 관리자 타일: 관리자 계정(bizAdmin/adminHigh)에게만 노출
             const siteAdminBtn=document.getElementById('topHomeSiteAdminBtn');
             if(siteAdminBtn) siteAdminBtn.style.display=(isBizAdmin||isAdminHigh)?'flex':'none';
+            if(typeof _homeSyncSections==='function') _homeSyncSections();
         }
 
         function openAdminSettings(){
@@ -3661,6 +3722,7 @@
             // 고객채팅: 개인계정에만 노출 + 실시간 스레드 구독
             const chatBtn=document.getElementById('topHomeChatBtn');
             if(chatBtn) chatBtn.style.display=(currentUser?.role==='shared')?'none':'flex';
+            if(typeof _homeSyncSections==='function') _homeSyncSections();
             _initChatRealtime();
             // STAFF 관리: adminHigh 이면 대기 배지 실시간 구독
             if(isAdminHigh) _initStaffAdminBadge();
@@ -6954,6 +7016,16 @@
             // 오늘 진료일정·연차 + 오늘 공지 인라인 갱신
             if(typeof _renderHomeNoticeInline==='function') _renderHomeNoticeInline();
             if(typeof _renderHomeTodayStatus==='function') _renderHomeTodayStatus();
+            _homeSyncSections();
+        }
+        // 권한에 따라 행이 전부 숨겨진 섹션은 빈 카드만 남으므로 카드째 숨긴다.
+        function _homeSyncSections(){
+            document.querySelectorAll('#tab-tophome .home-sec-list').forEach(list=>{
+                const sec=list.closest('.home-sec'); if(!sec) return;
+                const shown=[...list.querySelectorAll('.home-row')]
+                    .some(r=>getComputedStyle(r).display!=='none');
+                sec.style.display=shown?'':'none';
+            });
         }
         function openInventoryFromTop(){
             document.querySelectorAll('.tab-content').forEach(t=>{
