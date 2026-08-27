@@ -12120,8 +12120,18 @@
                 const perm=await Notification.requestPermission();
                 if(perm!=='granted'){ alert('알림 권한이 허용되지 않았습니다.'); return; }
                 const reg=await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                // 서비스워커가 '활성화'될 때까지 대기 (no active Service Worker 오류 방지)
+                let activeReg=reg;
+                if(!reg.active){
+                    try{
+                        activeReg=await Promise.race([
+                            navigator.serviceWorker.ready,
+                            new Promise((_,rej)=>setTimeout(()=>rej(new Error('SW 활성화 시간 초과')),12000))
+                        ]);
+                    }catch(_){ activeReg=reg; }
+                }
                 _fcmMessaging=_fcmMessaging||firebase.messaging();
-                const token=await _fcmMessaging.getToken({ vapidKey:_fcmVapidKey, serviceWorkerRegistration:reg });
+                const token=await _fcmMessaging.getToken({ vapidKey:_fcmVapidKey, serviceWorkerRegistration:activeReg||reg });
                 if(!token){ alert('토큰 발급에 실패했습니다.'); return; }
                 await db.collection('fcmTokens').doc(token).set({
                     token, email:currentUser?.email||'', name:currentUser?.name||currentUser?.id||'', adminHigh:true, updatedAt:new Date().toISOString()
