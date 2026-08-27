@@ -109,6 +109,7 @@ service cloud.firestore {
     // ── 퇴근 마감 체크리스트 ──
     match /closingItems/{id}                    { allow read, write: if signedIn(); }
     match /closingStatus/{id}                   { allow read, write: if signedIn(); }
+    match /fcmTokens/{id}                        { allow read, write: if signedIn(); }
 
     // ── 공지·교육/인계·상담 트리·설정·관리자 ──
     match /notices/{id}                         { allow read, write: if signedIn(); }
