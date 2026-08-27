@@ -8,6 +8,8 @@
  *     직원이 임시 비번으로 첫 로그인 시 본인이 직접 새 비번 설정 강제
  */
 const {onCall, onRequest, HttpsError} = require('firebase-functions/v2/https');
+const {onSchedule} = require('firebase-functions/v2/scheduler');
+const {onDocumentWritten} = require('firebase-functions/v2/firestore');
 const {logger} = require('firebase-functions');
 const admin = require('firebase-admin');
 
@@ -1402,5 +1404,96 @@ exports.ocrReceipt = onCall(
         discount: parsed.discount,
       },
     };
+  }
+);
+
+// ═══════════════════════════════════════════════════════════
+// 🌙 퇴근 마감 체크리스트 — 관리자 FCM 푸시 (Phase 2)
+//   - 즉시 알림: 마지막 퇴근자가 위임(closingStatus.adminAlert) 시 바로 푸시
+//   - 야간 백스톱: 매일 22:30 KST 마감 미완료면 관리자에게 푸시
+//   ⚠️ 배포: cd functions && firebase deploy --only functions
+//      (스케줄러=Cloud Scheduler, 트리거=Eventarc 사용 · Blaze 요금제 필요)
+// ═══════════════════════════════════════════════════════════
+function _kstToday() {
+  const kst = new Date(Date.now() + 9 * 3600 * 1000);
+  return kst.toISOString().slice(0, 10); // YYYY-MM-DD (KST)
+}
+
+async function _computeClosingRemaining(dateStr) {
+  const db = admin.firestore();
+  const itemsSnap = await db.collection('closingItems').get();
+  const items = itemsSnap.docs
+    .map((d) => ({id: d.id, ...d.data()}))
+    .filter((it) => it.active !== false && it.label);
+  const statusDoc = await db.collection('closingStatus').doc(dateStr).get();
+  const checks = (statusDoc.exists && statusDoc.data().checks) || {};
+  const remaining = items.filter((it) => !(checks[it.id] && checks[it.id].done));
+  return {items, remaining, statusDoc};
+}
+
+async function _sendClosingPush(dateStr, remaining, delegated) {
+  const db = admin.firestore();
+  const tokSnap = await db.collection('fcmTokens').where('adminHigh', '==', true).get();
+  const tokens = tokSnap.docs.map((d) => d.id);
+  if (!tokens.length) {
+    logger.info('closing push: 등록된 관리자 토큰 없음');
+    return 0;
+  }
+  const body = remaining.map((i) => '· ' + i.label).join('\n') +
+    (delegated ? ('\n\n위임: ' + (delegated.byName || '') + ' ' + (delegated.reason || '')) : '');
+  const message = {
+    tokens,
+    notification: {title: '🌙 마감 미완료 ' + remaining.length + '개', body},
+    data: {type: 'closing', date: dateStr},
+    webpush: {fcmOptions: {link: 'https://staff.lumiclinic.co.kr/staff.html'}},
+  };
+  const resp = await admin.messaging().sendEachForMulticast(message);
+  // 무효 토큰 정리
+  const dels = [];
+  resp.responses.forEach((r, i) => {
+    if (!r.success) {
+      const code = r.error && r.error.code;
+      if (code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-argument') {
+        dels.push(db.collection('fcmTokens').doc(tokens[i]).delete());
+      }
+    }
+  });
+  await Promise.allSettled(dels);
+  await db.collection('closingStatus').doc(dateStr).set(
+    {pushedAt: new Date().toISOString(), pushCount: resp.successCount}, {merge: true});
+  logger.info('closing push 발송', {date: dateStr, success: resp.successCount});
+  return resp.successCount;
+}
+
+// 야간 백스톱 (매일 22:30 KST)
+exports.closingNightlyCheck = onSchedule(
+  {schedule: '30 22 * * *', timeZone: 'Asia/Seoul', region: 'asia-northeast3'},
+  async () => {
+    const dateStr = _kstToday();
+    const {remaining, statusDoc} = await _computeClosingRemaining(dateStr);
+    if (!remaining.length) {
+      logger.info('마감 완료됨', dateStr);
+      return;
+    }
+    if (statusDoc.exists && statusDoc.data().pushedAt) {
+      logger.info('이미 발송됨', dateStr);
+      return;
+    }
+    const delegated = (statusDoc.exists && statusDoc.data().delegated) || null;
+    await _sendClosingPush(dateStr, remaining, delegated);
+  }
+);
+
+// 즉시 알림: 마지막 퇴근자 위임(adminAlert) 시
+exports.onClosingDelegated = onDocumentWritten(
+  {document: 'closingStatus/{date}', region: 'asia-northeast3'},
+  async (event) => {
+    const after = event.data && event.data.after && event.data.after.data();
+    if (!after || !after.adminAlert || after.pushedAt) return; // 미위임/이미발송 → skip (루프 방지)
+    const dateStr = event.params.date;
+    const {remaining} = await _computeClosingRemaining(dateStr);
+    if (!remaining.length) return;
+    await _sendClosingPush(dateStr, remaining, after.delegated || null);
   }
 );

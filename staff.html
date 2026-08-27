@@ -24,6 +24,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -3704,6 +3705,7 @@
             await loadClosingItems();
             subscribeClosingStatus();
             renderClosingChecklist();
+            if(isAdminHigh) _loadFcmConfig();  // 관리자 푸시(Phase 2) VAPID 로드
             startAutoLogoutTimer();
         }
         
@@ -11990,6 +11992,26 @@
                 }).join('');
             }
             h+='<input id="_closingPhotoInput" type="file" accept="image/*" style="display:none">';
+            // 📲 관리자 푸시 알림 (Phase 2)
+            const pushOn=_fcmPushEnabledHere();
+            const hasVapid=!!_fcmVapidKey;
+            h+=`<div style="margin-top:1.2rem;padding:.9rem;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa">
+                <div style="font-weight:700;font-size:.9rem;color:#111827;margin-bottom:.4rem">📲 관리자 푸시 알림</div>
+                <div style="font-size:.75rem;color:#6b7280;line-height:1.6;margin-bottom:.6rem">전원 퇴근했는데 마감이 안 됐을 때(또는 마지막 퇴근자가 위임 시) 이 기기로 알림을 받습니다. 야간 22:30에도 자동 점검합니다.</div>
+                <div style="display:flex;gap:.4rem;align-items:center;margin-bottom:.5rem">
+                    <span style="font-size:.78rem;color:#374151">이 기기 상태:</span>
+                    <span style="font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:8px;${pushOn?'background:#dcfce7;color:#166534':'background:#f3f4f6;color:#6b7280'}">${pushOn?'푸시 받는 중':'꺼짐'}</span>
+                </div>
+                <button onclick="enableAdminPush()" style="background:#4338ca;color:#fff;border:none;padding:.5rem .9rem;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer">${pushOn?'이 기기 다시 등록':'이 기기에서 푸시 받기'}</button>
+                <div style="margin-top:.8rem;border-top:1px dashed #e5e7eb;padding-top:.6rem">
+                    <div style="font-size:.72rem;color:#6b7280;margin-bottom:.3rem">웹 푸시 VAPID 키 ${hasVapid?'<span style="color:#059669">· 설정됨</span>':'<span style="color:#dc2626">· 미설정</span>'} <span style="color:#9ca3af">(Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서)</span></div>
+                    <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+                        <input id="_fcmVapidInput" type="text" placeholder="Bq... (공개키)" style="flex:1;min-width:160px;padding:.45rem .55rem;border:1px solid #d1d5db;border-radius:6px;font-size:.78rem">
+                        <button onclick="_saveFcmVapid()" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.45rem .8rem;border-radius:6px;font-size:.78rem;font-weight:600;cursor:pointer">키 저장</button>
+                    </div>
+                    <div style="font-size:.68rem;color:#9ca3af;margin-top:.4rem">※ iOS는 Safari에서 "홈 화면에 추가"한 앱에서만 푸시가 됩니다. 안드로이드 크롬은 바로 됩니다.</div>
+                </div>
+            </div>`;
             el.innerHTML=h;
         }
         async function _closingAddItem(){
@@ -12071,6 +12093,45 @@
                 };
                 reader.onerror=reject; reader.readAsDataURL(file);
             });
+        }
+
+        // ── 📲 관리자 FCM 푸시 (Phase 2) ──
+        let _fcmVapidKey='';
+        let _fcmMessaging=null;
+        async function _loadFcmConfig(){
+            try{ const d=await db.collection('settings').doc('fcm').get(); _fcmVapidKey=d.exists?(d.data().vapidKey||''):''; }
+            catch(e){ console.error('FCM 설정 로드 오류:',e); _fcmVapidKey=''; }
+        }
+        function _fcmPushEnabledHere(){ try{ return localStorage.getItem('lumi_fcm_admin')==='1'; }catch(_){ return false; } }
+        async function _saveFcmVapid(){
+            const v=(document.getElementById('_fcmVapidInput')?.value||'').trim();
+            if(!v){ alert('VAPID 키를 입력하세요.'); return; }
+            try{
+                await db.collection('settings').doc('fcm').set({ vapidKey:v, updatedAt:new Date().toISOString(), updatedBy:currentUser?.name||'' }, {merge:true});
+                _fcmVapidKey=v; alert('VAPID 키가 저장되었습니다.'); _renderStaffAdminBody();
+            }catch(e){ alert('저장 실패: '+(e?.message||e)); }
+        }
+        async function enableAdminPush(){
+            if(!isAdminHigh){ alert('대표원장(adminHigh) 계정만 사용합니다.'); return; }
+            if(!_fcmVapidKey){ alert('먼저 아래에 VAPID 키를 저장해주세요.\n(Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서)'); return; }
+            if(typeof firebase.messaging!=='function'){ alert('이 브라우저/환경은 웹 푸시를 지원하지 않습니다.'); return; }
+            if(!('serviceWorker' in navigator) || !('Notification' in window)){ alert('이 브라우저는 푸시를 지원하지 않습니다. (iOS는 홈화면에 추가한 앱에서만 가능)'); return; }
+            try{
+                const perm=await Notification.requestPermission();
+                if(perm!=='granted'){ alert('알림 권한이 허용되지 않았습니다.'); return; }
+                const reg=await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                _fcmMessaging=_fcmMessaging||firebase.messaging();
+                const token=await _fcmMessaging.getToken({ vapidKey:_fcmVapidKey, serviceWorkerRegistration:reg });
+                if(!token){ alert('토큰 발급에 실패했습니다.'); return; }
+                await db.collection('fcmTokens').doc(token).set({
+                    token, email:currentUser?.email||'', name:currentUser?.name||currentUser?.id||'', adminHigh:true, updatedAt:new Date().toISOString()
+                }, {merge:true});
+                try{ localStorage.setItem('lumi_fcm_admin','1'); }catch(_){}
+                // 앱이 열려 있을 때 수신 → 화면 알림
+                try{ _fcmMessaging.onMessage(p=>{ const n=(p&&p.notification)||{}; alert((n.title||'🌙 마감 미완료')+'\n\n'+(n.body||'')); }); }catch(_){}
+                alert('✅ 이 기기에서 마감 미완료 푸시를 받습니다.');
+                _renderStaffAdminBody();
+            }catch(e){ alert('푸시 설정 실패: '+(e?.message||e)); }
         }
 
         // ─────────────────────────────
