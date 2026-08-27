@@ -383,6 +383,8 @@
                     <div class="info-row"><span class="info-label">퇴근</span><span class="info-value" id="todayCheckOut">-</span></div>
                     <div class="info-row"><span class="info-label">상태</span><span class="info-value" id="todayStatus">-</span></div>
                 </div>
+                <!-- 🌙 퇴근 마감 체크리스트 (퇴근 버튼 위) -->
+                <div class="card" id="closingChecklistCard" style="display:none"></div>
                 <!-- v2.1: 좌우 큰 버튼 항상 표시 -->
                 <div style="display:flex;gap:.75rem;margin-bottom:.5rem">
                     <button class="att-v2-btn" id="checkInBtn" onclick="checkIn()">
@@ -944,7 +946,10 @@
                             style="background:none;border:none;padding:.5rem .7rem;font-size:.8rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap">📊 매출</button>
                         <button id="staffAdminTab-employees" onclick="setStaffAdminTab('employees')"
                             style="background:none;border:none;padding:.5rem .7rem;font-size:.8rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap">👥 직원</button>
+                        <button id="staffAdminTab-closing" onclick="setStaffAdminTab('closing')"
+                            style="background:none;border:none;padding:.5rem .7rem;font-size:.8rem;font-weight:500;color:#6b7280;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap">🌙 마감</button>
                     </div>
+                    <div id="closingAdminBanner"></div>
                     <div id="staffAdminBody" style="margin-top:.6rem"></div>
                 </div>
             </div>
@@ -3695,6 +3700,10 @@
             await loadAttendanceSettings(); // v2.0
             await loadAllData();
             await loadSettings();
+            // 🌙 퇴근 마감 체크리스트: 항목 로드 + 오늘 상태 실시간 구독
+            await loadClosingItems();
+            subscribeClosingStatus();
+            renderClosingChecklist();
             startAutoLogoutTimer();
         }
         
@@ -4976,7 +4985,26 @@
             }
 
             if(!confirm('퇴근하시겠습니까?')) return;
-            
+
+            // ── 🌙 퇴근 마감 체크 ── 마지막 퇴근자는 남은 항목을 마감(체크)해야 퇴근 가능
+            const _remain=_closingRemaining();
+            if(_remain.length){
+                const _last=await _isLastToClockOut();
+                if(_last){
+                    const _msg='🌙 아직 마감되지 않은 항목이 있습니다:\n\n'+_remain.map(i=>'· '+i.label).join('\n')
+                        +'\n\n당신이 오늘 마지막 퇴근자입니다.\n\n[확인] 관리자에게 위임(사유 입력)하고 퇴근\n[취소] 먼저 위 "🌙 오늘 마감 체크리스트"에서 직접 마감';
+                    if(!confirm(_msg)){
+                        alert('퇴근 버튼 위 "🌙 오늘 마감 체크리스트"에서 항목을 체크한 뒤 다시 퇴근을 눌러주세요.');
+                        return;
+                    }
+                    const _reason=prompt('관리자에게 위임할 사유/메모를 남겨주세요.\n(예: 6층 에어컨 리모컨 고장으로 실장님께 인계)','');
+                    if(_reason===null) return;
+                    if(!_reason.trim()){ alert('위임 사유를 입력해야 퇴근할 수 있습니다.'); return; }
+                    await _markClosingDelegated(_remain, _reason.trim());
+                }
+                // 마지막이 아니면 차단하지 않음 (체크리스트 카드로 이미 리마인드됨)
+            }
+
             // 즉시 비활성
             _checkOutBusy=true;
             const outBtn=document.getElementById('checkOutBtn');
@@ -11768,7 +11796,7 @@
         }
         function setStaffAdminTab(t){
             _staffAdminCurTab=t;
-            ['calendar','pending','attendance','ot','payroll','revenue','employees'].forEach(k=>{
+            ['calendar','pending','attendance','ot','payroll','revenue','employees','closing'].forEach(k=>{
                 const btn=document.getElementById('staffAdminTab-'+k);
                 if(!btn) return;
                 const active=(k===t);
@@ -11789,7 +11817,260 @@
                 case 'payroll':    _renderStaffPayroll(el); break;
                 case 'revenue':    _renderStaffRevenue(el); break;
                 case 'employees':  _renderStaffEmployees(el); break;
+                case 'closing':    _renderStaffClosing(el); break;
             }
+            _renderClosingAdminBanner();
+        }
+
+        // ========================= 🌙 퇴근 마감 체크리스트 =========================
+        let _closingItems=[];          // closingItems 컬렉션 (관리자 정의 항목)
+        let _closingChecks={};         // closingStatus/{오늘}.checks
+        let _closingDelegated=null;    // closingStatus/{오늘}.delegated
+        let _closingUnsub=null;        // 실시간 리스너 해제
+        let _closingDay='';            // 현재 구독 중 날짜
+        let _closingPhotoTargetId=null;
+
+        function _activeClosingItems(){ return (_closingItems||[]).filter(it=>it&&it.active!==false&&it.label); }
+        function _closingRemaining(){ return _activeClosingItems().filter(it=>!(_closingChecks[it.id]&&_closingChecks[it.id].done)); }
+
+        async function loadClosingItems(){
+            try{
+                const snap=await db.collection('closingItems').get();
+                _closingItems=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.order||0)-(b.order||0));
+            }catch(e){ console.error('마감 항목 로드 오류:',e); _closingItems=[]; }
+        }
+
+        function subscribeClosingStatus(){
+            const today=getToday();
+            if(_closingUnsub && _closingDay===today){ return; }
+            if(_closingUnsub){ try{_closingUnsub();}catch(_){ } _closingUnsub=null; }
+            _closingDay=today;
+            try{
+                _closingUnsub=db.collection('closingStatus').doc(today).onSnapshot(d=>{
+                    const data=d.exists?(d.data()||{}):{};
+                    _closingChecks=data.checks||{};
+                    _closingDelegated=data.delegated||null;
+                    renderClosingChecklist();
+                    _renderClosingAdminBanner();
+                }, err=>{ console.error('마감 상태 구독 오류:',err); });
+            }catch(e){ console.error(e); }
+        }
+
+        // 직원 퇴근 탭 체크리스트 렌더
+        function renderClosingChecklist(){
+            const box=document.getElementById('closingChecklistCard');
+            if(!box) return;
+            const items=_activeClosingItems();
+            if(!items.length){ box.style.display='none'; box.innerHTML=''; return; }
+            box.style.display='block';
+            const remaining=_closingRemaining().length;
+            let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+                <div class="card-title" style="margin:0">🌙 오늘 마감 체크리스트</div>
+                <span style="font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:8px;${remaining?'background:#fee2e2;color:#991b1b':'background:#dcfce7;color:#166534'}">${remaining?('남음 '+remaining):'완료'}</span>
+            </div>`;
+            h+=items.map(it=>{
+                const c=_closingChecks[it.id];
+                const done=!!(c&&c.done);
+                const who=done?`<div style="font-size:.68rem;color:#9ca3af">✓ ${_esc(c.byName||'')}${c.at?(' · '+String(c.at).slice(11,16)):''}</div>`:'';
+                return `<div onclick="toggleClosingItem('${it.id}')" style="display:flex;align-items:center;gap:.55rem;padding:.5rem .6rem;border:1px solid ${done?'#d1fae5':'#e5e7eb'};border-radius:7px;margin-bottom:.35rem;background:${done?'#f0fdf4':'#fff'};cursor:pointer">
+                    <span style="font-size:1.05rem">${done?'✅':'⬜'}</span>
+                    <div style="flex:1;min-width:0">
+                        <div style="font-size:.85rem;font-weight:600;color:${done?'#9ca3af':'#111827'};${done?'text-decoration:line-through':''}">${_esc(it.label)}</div>
+                        ${who}
+                    </div>
+                    ${it.photo?`<img src="${it.photo}" onclick="event.stopPropagation();_showClosingPhoto('${it.id}')" style="width:34px;height:34px;object-fit:cover;border-radius:5px;border:1px solid #e5e7eb" alt="참고">`:''}
+                </div>`;
+            }).join('');
+            if(_closingDelegated){
+                h+=`<div style="font-size:.72rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:.4rem .55rem;margin-top:.25rem">⚠️ 관리자 위임됨 · ${_esc(_closingDelegated.byName||'')}: ${_esc(_closingDelegated.reason||'')}</div>`;
+            }
+            box.innerHTML=h;
+        }
+
+        // 항목 체크/해제 (누구나 가능, 해제 허용)
+        async function toggleClosingItem(id){
+            const today=getToday();
+            const ref=db.collection('closingStatus').doc(today);
+            const cur=_closingChecks[id];
+            const isDone=!!(cur&&cur.done);
+            try{
+                if(isDone){
+                    await ref.set({ date:today, checks:{ [id]:{done:false} } }, {merge:true});
+                }else{
+                    await ref.set({ date:today, checks:{ [id]:{done:true, byId:currentUser?.id||'', byName:currentUser?.name||currentUser?.id||'', at:new Date().toISOString()} } }, {merge:true});
+                }
+            }catch(e){ alert('체크 실패: '+(e?.message||e)); }
+        }
+
+        // 참고 사진 크게 보기
+        function _showClosingPhoto(id){
+            const it=(_closingItems||[]).find(x=>x.id===id);
+            if(!it||!it.photo) return;
+            let ov=document.getElementById('_closingPhotoOverlay');
+            if(!ov){
+                ov=document.createElement('div'); ov.id='_closingPhotoOverlay';
+                ov.onclick=()=>{ ov.style.display='none'; };
+                ov.style.cssText='display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:1rem';
+                document.body.appendChild(ov);
+            }
+            ov.innerHTML=`<div style="text-align:center"><img src="${it.photo}" style="max-width:92vw;max-height:80vh;border-radius:8px"><div style="color:#fff;margin-top:.6rem;font-size:.9rem">${_esc(it.label)}</div></div>`;
+            ov.style.display='flex';
+        }
+
+        // 오늘 마지막 퇴근자인지 판정 (본인 외 '출근했고 아직 미퇴근'인 사람이 없으면 마지막)
+        async function _isLastToClockOut(){
+            const today=getToday();
+            try{
+                const snap=await db.collection('attendance').where('date','==',today).get();
+                const othersOpen=snap.docs.some(d=>{
+                    const a=d.data()||{};
+                    if((a.employeeId||a.empId)===currentUser.id) return false;
+                    return (a.checkIn||a.clockIn) && !(a.checkOut||a.clockOut);
+                });
+                return !othersOpen;
+            }catch(e){ console.error('마지막 퇴근 판정 오류:',e); return false; }
+        }
+
+        // 마감 미완료를 관리자에게 위임 기록
+        async function _markClosingDelegated(remaining, reason){
+            const today=getToday();
+            const now=new Date().toISOString();
+            try{
+                await db.collection('closingStatus').doc(today).set({
+                    date:today,
+                    delegated:{ byId:currentUser?.id||'', byName:currentUser?.name||currentUser?.id||'', reason:reason||'', at:now, items:remaining.map(i=>i.label) },
+                    adminAlert:{ at:now, pending:remaining.map(i=>i.label), byName:currentUser?.name||'' }
+                }, {merge:true});
+            }catch(e){ console.error('위임 기록 오류:',e); }
+        }
+
+        // 관리자(대표원장) 인앱 배너 — 오늘 마감 미완료 + 위임됨
+        function _renderClosingAdminBanner(){
+            const el=document.getElementById('closingAdminBanner');
+            if(!el) return;
+            const remaining=_closingRemaining();
+            if(isAdminHigh && _closingDelegated && remaining.length){
+                el.style.display='block';
+                el.innerHTML=`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:.6rem .75rem;margin:.4rem 0">
+                    <div style="font-weight:700;color:#991b1b;font-size:.85rem">🚨 오늘 마감 미완료 ${remaining.length}개 (관리자 위임됨)</div>
+                    <div style="font-size:.75rem;color:#b91c1c;margin-top:.25rem">${remaining.map(i=>'· '+_esc(i.label)).join('<br>')}</div>
+                    <div style="font-size:.72rem;color:#7f1d1d;margin-top:.3rem">위임: ${_esc(_closingDelegated.byName||'')} — ${_esc(_closingDelegated.reason||'')}</div>
+                </div>`;
+            }else{ el.style.display='none'; el.innerHTML=''; }
+        }
+
+        // ── 관리자: 마감 항목 관리 (통합앱 STAFF > 🌙 마감) ──
+        function _renderStaffClosing(el){
+            const items=_closingItems||[];
+            let h='<div style="font-weight:700;font-size:.95rem;color:#111827;margin-bottom:.35rem">🌙 마감 항목 관리</div>';
+            h+='<div style="font-size:.75rem;color:#6b7280;margin-bottom:.6rem">직원 퇴근 화면(퇴근 버튼 위)에 표시됩니다. 항목마다 참고 사진을 붙일 수 있어요.</div>';
+            h+=`<div style="display:flex;gap:.35rem;margin-bottom:.7rem;flex-wrap:wrap;align-items:center">
+                <input id="_closingNewLabel" type="text" placeholder="예: 6층 에어컨 끄기" style="flex:1;min-width:150px;padding:.5rem .6rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem">
+                <button onclick="_closingAddItem()" style="background:#7c3aed;color:#fff;border:none;padding:.5rem .9rem;border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer">+ 추가</button>
+            </div>`;
+            if(!items.length){
+                h+='<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:6px">등록된 항목이 없습니다.</div>';
+            }else{
+                h+=items.map(it=>{
+                    const off=(it.active===false);
+                    return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:7px;margin-bottom:.35rem;background:${off?'#f9fafb':'#fff'}">
+                        ${it.photo?`<img src="${it.photo}" onclick="_showClosingPhoto('${it.id}')" style="width:38px;height:38px;object-fit:cover;border-radius:5px;border:1px solid #e5e7eb;cursor:pointer;flex-shrink:0">`:'<div style="width:38px;height:38px;border:1px dashed #d1d5db;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:.58rem;flex-shrink:0">사진</div>'}
+                        <div style="flex:1;min-width:0">
+                            <div style="font-size:.85rem;font-weight:600;color:${off?'#9ca3af':'#111827'}">${_esc(it.label)}${off?' <span style=\"font-size:.68rem;color:#9ca3af\">(미사용)</span>':''}</div>
+                            <div style="display:flex;gap:.3rem;margin-top:.3rem;flex-wrap:wrap">
+                                <button onclick="_closingPickPhoto('${it.id}')" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.2rem .5rem;font-size:.68rem;border-radius:4px;cursor:pointer">사진</button>
+                                <button onclick="_closingRenameItem('${it.id}')" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.2rem .5rem;font-size:.68rem;border-radius:4px;cursor:pointer">이름</button>
+                                <button onclick="_closingMoveItem('${it.id}',-1)" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.2rem .45rem;font-size:.68rem;border-radius:4px;cursor:pointer">▲</button>
+                                <button onclick="_closingMoveItem('${it.id}',1)" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.2rem .45rem;font-size:.68rem;border-radius:4px;cursor:pointer">▼</button>
+                                <button onclick="_closingToggleActive('${it.id}')" style="background:#fff;border:1px solid ${off?'#10b981':'#f59e0b'};color:${off?'#047857':'#b45309'};padding:.2rem .5rem;font-size:.68rem;border-radius:4px;cursor:pointer">${off?'사용':'미사용'}</button>
+                                <button onclick="_closingDeleteItem('${it.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.2rem .5rem;font-size:.68rem;border-radius:4px;cursor:pointer">삭제</button>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+            h+='<input id="_closingPhotoInput" type="file" accept="image/*" style="display:none">';
+            el.innerHTML=h;
+        }
+        async function _closingAddItem(){
+            const inp=document.getElementById('_closingNewLabel');
+            const label=(inp?.value||'').trim();
+            if(!label){ alert('항목 이름을 입력하세요.'); return; }
+            try{
+                const order=_closingItems.length;
+                const ref=await db.collection('closingItems').add({ label, active:true, order, createdAt:new Date().toISOString(), updatedBy:currentUser?.name||currentUser?.id||'admin' });
+                _closingItems.push({ id:ref.id, label, active:true, order });
+                renderClosingChecklist();
+                _renderStaffAdminBody();
+            }catch(e){ alert('추가 실패: '+(e?.message||e)); }
+        }
+        async function _closingRenameItem(id){
+            const it=_closingItems.find(x=>x.id===id); if(!it) return;
+            const v=prompt('항목 이름', it.label); if(v===null) return;
+            const label=v.trim()||it.label;
+            try{ await db.collection('closingItems').doc(id).update({label}); it.label=label; renderClosingChecklist(); _renderStaffAdminBody(); }
+            catch(e){ alert('수정 실패: '+(e?.message||e)); }
+        }
+        async function _closingMoveItem(id,dir){
+            const i=_closingItems.findIndex(x=>x.id===id); if(i<0) return;
+            const j=i+dir; if(j<0||j>=_closingItems.length) return;
+            const t=_closingItems[i]; _closingItems[i]=_closingItems[j]; _closingItems[j]=t;
+            try{
+                await Promise.all(_closingItems.map((it,idx)=> db.collection('closingItems').doc(it.id).update({order:idx}).then(()=>{ it.order=idx; })));
+                renderClosingChecklist();
+                _renderStaffAdminBody();
+            }catch(e){ alert('순서 변경 실패: '+(e?.message||e)); }
+        }
+        async function _closingToggleActive(id){
+            const it=_closingItems.find(x=>x.id===id); if(!it) return;
+            const next=(it.active===false);
+            try{ await db.collection('closingItems').doc(id).update({active:next}); it.active=next; renderClosingChecklist(); _renderStaffAdminBody(); }
+            catch(e){ alert('변경 실패: '+(e?.message||e)); }
+        }
+        async function _closingDeleteItem(id){
+            if(!confirm('이 마감 항목을 삭제하시겠습니까?')) return;
+            try{ await db.collection('closingItems').doc(id).delete(); _closingItems=_closingItems.filter(x=>x.id!==id); renderClosingChecklist(); _renderStaffAdminBody(); }
+            catch(e){ alert('삭제 실패: '+(e?.message||e)); }
+        }
+        function _closingPickPhoto(id){
+            _closingPhotoTargetId=id;
+            const inp=document.getElementById('_closingPhotoInput'); if(!inp) return;
+            inp.value='';
+            inp.onchange=async ()=>{
+                const f=inp.files&&inp.files[0]; if(!f) return;
+                try{
+                    const dataUrl=await _closingDownscaleImage(f,900,0.6);
+                    await db.collection('closingItems').doc(_closingPhotoTargetId).update({photo:dataUrl});
+                    const it=_closingItems.find(x=>x.id===_closingPhotoTargetId); if(it) it.photo=dataUrl;
+                    renderClosingChecklist();
+                    _renderStaffAdminBody();
+                }catch(e){ alert('사진 처리 실패: '+(e?.message||e)); }
+            };
+            inp.click();
+        }
+        // 이미지 축소 → dataURL (Firestore 문서 한도 고려)
+        function _closingDownscaleImage(file, maxDim, quality){
+            return new Promise((resolve,reject)=>{
+                const reader=new FileReader();
+                reader.onload=()=>{
+                    const img=new Image();
+                    img.onload=()=>{
+                        try{
+                            let w=img.width, h=img.height;
+                            const scale=Math.min(1, maxDim/Math.max(w,h));
+                            w=Math.max(1,Math.round(w*scale)); h=Math.max(1,Math.round(h*scale));
+                            const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+                            cv.getContext('2d').drawImage(img,0,0,w,h);
+                            let out=cv.toDataURL('image/jpeg', quality);
+                            if(out.length>700000) out=cv.toDataURL('image/jpeg', 0.45);
+                            if(out.length>900000) out=cv.toDataURL('image/jpeg', 0.3);
+                            resolve(out);
+                        }catch(err){ reject(err); }
+                    };
+                    img.onerror=reject; img.src=reader.result;
+                };
+                reader.onerror=reject; reader.readAsDataURL(file);
+            });
         }
 
         // ─────────────────────────────
