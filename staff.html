@@ -1427,7 +1427,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('personalMealModal')" style="flex:1">취소</button>
-                <button class="btn btn-primary" onclick="savePersonalMeal()" style="flex:2">입력</button>
+                <button class="btn btn-primary" id="personalMealSaveBtn" onclick="savePersonalMeal()" style="flex:2">입력</button>
             </div>
         </div>
     </div>
@@ -5299,6 +5299,28 @@
         // 각 장의 금액을 보여주고, 음식 금액 칸에는 합계를 넣는다.
         let _mealReceipts={personal:[], group:[]};
 
+        // ── 중복 저장 방지 ──
+        // 저장은 await 가 여러 번 걸려 수백 ms~수 초가 걸린다. 그동안 버튼이 살아
+        // 있으면 사진 처리로 화면이 멈춘 사이 누른 탭이 전부 각각 저장된다.
+        // (실제로 ₩1,100 이 30건 들어간 사고가 있었다.)
+        let _mealSaving=false;     // 저장 진행 중
+        let _mealOcrBusy=false;    // 영수증 인식 진행 중
+
+        // 저장 버튼 잠그기/풀기. 그룹은 검증 결과에 따라 원래 상태로 되돌린다.
+        function _setMealSaveLock(locked){
+            const p=document.getElementById('personalMealSaveBtn');
+            if(p){
+                p.disabled=locked;
+                p.textContent=locked?'처리 중…':'입력';
+            }
+            const g=document.getElementById('mealSaveBtn');
+            if(g){
+                g.textContent=locked?'처리 중…':'정산 저장';
+                if(locked) g.disabled=true;
+                else if(typeof validateMeal==='function') validateMeal();   // 검증 기준으로 복원
+            }
+        }
+
         function _mealReceiptStatusEl(target){
             return document.getElementById(target==='personal'?'personalReceiptStatus':'mealReceiptStatus');
         }
@@ -5444,6 +5466,10 @@
                 return;
             }
             const fn=functions.httpsCallable('ocrReceipt');
+            // 사진 처리 중에는 화면이 잠깐 멈출 수 있다. 그동안 저장이 눌리면
+            // 같은 건이 여러 번 들어가므로 인식이 끝날 때까지 저장을 잠근다.
+            _mealOcrBusy=true; _setMealSaveLock(true);
+            try{
             for(let i=0;i<files.length;i++){
                 _renderMealReceipts(target, '영수증을 읽는 중… ('+(i+1)+'/'+files.length+')');
                 let entry;
@@ -5480,6 +5506,7 @@
                 _applyMealReceiptTotals(target);
                 _renderMealReceipts(target, (i+1<files.length)?('영수증을 읽는 중… ('+(i+2)+'/'+files.length+')'):'');
             }
+            }finally{ _mealOcrBusy=false; _setMealSaveLock(false); }
         }
 
         // 특정 날짜 기준 사용 가능 잔액 (그 날짜까지의 적립 − 사용, 이월분 포함)
@@ -5577,12 +5604,16 @@
         }
 
         async function savePersonalMeal(){
+            if(_mealSaving) return;                      // 연속 탭 무시
+            if(_mealOcrBusy){ alert('영수증을 읽는 중입니다. 잠시 후 다시 눌러주세요.'); return; }
             const date=document.getElementById('personalMealDate').value;
             const amount=moneyValue('personalMealAmount');
 
             if(!date||!amount){alert('날짜와 금액을 입력해주세요.');return;}
             if(amount<=0){alert('금액은 0보다 커야 합니다.');return;}
 
+            _mealSaving=true; _setMealSaveLock(true);
+            try{
             await loadMealAttendance(date.substring(0,7));   // 저장 직전 최신 출근 기록으로 재검증
             await loadMealRecords();
             const check=checkMealEligibility(currentUser.id, date, amount);
@@ -5607,8 +5638,9 @@
                 await loadMealRecords();
                 renderMeal();
             }catch(e){alert('입력 실패: '+e.message);}
+            }finally{ _mealSaving=false; _setMealSaveLock(false); }
         }
-        
+
         async function loadMealStaffList(){
             try{
                 const s=await db.collection('employees').where('status','==','active').get();
@@ -5768,6 +5800,8 @@
         }
         
         async function saveMealGroup(){
+            if(_mealSaving) return;                      // 연속 탭 무시 (인원수만큼 곱해져 들어간다)
+            if(_mealOcrBusy){ alert('영수증을 읽는 중입니다. 잠시 후 다시 눌러주세요.'); return; }
             const date=document.getElementById('mealDate').value;
             const total=getMealTotal();
             const selected=Object.keys(mealSelectedStaff);
@@ -5781,6 +5815,8 @@
                 return;
             }
 
+            _mealSaving=true; _setMealSaveLock(true);
+            try{
             // 출근 여부 + 잔액 재검증 (최신 데이터 기준)
             await loadMealAttendance(date.substring(0,7));
             await loadMealRecords();
@@ -5816,6 +5852,7 @@
                 await loadMealRecords();
                 renderMeal();
             }catch(e){alert('정산 실패: '+e.message);}
+            }finally{ _mealSaving=false; _setMealSaveLock(false); }
         }
         
         async function deleteMealRecord(recordId, groupId, splitMode){
