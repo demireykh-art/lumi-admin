@@ -1118,6 +1118,10 @@
                             🏳️ 단종 <span id="invDiscontinuedCount" style="opacity:.7;font-size:.72rem">0</span>
                         </button>
                     </div>
+                    <button type="button" onclick="exportInventoryXlsx()"
+                        style="width:100%;margin-top:.5rem;padding:.6rem;border:1px solid #bbf7d0;background:#f0fdf4;color:#166534;font-weight:700;font-size:.85rem;border-radius:var(--r);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.35rem">
+                        📥 재고 목록 엑셀 다운로드
+                    </button>
                 </div>
 
                 <!-- === 재고 실사 상세 (홈에서 카테고리 선택 시 노출) === -->
@@ -15185,6 +15189,53 @@
             const a=document.createElement('a');
             const stamp=new Date().toISOString().slice(0,10).replace(/-/g,'');
             a.href=url; a.download=`재고_정리목록_${stamp}.csv`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }
+
+        // 재고 목록 전체를 관련 정보와 함께 엑셀(.xlsx)로 다운로드 (XLSX 없으면 CSV 폴백)
+        function exportInventoryXlsx(){
+            const items=(invItems||[]).slice().sort((a,b)=>{
+                const pa=String(a.parentName||'').localeCompare(String(b.parentName||''),'ko');
+                if(pa!==0) return pa;
+                return String(a.name||'').localeCompare(String(b.name||''),'ko');
+            });
+            if(!items.length){ alert('재고 품목이 없습니다.'); return; }
+            const header=['상위품목','품목명','카테고리','타입','현재고','단위','안전재고','발주필요','낱개단가(원)','재고가치(원)','보관장소','유통기한','1개용량(ml)','거래처','구매링크','최근입고','단종'];
+            const aoa=[header];
+            items.forEach(i=>{
+                const up=(typeof _overviewItemUnitPrice==='function')?_overviewItemUnitPrice(i):(Number(i.unitPrice)||0);
+                const stock=Number(i.currentStock)||0;
+                const safe=Number(i.safetyStock)||0;
+                const low=(!i.discontinued && safe && stock<safe)?'Y':'';
+                const locSummary=(typeof _overviewLocationSummary==='function')?_overviewLocationSummary(i)
+                    : Object.entries(i.locations||{}).filter(([,q])=>(Number(q)||0)>0).map(([k,q])=>`${k}:${q}`).join(' | ');
+                const vName=(i.vendorId&&typeof _vendorById==='function'?(_vendorById(i.vendorId)?.name||''):'')||i.contactName||'';
+                aoa.push([
+                    i.parentName||'', i.name||'', INV_CATEGORIES[i.category]||i.category||'', INV_TYPES[i.type]||i.type||'',
+                    stock, i.unit||'개', safe, low,
+                    Math.round(up||0), Math.round((up||0)*stock),
+                    locSummary, i.expiryDate||'', Number(i.volumeMl)||'',
+                    vName, i.purchaseLink||'', i.lastReceiveDate||'', i.discontinued?'Y':''
+                ]);
+            });
+            const stamp=new Date().toISOString().slice(0,10).replace(/-/g,'');
+            try{
+                if(typeof XLSX!=='undefined'){
+                    const ws=XLSX.utils.aoa_to_sheet(aoa);
+                    ws['!cols']=[{wch:12},{wch:22},{wch:8},{wch:8},{wch:7},{wch:5},{wch:7},{wch:6},{wch:11},{wch:12},{wch:28},{wch:11},{wch:10},{wch:14},{wch:32},{wch:11},{wch:5}];
+                    const wb=XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, '재고목록');
+                    XLSX.writeFile(wb, `재고목록_${stamp}.xlsx`);
+                    return;
+                }
+            }catch(e){ console.warn('xlsx 내보내기 실패, CSV로 대체:', e); }
+            // CSV 폴백 (엑셀에서 열 수 있게 BOM 추가)
+            const esc=v=>{ const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+            const csv='﻿'+aoa.map(r=>r.map(esc).join(',')).join('\r\n');
+            const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a'); a.href=url; a.download=`재고목록_${stamp}.csv`;
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(()=>URL.revokeObjectURL(url),1000);
         }
