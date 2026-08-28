@@ -1439,9 +1439,13 @@ async function _sendClosingPush(dateStr, remaining, delegated) {
     logger.info('closing push: 등록된 관리자 토큰 없음');
     return 0;
   }
+  const asgNames = (i) => {
+    if (Array.isArray(i.assignees)) return i.assignees.map((a) => a.name || a.id).filter(Boolean).join(', ');
+    return i.assigneeName || '';
+  };
   const joined = remaining.map((i) => i.label).join('/');
   const title = '🚨 ' + joined + ' 마감해야지!!';
-  const body = remaining.map((i) => '· ' + i.label + (i.assigneeName ? (' (' + i.assigneeName + ')') : '')).join('\n') +
+  const body = remaining.map((i) => { const n = asgNames(i); return '· ' + i.label + (n ? (' (' + n + ')') : ''); }).join('\n') +
     (delegated ? ('\n\n위임: ' + (delegated.byName || '') + ' ' + (delegated.reason || '')) : '');
   const message = {
     tokens,

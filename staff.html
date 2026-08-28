@@ -5075,13 +5075,13 @@
 
             if(!confirm('퇴근하시겠습니까?')) return;
 
-            // ── 🌙 퇴근 마감 체크 ── 마지막 퇴근자는 남은 항목을 마감(체크)해야 퇴근 가능
-            const _remain=_closingRemaining();
-            if(_remain.length){
-                const _last=await _isLastToClockOut();
-                if(_last){
-                    const _msg='🌙 아직 마감되지 않은 항목이 있습니다:\n\n'+_remain.map(i=>'· '+i.label).join('\n')
-                        +'\n\n당신이 오늘 마지막 퇴근자입니다.\n\n[확인] 관리자에게 위임(사유 입력)하고 퇴근\n[취소] 먼저 위 "🌙 오늘 마감 체크리스트"에서 직접 마감';
+            // ── 🌙 퇴근 마감 체크 ── 해당 파트(담당자들)의 마지막 퇴근자는 본인 항목을 마감해야 퇴근 가능
+            if(_closingRemaining().length){
+                const _myItems=await _myLastResponsibleItems();
+                if(_myItems.length){
+                    const _joined=_myItems.map(i=>i.label).join('/');
+                    const _msg='🚨 '+_joined+' 마감하고 가요!!\n\n'+_myItems.map(i=>'· '+i.label).join('\n')
+                        +'\n\n당신이 이 파트의 마지막 퇴근자예요.\n\n[확인] 관리자에게 위임(사유 입력)하고 퇴근\n[취소] 먼저 위 "🌙 오늘 마감 체크리스트"에서 직접 마감';
                     if(!confirm(_msg)){
                         alert('퇴근 버튼 위 "🌙 오늘 마감 체크리스트"에서 항목을 체크한 뒤 다시 퇴근을 눌러주세요.');
                         return;
@@ -5089,9 +5089,9 @@
                     const _reason=prompt('관리자에게 위임할 사유/메모를 남겨주세요.\n(예: 6층 에어컨 리모컨 고장으로 실장님께 인계)','');
                     if(_reason===null) return;
                     if(!_reason.trim()){ alert('위임 사유를 입력해야 퇴근할 수 있습니다.'); return; }
-                    await _markClosingDelegated(_remain, _reason.trim());
+                    await _markClosingDelegated(_myItems, _reason.trim());
                 }
-                // 마지막이 아니면 차단하지 않음 (체크리스트 카드로 이미 리마인드됨)
+                // 내 파트 담당이 아니면 차단하지 않음 (체크리스트 카드로 이미 리마인드됨)
             }
 
             // 즉시 비활성
@@ -11969,6 +11969,12 @@
 
         function _activeClosingItems(){ return (_closingItems||[]).filter(it=>it&&it.active!==false&&it.label); }
         function _closingRemaining(){ return _activeClosingItems().filter(it=>!(_closingChecks[it.id]&&_closingChecks[it.id].done)); }
+        // 항목 담당자(복수) — 신규 assignees[] 우선, 구 assigneeId 호환
+        function _itemAssignees(it){
+            if(Array.isArray(it.assignees)) return it.assignees.filter(a=>a&&a.id);
+            if(it.assigneeId) return [{id:it.assigneeId, name:it.assigneeName||''}];
+            return [];
+        }
 
         async function loadClosingItems(){
             try{
@@ -12009,8 +12015,9 @@
                 const c=_closingChecks[it.id];
                 const done=!!(c&&c.done);
                 const who=done?`<div style="font-size:.68rem;color:#9ca3af">✓ ${_esc(c.byName||'')}${c.at?(' · '+String(c.at).slice(11,16)):''}</div>`:'';
-                const mine=(it.assigneeId && currentUser?.id && it.assigneeId===currentUser.id);
-                const assignee=it.assigneeName?`<span style="font-size:.66rem;font-weight:600;padding:1px 6px;border-radius:8px;${mine?'background:#4338ca;color:#fff':'background:#eef2ff;color:#4338ca'}">담당 ${_esc(it.assigneeName)}${mine?' · 나':''}</span>`:'';
+                const as=_itemAssignees(it);
+                const mine=as.some(a=>a.id===currentUser?.id);
+                const assignee=as.length?`<span style="font-size:.66rem;font-weight:600;padding:1px 6px;border-radius:8px;${mine?'background:#4338ca;color:#fff':'background:#eef2ff;color:#4338ca'}">담당 ${_esc(as.map(a=>a.name||a.id).join(', '))}${mine?' · 나':''}</span>`:'';
                 return `<div onclick="toggleClosingItem('${it.id}')" style="display:flex;align-items:center;gap:.55rem;padding:.5rem .6rem;border:1px solid ${mine&&!done?'#4338ca':(done?'#d1fae5':'#e5e7eb')};border-radius:var(--r-sm);margin-bottom:.35rem;background:${done?'#f0fdf4':'#fff'};cursor:pointer">
                     <span style="font-size:1.05rem">${done?'✅':'⬜'}</span>
                     <div style="flex:1;min-width:0">
@@ -12057,17 +12064,34 @@
         }
 
         // 오늘 마지막 퇴근자인지 판정 (본인 외 '출근했고 아직 미퇴근'인 사람이 없으면 마지막)
-        async function _isLastToClockOut(){
+        // 오늘 아직 재실(출근O·퇴근X) 중인 '나를 제외한' 직원 id 집합
+        async function _presentOthersToday(){
             const today=getToday();
+            const set=new Set();
             try{
                 const snap=await db.collection('attendance').where('date','==',today).get();
-                const othersOpen=snap.docs.some(d=>{
+                snap.docs.forEach(d=>{
                     const a=d.data()||{};
-                    if((a.employeeId||a.empId)===currentUser.id) return false;
-                    return (a.checkIn||a.clockIn) && !(a.checkOut||a.clockOut);
+                    const id=a.employeeId||a.empId;
+                    if(!id || id===currentUser?.id) return;
+                    if((a.checkIn||a.clockIn) && !(a.checkOut||a.clockOut)) set.add(id);
                 });
-                return !othersOpen;
-            }catch(e){ console.error('마지막 퇴근 판정 오류:',e); return false; }
+            }catch(e){ console.error('재실 인원 조회 오류:',e); }
+            return set;
+        }
+        // 내가 '해당 파트의 마지막 퇴근자'가 되는 미완료 항목들
+        //   - 담당 있음: 내가 담당이고, 나 외의 담당자가 아무도 재실하지 않으면 → 내가 마감해야 함
+        //   - 담당 없음: 내가 전체 마지막 퇴근자일 때만
+        async function _myLastResponsibleItems(){
+            const remain=_closingRemaining();
+            if(!remain.length) return [];
+            const others=await _presentOthersToday();
+            return remain.filter(it=>{
+                const as=_itemAssignees(it);
+                if(!as.length) return others.size===0;             // 담당 미지정 → 전체 마지막일 때
+                if(!as.some(a=>a.id===currentUser?.id)) return false; // 내가 담당 아님
+                return !as.some(a=>a.id!==currentUser?.id && others.has(a.id)); // 다른 담당자 아무도 안 남음
+            });
         }
 
         // 마감 미완료를 관리자에게 위임 기록
@@ -12091,7 +12115,7 @@
             if(isAdminHigh && _closingDelegated && remaining.length){
                 el.style.display='block';
                 const joined=remaining.map(i=>_esc(i.label)).join('/');
-                const lines=remaining.map(i=>'· '+_esc(i.label)+(i.assigneeName?` <b>(${_esc(i.assigneeName)})</b>`:'')).join('<br>');
+                const lines=remaining.map(i=>{ const as=_itemAssignees(i); return '· '+_esc(i.label)+(as.length?` <b>(${_esc(as.map(a=>a.name||a.id).join(', '))})</b>`:''); }).join('<br>');
                 el.innerHTML=`<div style="background:#fef2f2;border:2px solid #ef4444;border-radius:var(--r-sm);padding:.7rem .8rem;margin:.4rem 0">
                     <div style="font-weight:800;color:#dc2626;font-size:1rem">🚨 ${joined} 마감해야지!!</div>
                     <div style="font-size:.75rem;color:#b91c1c;margin-top:.35rem">${lines}</div>
@@ -12112,18 +12136,20 @@
             if(!items.length){
                 h+='<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:var(--r-sm)">등록된 항목이 없습니다.</div>';
             }else{
-                const emps=(_staffAdminEmployees||[]).filter(e=>!e.status||e.status==='active')
-                    .slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
-                const empOpts=(sel)=>'<option value="">담당 없음</option>'+emps.map(e=>`<option value="${e.id}" ${sel===e.id?'selected':''}>${_esc(e.name||e.id)}</option>`).join('');
                 h+=items.map(it=>{
                     const off=(it.active===false);
+                    const as=_itemAssignees(it);
+                    const chips=as.length
+                        ? as.map(a=>`<span style="font-size:.66rem;background:#eef2ff;color:#4338ca;padding:1px 6px;border-radius:8px">${_esc(a.name||a.id)}</span>`).join(' ')
+                        : '<span style="font-size:.66rem;color:#9ca3af">담당 미지정</span>';
                     return `<div style="display:flex;align-items:flex-start;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:var(--r-sm);margin-bottom:.35rem;background:${off?'#f9fafb':'#fff'}">
                         ${it.photo?`<img src="${it.photo}" onclick="_showClosingPhoto('${it.id}')" style="width:38px;height:38px;object-fit:cover;border-radius:var(--r-sm);border:1px solid #e5e7eb;cursor:pointer;flex-shrink:0">`:'<div style="width:38px;height:38px;border:1px dashed #d1d5db;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:.58rem;flex-shrink:0">사진</div>'}
                         <div style="flex:1;min-width:0">
                             <div style="font-size:.85rem;font-weight:600;color:${off?'#9ca3af':'#111827'}">${_esc(it.label)}${off?' <span style=\"font-size:.68rem;color:#9ca3af\">(미사용)</span>':''}</div>
-                            <div style="display:flex;align-items:center;gap:.3rem;margin-top:.3rem">
+                            <div style="display:flex;align-items:center;gap:.35rem;margin-top:.3rem;flex-wrap:wrap">
                                 <span style="font-size:.68rem;color:#6b7280;flex-shrink:0">담당</span>
-                                <select onchange="_closingSetAssignee('${it.id}', this.value)" style="flex:1;min-width:0;max-width:180px;padding:.2rem .3rem;font-size:.72rem;border:1px solid #d1d5db;border-radius:var(--r-sm)">${empOpts(it.assigneeId||'')}</select>
+                                ${chips}
+                                <button onclick="_closingOpenAssignees('${it.id}')" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.1rem .45rem;font-size:.66rem;border-radius:var(--r-sm);cursor:pointer">지정</button>
                             </div>
                             <div style="display:flex;gap:.3rem;margin-top:.35rem;flex-wrap:wrap">
                                 <button onclick="_closingPickPhoto('${it.id}')" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.2rem .5rem;font-size:.68rem;border-radius:var(--r-sm);cursor:pointer">사진</button>
@@ -12199,16 +12225,52 @@
             try{ await db.collection('closingItems').doc(id).delete(); _closingItems=_closingItems.filter(x=>x.id!==id); renderClosingChecklist(); _renderStaffAdminBody(); }
             catch(e){ alert('삭제 실패: '+(e?.message||e)); }
         }
-        // 담당 직원 지정 (재직 직원 선택)
-        async function _closingSetAssignee(id, empId){
-            const it=_closingItems.find(x=>x.id===id); if(!it) return;
-            const emp=(_staffAdminEmployees||[]).find(e=>e.id===empId);
-            const assigneeName=emp?(emp.name||emp.id):'';
+        // 담당 직원 복수 지정 (재직 직원 체크박스 모달)
+        let _closingAssigneeTargetId=null;
+        function _closingOpenAssignees(id){
+            _closingAssigneeTargetId=id;
+            const it=(_closingItems||[]).find(x=>x.id===id); if(!it) return;
+            const cur=new Set(_itemAssignees(it).map(a=>a.id));
+            const emps=(_staffAdminEmployees||[]).filter(e=>!e.status||e.status==='active')
+                .slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+            let ov=document.getElementById('_closingAssigneeModal');
+            if(!ov){
+                ov=document.createElement('div'); ov.id='_closingAssigneeModal';
+                ov.style.cssText='display:none;position:fixed;inset:0;z-index:3200;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:1rem';
+                document.body.appendChild(ov);
+            }
+            const rows=emps.length? emps.map(e=>`<label style="display:flex;align-items:center;gap:.5rem;padding:.4rem .3rem;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:.85rem">
+                <input type="checkbox" class="_clAsgChk" value="${e.id}" data-name="${_esc(e.name||e.id)}" ${cur.has(e.id)?'checked':''} style="width:16px;height:16px">
+                ${_esc(e.name||e.id)}
+            </label>`).join('') : '<div style="color:#9ca3af;font-size:.82rem;padding:.5rem">재직 직원이 없습니다.</div>';
+            ov.innerHTML=`<div style="background:#fff;border-radius:10px;max-width:420px;width:100%;padding:1rem;max-height:80vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+                <div style="font-weight:700;font-size:.95rem;margin-bottom:.2rem">담당 직원 (복수 선택)</div>
+                <div style="font-size:.72rem;color:#6b7280;margin-bottom:.5rem">${_esc(it.label)} · 이 파트의 <b>마지막 퇴근자</b>가 마감하도록 알림이 갑니다.</div>
+                <div style="overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;padding:.2rem .4rem;margin-bottom:.6rem">${rows}</div>
+                <div style="display:flex;gap:.4rem;justify-content:flex-end">
+                    <button onclick="_closingAssigneeClose()" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">닫기</button>
+                    <button onclick="_closingAssigneeSave()" style="background:#4338ca;color:#fff;border:none;padding:.45rem .9rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">저장</button>
+                </div>
+            </div>`;
+            ov.onclick=()=>_closingAssigneeClose();
+            ov.style.display='flex';
+        }
+        function _closingAssigneeClose(){ const ov=document.getElementById('_closingAssigneeModal'); if(ov) ov.style.display='none'; }
+        async function _closingAssigneeSave(){
+            const id=_closingAssigneeTargetId; if(!id) return;
+            const chosen=[...document.querySelectorAll('._clAsgChk:checked')].map(c=>({id:c.value, name:c.getAttribute('data-name')||''}));
             try{
-                await db.collection('closingItems').doc(id).update({ assigneeId:empId||'', assigneeName });
-                it.assigneeId=empId||''; it.assigneeName=assigneeName;
+                await db.collection('closingItems').doc(id).update({
+                    assignees: chosen,
+                    assigneeId: firebase.firestore.FieldValue.delete(),
+                    assigneeName: firebase.firestore.FieldValue.delete()
+                });
+                const it=_closingItems.find(x=>x.id===id);
+                if(it){ it.assignees=chosen; delete it.assigneeId; delete it.assigneeName; }
+                _closingAssigneeClose();
                 renderClosingChecklist();
-            }catch(e){ alert('담당 지정 실패: '+(e?.message||e)); }
+                _renderStaffAdminBody();
+            }catch(e){ alert('담당 저장 실패: '+(e?.message||e)); }
         }
         // ── 사진 편집 모달 (PC 캡처 붙여넣기 Ctrl+V / 파일 선택 / 삭제) ──
         let _closingPhotoDraft=null;
