@@ -12009,10 +12009,12 @@
                 const c=_closingChecks[it.id];
                 const done=!!(c&&c.done);
                 const who=done?`<div style="font-size:.68rem;color:#9ca3af">✓ ${_esc(c.byName||'')}${c.at?(' · '+String(c.at).slice(11,16)):''}</div>`:'';
-                return `<div onclick="toggleClosingItem('${it.id}')" style="display:flex;align-items:center;gap:.55rem;padding:.5rem .6rem;border:1px solid ${done?'#d1fae5':'#e5e7eb'};border-radius:var(--r-sm);margin-bottom:.35rem;background:${done?'#f0fdf4':'#fff'};cursor:pointer">
+                const mine=(it.assigneeId && currentUser?.id && it.assigneeId===currentUser.id);
+                const assignee=it.assigneeName?`<span style="font-size:.66rem;font-weight:600;padding:1px 6px;border-radius:8px;${mine?'background:#4338ca;color:#fff':'background:#eef2ff;color:#4338ca'}">담당 ${_esc(it.assigneeName)}${mine?' · 나':''}</span>`:'';
+                return `<div onclick="toggleClosingItem('${it.id}')" style="display:flex;align-items:center;gap:.55rem;padding:.5rem .6rem;border:1px solid ${mine&&!done?'#4338ca':(done?'#d1fae5':'#e5e7eb')};border-radius:var(--r-sm);margin-bottom:.35rem;background:${done?'#f0fdf4':'#fff'};cursor:pointer">
                     <span style="font-size:1.05rem">${done?'✅':'⬜'}</span>
                     <div style="flex:1;min-width:0">
-                        <div style="font-size:.85rem;font-weight:600;color:${done?'#9ca3af':'#111827'};${done?'text-decoration:line-through':''}">${_esc(it.label)}</div>
+                        <div style="font-size:.85rem;font-weight:600;color:${done?'#9ca3af':'#111827'};${done?'text-decoration:line-through':''}">${_esc(it.label)} ${assignee}</div>
                         ${who}
                     </div>
                     ${it.photo?`<img src="${it.photo}" onclick="event.stopPropagation();_showClosingPhoto('${it.id}')" style="width:34px;height:34px;object-fit:cover;border-radius:var(--r-sm);border:1px solid #e5e7eb" alt="참고">`:''}
@@ -12088,9 +12090,11 @@
             const remaining=_closingRemaining();
             if(isAdminHigh && _closingDelegated && remaining.length){
                 el.style.display='block';
-                el.innerHTML=`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r-sm);padding:.6rem .75rem;margin:.4rem 0">
-                    <div style="font-weight:700;color:#991b1b;font-size:.85rem">🚨 오늘 마감 미완료 ${remaining.length}개 (관리자 위임됨)</div>
-                    <div style="font-size:.75rem;color:#b91c1c;margin-top:.25rem">${remaining.map(i=>'· '+_esc(i.label)).join('<br>')}</div>
+                const joined=remaining.map(i=>_esc(i.label)).join('/');
+                const lines=remaining.map(i=>'· '+_esc(i.label)+(i.assigneeName?` <b>(${_esc(i.assigneeName)})</b>`:'')).join('<br>');
+                el.innerHTML=`<div style="background:#fef2f2;border:2px solid #ef4444;border-radius:var(--r-sm);padding:.7rem .8rem;margin:.4rem 0">
+                    <div style="font-weight:800;color:#dc2626;font-size:1rem">🚨 ${joined} 마감해야지!!</div>
+                    <div style="font-size:.75rem;color:#b91c1c;margin-top:.35rem">${lines}</div>
                     <div style="font-size:.72rem;color:#7f1d1d;margin-top:.3rem">위임: ${_esc(_closingDelegated.byName||'')} — ${_esc(_closingDelegated.reason||'')}</div>
                 </div>`;
             }else{ el.style.display='none'; el.innerHTML=''; }
@@ -12108,13 +12112,20 @@
             if(!items.length){
                 h+='<div style="color:#9ca3af;font-size:.85rem;padding:.75rem;text-align:center;background:#f9fafb;border-radius:var(--r-sm)">등록된 항목이 없습니다.</div>';
             }else{
+                const emps=(_staffAdminEmployees||[]).filter(e=>!e.status||e.status==='active')
+                    .slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+                const empOpts=(sel)=>'<option value="">담당 없음</option>'+emps.map(e=>`<option value="${e.id}" ${sel===e.id?'selected':''}>${_esc(e.name||e.id)}</option>`).join('');
                 h+=items.map(it=>{
                     const off=(it.active===false);
-                    return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:var(--r-sm);margin-bottom:.35rem;background:${off?'#f9fafb':'#fff'}">
+                    return `<div style="display:flex;align-items:flex-start;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:var(--r-sm);margin-bottom:.35rem;background:${off?'#f9fafb':'#fff'}">
                         ${it.photo?`<img src="${it.photo}" onclick="_showClosingPhoto('${it.id}')" style="width:38px;height:38px;object-fit:cover;border-radius:var(--r-sm);border:1px solid #e5e7eb;cursor:pointer;flex-shrink:0">`:'<div style="width:38px;height:38px;border:1px dashed #d1d5db;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:.58rem;flex-shrink:0">사진</div>'}
                         <div style="flex:1;min-width:0">
                             <div style="font-size:.85rem;font-weight:600;color:${off?'#9ca3af':'#111827'}">${_esc(it.label)}${off?' <span style=\"font-size:.68rem;color:#9ca3af\">(미사용)</span>':''}</div>
-                            <div style="display:flex;gap:.3rem;margin-top:.3rem;flex-wrap:wrap">
+                            <div style="display:flex;align-items:center;gap:.3rem;margin-top:.3rem">
+                                <span style="font-size:.68rem;color:#6b7280;flex-shrink:0">담당</span>
+                                <select onchange="_closingSetAssignee('${it.id}', this.value)" style="flex:1;min-width:0;max-width:180px;padding:.2rem .3rem;font-size:.72rem;border:1px solid #d1d5db;border-radius:var(--r-sm)">${empOpts(it.assigneeId||'')}</select>
+                            </div>
+                            <div style="display:flex;gap:.3rem;margin-top:.35rem;flex-wrap:wrap">
                                 <button onclick="_closingPickPhoto('${it.id}')" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.2rem .5rem;font-size:.68rem;border-radius:var(--r-sm);cursor:pointer">사진</button>
                                 <button onclick="_closingRenameItem('${it.id}')" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.2rem .5rem;font-size:.68rem;border-radius:var(--r-sm);cursor:pointer">이름</button>
                                 <button onclick="_closingMoveItem('${it.id}',-1)" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.2rem .45rem;font-size:.68rem;border-radius:var(--r-sm);cursor:pointer">▲</button>
@@ -12126,7 +12137,6 @@
                     </div>`;
                 }).join('');
             }
-            h+='<input id="_closingPhotoInput" type="file" accept="image/*" style="display:none">';
             // 📲 관리자 푸시 알림 (Phase 2)
             const pushOn=_fcmPushEnabledHere();
             const hasVapid=!!_fcmVapidKey;
@@ -12189,21 +12199,83 @@
             try{ await db.collection('closingItems').doc(id).delete(); _closingItems=_closingItems.filter(x=>x.id!==id); renderClosingChecklist(); _renderStaffAdminBody(); }
             catch(e){ alert('삭제 실패: '+(e?.message||e)); }
         }
+        // 담당 직원 지정 (재직 직원 선택)
+        async function _closingSetAssignee(id, empId){
+            const it=_closingItems.find(x=>x.id===id); if(!it) return;
+            const emp=(_staffAdminEmployees||[]).find(e=>e.id===empId);
+            const assigneeName=emp?(emp.name||emp.id):'';
+            try{
+                await db.collection('closingItems').doc(id).update({ assigneeId:empId||'', assigneeName });
+                it.assigneeId=empId||''; it.assigneeName=assigneeName;
+                renderClosingChecklist();
+            }catch(e){ alert('담당 지정 실패: '+(e?.message||e)); }
+        }
+        // ── 사진 편집 모달 (PC 캡처 붙여넣기 Ctrl+V / 파일 선택 / 삭제) ──
+        let _closingPhotoDraft=null;
+        let _closingPasteHandler=null;
         function _closingPickPhoto(id){
             _closingPhotoTargetId=id;
-            const inp=document.getElementById('_closingPhotoInput'); if(!inp) return;
-            inp.value='';
-            inp.onchange=async ()=>{
-                const f=inp.files&&inp.files[0]; if(!f) return;
-                try{
-                    const dataUrl=await _closingDownscaleImage(f,900,0.6);
-                    await db.collection('closingItems').doc(_closingPhotoTargetId).update({photo:dataUrl});
-                    const it=_closingItems.find(x=>x.id===_closingPhotoTargetId); if(it) it.photo=dataUrl;
-                    renderClosingChecklist();
-                    _renderStaffAdminBody();
-                }catch(e){ alert('사진 처리 실패: '+(e?.message||e)); }
+            const it=(_closingItems||[]).find(x=>x.id===id);
+            _closingPhotoDraft=(it&&it.photo)||null;
+            let ov=document.getElementById('_closingPhotoModal');
+            if(!ov){
+                ov=document.createElement('div'); ov.id='_closingPhotoModal';
+                ov.style.cssText='display:none;position:fixed;inset:0;z-index:3200;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:1rem';
+                document.body.appendChild(ov);
+            }
+            _closingRenderPhotoModal();
+            ov.style.display='flex';
+            if(_closingPasteHandler) document.removeEventListener('paste', _closingPasteHandler);
+            _closingPasteHandler=async (e)=>{
+                const items=(e.clipboardData&&e.clipboardData.items)||[];
+                for(const itm of items){
+                    if(itm.type && itm.type.indexOf('image')===0){
+                        const f=itm.getAsFile();
+                        if(f){ e.preventDefault(); try{ _closingPhotoDraft=await _closingDownscaleImage(f,900,0.6); _closingRenderPhotoModal(); }catch(err){ alert('붙여넣기 실패: '+(err?.message||err)); } }
+                        return;
+                    }
+                }
             };
-            inp.click();
+            document.addEventListener('paste', _closingPasteHandler);
+        }
+        function _closingRenderPhotoModal(){
+            const ov=document.getElementById('_closingPhotoModal'); if(!ov) return;
+            const has=!!_closingPhotoDraft;
+            ov.innerHTML=`<div style="background:#fff;border-radius:10px;max-width:440px;width:100%;padding:1rem" onclick="event.stopPropagation()">
+                <div style="font-weight:700;font-size:.95rem;margin-bottom:.6rem">📷 마감 항목 사진</div>
+                <div style="border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;min-height:150px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:.6rem">
+                    ${has?`<img src="${_closingPhotoDraft}" style="max-width:100%;max-height:300px;object-fit:contain">`:'<div style="color:#94a3b8;font-size:.82rem;text-align:center;padding:1rem">미리보기 없음<br><span style="font-size:.72rem">아래에서 캡처 붙여넣기(Ctrl+V) 또는 파일 선택</span></div>'}
+                </div>
+                <div style="font-size:.75rem;color:#475569;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:.5rem .6rem;margin-bottom:.6rem">💡 <b>PC 캡처 붙여넣기:</b> 캡처(⊞+Shift+S / ⌘+⌃+⇧+4) 후 이 창에서 <b>Ctrl+V</b> (⌘+V)</div>
+                <input id="_closingModalFile" type="file" accept="image/*" style="display:none">
+                <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end">
+                    <button onclick="document.getElementById('_closingModalFile').click()" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">파일 선택</button>
+                    ${has?`<button onclick="_closingPhotoModalRemove()" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">사진 삭제</button>`:''}
+                    <button onclick="_closingPhotoModalClose()" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">닫기</button>
+                    <button onclick="_closingPhotoModalSave()" style="background:#4338ca;color:#fff;border:none;padding:.45rem .9rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">저장</button>
+                </div>
+            </div>`;
+            ov.onclick=()=>_closingPhotoModalClose();
+            const fi=document.getElementById('_closingModalFile');
+            if(fi) fi.onchange=async ()=>{ const f=fi.files&&fi.files[0]; if(!f) return; try{ _closingPhotoDraft=await _closingDownscaleImage(f,900,0.6); _closingRenderPhotoModal(); }catch(e){ alert('사진 처리 실패: '+(e?.message||e)); } };
+        }
+        function _closingPhotoModalClose(){
+            const ov=document.getElementById('_closingPhotoModal'); if(ov) ov.style.display='none';
+            if(_closingPasteHandler){ document.removeEventListener('paste', _closingPasteHandler); _closingPasteHandler=null; }
+            _closingPhotoDraft=null;
+        }
+        function _closingPhotoModalRemove(){ _closingPhotoDraft=null; _closingRenderPhotoModal(); }
+        async function _closingPhotoModalSave(){
+            const id=_closingPhotoTargetId; if(!id){ _closingPhotoModalClose(); return; }
+            try{
+                const val=_closingPhotoDraft?_closingPhotoDraft:firebase.firestore.FieldValue.delete();
+                await db.collection('closingItems').doc(id).update({photo: val});
+                const it=_closingItems.find(x=>x.id===id);
+                if(it){ if(_closingPhotoDraft) it.photo=_closingPhotoDraft; else delete it.photo; }
+                _closingPhotoModalClose();
+                renderClosingChecklist();
+                _renderStaffAdminBody();
+            }catch(e){ alert('저장 실패: '+(e?.message||e)); }
         }
         // 이미지 축소 → dataURL (Firestore 문서 한도 고려)
         function _closingDownscaleImage(file, maxDim, quality){
