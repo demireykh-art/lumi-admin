@@ -16788,9 +16788,16 @@
             ['taxFree','과세비급여'],['vat','부가세'],['copay','급여본부금'],['claim','급여청구액'],
             ['copaySum','본부금합'],['support','지원금'],['discount','할인금액'],
             ['totalSales','총매출액'],['refundOrder','환불오더']];
+        // 시술별 매출집계 — 열 수는 같지만 할인금액이 없고 '수납'(실제 걷힌 돈)이 있다
+        const DS_PROC_COL=[['nonTaxFree','비과세비급여'],['taxFreeGross','과세비급여 총금액'],
+            ['taxFree','과세비급여'],['vat','부가세'],['copay','급여본부금'],['claim','급여청구액'],
+            ['copaySum','본부금합'],['support','지원금'],
+            ['totalSales','총매출액'],['refundOrder','환불오더'],['received','수납']];
 
         // 보험유형별 환자 수 그래프 — 기본 항목 (사진 없이 직접 입력할 때의 빈 칸)
         const DS_PT_DEFAULT=['건강보험','의료급여','자동차보험','일반보험'];
+        const DS_KIND_NAME={payment:'수납 구분표',staff:'담당직원별',doctor:'담당의별',
+                            procedure:'시술별',patients:'보험유형별 환자 수'};
         // '일반/비급여' 계열만 비보험. 나머지(건강보험·의료급여·자동차보험·산재…)는 급여.
         function _dsIsNonInsType(label){ return /일반|비급여|비보험/.test(String(label||'')); }
 
@@ -16830,16 +16837,25 @@
         function _dsNormPayment(p){
             return {rows:(p&&p.rows)||{}, notes:(p&&p.notes)||{}};
         }
-        function _dsEmptySalesRow(){ const r={count:0}; DS_SALES_COL.forEach(([k])=>r[k]=0); return r; }
+        function _dsEmptyRow(cols){ const r={count:0}; cols.forEach(([k])=>r[k]=0); return r; }
+        function _dsEmptySalesRow(){ return _dsEmptyRow(DS_SALES_COL); }
+        function _dsEmptyProcRow(){ return _dsEmptyRow(DS_PROC_COL); }
 
         // 이름별 행들을 열 단위로 더한다 (합계 행이 없을 때 대신 쓴다)
-        function _dsSumRows(map){
-            const out=_dsEmptySalesRow();
+        function _dsSumBy(map,cols){
+            const out=_dsEmptyRow(cols);
             Object.values(map||{}).forEach(r=>{
                 out.count+=_dsN(r.count);
-                DS_SALES_COL.forEach(([k])=>{ out[k]+=_dsN(r[k]); });
+                cols.forEach(([k])=>{ out[k]+=_dsN(r[k]); });
             });
             return out;
+        }
+        function _dsSumRows(map){ return _dsSumBy(map,DS_SALES_COL); }
+
+        // 시술별 표에서 '보험진료' 행을 찾는다 (OCR 오차를 감안해 부분일치)
+        function _dsFindInsRow(procRows){
+            const key=Object.keys(procRows||{}).find(n=>/보험\s*진료/.test(String(n)));
+            return key?{key,row:procRows[key]}:null;
         }
 
         // 하루치 문서 → 화면에 쓰는 지표. 문서가 없으면 전부 0.
@@ -16852,8 +16868,26 @@
             const base=(dTot.totalSales||dTot.count)?dTot:sTot;
             const p=(d.payment&&d.payment.rows)||{};
             const pr=k=>p[k]||{};
-            const insurance=_dsN(base.copay)+_dsN(base.claim);        // 급여(보험)
-            const nonIns=_dsN(base.nonTaxFree)+_dsN(base.taxFreeGross); // 비급여
+            // ── 보험 / 비보험 분해 ──
+            // 시술별 표가 있으면 그 표의 '보험진료' 행을 쓴다. 원장님이 말하는
+            // "보험진료 매출·객단가" 가 바로 이 행이고, 건수까지 같이 들어 있어
+            // 분자·분모가 같은 표에서 나온다 (가장 정확).
+            // 없으면 급여 금액(급여본부금+급여청구액) 기준으로 떨어뜨린다.
+            const procRows=d.procedure||{};
+            const procTotal=d.procedureTotal
+                || (Object.keys(procRows).length?_dsSumBy(procRows,DS_PROC_COL):null);
+            const insRow=_dsFindInsRow(procRows);
+            let insurance, nonIns, insCnt=0, nonInsCnt=0, insSrc='accrual';
+            if(insRow&&procTotal){
+                insSrc='procedure';
+                insurance=_dsN(insRow.row.totalSales);
+                insCnt=_dsN(insRow.row.count);
+                nonIns=_dsN(procTotal.totalSales)-insurance;
+                nonInsCnt=_dsN(procTotal.count)-insCnt;
+            }else{
+                insurance=_dsN(base.copay)+_dsN(base.claim);          // 급여 금액
+                nonIns=_dsN(base.nonTaxFree)+_dsN(base.taxFreeGross); // 비급여 금액
+            }
             // 환자 수(명)는 보험유형별 그래프에서 온다. 담당의별 건수(오더 수)와는
             // 세는 단위가 달라서 서로 맞지 않는 게 정상이다. 대조하지 않는다.
             const ptTypes=(d.patients&&d.patients.types)||{};
@@ -16874,9 +16908,20 @@
                 refundOrder:_dsN(base.refundOrder),
                 avg:_dsAvg(total,orders),                                   // 오더 객단가
                 avgPerPatient:ptTotal>0?Math.round(total/ptTotal):null,     // 환자 객단가
-                insurance,
-                insAvg:insPt>0?Math.round(insurance/insPt):null,
-                nonIns, nonInsAvg:nonInsPt>0?Math.round(nonIns/nonInsPt):null,
+                // 보험/비보험 — 객단가 분모는 시술별 건수(있으면) > 환자 명수 순
+                insSrc,
+                insLabel:insSrc==='procedure'?'보험진료':'보험(급여)',
+                nonInsLabel:insSrc==='procedure'?'비보험 진료':'비보험(비급여)',
+                insurance, nonIns, insCnt, nonInsCnt,
+                insAvg:insCnt>0?Math.round(insurance/insCnt)
+                      :(insPt>0?Math.round(insurance/insPt):null),
+                insBasis:insCnt>0?'건':(insPt>0?'명':null),
+                insDenom:insCnt>0?insCnt:insPt,
+                nonInsAvg:nonInsCnt>0?Math.round(nonIns/nonInsCnt)
+                         :(nonInsPt>0?Math.round(nonIns/nonInsPt):null),
+                nonInsBasis:nonInsCnt>0?'건':(nonInsPt>0?'명':null),
+                nonInsDenom:nonInsCnt>0?nonInsCnt:nonInsPt,
+                procRows, procTotal,
                 cash:_dsN(pr('cashSum').sum), card:_dsN(pr('card').sum),
                 easy:_dsN(pr('easySum').sum), etc:_dsN(pr('etc').sum),
                 unclassified:_dsN(pr('unclassified').sum),
@@ -16925,9 +16970,36 @@
                     });
                 }
             });
-            const st=draft.staffTotal, dt=draft.doctorTotal;
-            if(st&&dt&&_dsN(st.totalSales)&&_dsN(dt.totalSales)&&_dsN(st.totalSales)!==_dsN(dt.totalSales))
-                w.push(`담당직원 합계(${_dsWon(st.totalSales)})와 담당의 합계(${_dsWon(dt.totalSales)})가 다릅니다`);
+            // 시술별 매출집계 — 할인금액이 없고 '수납' 열이 있다
+            const pmap=draft.procedure||{};
+            const ptot=draft.procedureTotal;
+            Object.entries(pmap).forEach(([name,r])=>{
+                if(_dsN(r.taxFree)+_dsN(r.vat)!==_dsN(r.taxFreeGross))
+                    w.push(`시술 [${name}] 과세비급여+부가세 ≠ 과세비급여 총금액`);
+                if(_dsN(r.nonTaxFree)+_dsN(r.taxFreeGross)+_dsN(r.copay)!==_dsN(r.copaySum))
+                    w.push(`시술 [${name}] 비과세+과세총액+급여본부금 ≠ 본부금합`);
+                if(_dsN(r.copaySum)+_dsN(r.claim)-_dsN(r.support)!==_dsN(r.totalSales))
+                    w.push(`시술 [${name}] 본부금합+급여청구액−지원금 ≠ 총매출액`);
+            });
+            if(ptot&&Object.keys(pmap).length){
+                const ps=_dsSumBy(pmap,DS_PROC_COL);
+                [['count','건수']].concat(DS_PROC_COL).forEach(([col,cl])=>{
+                    if(_dsN(ps[col])!==_dsN(ptot[col]))
+                        w.push(`시술 [합계 · ${cl}] 이 각 행의 합과 다릅니다 (행 합 ${_dsWon(ps[col])} / 표 합계 ${_dsWon(ptot[col])})`);
+                });
+            }
+
+            // 표끼리 대조 — 담당직원·담당의·시술별 세 표의 총매출액과 건수는 같아야 한다.
+            // (환자 수(명)와는 단위가 달라 여기에 끼우지 않는다)
+            const totals=[['담당직원',draft.staffTotal],['담당의',draft.doctorTotal],['시술별',ptot]]
+                .filter(([,t])=>t&&_dsN(t.totalSales));
+            for(let i=1;i<totals.length;i++){
+                const [an,a]=totals[0], [bn,b]=totals[i];
+                if(_dsN(a.totalSales)!==_dsN(b.totalSales))
+                    w.push(`${an} 합계(${_dsWon(a.totalSales)})와 ${bn} 합계(${_dsWon(b.totalSales)})의 총매출액이 다릅니다`);
+                if(_dsN(a.count)&&_dsN(b.count)&&_dsN(a.count)!==_dsN(b.count))
+                    w.push(`${an} 합계(${_dsN(a.count)}건)와 ${bn} 합계(${_dsN(b.count)}건)의 건수가 다릅니다`);
+            }
             return w;
         }
 
@@ -16981,9 +17053,9 @@
             const first=new Date(y,m-1,1).getDay();
             // 월 누계
             const acc={count:0,totalSales:0,insurance:0,nonIns:0,
-                       patientTotal:0,insPt:0,nonInsPt:0,
+                       patientTotal:0,insPt:0,nonInsPt:0,insCnt:0,nonInsCnt:0,
                        received:0,cash:0,card:0,easy:0,etc:0,taxAmt:0,vat:0,nonTaxAmt:0,filled:0};
-            const staffAcc={}, doctorAcc={}, byDay={};
+            const staffAcc={}, doctorAcc={}, procAcc={}, byDay={};
             for(let d=1;d<=days;d++){
                 const ymd=`${ym}-${String(d).padStart(2,'0')}`;
                 const doc=_dsDocs[ymd];
@@ -16991,10 +17063,10 @@
                 const k=_dsMetrics(doc);
                 byDay[ymd]=k; acc.filled++;
                 ['count','totalSales','insurance','nonIns','patientTotal','insPt','nonInsPt',
-                 'received','cash','card','easy','etc','taxAmt','vat','nonTaxAmt']
+                 'insCnt','nonInsCnt','received','cash','card','easy','etc','taxAmt','vat','nonTaxAmt']
                     .forEach(f=>{ acc[f]+=_dsN(k[f]); });
-                [['staff',staffAcc],['doctor',doctorAcc]].forEach(([scope,into])=>{
-                    Object.entries(k[scope]||{}).forEach(([name,r])=>{
+                [[k.staff,staffAcc],[k.doctor,doctorAcc],[k.procRows,procAcc]].forEach(([src,into])=>{
+                    Object.entries(src||{}).forEach(([name,r])=>{
                         const t=into[name]||(into[name]={count:0,totalSales:0});
                         t.count+=_dsN(r.count); t.totalSales+=_dsN(r.totalSales);
                     });
@@ -17015,11 +17087,11 @@
                 ['객단가',
                  acc.patientTotal>0?_dsWon(Math.round(acc.totalSales/acc.patientTotal)):_dsWon(_dsAvg(acc.totalSales,acc.count)),
                  acc.patientTotal>0?`환자 기준 · 오더 기준 ${_dsWon(_dsAvg(acc.totalSales,acc.count))}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
-                ['수납 합계',_dsWon(acc.received),`현금 ${_dsShort(acc.cash)} · 카드 ${_dsShort(acc.card)}`,'#166534','#dcfce7'],
-                ['보험(급여)',_dsWon(acc.insurance),
-                 acc.insPt>0?`${acc.insPt.toLocaleString()}명 · 객단가 ${_dsWon(Math.round(acc.insurance/acc.insPt))}`:'환자 수 미입력','#92400e','#fef3c7'],
-                ['비보험(비급여)',_dsWon(acc.nonIns),
-                 acc.nonInsPt>0?`${acc.nonInsPt.toLocaleString()}명 · 객단가 ${_dsWon(Math.round(acc.nonIns/acc.nonInsPt))}`:'환자 수 미입력','#7c3aed','#f5f3ff'],
+                ['수납 합계',_dsWon(acc.received),`현금 ${_dsShort(acc.cash)}원 · 카드 ${_dsShort(acc.card)}원`,'#166534','#dcfce7'],
+                [acc.insCnt>0?'보험진료':'보험(급여)',_dsWon(acc.insurance),
+                 _dsDenomSub(acc.insurance,acc.insCnt,acc.insPt),'#92400e','#fef3c7'],
+                [acc.insCnt>0?'비보험 진료':'비보험(비급여)',_dsWon(acc.nonIns),
+                 _dsDenomSub(acc.nonIns,acc.nonInsCnt,acc.nonInsPt),'#7c3aed','#f5f3ff'],
                 ['과세 수납금액',_dsWon(acc.taxAmt),`부가세 ${_dsWon(acc.vat)}`,'#0f766e','#ccfbf1'],
                 ['입력한 날',`${acc.filled}일`,`${days}일 중 ${days-acc.filled}일 미입력`,'#6b7280','#f3f4f6'],
             ]);
@@ -17052,6 +17124,7 @@
             h+='</div>';
             h+='<div class="view-note">칸을 누르면 그 날 상세(수납 구분·직원별·담당의별)가 열립니다. 색이 진할수록 매출이 큰 날입니다.</div>';
 
+            h+=_dsRankHtml('🔧 시술 분류별 월 누계',procAcc,acc.totalSales);
             h+=_dsRankHtml('👥 직원별 월 누계',staffAcc,acc.totalSales);
             h+=_dsRankHtml('👨‍⚕️ 담당의별 월 누계',doctorAcc,acc.totalSales);
 
@@ -17061,6 +17134,13 @@
                   +'이 달에 입력된 마감결산이 없습니다. 오른쪽 위 <strong>📷 업로드</strong> 로 시작하세요.</div>';
             }
             return h;
+        }
+
+        // 객단가 분모 표기 — 건수(시술별 표)가 있으면 건, 없으면 환자 명수, 둘 다 없으면 —
+        function _dsDenomSub(amount,cnt,pt){
+            if(cnt>0) return `${cnt.toLocaleString()}건 · 객단가 ${_dsWon(Math.round(amount/cnt))}`;
+            if(pt>0)  return `${pt.toLocaleString()}명 · 객단가 ${_dsWon(Math.round(amount/pt))}`;
+            return '객단가 — (건수·환자 수 없음)';
         }
 
         function _dsCards(list){
@@ -17157,11 +17237,17 @@
             // ① 진료 실적 (발생매출)
             h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">🩺 진료 실적 (발생매출)</div>';
             h+=_dsCards([
-                ['보험(급여) 매출',_dsWon(k.insurance),
-                 k.insAvg!=null?`${k.insPt}명 · 객단가 ${_dsWon(k.insAvg)}`:'객단가 — (환자 수 미입력)','#92400e','#fef3c7'],
-                ['비보험(비급여) 매출',_dsWon(k.nonIns),
-                 k.nonInsAvg!=null?`${k.nonInsPt}명 · 객단가 ${_dsWon(k.nonInsAvg)}`:'객단가 — (환자 수 미입력)','#7c3aed','#f5f3ff'],
+                [k.insLabel+' 매출',_dsWon(k.insurance),
+                 k.insAvg!=null?`${k.insDenom}${k.insBasis} · 객단가 ${_dsWon(k.insAvg)}`:'객단가 — (건수·환자 수 없음)','#92400e','#fef3c7'],
+                [k.nonInsLabel+' 매출',_dsWon(k.nonIns),
+                 k.nonInsAvg!=null?`${k.nonInsDenom}${k.nonInsBasis} · 객단가 ${_dsWon(k.nonInsAvg)}`:'객단가 — (건수·환자 수 없음)','#7c3aed','#f5f3ff'],
             ]);
+            if(k.insSrc!=='procedure'){
+                h+='<div style="font-size:.66rem;color:var(--text-muted);margin-top:.3rem;line-height:1.5">'
+                  +'※ 급여/비급여 <strong>금액</strong> 기준입니다. ⑤ 시술별 매출집계를 올리면 '
+                  +'<strong>보험진료 건수까지</strong> 있는 정확한 객단가로 바뀝니다.</div>';
+            }
+            h+=_dsProcHtml(k);
             h+=_dsPtBarHtml(k);
             h+=_dsRankHtml('👥 담당직원별',_dsRankMap(k.staff),k.totalSales);
             h+=_dsRankHtml('👨‍⚕️ 담당의별',_dsRankMap(k.doctor),k.totalSales);
@@ -17169,7 +17255,7 @@
             // ② 수납 (현금흐름)
             h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">💳 수납 (실제 들어온 돈)</div>';
             h+=_dsCards([
-                ['수납 합계',_dsWon(k.received),`현금 ${_dsShort(k.cash)} · 카드 ${_dsShort(k.card)}`,'#166534','#dcfce7'],
+                ['수납 합계',_dsWon(k.received),`현금 ${_dsShort(k.cash)}원 · 카드 ${_dsShort(k.card)}원`,'#166534','#dcfce7'],
                 ['과세 수납금액',_dsWon(k.taxAmt),`부가세 ${_dsWon(k.vat)} · 비과세 ${_dsWon(k.nonTaxAmt)}`,'#0f766e','#ccfbf1'],
             ]);
             h+=_dsPayBarHtml(k);
@@ -17178,6 +17264,7 @@
             h+=_dsPayTableHtml(doc);
             h+=_dsSalesTableHtml('담당직원별 매출집계',doc.staff,doc.staffTotal);
             h+=_dsSalesTableHtml('담당의별 매출집계',doc.doctor,doc.doctorTotal);
+            h+=_dsSalesTableHtml('시술별 매출집계',doc.procedure,doc.procedureTotal,DS_PROC_COL,'시술');
 
             const w=_dsVerify(doc);
             if(w.length){
@@ -17202,6 +17289,38 @@
             const out={};
             Object.entries(map||{}).forEach(([n,r])=>{ out[n]={count:_dsN(r.count),totalSales:_dsN(r.totalSales)}; });
             return out;
+        }
+
+        // 시술 카테고리별 매출 — 건수·객단가·수납률까지 한 줄에
+        function _dsProcHtml(k){
+            const rows=Object.entries(k.procRows||{})
+                .map(([n,r])=>[n,{count:_dsN(r.count),totalSales:_dsN(r.totalSales),received:_dsN(r.received)}])
+                .filter(([,v])=>v.count||v.totalSales)
+                .sort((a,b)=>b[1].totalSales-a[1].totalSales);
+            if(!rows.length) return '';
+            const total=_dsN(k.procTotal&&k.procTotal.totalSales)||rows.reduce((s,[,v])=>s+v.totalSales,0);
+            const max=Math.max(1,...rows.map(([,v])=>v.totalSales));
+            let h='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">🔧 시술 분류별</div>';
+            h+='<div style="display:flex;flex-direction:column;gap:.3rem">';
+            rows.forEach(([name,v])=>{
+                const pct=total>0?Math.round(v.totalSales/total*1000)/10:0;
+                const ins=/보험\s*진료/.test(name);
+                h+=`<div style="padding:.4rem .55rem;background:${ins?'#fffbeb':'var(--bg)'};
+                    border:1px solid ${ins?'#fde68a':'var(--border)'};border-radius:var(--r-sm)">
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;font-size:.78rem">
+                        <strong>${_esc(name)}</strong>
+                        <span style="white-space:nowrap">${_dsWon(v.totalSales)} <span style="color:var(--text-muted);font-weight:400">(${pct}%)</span></span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text-muted);margin-top:.1rem">
+                        <span>${v.count}건 · 수납 ${_dsShort(v.received)}원</span>
+                        <span>객단가 ${_dsWon(_dsAvg(v.totalSales,v.count))}</span>
+                    </div>
+                    <div style="height:4px;background:var(--border);border-radius:2px;margin-top:.25rem;overflow:hidden">
+                        <div style="height:100%;width:${Math.round(v.totalSales/max*100)}%;background:${ins?'#d97706':'var(--primary)'}"></div>
+                    </div>
+                </div>`;
+            });
+            return h+'</div>';
         }
 
         // 보험유형별 환자 분포 + 단위가 다르다는 안내
@@ -17282,18 +17401,21 @@
             return h+'</details>';
         }
 
-        function _dsSalesTableHtml(title,map,total){
+        // 원본 표 그대로 접어서 보여주기 — 담당직원/담당의(DS_SALES_COL)와
+        // 시술별(DS_PROC_COL) 이 같은 모양이라 열 정의만 바꿔 쓴다.
+        function _dsSalesTableHtml(title,map,total,cols,nameHead){
+            const cs=cols||DS_SALES_COL;
             const names=Object.keys(map||{});
             if(!names.length) return '';
             let h=`<details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:.78rem;font-weight:600">📋 ${_esc(title)} 원본</summary>`;
             h+='<div style="overflow-x:auto;margin-top:.4rem"><table style="border-collapse:collapse;font-size:.7rem;min-width:860px;width:100%">';
-            h+='<thead><tr style="background:var(--bg)"><th style="padding:.3rem .4rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap">이름(건수)</th>';
-            DS_SALES_COL.forEach(([,l])=>{ h+=`<th style="padding:.3rem .4rem;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap">${l}</th>`; });
+            h+=`<thead><tr style="background:var(--bg)"><th style="padding:.3rem .4rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap">${_esc(nameHead||'이름')}(건수)</th>`;
+            cs.forEach(([,l])=>{ h+=`<th style="padding:.3rem .4rem;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap">${l}</th>`; });
             h+='</tr></thead><tbody>';
             const draw=(name,r,bold)=>{
                 let t=`<tr style="${bold?'background:#f7f6f4;font-weight:700':''}">`
                     +`<td style="padding:.28rem .4rem;border-bottom:1px solid #f0eeeb;white-space:nowrap">${_esc(name)} (${_dsN(r.count)})</td>`;
-                DS_SALES_COL.forEach(([c])=>{
+                cs.forEach(([c])=>{
                     t+=`<td style="padding:.28rem .4rem;border-bottom:1px solid #f0eeeb;text-align:right;white-space:nowrap">${_dsN(r[c]).toLocaleString('ko-KR')}</td>`;
                 });
                 return t+'</tr>';
@@ -17318,11 +17440,14 @@
                 payment:pay,
                 staff:doc.staff||{}, staffTotal:doc.staffTotal||null,
                 doctor:doc.doctor||{}, doctorTotal:doc.doctorTotal||null,
+                procedure:doc.procedure||{},
+                procedureTotal:doc.procedureTotal||null,
                 patients:{types:(doc.patients&&doc.patients.types)||{}},
                 shots:{
                     payment:Object.keys(pay.rows).length?'saved':null,
                     staff:Object.keys(doc.staff||{}).length?'saved':null,
                     doctor:Object.keys(doc.doctor||{}).length?'saved':null,
+                    procedure:Object.keys(doc.procedure||{}).length?'saved':null,
                     patients:Object.keys((doc.patients&&doc.patients.types)||{}).length?'saved':null
                 },
                 lines:{}, source:(doc.meta&&doc.meta.source)||'manual', editing:true
@@ -17331,9 +17456,10 @@
         }
         function _dsNewDraft(ymd){
             return {date:ymd, payment:{rows:{},notes:{}}, staff:{}, staffTotal:null,
-                    doctor:{}, doctorTotal:null, patients:{types:{}},
-                    shots:{payment:null,staff:null,doctor:null,patients:null}, lines:{},
-                    source:'ocr', editing:false};
+                    doctor:{}, doctorTotal:null, procedure:{}, procedureTotal:null,
+                    patients:{types:{}},
+                    shots:{payment:null,staff:null,doctor:null,procedure:null,patients:null},
+                    lines:{}, source:'ocr', editing:false};
         }
 
         // 표는 글씨가 작다. 영수증(2400px)보다 크게 보내야 숫자가 안 뭉갠다.
@@ -17368,13 +17494,16 @@
                 _dsDraft.lines[kind]=d.lines||[];
                 if(d.detectedKind&&d.detectedKind!==kind){
                     // 슬롯을 잘못 골랐을 가능성 — 읽기는 했으니 넣되 알려준다
-                    _dsDraft.shots[kind]='warn:'+({payment:'수납 구분표',staff:'담당직원별',doctor:'담당의별',patients:'보험유형별 환자 수'}[d.detectedKind]||d.detectedKind);
+                    _dsDraft.shots[kind]='warn:'+(DS_KIND_NAME[d.detectedKind]||d.detectedKind);
                 }else{
                     _dsDraft.shots[kind]=d.ok?'ok':('err:'+(d.reason||'인식 실패'));
                 }
-                if(!d.ok&&!d.payment&&!d.sales&&!d.patients){ _dsDraft.shots[kind]='err:'+(d.reason||'인식 실패'); }
+                if(!d.ok&&!d.payment&&!d.sales&&!d.patients&&!d.procedure){ _dsDraft.shots[kind]='err:'+(d.reason||'인식 실패'); }
                 if(kind==='patients'&&d.patients){
                     _dsDraft.patients={types:d.patients.types||{}};
+                }else if(kind==='procedure'&&d.procedure){
+                    _dsDraft.procedure=d.procedure.rows||{};
+                    _dsDraft.procedureTotal=d.procedure.total||null;
                 }else if(kind==='payment'&&d.payment){
                     const rows={};
                     DS_PAY_BODY.forEach(k=>{ rows[k]={..._dsEmptyPayRow(),...(d.payment.rows[k]||{})}; });
@@ -17396,7 +17525,6 @@
 
         function _dsShotRow(kind,label,desc){
             const st=_dsDraft.shots[kind]||null;
-            const kindName={payment:'수납 구분표',staff:'담당직원별',doctor:'담당의별',patients:'보험유형별 환자 수'};
             let badge='<span style="font-size:.7rem;color:var(--text-muted)">미등록</span>';
             if(st==='busy') badge='<span style="font-size:.7rem;color:#4338ca">읽는 중…</span>';
             else if(st==='ok') badge='<span style="font-size:.7rem;color:#166534;font-weight:600">✅ 인식됨</span>';
@@ -17432,6 +17560,7 @@
             h+=_dsShotRow('payment','① 수납 구분표','현금·통장·카드·간편결제 / 부가세·합계');
             h+=_dsShotRow('staff','② 담당직원별 매출집계','직원 이름(건수) + 매출 열');
             h+=_dsShotRow('doctor','③ 담당의별 매출집계','담당의 이름(건수) + 매출 열');
+            h+=_dsShotRow('procedure','⑤ 시술별 매출집계','구분없음 — 보험진료·시술 등 분류별. 보험진료 객단가가 여기서 나옵니다');
             h+=_dsShotRow('patients','④ 보험유형별 환자 수','막대그래프 — 객단가 계산에 쓰는 내원 환자 수 (선택)');
             h+='<div class="view-note">사진을 올리면 표를 읽어 아래 칸을 채웁니다. '
               +'<strong>읽은 값은 그대로 저장되지 않습니다</strong> — 아래에서 확인·수정한 뒤 [저장]을 눌러야 기록됩니다. '
@@ -17454,6 +17583,7 @@
             h+=_dsEditPayHtml(d);
             h+=_dsEditSalesHtml('staff','② 담당직원별 매출집계',d);
             h+=_dsEditSalesHtml('doctor','③ 담당의별 매출집계',d);
+            h+=_dsEditSalesHtml('procedure','⑤ 시술별 매출집계',d,DS_PROC_COL,'시술');
 
             h+=_dsEditPatientsHtml(d);
 
@@ -17541,9 +17671,10 @@
                 _dsDraft.payment.notes[rowKey]=v;
             }else{
                 // 합계 행을 처음 건드리는 경우, 빈 행이 아니라 지금까지의 행 합에서 출발한다
+                const cs=_dsColsFor(scope);
                 const target=(rowKey==='__total__')
-                    ? (_dsDraft[scope+'Total']||(_dsDraft[scope+'Total']=_dsSumRows(_dsDraft[scope])))
-                    : (_dsDraft[scope][rowKey]||(_dsDraft[scope][rowKey]=_dsEmptySalesRow()));
+                    ? (_dsDraft[scope+'Total']||(_dsDraft[scope+'Total']=_dsSumBy(_dsDraft[scope],cs)))
+                    : (_dsDraft[scope][rowKey]||(_dsDraft[scope][rowKey]=_dsEmptyRow(cs)));
                 target[col]=v;
             }
             _dsRender();
@@ -17582,7 +17713,8 @@
             return h+'</div></details>';
         }
 
-        function _dsEditSalesHtml(scope,title,d){
+        function _dsEditSalesHtml(scope,title,d,cols,nameHead){
+            const cs=cols||DS_SALES_COL;
             const map=d[scope]||{};
             const names=Object.keys(map);
             const total=d[scope+'Total'];
@@ -17594,15 +17726,15 @@
             }else{
                 h+='<div style="overflow-x:auto;margin-top:.4rem"><table style="border-collapse:collapse;font-size:.7rem;min-width:1180px">';
                 h+='<thead><tr style="background:var(--bg)">'
-                  +'<th style="padding:.3rem .4rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;left:0;background:var(--bg)">이름</th>'
+                  +`<th style="padding:.3rem .4rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;left:0;background:var(--bg)">${_esc(nameHead||'이름')}</th>`
                   +'<th style="padding:.3rem .4rem;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap">건수</th>';
-                DS_SALES_COL.forEach(([,l])=>{ h+=`<th style="padding:.3rem .4rem;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap">${l}</th>`; });
+                cs.forEach(([,l])=>{ h+=`<th style="padding:.3rem .4rem;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap">${l}</th>`; });
                 h+='<th style="border-bottom:1px solid var(--border)"></th></tr></thead><tbody>';
                 const line=(name,r,key,bold)=>{
                     let t=`<tr style="${bold?'background:#f7f6f4':''}">`
                         +`<td style="padding:.2rem .4rem;border-bottom:1px solid #f0eeeb;white-space:nowrap;font-weight:${bold?'700':'500'};position:sticky;left:0;background:${bold?'#f7f6f4':'var(--bg-card)'}">${_esc(name)}</td>`
                         +`<td style="padding:.15rem .25rem;border-bottom:1px solid #f0eeeb;text-align:right">${_dsCellInput(scope,key,'count',r.count)}</td>`;
-                    DS_SALES_COL.forEach(([c])=>{
+                    cs.forEach(([c])=>{
                         t+=`<td style="padding:.15rem .25rem;border-bottom:1px solid #f0eeeb;text-align:right">${_dsCellInput(scope,key,c,r[c])}</td>`;
                     });
                     t+=`<td style="padding:.15rem .25rem;border-bottom:1px solid #f0eeeb">`
@@ -17612,19 +17744,21 @@
                     return t;
                 };
                 names.forEach(n=>{ h+=line(n,map[n],n,false); });
-                h+=line('합계',total||_dsSumRows(map),'__total__',true);
+                h+=line('합계',total||_dsSumBy(map,cs),'__total__',true);
                 h+='</tbody></table></div>';
             }
-            h+=`<button class="view-btn" style="margin-top:.4rem" onclick="dsAddRow('${scope}')">+ 행 추가</button>`;
+            h+=`<button class="view-btn" style="margin-top:.4rem" onclick="dsAddRow('${scope}')">+ ${_esc(nameHead||'행')} 추가</button>`;
             h+=`<button class="view-btn" style="margin-top:.4rem;margin-left:.3rem" onclick="dsRecalcTotal('${scope}')">합계를 각 행의 합으로 맞추기</button>`;
             return h+'</details>';
         }
 
+        function _dsColsFor(scope){ return scope==='procedure'?DS_PROC_COL:DS_SALES_COL; }
         function dsAddRow(scope){
-            const name=(prompt(scope==='doctor'?'담당의 이름':'담당직원 이름','')||'').trim();
+            const what={doctor:'담당의 이름',staff:'담당직원 이름',procedure:'시술 분류 이름'}[scope]||'이름';
+            const name=(prompt(what,'')||'').trim();
             if(!name) return;
             if(_dsDraft[scope][name]){ alert('이미 있는 이름입니다.'); return; }
-            _dsDraft[scope][name]=_dsEmptySalesRow();
+            _dsDraft[scope][name]=_dsEmptyRow(_dsColsFor(scope));
             _dsRender();
         }
         function dsRemoveRow(scope,name){
@@ -17634,7 +17768,7 @@
         }
         // 합계 행을 각 행의 합으로 덮어쓴다 (합계 줄만 잘못 읽힌 경우에 쓴다)
         function dsRecalcTotal(scope){
-            _dsDraft[scope+'Total']=_dsSumRows(_dsDraft[scope]);
+            _dsDraft[scope+'Total']=_dsSumBy(_dsDraft[scope],_dsColsFor(scope));
             _dsRender();
         }
 
@@ -17644,7 +17778,8 @@
             if(!d||!/^\d{4}-\d{2}-\d{2}$/.test(d.date||'')){ alert('날짜를 선택해주세요.'); return; }
             d.payment=_dsNormPayment(d.payment);
             const hasPay=Object.values(d.payment.rows).some(r=>DS_PAY_COL.some(([c])=>_dsN(r[c])));
-            const hasSales=Object.keys(d.staff).length||Object.keys(d.doctor).length;
+            const hasSales=Object.keys(d.staff).length||Object.keys(d.doctor).length
+                          ||Object.keys(d.procedure||{}).length;
             const hasPt=Object.values((d.patients&&d.patients.types)||{}).some(v=>_dsN(v)>0);
             if(!hasPay&&!hasSales&&!hasPt){ alert('저장할 값이 없습니다. 사진을 올리거나 직접 입력해주세요.'); return; }
             const warns=_dsVerify(d);
@@ -17665,11 +17800,12 @@
                 const notes={};
                 const draftNotes=(d.payment&&d.payment.notes)||{};
                 DS_NOTE.forEach(([k])=>{ if(draftNotes[k]!=null) notes[k]=_dsN(draftNotes[k]); });
-                const clean=map=>{
+                const clean=(map,cols)=>{
+                    const cs=cols||DS_SALES_COL;
                     const out={};
                     Object.entries(map||{}).forEach(([n,r])=>{
                         const c={count:_dsN(r.count)};
-                        DS_SALES_COL.forEach(([k])=>c[k]=_dsN(r[k]));
+                        cs.forEach(([k])=>c[k]=_dsN(r[k]));
                         out[n]=c;
                     });
                     return out;
@@ -17683,6 +17819,8 @@
                     payment:{rows:payRows,notes},
                     staff:clean(d.staff), staffTotal:d.staffTotal?clean({t:d.staffTotal}).t:null,
                     doctor:clean(d.doctor), doctorTotal:d.doctorTotal?clean({t:d.doctorTotal}).t:null,
+                    procedure:clean(d.procedure,DS_PROC_COL),
+                    procedureTotal:d.procedureTotal?clean({t:d.procedureTotal},DS_PROC_COL).t:null,
                     patients:{types:ptTypes, total:Object.values(ptTypes).reduce((a,b)=>a+b,0)},
                     warnings:warns,
                     meta:{

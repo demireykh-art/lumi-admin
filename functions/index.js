@@ -1574,6 +1574,22 @@ const DS_SALES_COLS = [
   'refundOrder',   // 환불오더
 ];
 
+// 시술별 매출집계 — 담당직원/담당의별과 열 개수(11)는 같지만 구성이 다르다.
+// 할인금액이 없고 대신 '수납'(그 분류에서 실제로 걷힌 돈) 열이 있다.
+const DS_PROC_COLS = [
+  'nonTaxFree',    // 비과세비급여
+  'taxFreeGross',  // 과세비급여 총금액
+  'taxFree',       // 과세비급여
+  'vat',           // 부가세
+  'copay',         // 급여본부금
+  'claim',         // 급여청구액
+  'copaySum',      // 본부금합(수납할금액)
+  'support',       // 지원금
+  'totalSales',    // 총매출액(환불오더미포함)
+  'refundOrder',   // 환불오더
+  'received',      // 수납
+];
+
 // 표 라벨 비교용 정규화 — 한글·숫자·+ 만 남긴다.
 // "※ 과세 + 비과세 수납금액" → "과세+비과세수납금액"
 function dsNorm(s) {
@@ -1749,29 +1765,55 @@ function dsParsePayment(wordRows) {
 }
 
 // 담당직원별 / 담당의별 매출집계 파싱
-function dsParseSales(wordRows) {
+/**
+ * "이름 (건수)" 로 시작하는 행에서 이름·건수·이후 숫자 시작 위치를 찾는다.
+ *
+ * 라벨 자체에 괄호가 들어가는 행이 있다 — "단순(10분미만) (0)", "위너,포다이스 (2)".
+ * 그래서 첫 괄호가 아니라 "뒤쪽에 한글이 더 없는" 마지막 (숫자) 묶음을 건수로 본다.
+ * 그 지점 이후는 금액 열뿐이다.
+ */
+function dsRowLabel(text) {
+  const re = /\(\s*(\d{1,5})\s*\)/g;
+  let m; let best = null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > 40) break;                       // 라벨 구역을 벗어남
+    const rest = text.slice(m.index + m[0].length);
+    if (/[가-힣]/.test(rest)) continue;             // 뒤에 아직 글자가 남았으면 라벨의 일부
+    best = m;
+  }
+  if (!best) return null;
+  const name = text.slice(0, best.index).trim();
+  if (!name || !/[가-힣A-Za-z]/.test(name)) return null;
+  return {name, count: parseInt(best[1], 10), skip: best.index + best[0].length};
+}
+
+/**
+ * 담당직원별·담당의별·시술별 매출집계 — 구조가 같아서 열 정의만 갈아끼운다.
+ * @param {string[]} cols DS_SALES_COLS 또는 DS_PROC_COLS
+ */
+function dsParseSales(wordRows, cols) {
+  const columns = cols || DS_SALES_COLS;
   const cand = [];
   for (const words of wordRows) {
     const text = words.map((w) => w.text).join(' ');
-    // "박지윤 (1)" / "합계 (19)" — 이름 + 건수
-    const m = text.match(/^\s*(\S[^()]{0,20}?)\s*\(\s*(\d{1,5})\s*\)/);
-    if (!m) continue;
-    const name = m[1].trim();
-    if (!/[가-힣A-Za-z]/.test(name)) continue;                       // 숫자만 있는 줄
-    if (/^(담당의|담당직원|매출비율|비율|구분)$/.test(dsNorm(name))) continue;  // 머리글
-    cand.push({name, count: parseInt(m[2], 10), words, skip: m[0].length});
+    const lab = dsRowLabel(text);
+    if (!lab) continue;
+    // 머리글이 걸리지 않게. ('시술' 은 시술별 표의 실제 데이터 행이라 빼면 안 된다 —
+    //  머리글 줄은 어차피 "(건수)" 가 없어서 dsRowLabel 에서 걸러진다)
+    if (/^(담당의|담당직원|매출비율|비율|구분)$/.test(dsNorm(lab.name))) continue;
+    cand.push({name: lab.name, count: lab.count, words, skip: lab.skip});
   }
   if (!cand.length) return {staff: {}, total: null, matched: 0};
 
   const nums = cand.map((c) => dsRowNumbers(c.words, c.skip));
-  const anchors = dsAnchors(nums.map((n) => n.tokens), DS_SALES_COLS.length);
+  const anchors = dsAnchors(nums.map((n) => n.tokens), columns.length);
 
   const staff = {};
   let total = null;
   cand.forEach((c, i) => {
     const a = dsAlign(nums[i].tokens, anchors || []);
     const row = {count: c.count};
-    DS_SALES_COLS.forEach((col, ci) => { row[col] = a.values[ci]; });
+    columns.forEach((col, ci) => { row[col] = a.values[ci]; });
     if (dsNorm(c.name) === '합계') total = row;
     else staff[c.name] = row;
   });
@@ -1917,17 +1959,53 @@ function dsParsePatients(wordRows) {
   return {types, total, matched: labels.length};
 }
 
+// 시술별 매출집계 검산 — 담당직원별과 달리 할인금액이 없다.
+function dsVerifyProcedure(rows, total) {
+  const w = [];
+  const n = (v) => Math.round(Number(v) || 0);
+  const all = Object.entries(rows);
+  for (const [name, r] of all) {
+    if (n(r.taxFree) + n(r.vat) !== n(r.taxFreeGross)) {
+      w.push(`시술 ${name}: 과세비급여+부가세 ≠ 과세비급여 총금액`);
+    }
+    if (n(r.nonTaxFree) + n(r.taxFreeGross) + n(r.copay) !== n(r.copaySum)) {
+      w.push(`시술 ${name}: 비과세+과세총액+급여본부금 ≠ 본부금합`);
+    }
+    if (n(r.copaySum) + n(r.claim) - n(r.support) !== n(r.totalSales)) {
+      w.push(`시술 ${name}: 본부금합+급여청구액−지원금 ≠ 총매출액`);
+    }
+  }
+  if (total) {
+    for (const col of ['count'].concat(DS_PROC_COLS)) {
+      const sum = all.reduce((acc, [, r]) => acc + n(r[col]), 0);
+      if (sum !== n(total[col])) w.push(`시술 합계(${col})가 각 행의 합과 다릅니다`);
+    }
+  }
+  return w;
+}
+
+/**
+ * 어떤 화면을 찍었는지 판별한다.
+ *
+ * 화면 전체를 찍으면 위쪽 탭(일일결산·환자별·시술별·담당의별·담당직원별)과
+ * 라디오 버튼(성별·진료구분별·담당의별…)에 온갖 이름이 다 들어온다. 그래서
+ * 키워드만 세면 전부 뒤섞인다. 표 제목 "○○별 매출집계" 한 줄만 본다.
+ * 제목을 못 찾으면 null 을 돌려 경고를 띄우지 않는다 (슬롯은 사용자가 고른다).
+ */
 function dsDetectKind(lines) {
+  for (const line of lines) {
+    const m = String(line).match(/([가-힣]{1,6})별\s*매출집계/);
+    if (!m) continue;
+    if (m[1] === '시술') return 'procedure';
+    if (m[1] === '담당의') return 'doctor';
+    if (m[1] === '담당직원') return 'staff';
+  }
   const all = lines.join(' ').replace(/\s/g, '');
-  // 보험유형별 환자 수 그래프 — 유형 이름이 둘 이상 보이면 이 그래프다.
-  // '보험' 글자가 수납 구분표와 겹치므로 payment 판정보다 먼저 본다.
+  if (/보험본인부담금|수납금액합계/.test(all)) return 'payment';
+  // 보험유형별 환자 수 그래프 — 유형 이름이 둘 이상 + 표가 아닌 것
   const ptHits = ['건강보험', '의료급여', '자동차보험', '일반보험', '산재보험']
     .filter((t) => all.includes(t)).length;
-  if (ptHits >= 2 && !/보험본인부담금|수납금액합계/.test(all)) return 'patients';
-  if (/보험본인부담금|수납금액합계|간편결제/.test(all)) return 'payment';
-  if (/담당의/.test(all)) return 'doctor';
-  if (/담당직원/.test(all)) return 'staff';
-  if (/본부금합|매출비율|급여청구액/.test(all)) return 'staff';
+  if (ptHits >= 2 && !/매출집계|본부금합/.test(all)) return 'patients';
   return null;
 }
 
@@ -2036,7 +2114,21 @@ exports.ocrDailySales = onCall(
       };
     }
 
-    const s = dsParseSales(wordRows);
+    if (kind === 'procedure') {
+      const pc = dsParseSales(wordRows, DS_PROC_COLS);
+      const warnings = dsVerifyProcedure(pc.staff, pc.total);
+      const ok = Object.keys(pc.staff).length > 0;
+      logger.info(`ocrDailySales(procedure) by ${request.auth.token.email || request.auth.uid}: ` +
+        `rows=${pc.matched} warn=${warnings.length}`);
+      return {
+        ok, kind: 'procedure', detectedKind: detected,
+        reason: ok ? null : '시술별 매출집계에서 행을 읽지 못했습니다. 표 전체가 나오게 다시 찍어주세요.',
+        procedure: {rows: pc.staff, total: pc.total},
+        warnings, lines,
+      };
+    }
+
+    const s = dsParseSales(wordRows, DS_SALES_COLS);
     const label = kind === 'doctor' ? '담당의' : '담당직원';
     const warnings = dsVerifySales(s.staff, s.total, label);
     const ok = Object.keys(s.staff).length > 0;
