@@ -16789,6 +16789,11 @@
             ['copaySum','본부금합'],['support','지원금'],['discount','할인금액'],
             ['totalSales','총매출액'],['refundOrder','환불오더']];
 
+        // 보험유형별 환자 수 그래프 — 기본 항목 (사진 없이 직접 입력할 때의 빈 칸)
+        const DS_PT_DEFAULT=['건강보험','의료급여','자동차보험','일반보험'];
+        // '일반/비급여' 계열만 비보험. 나머지(건강보험·의료급여·자동차보험·산재…)는 급여.
+        function _dsIsNonInsType(label){ return /일반|비급여|비보험/.test(String(label||'')); }
+
         let _dsMonth=null;        // 보고 있는 월 'YYYY-MM'
         let _dsCache={};          // {ym:{date:doc}} — 월 단위 캐시
         let _dsDocs={};           // 현재 월 문서
@@ -16849,16 +16854,29 @@
             const pr=k=>p[k]||{};
             const insurance=_dsN(base.copay)+_dsN(base.claim);        // 급여(보험)
             const nonIns=_dsN(base.nonTaxFree)+_dsN(base.taxFreeGross); // 비급여
-            const insCount=_dsN(d.insuranceCount);
+            // 환자 수(명)는 보험유형별 그래프에서 온다. 담당의별 건수(오더 수)와는
+            // 세는 단위가 달라서 서로 맞지 않는 게 정상이다. 대조하지 않는다.
+            const ptTypes=(d.patients&&d.patients.types)||{};
+            let ptTotal=0, nonInsPt=0;
+            Object.entries(ptTypes).forEach(([k,v])=>{
+                const n=_dsN(v); ptTotal+=n;
+                if(_dsIsNonInsType(k)) nonInsPt+=n;
+            });
+            const insPt=ptTotal-nonInsPt;
+            const orders=_dsN(base.count);
+            const total=_dsN(base.totalSales);
             return {
                 has:!!doc,
-                count:_dsN(base.count),
-                totalSales:_dsN(base.totalSales),
+                count:orders,                       // 오더 건수 (담당의별/직원별 표)
+                patientTotal:ptTotal,               // 내원 환자 수 (보험유형별 그래프)
+                ptTypes, insPt, nonInsPt,
+                totalSales:total,
                 refundOrder:_dsN(base.refundOrder),
-                avg:_dsAvg(_dsN(base.totalSales),_dsN(base.count)),
-                insurance, insCount,
-                insAvg:insCount>0?Math.round(insurance/insCount):null,
-                nonIns, nonInsAvg:_dsAvg(nonIns,_dsN(base.count)),
+                avg:_dsAvg(total,orders),                                   // 오더 객단가
+                avgPerPatient:ptTotal>0?Math.round(total/ptTotal):null,     // 환자 객단가
+                insurance,
+                insAvg:insPt>0?Math.round(insurance/insPt):null,
+                nonIns, nonInsAvg:nonInsPt>0?Math.round(nonIns/nonInsPt):null,
                 cash:_dsN(pr('cashSum').sum), card:_dsN(pr('card').sum),
                 easy:_dsN(pr('easySum').sum), etc:_dsN(pr('etc').sum),
                 unclassified:_dsN(pr('unclassified').sum),
@@ -16962,7 +16980,8 @@
             const days=new Date(y,m,0).getDate();
             const first=new Date(y,m-1,1).getDay();
             // 월 누계
-            const acc={count:0,totalSales:0,insurance:0,nonIns:0,insCount:0,
+            const acc={count:0,totalSales:0,insurance:0,nonIns:0,
+                       patientTotal:0,insPt:0,nonInsPt:0,
                        received:0,cash:0,card:0,easy:0,etc:0,taxAmt:0,vat:0,nonTaxAmt:0,filled:0};
             const staffAcc={}, doctorAcc={}, byDay={};
             for(let d=1;d<=days;d++){
@@ -16971,8 +16990,9 @@
                 if(!doc) continue;
                 const k=_dsMetrics(doc);
                 byDay[ymd]=k; acc.filled++;
-                ['count','totalSales','insurance','nonIns','insCount','received','cash','card',
-                 'easy','etc','taxAmt','vat','nonTaxAmt'].forEach(f=>{ acc[f]+=_dsN(k[f]); });
+                ['count','totalSales','insurance','nonIns','patientTotal','insPt','nonInsPt',
+                 'received','cash','card','easy','etc','taxAmt','vat','nonTaxAmt']
+                    .forEach(f=>{ acc[f]+=_dsN(k[f]); });
                 [['staff',staffAcc],['doctor',doctorAcc]].forEach(([scope,into])=>{
                     Object.entries(k[scope]||{}).forEach(([name,r])=>{
                         const t=into[name]||(into[name]={count:0,totalSales:0});
@@ -16990,10 +17010,16 @@
             </div>`;
 
             h+=_dsCards([
-                ['총매출(발생)',_dsWon(acc.totalSales),`${acc.count.toLocaleString()}건 · 객단가 ${_dsWon(_dsAvg(acc.totalSales,acc.count))}`,'#4338ca','#eef2ff'],
+                ['총매출(발생)',_dsWon(acc.totalSales),
+                 `오더 ${acc.count.toLocaleString()}건${acc.patientTotal?` · 내원 ${acc.patientTotal.toLocaleString()}명`:''}`,'#4338ca','#eef2ff'],
+                ['객단가',
+                 acc.patientTotal>0?_dsWon(Math.round(acc.totalSales/acc.patientTotal)):_dsWon(_dsAvg(acc.totalSales,acc.count)),
+                 acc.patientTotal>0?`환자 기준 · 오더 기준 ${_dsWon(_dsAvg(acc.totalSales,acc.count))}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
                 ['수납 합계',_dsWon(acc.received),`현금 ${_dsShort(acc.cash)} · 카드 ${_dsShort(acc.card)}`,'#166534','#dcfce7'],
-                ['보험(급여)',_dsWon(acc.insurance),acc.insCount>0?`${acc.insCount.toLocaleString()}건 · 객단가 ${_dsWon(Math.round(acc.insurance/acc.insCount))}`:'보험 건수 미입력','#92400e','#fef3c7'],
-                ['비보험(비급여)',_dsWon(acc.nonIns),`객단가 ${_dsWon(_dsAvg(acc.nonIns,acc.count))}`,'#7c3aed','#f5f3ff'],
+                ['보험(급여)',_dsWon(acc.insurance),
+                 acc.insPt>0?`${acc.insPt.toLocaleString()}명 · 객단가 ${_dsWon(Math.round(acc.insurance/acc.insPt))}`:'환자 수 미입력','#92400e','#fef3c7'],
+                ['비보험(비급여)',_dsWon(acc.nonIns),
+                 acc.nonInsPt>0?`${acc.nonInsPt.toLocaleString()}명 · 객단가 ${_dsWon(Math.round(acc.nonIns/acc.nonInsPt))}`:'환자 수 미입력','#7c3aed','#f5f3ff'],
                 ['과세 수납금액',_dsWon(acc.taxAmt),`부가세 ${_dsWon(acc.vat)}`,'#0f766e','#ccfbf1'],
                 ['입력한 날',`${acc.filled}일`,`${days}일 중 ${days-acc.filled}일 미입력`,'#6b7280','#f3f4f6'],
             ]);
@@ -17121,27 +17147,32 @@
             }
 
             h+=_dsCards([
-                ['총매출(발생)',_dsWon(k.totalSales),`${k.count}건 · 객단가 ${_dsWon(k.avg)}`,'#4338ca','#eef2ff'],
-                ['수납 합계',_dsWon(k.received),`과세 ${_dsShort(k.taxAmt)} · 부가세 ${_dsShort(k.vat)}`,'#166534','#dcfce7'],
+                ['총매출(발생)',_dsWon(k.totalSales),
+                 `오더 ${k.count}건${k.patientTotal?` · 내원 ${k.patientTotal}명`:''}`,'#4338ca','#eef2ff'],
+                ['객단가',
+                 k.avgPerPatient!=null?_dsWon(k.avgPerPatient):_dsWon(k.avg),
+                 k.avgPerPatient!=null?`환자 기준 · 오더 기준 ${_dsWon(k.avg)}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
             ]);
 
             // ① 진료 실적 (발생매출)
             h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">🩺 진료 실적 (발생매출)</div>';
             h+=_dsCards([
                 ['보험(급여) 매출',_dsWon(k.insurance),
-                 k.insAvg!=null?`${k.insCount}건 · 객단가 ${_dsWon(k.insAvg)}`:'객단가 — (보험 건수 미입력)','#92400e','#fef3c7'],
-                ['비보험(비급여) 매출',_dsWon(k.nonIns),`객단가 ${_dsWon(k.nonInsAvg)} (전체 ${k.count}건 기준)`,'#7c3aed','#f5f3ff'],
+                 k.insAvg!=null?`${k.insPt}명 · 객단가 ${_dsWon(k.insAvg)}`:'객단가 — (환자 수 미입력)','#92400e','#fef3c7'],
+                ['비보험(비급여) 매출',_dsWon(k.nonIns),
+                 k.nonInsAvg!=null?`${k.nonInsPt}명 · 객단가 ${_dsWon(k.nonInsAvg)}`:'객단가 — (환자 수 미입력)','#7c3aed','#f5f3ff'],
             ]);
+            h+=_dsPtBarHtml(k);
             h+=_dsRankHtml('👥 담당직원별',_dsRankMap(k.staff),k.totalSales);
             h+=_dsRankHtml('👨‍⚕️ 담당의별',_dsRankMap(k.doctor),k.totalSales);
 
             // ② 수납 (현금흐름)
             h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">💳 수납 (실제 들어온 돈)</div>';
-            h+=_dsPayBarHtml(k);
             h+=_dsCards([
-                ['과세 수납금액',_dsWon(k.taxAmt),`부가세 ${_dsWon(k.vat)} · 과세 총액 ${_dsWon(k.taxGross)}`,'#0f766e','#ccfbf1'],
-                ['비과세 수납금액',_dsWon(k.nonTaxAmt),`수납 합계 ${_dsWon(k.received)}`,'#6b7280','#f3f4f6'],
+                ['수납 합계',_dsWon(k.received),`현금 ${_dsShort(k.cash)} · 카드 ${_dsShort(k.card)}`,'#166534','#dcfce7'],
+                ['과세 수납금액',_dsWon(k.taxAmt),`부가세 ${_dsWon(k.vat)} · 비과세 ${_dsWon(k.nonTaxAmt)}`,'#0f766e','#ccfbf1'],
             ]);
+            h+=_dsPayBarHtml(k);
 
             // 원본 표 그대로 — 숫자를 대조하고 싶을 때만 펼친다
             h+=_dsPayTableHtml(doc);
@@ -17171,6 +17202,34 @@
             const out={};
             Object.entries(map||{}).forEach(([n,r])=>{ out[n]={count:_dsN(r.count),totalSales:_dsN(r.totalSales)}; });
             return out;
+        }
+
+        // 보험유형별 환자 분포 + 단위가 다르다는 안내
+        //   내원 환자(명)와 담당의별 오더(건)는 세는 대상이 달라 원래 안 맞는다.
+        //   같은 화면에 두되 절대 합치거나 대조하지 않는다.
+        function _dsPtBarHtml(k){
+            const entries=Object.entries(k.ptTypes||{}).filter(([,v])=>_dsN(v)>0);
+            if(!entries.length) return '';
+            const total=k.patientTotal||1;
+            const palette=['#0ea5e9','#14b8a6','#f59e0b','#ec4899','#7c3aed','#64748b'];
+            let h='<div style="margin-top:.5rem;padding:.55rem .7rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm)">';
+            h+=`<div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:.3rem">보험유형별 내원 환자 ${k.patientTotal}명</div>`;
+            h+='<div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--border)">';
+            entries.forEach(([,v],i)=>{ h+=`<div style="width:${(_dsN(v)/total*100).toFixed(1)}%;background:${palette[i%palette.length]}"></div>`; });
+            h+='</div><div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.3rem">';
+            entries.forEach(([n,v],i)=>{
+                h+=`<span style="font-size:.7rem;color:var(--text-secondary)">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${palette[i%palette.length]};margin-right:.2rem"></span>
+                    ${_esc(n)} ${_dsN(v)}명</span>`;
+            });
+            h+='</div>';
+            if(k.count){
+                h+=`<div style="font-size:.66rem;color:var(--text-muted);margin-top:.35rem;line-height:1.5">
+                    ※ 내원 <strong>${k.patientTotal}명</strong>과 담당의·직원별 <strong>${k.count}건</strong>은 세는 단위가 다릅니다
+                    (명=환자, 건=오더). 한 환자가 오더를 여러 건 만들거나, 담당이 지정되지 않은 진료가 있어
+                    원래 일치하지 않습니다.</div>`;
+            }
+            return h+'</div>';
         }
 
         // 수단별 수납 비중 막대 (현금·카드·간편결제·기타)
@@ -17259,11 +17318,12 @@
                 payment:pay,
                 staff:doc.staff||{}, staffTotal:doc.staffTotal||null,
                 doctor:doc.doctor||{}, doctorTotal:doc.doctorTotal||null,
-                insuranceCount:doc.insuranceCount==null?null:doc.insuranceCount,
+                patients:{types:(doc.patients&&doc.patients.types)||{}},
                 shots:{
                     payment:Object.keys(pay.rows).length?'saved':null,
                     staff:Object.keys(doc.staff||{}).length?'saved':null,
-                    doctor:Object.keys(doc.doctor||{}).length?'saved':null
+                    doctor:Object.keys(doc.doctor||{}).length?'saved':null,
+                    patients:Object.keys((doc.patients&&doc.patients.types)||{}).length?'saved':null
                 },
                 lines:{}, source:(doc.meta&&doc.meta.source)||'manual', editing:true
             }));
@@ -17271,8 +17331,8 @@
         }
         function _dsNewDraft(ymd){
             return {date:ymd, payment:{rows:{},notes:{}}, staff:{}, staffTotal:null,
-                    doctor:{}, doctorTotal:null, insuranceCount:null,
-                    shots:{payment:null,staff:null,doctor:null}, lines:{},
+                    doctor:{}, doctorTotal:null, patients:{types:{}},
+                    shots:{payment:null,staff:null,doctor:null,patients:null}, lines:{},
                     source:'ocr', editing:false};
         }
 
@@ -17308,12 +17368,14 @@
                 _dsDraft.lines[kind]=d.lines||[];
                 if(d.detectedKind&&d.detectedKind!==kind){
                     // 슬롯을 잘못 골랐을 가능성 — 읽기는 했으니 넣되 알려준다
-                    _dsDraft.shots[kind]='warn:'+({payment:'수납 구분표',staff:'담당직원별',doctor:'담당의별'}[d.detectedKind]||d.detectedKind);
+                    _dsDraft.shots[kind]='warn:'+({payment:'수납 구분표',staff:'담당직원별',doctor:'담당의별',patients:'보험유형별 환자 수'}[d.detectedKind]||d.detectedKind);
                 }else{
                     _dsDraft.shots[kind]=d.ok?'ok':('err:'+(d.reason||'인식 실패'));
                 }
-                if(!d.ok&&!d.payment&&!d.sales){ _dsDraft.shots[kind]='err:'+(d.reason||'인식 실패'); }
-                if(kind==='payment'&&d.payment){
+                if(!d.ok&&!d.payment&&!d.sales&&!d.patients){ _dsDraft.shots[kind]='err:'+(d.reason||'인식 실패'); }
+                if(kind==='patients'&&d.patients){
+                    _dsDraft.patients={types:d.patients.types||{}};
+                }else if(kind==='payment'&&d.payment){
                     const rows={};
                     DS_PAY_BODY.forEach(k=>{ rows[k]={..._dsEmptyPayRow(),...(d.payment.rows[k]||{})}; });
                     _dsDraft.payment={rows,notes:d.payment.notes||{}};
@@ -17334,6 +17396,7 @@
 
         function _dsShotRow(kind,label,desc){
             const st=_dsDraft.shots[kind]||null;
+            const kindName={payment:'수납 구분표',staff:'담당직원별',doctor:'담당의별',patients:'보험유형별 환자 수'};
             let badge='<span style="font-size:.7rem;color:var(--text-muted)">미등록</span>';
             if(st==='busy') badge='<span style="font-size:.7rem;color:#4338ca">읽는 중…</span>';
             else if(st==='ok') badge='<span style="font-size:.7rem;color:#166534;font-weight:600">✅ 인식됨</span>';
@@ -17365,10 +17428,11 @@
                 <input type="date" value="${_esc(d.date)}" onchange="dsSetDraftDate(this.value)"
                     style="padding:.35rem .5rem;font-size:.8rem;border:1px solid var(--border);border-radius:var(--r-sm)">
             </div>`;
-            h+='<div style="font-weight:700;font-size:.85rem;margin-bottom:.4rem">📷 마감 화면 3장</div>';
+            h+='<div style="font-weight:700;font-size:.85rem;margin-bottom:.4rem">📷 마감 화면</div>';
             h+=_dsShotRow('payment','① 수납 구분표','현금·통장·카드·간편결제 / 부가세·합계');
             h+=_dsShotRow('staff','② 담당직원별 매출집계','직원 이름(건수) + 매출 열');
             h+=_dsShotRow('doctor','③ 담당의별 매출집계','담당의 이름(건수) + 매출 열');
+            h+=_dsShotRow('patients','④ 보험유형별 환자 수','막대그래프 — 객단가 계산에 쓰는 내원 환자 수 (선택)');
             h+='<div class="view-note">사진을 올리면 표를 읽어 아래 칸을 채웁니다. '
               +'<strong>읽은 값은 그대로 저장되지 않습니다</strong> — 아래에서 확인·수정한 뒤 [저장]을 눌러야 기록됩니다. '
               +'사진 없이 직접 입력해도 됩니다.</div>';
@@ -17391,15 +17455,7 @@
             h+=_dsEditSalesHtml('staff','② 담당직원별 매출집계',d);
             h+=_dsEditSalesHtml('doctor','③ 담당의별 매출집계',d);
 
-            // 보험 객단가는 보험 건수를 알아야 나온다. 마감 화면엔 없는 값이라 손으로 받는다.
-            h+=`<div style="margin-top:.8rem;padding:.6rem .7rem;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r-sm)">
-                <div style="font-size:.78rem;font-weight:700;color:#92400e">보험(급여) 건수 <span style="font-weight:400">— 선택</span></div>
-                <div style="font-size:.68rem;color:#92400e;opacity:.85;margin:.15rem 0 .35rem">
-                    마감결산표에 없는 값이라 직접 입력합니다. 넣으면 <strong>보험 객단가</strong>가 계산됩니다. 비워두면 객단가는 “—” 로 표시됩니다.</div>
-                <input type="number" inputmode="numeric" min="0" value="${d.insuranceCount==null?'':_dsN(d.insuranceCount)}"
-                    onchange="dsSetInsCount(this.value)" placeholder="예: 12"
-                    style="width:120px;padding:.35rem .5rem;font-size:.85rem;border:1px solid #fde68a;border-radius:var(--r-sm)">
-            </div>`;
+            h+=_dsEditPatientsHtml(d);
 
             const linesKeys=Object.keys(d.lines||{}).filter(k=>(d.lines[k]||[]).length);
             if(linesKeys.length){
@@ -17421,9 +17477,50 @@
         }
 
         function dsSetDraftDate(v){ if(v) _dsDraft.date=v; }
-        function dsSetInsCount(v){
-            const s=String(v||'').trim();
-            _dsDraft.insuranceCount=s===''?null:Math.max(0,parseInt(s,10)||0);
+
+        // ④ 보험유형별 환자 수 — 객단가의 분모다. 사진이 없어도 직접 채울 수 있게
+        //    기본 항목(건강보험·의료급여·자동차보험·일반보험)을 항상 깔아둔다.
+        function _dsEditPatientsHtml(d){
+            const types=(d.patients&&d.patients.types)||{};
+            const names=DS_PT_DEFAULT.concat(Object.keys(types).filter(n=>!DS_PT_DEFAULT.includes(n)));
+            let ins=0, nonIns=0;
+            names.forEach(n=>{ const v=_dsN(types[n]); if(_dsIsNonInsType(n)) nonIns+=v; else ins+=v; });
+            let h='<details style="margin-top:.5rem" open><summary style="cursor:pointer;font-size:.8rem;font-weight:700">'
+                 +'④ 보험유형별 환자 수 확인·수정</summary>';
+            h+='<div style="font-size:.68rem;color:var(--text-muted);margin:.25rem 0 .4rem;line-height:1.55">'
+              +'<strong>객단가의 분모</strong>입니다. 사진 없이 직접 넣어도 됩니다. '
+              +'일반보험(비급여) 외 유형은 모두 보험(급여)으로 셉니다. '
+              +'담당의·직원별 <strong>건수(오더)</strong> 와는 세는 단위가 달라 합이 맞지 않는 게 정상입니다.</div>';
+            h+='<div style="display:flex;flex-wrap:wrap;gap:.4rem">';
+            names.forEach(n=>{
+                const isNon=_dsIsNonInsType(n);
+                h+=`<label style="display:flex;align-items:center;gap:.3rem;padding:.25rem .45rem;
+                    background:${isNon?'#f5f3ff':'#fef3c7'};border-radius:var(--r-sm);font-size:.72rem;
+                    color:${isNon?'#6d28d9':'#92400e'};font-weight:600">
+                    <span style="white-space:nowrap">${_esc(n)}</span>
+                    <input type="text" inputmode="numeric" value="${_dsN(types[n]).toLocaleString('ko-KR')}"
+                        onchange="dsEditPtCount('${_esc(n).replace(/'/g,"\\'")}',this)"
+                        style="width:56px;padding:.15rem .3rem;font-size:.72rem;text-align:right;
+                        border:1px solid var(--border);border-radius:4px;font-family:inherit">
+                    <span>명</span></label>`;
+            });
+            h+='</div>';
+            h+=`<div style="font-size:.72rem;color:var(--text-secondary);margin-top:.35rem">
+                보험(급여) <strong>${ins}명</strong> · 비보험(비급여) <strong>${nonIns}명</strong> · 내원 합계 <strong>${ins+nonIns}명</strong></div>`;
+            h+=`<button class="view-btn" style="margin-top:.4rem" onclick="dsAddPtType()">+ 유형 추가</button>`;
+            return h+'</details>';
+        }
+        function dsEditPtCount(name,el){
+            if(!_dsDraft.patients) _dsDraft.patients={types:{}};
+            _dsDraft.patients.types[name]=Math.max(0,Math.round(Number(String(el.value).replace(/[^\d]/g,''))||0));
+            _dsRender();
+        }
+        function dsAddPtType(){
+            const n=(prompt('보험유형 이름 (예: 산재보험)','')||'').trim();
+            if(!n) return;
+            if(!_dsDraft.patients) _dsDraft.patients={types:{}};
+            if(_dsDraft.patients.types[n]!=null){ alert('이미 있는 유형입니다.'); return; }
+            _dsDraft.patients.types[n]=0;
             _dsRender();
         }
         function dsCancelUpload(){
@@ -17548,7 +17645,8 @@
             d.payment=_dsNormPayment(d.payment);
             const hasPay=Object.values(d.payment.rows).some(r=>DS_PAY_COL.some(([c])=>_dsN(r[c])));
             const hasSales=Object.keys(d.staff).length||Object.keys(d.doctor).length;
-            if(!hasPay&&!hasSales){ alert('저장할 값이 없습니다. 사진을 올리거나 직접 입력해주세요.'); return; }
+            const hasPt=Object.values((d.patients&&d.patients.types)||{}).some(v=>_dsN(v)>0);
+            if(!hasPay&&!hasSales&&!hasPt){ alert('저장할 값이 없습니다. 사진을 올리거나 직접 입력해주세요.'); return; }
             const warns=_dsVerify(d);
             if(warns.length&&!confirm(`검산에서 ${warns.length}건이 어긋납니다.\n\n${warns.slice(0,5).join('\n')}${warns.length>5?'\n…':''}\n\n이대로 저장할까요?`)) return;
             if(!d.editing&&_dsDocs[d.date]&&!confirm(`${d.date} 결산이 이미 있습니다. 덮어쓸까요?`)) return;
@@ -17576,12 +17674,16 @@
                     });
                     return out;
                 };
+                const ptTypes={};
+                Object.entries((d.patients&&d.patients.types)||{}).forEach(([n,v])=>{
+                    if(_dsN(v)>0||DS_PT_DEFAULT.includes(n)) ptTypes[n]=_dsN(v);
+                });
                 const payload={
                     date:d.date, ym:d.date.slice(0,7),
                     payment:{rows:payRows,notes},
                     staff:clean(d.staff), staffTotal:d.staffTotal?clean({t:d.staffTotal}).t:null,
                     doctor:clean(d.doctor), doctorTotal:d.doctorTotal?clean({t:d.doctorTotal}).t:null,
-                    insuranceCount:d.insuranceCount==null?null:_dsN(d.insuranceCount),
+                    patients:{types:ptTypes, total:Object.values(ptTypes).reduce((a,b)=>a+b,0)},
                     warnings:warns,
                     meta:{
                         by:(currentUser&&currentUser.email)||'',

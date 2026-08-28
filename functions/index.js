@@ -1829,8 +1829,101 @@ function dsVerifySales(staff, total, label) {
   return w;
 }
 
+/**
+ * 보험유형별 환자 수 막대그래프 파싱.
+ *
+ * 표가 아니라 그래프라서 셀이 없다. 대신 두 가지 단서를 쓴다.
+ *  · 값 — 막대 위에 "45명" 처럼 명이 붙어 찍힌다. y축 눈금(0·20·40·60)에는
+ *    명이 없으므로 이것만으로 눈금과 값이 갈린다.
+ *  · 라벨 — 맨 아래 줄의 한글 단어들. 값과는 x좌표로 짝지운다.
+ * 이 그래프는 "명(환자 수)" 이고 담당의별 집계는 "건(오더 수)" 이라 둘은
+ * 원래 다른 수다. 여기서 대조하지 않는다. (호출부 주석 참고)
+ */
+function dsParsePatients(wordRows) {
+  // ① 값 — "45명" / "45" + "명"
+  const values = [];
+  for (const row of wordRows) {
+    row.forEach((w, i) => {
+      const m = String(w.text).match(/^(-?[\d,]+)\s*명$/);
+      if (m) {
+        const v = tokenToWon(m[1]);
+        if (v !== null) values.push({v, x: w.x, y: w.y});
+        return;
+      }
+      if (/^-?[\d,]+$/.test(w.text) && row[i + 1] && /^명$/.test(row[i + 1].text)) {
+        const v = tokenToWon(w.text);
+        if (v !== null) values.push({v, x: w.x, y: w.y});
+      }
+    });
+  }
+
+  // ② 라벨 줄 — 한글 단어가 둘 이상인 줄 중 가장 아래
+  let labelRow = null;
+  for (const row of wordRows) {
+    const ko = row.filter((w) => /^[가-힣]{2,10}$/.test(w.text));
+    if (ko.length < 2) continue;
+    const y = Math.max(...ko.map((w) => w.y));
+    if (!labelRow || y > labelRow.y) labelRow = {y, words: ko};
+  }
+  if (!labelRow) return {types: {}, total: 0, matched: 0};
+
+  // 붙어 있는 한글 단어는 한 라벨로 ("자동차 보험" → "자동차보험")
+  const labels = [];
+  labelRow.words.slice().sort((a, b) => a.x - b.x).forEach((w) => {
+    const left = w.x - w.w / 2;
+    const right = w.x + w.w / 2;
+    const charW = w.w / Math.max(1, w.text.length);
+    const last = labels[labels.length - 1];
+    if (last && left - last.right < charW * 1.2) {
+      last.text += w.text; last.right = right;
+    } else {
+      labels.push({text: w.text, left, right});
+    }
+  });
+  labels.forEach((l) => { l.x = (l.left + l.right) / 2; });
+
+  // ③ 값이 하나도 없으면 — 막대에 "명" 없이 숫자만 찍힌 경우.
+  //    라벨 줄 위, 그리고 첫 라벨 왼쪽 끝보다 오른쪽인 숫자만 후보로 본다(y축 눈금 제외).
+  let pool = values.filter((v) => v.y < labelRow.y);
+  if (!pool.length) {
+    const minX = labels[0].left - (labels[0].right - labels[0].left);
+    for (const row of wordRows) {
+      for (const w of row) {
+        if (w.y >= labelRow.y || w.x < minX) continue;
+        if (!/^-?[\d,]+$/.test(w.text)) continue;
+        const v = tokenToWon(w.text);
+        if (v !== null) pool.push({v, x: w.x, y: w.y});
+      }
+    }
+  }
+
+  // ④ 라벨 ↔ 값 짝짓기 — x 가 가까운 것부터 하나씩
+  const pairs = [];
+  labels.forEach((l, li) => {
+    pool.forEach((v, vi) => pairs.push({d: Math.abs(v.x - l.x), li, vi}));
+  });
+  pairs.sort((a, b) => a.d - b.d);
+  const usedL = new Set(); const usedV = new Set();
+  const types = {};
+  for (const pr of pairs) {
+    if (usedL.has(pr.li) || usedV.has(pr.vi)) continue;
+    usedL.add(pr.li); usedV.add(pr.vi);
+    types[labels[pr.li].text] = pool[pr.vi].v;
+  }
+  // 값을 못 찾은 라벨은 0 (막대가 없는 항목)
+  labels.forEach((l, li) => { if (!usedL.has(li)) types[l.text] = 0; });
+
+  const total = Object.values(types).reduce((a, b) => a + b, 0);
+  return {types, total, matched: labels.length};
+}
+
 function dsDetectKind(lines) {
   const all = lines.join(' ').replace(/\s/g, '');
+  // 보험유형별 환자 수 그래프 — 유형 이름이 둘 이상 보이면 이 그래프다.
+  // '보험' 글자가 수납 구분표와 겹치므로 payment 판정보다 먼저 본다.
+  const ptHits = ['건강보험', '의료급여', '자동차보험', '일반보험', '산재보험']
+    .filter((t) => all.includes(t)).length;
+  if (ptHits >= 2 && !/보험본인부담금|수납금액합계/.test(all)) return 'patients';
   if (/보험본인부담금|수납금액합계|간편결제/.test(all)) return 'payment';
   if (/담당의/.test(all)) return 'doctor';
   if (/담당직원/.test(all)) return 'staff';
@@ -1914,6 +2007,19 @@ exports.ocrDailySales = onCall(
     if (!kind) {
       return {ok: false, reason: '어떤 표인지 알아보지 못했습니다. 표 머리글까지 나오게 찍어주세요.',
         kind: null, detectedKind: null, lines};
+    }
+
+    if (kind === 'patients') {
+      const pt = dsParsePatients(wordRows);
+      const ok = Object.keys(pt.types).length > 0;
+      logger.info(`ocrDailySales(patients) by ${request.auth.token.email || request.auth.uid}: ` +
+        `labels=${pt.matched} total=${pt.total}`);
+      return {
+        ok, kind: 'patients', detectedKind: detected,
+        reason: ok ? null : '보험유형과 환자 수를 읽지 못했습니다. 막대 위 숫자와 아래 항목 이름이 모두 나오게 찍어주세요.',
+        patients: {types: pt.types, total: pt.total},
+        warnings: [], lines,
+      };
     }
 
     if (kind === 'payment') {
