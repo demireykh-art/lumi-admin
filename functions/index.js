@@ -1439,11 +1439,13 @@ async function _sendClosingPush(dateStr, remaining, delegated) {
     logger.info('closing push: 등록된 관리자 토큰 없음');
     return 0;
   }
-  const body = remaining.map((i) => '· ' + i.label).join('\n') +
+  const joined = remaining.map((i) => i.label).join('/');
+  const title = '🚨 ' + joined + ' 마감해야지!!';
+  const body = remaining.map((i) => '· ' + i.label + (i.assigneeName ? (' (' + i.assigneeName + ')') : '')).join('\n') +
     (delegated ? ('\n\n위임: ' + (delegated.byName || '') + ' ' + (delegated.reason || '')) : '');
   const message = {
     tokens,
-    notification: {title: '🌙 마감 미완료 ' + remaining.length + '개', body},
+    notification: {title, body},
     data: {type: 'closing', date: dateStr},
     webpush: {fcmOptions: {link: 'https://staff.lumiclinic.co.kr/staff.html'}},
   };
