@@ -16864,8 +16864,14 @@
             const staff=d.staff||{}, doctor=d.doctor||{};
             const sTot=d.staffTotal||_dsSumRows(staff);
             const dTot=d.doctorTotal||_dsSumRows(doctor);
-            // 두 표의 합계는 같아야 한다. 담당의 표를 우선 쓰고 없으면 직원 표.
-            const base=(dTot.totalSales||dTot.count)?dTot:sTot;
+            const procRows=d.procedure||{};
+            const procTotal=d.procedureTotal
+                || (Object.keys(procRows).length?_dsSumBy(procRows,DS_PROC_COL):null);
+            // 총매출·건수는 세 표 어디서 읽어도 같아야 한다(검산에서 대조한다).
+            // 있는 것 중 하나를 쓴다 — 시술별 한 장만 올린 날도 총매출이 나와야 하므로
+            // 담당의 → 담당직원 → 시술별 순으로 찾는다.
+            const has=t=>!!(t&&(_dsN(t.totalSales)||_dsN(t.count)));
+            const base=has(dTot)?dTot:(has(sTot)?sTot:(has(procTotal)?procTotal:sTot));
             const p=(d.payment&&d.payment.rows)||{};
             const pr=k=>p[k]||{};
             // ── 보험 / 비보험 분해 ──
@@ -16873,9 +16879,6 @@
             // "보험진료 매출·객단가" 가 바로 이 행이고, 건수까지 같이 들어 있어
             // 분자·분모가 같은 표에서 나온다 (가장 정확).
             // 없으면 급여 금액(급여본부금+급여청구액) 기준으로 떨어뜨린다.
-            const procRows=d.procedure||{};
-            const procTotal=d.procedureTotal
-                || (Object.keys(procRows).length?_dsSumBy(procRows,DS_PROC_COL):null);
             const insRow=_dsFindInsRow(procRows);
             let insurance, nonIns, insCnt=0, nonInsCnt=0, insSrc='accrual';
             if(insRow&&procTotal){
@@ -17450,7 +17453,8 @@
                     procedure:Object.keys(doc.procedure||{}).length?'saved':null,
                     patients:Object.keys((doc.patients&&doc.patients.types)||{}).length?'saved':null
                 },
-                lines:{}, source:(doc.meta&&doc.meta.source)||'manual', editing:true
+                lines:{}, unknown:[], errors:[], progress:'',
+                source:(doc.meta&&doc.meta.source)||'manual', editing:true
             }));
             _dsView='upload'; _dsRender();
         }
@@ -17459,7 +17463,8 @@
                     doctor:{}, doctorTotal:null, procedure:{}, procedureTotal:null,
                     patients:{types:{}},
                     shots:{payment:null,staff:null,doctor:null,procedure:null,patients:null},
-                    lines:{}, source:'ocr', editing:false};
+                    lines:{}, unknown:[], errors:[], progress:'',
+                    source:'ocr', editing:false};
         }
 
         // 표는 글씨가 작다. 영수증(2400px)보다 크게 보내야 숫자가 안 뭉갠다.
@@ -17479,48 +17484,97 @@
             return c.toDataURL('image/jpeg',0.92).split(',')[1];
         }
 
+        // ── 사진 → OCR ────────────────────────────────────────────────
+        //  마감정산은 코디가 매일 하는 일이다. 표 종류를 고르게 하지 않는다.
+        //  사진을 여러 장 한꺼번에 고르면 표 제목을 보고 알아서 분류한다.
+        //  못 알아본 사진만 "어떤 표인가요?" 하고 되묻는다.
+
+        // OCR 결과를 초안에 반영
+        function _dsApplyOcr(kind,d){
+            _dsDraft.lines[kind]=d.lines||[];
+            _dsDraft.shots[kind]=d.ok?'ok':('err:'+(d.reason||'인식 실패'));
+            if(kind==='patients'&&d.patients){
+                _dsDraft.patients={types:d.patients.types||{}};
+            }else if(kind==='procedure'&&d.procedure){
+                _dsDraft.procedure=d.procedure.rows||{};
+                _dsDraft.procedureTotal=d.procedure.total||null;
+            }else if(kind==='payment'&&d.payment){
+                const rows={};
+                DS_PAY_BODY.forEach(k=>{ rows[k]={..._dsEmptyPayRow(),...(d.payment.rows[k]||{})}; });
+                _dsDraft.payment={rows,notes:d.payment.notes||{}};
+            }else if(d.sales){
+                _dsDraft[kind]=d.sales.rows||{};
+                _dsDraft[kind+'Total']=d.sales.total||null;
+            }
+        }
+
+        function _dsOcrErrMsg(e){
+            const code=String((e&&e.code)||'');
+            if(/not-found/.test(code)) return 'OCR 함수가 아직 배포되지 않았습니다. (functions 배포 필요)';
+            if(/unauthenticated/.test(code)) return '로그인이 만료되었습니다. 다시 로그인해주세요.';
+            return (e&&e.message)||'알 수 없는 오류';
+        }
+
+        // 사진 한 장 처리. kind 를 주면 그 표로 강제, 안 주면 자동 판별.
+        async function _dsIngestPhoto(src,kind){
+            let b64;
+            try{ b64=(typeof src==='string')?src:await _dsCompressImage(src); }
+            catch(e){ _dsDraft.errors.push('사진을 열지 못했습니다: '+((e&&e.message)||'')); return; }
+            try{
+                const arg=kind?{imageBase64:b64,kind}:{imageBase64:b64};
+                const res=await functions.httpsCallable('ocrDailySales')(arg);
+                const d=res.data||{};
+                if(!d.kind){
+                    // 표 제목을 못 찾았다 — 버리지 말고 되묻는다 (사진은 들고 있는다)
+                    _dsDraft.unknown.push({b64, reason:d.reason||'어떤 표인지 알아보지 못했습니다.'});
+                    return;
+                }
+                _dsApplyOcr(d.kind,d);
+            }catch(e){ _dsDraft.errors.push(_dsOcrErrMsg(e)); }
+        }
+
+        // [📷 사진 올리기] — 여러 장 한 번에
+        async function dsPickShots(input){
+            const files=Array.from(input.files||[]);
+            input.value='';
+            if(!files.length) return;
+            if(!functions){ alert('OCR 기능을 쓸 수 없는 환경입니다. 아래 [숫자 확인·수정]에서 직접 입력해주세요.'); return; }
+            if(_dsBusy) return;
+            _dsBusy=true; _dsDraft.errors=[];
+            try{
+                for(let i=0;i<files.length;i++){
+                    _dsDraft.progress=`사진 읽는 중… (${i+1}/${files.length})`;
+                    _dsRender();
+                    await _dsIngestPhoto(files[i],null);
+                }
+            }finally{
+                _dsDraft.progress=''; _dsBusy=false; _dsRender();
+            }
+        }
+
+        // 못 알아본 사진에 표 종류를 지정해 다시 읽기
+        async function dsAssignUnknown(idx,kind){
+            const u=(_dsDraft.unknown||[])[idx];
+            if(!u||_dsBusy) return;
+            _dsBusy=true; _dsDraft.progress='다시 읽는 중…';
+            _dsDraft.unknown.splice(idx,1);
+            _dsRender();
+            try{ await _dsIngestPhoto(u.b64,kind); }
+            finally{ _dsDraft.progress=''; _dsBusy=false; _dsRender(); }
+        }
+        function dsDropUnknown(idx){ (_dsDraft.unknown||[]).splice(idx,1); _dsRender(); }
+
+        // 표 하나만 다시 찍어 올리기 (접어둔 보조 수단)
         async function dsPickShot(input,kind){
             const file=(input.files||[])[0];
             input.value='';
             if(!file) return;
-            if(!functions){ alert('OCR 기능을 쓸 수 없는 환경입니다. 아래 표에 직접 입력해주세요.'); return; }
+            if(!functions){ alert('OCR 기능을 쓸 수 없는 환경입니다. 직접 입력해주세요.'); return; }
             if(_dsBusy) return;
-            _dsBusy=true;
+            _dsBusy=true; _dsDraft.errors=[];
             _dsDraft.shots[kind]='busy'; _dsRender();
-            try{
-                const b64=await _dsCompressImage(file);
-                const res=await functions.httpsCallable('ocrDailySales')({imageBase64:b64,kind});
-                const d=res.data||{};
-                _dsDraft.lines[kind]=d.lines||[];
-                if(d.detectedKind&&d.detectedKind!==kind){
-                    // 슬롯을 잘못 골랐을 가능성 — 읽기는 했으니 넣되 알려준다
-                    _dsDraft.shots[kind]='warn:'+(DS_KIND_NAME[d.detectedKind]||d.detectedKind);
-                }else{
-                    _dsDraft.shots[kind]=d.ok?'ok':('err:'+(d.reason||'인식 실패'));
-                }
-                if(!d.ok&&!d.payment&&!d.sales&&!d.patients&&!d.procedure){ _dsDraft.shots[kind]='err:'+(d.reason||'인식 실패'); }
-                if(kind==='patients'&&d.patients){
-                    _dsDraft.patients={types:d.patients.types||{}};
-                }else if(kind==='procedure'&&d.procedure){
-                    _dsDraft.procedure=d.procedure.rows||{};
-                    _dsDraft.procedureTotal=d.procedure.total||null;
-                }else if(kind==='payment'&&d.payment){
-                    const rows={};
-                    DS_PAY_BODY.forEach(k=>{ rows[k]={..._dsEmptyPayRow(),...(d.payment.rows[k]||{})}; });
-                    _dsDraft.payment={rows,notes:d.payment.notes||{}};
-                }else if(d.sales){
-                    _dsDraft[kind]=d.sales.rows||{};
-                    _dsDraft[kind+'Total']=d.sales.total||null;
-                }
-            }catch(e){
-                const code=String((e&&e.code)||'');
-                let msg=(e&&e.message)||'알 수 없는 오류';
-                if(/not-found/.test(code)) msg='OCR 함수가 아직 배포되지 않았습니다. (firebase deploy --only functions)';
-                else if(/unauthenticated/.test(code)) msg='로그인이 만료되었습니다. 다시 로그인해주세요.';
-                _dsDraft.shots[kind]='err:'+msg;
-            }finally{
-                _dsBusy=false; _dsRender();
-            }
+            try{ await _dsIngestPhoto(file,kind); }
+            finally{ _dsBusy=false; _dsRender(); }
         }
 
         function _dsShotRow(kind,label,desc){
@@ -17529,80 +17583,180 @@
             if(st==='busy') badge='<span style="font-size:.7rem;color:#4338ca">읽는 중…</span>';
             else if(st==='ok') badge='<span style="font-size:.7rem;color:#166534;font-weight:600">✅ 인식됨</span>';
             else if(st==='saved') badge='<span style="font-size:.7rem;color:#166534;font-weight:600">저장된 값</span>';
-            else if(st&&st.startsWith('warn:')) badge=`<span style="font-size:.7rem;color:#b45309;font-weight:600">⚠ ${_esc(st.slice(5))} 표 같습니다</span>`;
             else if(st&&st.startsWith('err:')) badge=`<span style="font-size:.7rem;color:var(--red)">⚠ ${_esc(st.slice(4))}</span>`;
-            return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;background:var(--bg);
-                border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:.35rem">
+            return `<div style="display:flex;align-items:center;gap:.5rem;padding:.45rem .6rem;background:var(--bg);
+                border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:.3rem">
                 <div style="flex:1;min-width:0">
-                    <div style="font-size:.8rem;font-weight:600">${_esc(label)}</div>
-                    <div style="font-size:.68rem;color:var(--text-muted)">${_esc(desc)}</div>
-                    <div style="margin-top:.15rem">${badge}</div>
+                    <div style="font-size:.78rem;font-weight:600">${_esc(label)}</div>
+                    <div style="font-size:.66rem;color:var(--text-muted)">${_esc(desc)}</div>
+                    <div style="margin-top:.1rem">${badge}</div>
                 </div>
-                <label style="flex:0 0 auto;padding:.4rem .65rem;border:1px solid var(--border);border-radius:var(--r-sm);
-                    background:var(--bg-card);font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap">
+                <label style="flex:0 0 auto;padding:.35rem .6rem;border:1px solid var(--border);border-radius:var(--r-sm);
+                    background:var(--bg-card);font-size:.73rem;font-weight:600;cursor:pointer;white-space:nowrap">
                     📷 사진
                     <input type="file" accept="image/*" style="display:none" onchange="dsPickShot(this,'${kind}')">
                 </label>
             </div>`;
         }
 
+        // 검산 경고가 어느 표에서 났는지 — 그 표만 펼쳐 준다
+        function _dsWarnScopes(warns){
+            const set=new Set();
+            warns.forEach(w=>{
+                if(/합계\(.*\)와 .*합계\(/.test(w)){ ['payment','staff','doctor','procedure'].forEach(k=>set.add(k)); return; }
+                if(w.startsWith('수납 ')) set.add('payment');
+                else if(w.startsWith('담당직원 ')) set.add('staff');
+                else if(w.startsWith('담당의 ')) set.add('doctor');
+                else if(w.startsWith('시술 ')) set.add('procedure');
+            });
+            return set;
+        }
+
+        // 저장 직전에 코디가 실제 화면·시재와 맞춰볼 큰 숫자
+        function _dsDraftSummaryHtml(d){
+            const k=_dsMetrics(d);
+            const hasPay=!!(k.received||k.cash||k.card||k.taxAmt);
+            const hasSales=!!(k.totalSales||k.count);
+            if(!hasPay&&!hasSales) return '';
+            let h='<div style="display:flex;flex-direction:column;gap:.45rem;margin-top:.7rem">';
+            if(hasPay){
+                h+=`<div style="padding:.7rem .8rem;background:#dcfce7;border-radius:var(--r-sm)">
+                    <div style="font-size:.72rem;color:#166534;font-weight:600">오늘 수납 합계</div>
+                    <div style="font-size:1.45rem;font-weight:700;color:#166534;letter-spacing:-.5px;margin:.1rem 0">${_dsWon(k.received)}</div>
+                    <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}${k.etc?' · 기타 '+_dsWon(k.etc):''}${k.easy?' · 간편결제 '+_dsWon(k.easy):''}</div>
+                    <div style="font-size:.72rem;color:#166534;opacity:.8">과세 수납 ${_dsWon(k.taxAmt)} · 부가세 ${_dsWon(k.vat)}</div>
+                </div>`;
+            }
+            if(hasSales){
+                h+=`<div style="padding:.7rem .8rem;background:#eef2ff;border-radius:var(--r-sm)">
+                    <div style="font-size:.72rem;color:#4338ca;font-weight:600">오늘 매출(발생)</div>
+                    <div style="font-size:1.25rem;font-weight:700;color:#4338ca;letter-spacing:-.5px;margin:.1rem 0">${_dsWon(k.totalSales)}</div>
+                    <div style="font-size:.72rem;color:#4338ca">오더 ${k.count}건${k.patientTotal?` · 내원 ${k.patientTotal}명`:''}${k.insCnt?` · 보험진료 ${k.insCnt}건 ${_dsWon(k.insurance)}`:''}</div>
+                </div>`;
+            }
+            return h+'</div>';
+        }
+
         function _dsUploadHtml(){
             const d=_dsDraft;
             d.payment=_dsNormPayment(d.payment);
-            let h=`<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.6rem">
+            if(!d.unknown) d.unknown=[];
+            if(!d.errors) d.errors=[];
+
+            let h=`<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.7rem">
                 <button class="view-btn" onclick="dsCancelUpload()">← 취소</button>
                 <span style="flex:1"></span>
-                <label style="font-size:.75rem;color:var(--text-secondary)">날짜</label>
                 <input type="date" value="${_esc(d.date)}" onchange="dsSetDraftDate(this.value)"
-                    style="padding:.35rem .5rem;font-size:.8rem;border:1px solid var(--border);border-radius:var(--r-sm)">
+                    style="padding:.35rem .5rem;font-size:.85rem;font-weight:600;border:1px solid var(--border);border-radius:var(--r-sm)">
             </div>`;
-            h+='<div style="font-weight:700;font-size:.85rem;margin-bottom:.4rem">📷 마감 화면</div>';
-            h+=_dsShotRow('payment','① 수납 구분표','현금·통장·카드·간편결제 / 부가세·합계');
-            h+=_dsShotRow('staff','② 담당직원별 매출집계','직원 이름(건수) + 매출 열');
-            h+=_dsShotRow('doctor','③ 담당의별 매출집계','담당의 이름(건수) + 매출 열');
-            h+=_dsShotRow('procedure','⑤ 시술별 매출집계','구분없음 — 보험진료·시술 등 분류별. 보험진료 객단가가 여기서 나옵니다');
-            h+=_dsShotRow('patients','④ 보험유형별 환자 수','막대그래프 — 객단가 계산에 쓰는 내원 환자 수 (선택)');
-            h+='<div class="view-note">사진을 올리면 표를 읽어 아래 칸을 채웁니다. '
-              +'<strong>읽은 값은 그대로 저장되지 않습니다</strong> — 아래에서 확인·수정한 뒤 [저장]을 눌러야 기록됩니다. '
-              +'사진 없이 직접 입력해도 됩니다.</div>';
 
-            const warns=_dsVerify(d);
-            if(warns.length){
-                h+='<div style="margin-top:.7rem;padding:.6rem .7rem;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r-sm)">'
-                  +`<div style="font-size:.78rem;font-weight:700;color:#b91c1c">⚠ 검산에서 ${warns.length}건이 어긋납니다</div>`
-                  +'<ul style="margin:.3rem 0 0 1rem;font-size:.7rem;color:#b91c1c;line-height:1.7">'
-                  +warns.slice(0,12).map(x=>'<li>'+_esc(x)+'</li>').join('')
-                  +(warns.length>12?`<li>… 외 ${warns.length-12}건</li>`:'')
-                  +'</ul><div style="font-size:.68rem;color:#7f1d1d;margin-top:.3rem">'
-                  +'표의 산식과 맞지 않는 곳입니다. 대개 OCR 이 숫자를 잘못 읽은 자리예요. 고친 뒤 저장하세요.</div></div>';
-            }else if(Object.keys(d.payment.rows).length||Object.keys(d.staff).length||Object.keys(d.doctor).length){
-                h+='<div style="margin-top:.7rem;padding:.5rem .7rem;background:#f0fdf4;border:1px solid #bbf7d0;'
-                  +'border-radius:var(--r-sm);font-size:.78rem;color:#166534;font-weight:600">✅ 검산 통과 — 표의 산식과 모두 맞습니다</div>';
+            // ── 사진 한 방 ──
+            const busy=!!d.progress;
+            h+=`<label style="display:flex;flex-direction:column;align-items:center;gap:.2rem;
+                padding:1.1rem .8rem;border:2px dashed ${busy?'#c7d2fe':'var(--primary)'};border-radius:var(--r);
+                background:${busy?'#eef2ff':'var(--bg-card)'};cursor:${busy?'default':'pointer'}">
+                <span style="font-size:1.6rem">📷</span>
+                <span style="font-size:.95rem;font-weight:700;color:${busy?'#4338ca':'var(--text)'}">
+                    ${busy?_esc(d.progress):'마감 화면 사진 올리기'}</span>
+                <span style="font-size:.73rem;color:var(--text-muted);text-align:center">
+                    ${busy?'잠시만 기다려주세요':'여러 장 한 번에 골라도 됩니다 · 어떤 표인지 알아서 구분합니다'}</span>
+                <input type="file" accept="image/*" multiple style="display:none"
+                    ${busy?'disabled':''} onchange="dsPickShots(this)">
+            </label>`;
+            h+='<div class="view-note" style="text-align:center">'
+              +'<strong>수납 구분표 한 장</strong>이면 마감정산은 끝납니다. 매출 상세(시술별·담당의별·직원별)는 선택이에요.</div>';
+
+            // ── 인식된 표 뱃지 ──
+            const done=['payment','procedure','doctor','staff','patients']
+                .filter(k=>{ const st=d.shots[k]; return st==='ok'||st==='saved'; });
+            if(done.length){
+                h+='<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem">';
+                done.forEach(k=>{
+                    h+=`<span style="font-size:.72rem;font-weight:600;color:#166534;background:#f0fdf4;
+                        border:1px solid #bbf7d0;border-radius:var(--r-pill);padding:.2rem .6rem">✅ ${DS_KIND_NAME[k]}</span>`;
+                });
+                h+='</div>';
             }
 
-            h+=_dsEditPayHtml(d);
-            h+=_dsEditSalesHtml('staff','② 담당직원별 매출집계',d);
-            h+=_dsEditSalesHtml('doctor','③ 담당의별 매출집계',d);
-            h+=_dsEditSalesHtml('procedure','⑤ 시술별 매출집계',d,DS_PROC_COL,'시술');
+            // ── 못 알아본 사진 되묻기 ──
+            (d.unknown||[]).forEach((u,i)=>{
+                h+=`<div style="margin-top:.5rem;padding:.6rem .7rem;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r-sm)">
+                    <div style="font-size:.78rem;font-weight:700;color:#92400e">이 사진은 어떤 표인가요?</div>
+                    <div style="font-size:.68rem;color:#92400e;opacity:.85;margin:.1rem 0 .4rem">${_esc(u.reason)}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:.3rem">`;
+                ['payment','procedure','doctor','staff','patients'].forEach(k=>{
+                    h+=`<button class="view-btn" onclick="dsAssignUnknown(${i},'${k}')">${DS_KIND_NAME[k]}</button>`;
+                });
+                h+=`<button class="view-btn" style="color:var(--red)" onclick="dsDropUnknown(${i})">버리기</button>`;
+                h+='</div></div>';
+            });
 
+            (d.errors||[]).forEach(msg=>{
+                h+=`<div style="margin-top:.5rem;padding:.5rem .7rem;background:#fef2f2;border:1px solid #fecaca;
+                    border-radius:var(--r-sm);font-size:.75rem;color:#b91c1c">⚠ ${_esc(msg)}</div>`;
+            });
+
+            // ── 큰 숫자로 확인 ──
+            h+=_dsDraftSummaryHtml(d);
+
+            // ── 검산 ──
+            const warns=_dsVerify(d);
+            const filled=Object.keys(d.payment.rows).length||Object.keys(d.staff).length
+                       ||Object.keys(d.doctor).length||Object.keys(d.procedure||{}).length;
+            if(warns.length){
+                h+='<div style="margin-top:.6rem;padding:.6rem .7rem;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r-sm)">'
+                  +`<div style="font-size:.8rem;font-weight:700;color:#b91c1c">⚠ 숫자 ${warns.length}곳이 표와 맞지 않습니다</div>`
+                  +'<div style="font-size:.7rem;color:#7f1d1d;margin-top:.2rem;line-height:1.55">'
+                  +'사진이 흐려 숫자를 잘못 읽은 자리입니다. 아래 <strong>숫자 확인·수정</strong>에서 고치거나, '
+                  +'그 표만 다시 찍어 올리세요.</div>'
+                  +'<ul style="margin:.35rem 0 0 1rem;font-size:.7rem;color:#b91c1c;line-height:1.7">'
+                  +warns.slice(0,6).map(x=>'<li>'+_esc(x)+'</li>').join('')
+                  +(warns.length>6?`<li>… 외 ${warns.length-6}곳</li>`:'')
+                  +'</ul></div>';
+            }else if(filled){
+                h+='<div style="margin-top:.6rem;padding:.55rem .7rem;background:#f0fdf4;border:1px solid #bbf7d0;'
+                  +'border-radius:var(--r-sm);font-size:.8rem;color:#166534;font-weight:600">'
+                  +'✅ 검산 통과 — 표의 산식과 모두 맞습니다. 그대로 저장하세요.</div>';
+            }
+
+            // ── 저장 ──
+            h+=`<div style="display:flex;gap:.4rem;margin-top:.8rem">
+                <button class="btn btn-secondary" style="margin:0;flex:0 0 32%" onclick="dsCancelUpload()">취소</button>
+                <button class="btn btn-primary" style="margin:0;flex:1" id="dsSaveBtn" onclick="dsSaveDraft()">${d.editing?'수정 저장':'저장'}</button>
+            </div>`;
+
+            // ── 여기서부터는 평소엔 접혀 있다 ──
+            const bad=_dsWarnScopes(warns);
+            h+=`<details style="margin-top:.8rem"${warns.length?' open':''}>
+                <summary style="cursor:pointer;font-size:.82rem;font-weight:700;padding:.3rem 0">
+                🔢 숫자 확인·수정${warns.length?` <span style="color:#b91c1c">(${warns.length}곳 확인 필요)</span>`:' <span style="font-weight:400;color:var(--text-muted)">— 직접 입력도 여기서</span>'}</summary>`;
+            h+=_dsEditPayHtml(d,bad.has('payment'));
+            h+=_dsEditSalesHtml('procedure','시술별 매출집계',d,DS_PROC_COL,'시술',bad.has('procedure'));
+            h+=_dsEditSalesHtml('doctor','담당의별 매출집계',d,DS_SALES_COL,'담당의',bad.has('doctor'));
+            h+=_dsEditSalesHtml('staff','담당직원별 매출집계',d,DS_SALES_COL,'담당직원',bad.has('staff'));
             h+=_dsEditPatientsHtml(d);
+            h+='</details>';
+
+            h+='<details style="margin-top:.4rem"><summary style="cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-secondary);padding:.3rem 0">📷 표를 하나씩 골라서 올리기</summary>'
+              +'<div style="font-size:.7rem;color:var(--text-muted);margin:.2rem 0 .4rem">한 장만 다시 찍어 바꾸고 싶을 때 씁니다.</div>';
+            h+=_dsShotRow('payment','수납 구분표','현금·통장·카드·간편결제 / 부가세·합계');
+            h+=_dsShotRow('procedure','시술별 매출집계','구분없음 — 보험진료·시술 등 분류별');
+            h+=_dsShotRow('doctor','담당의별 매출집계','담당의 이름(건수) + 매출 열');
+            h+=_dsShotRow('staff','담당직원별 매출집계','직원 이름(건수) + 매출 열');
+            h+=_dsShotRow('patients','보험유형별 환자 수','막대그래프 — 내원 환자 수');
+            h+='</details>';
 
             const linesKeys=Object.keys(d.lines||{}).filter(k=>(d.lines[k]||[]).length);
             if(linesKeys.length){
-                h+='<details style="margin-top:.6rem"><summary style="cursor:pointer;color:var(--text-muted);font-size:.72rem">인식된 원문 보기</summary>';
+                h+='<details style="margin-top:.4rem"><summary style="cursor:pointer;color:var(--text-muted);font-size:.72rem;padding:.3rem 0">인식된 원문 보기</summary>';
                 linesKeys.forEach(k=>{
-                    h+=`<div style="font-size:.7rem;font-weight:600;margin-top:.35rem">${_esc(k)}</div>`
+                    h+=`<div style="font-size:.7rem;font-weight:600;margin-top:.35rem">${_esc(DS_KIND_NAME[k]||k)}</div>`
                       +'<pre style="white-space:pre-wrap;word-break:break-all;font-size:.66rem;color:var(--text-muted);'
                       +'background:var(--bg);padding:.4rem;border-radius:var(--r-sm);margin:.15rem 0 0;max-height:180px;overflow:auto">'
                       +_esc((d.lines[k]||[]).join('\n'))+'</pre>';
                 });
                 h+='</details>';
             }
-
-            h+=`<div style="display:flex;gap:.4rem;margin-top:.9rem">
-                <button class="btn btn-secondary" style="margin:0" onclick="dsCancelUpload()">취소</button>
-                <button class="btn btn-primary" style="margin:0" id="dsSaveBtn" onclick="dsSaveDraft()">${d.editing?'수정 저장':'저장'}</button>
-            </div>`;
             return h;
         }
 
@@ -17615,8 +17769,8 @@
             const names=DS_PT_DEFAULT.concat(Object.keys(types).filter(n=>!DS_PT_DEFAULT.includes(n)));
             let ins=0, nonIns=0;
             names.forEach(n=>{ const v=_dsN(types[n]); if(_dsIsNonInsType(n)) nonIns+=v; else ins+=v; });
-            let h='<details style="margin-top:.5rem" open><summary style="cursor:pointer;font-size:.8rem;font-weight:700">'
-                 +'④ 보험유형별 환자 수 확인·수정</summary>';
+            let h='<details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:.8rem;font-weight:700">'
+                 +'보험유형별 환자 수 확인·수정</summary>';
             h+='<div style="font-size:.68rem;color:var(--text-muted);margin:.25rem 0 .4rem;line-height:1.55">'
               +'<strong>객단가의 분모</strong>입니다. 사진 없이 직접 넣어도 됩니다. '
               +'일반보험(비급여) 외 유형은 모두 보험(급여)으로 셉니다. '
@@ -17686,10 +17840,10 @@
                 border-radius:4px;font-family:inherit">`;
         }
 
-        function _dsEditPayHtml(d){
+        function _dsEditPayHtml(d,forceOpen){
             const rows=d.payment.rows||{};
-            const open=Object.keys(rows).length?' open':'';
-            let h=`<details style="margin-top:.7rem"${open}><summary style="cursor:pointer;font-size:.8rem;font-weight:700">① 수납 구분표 확인·수정</summary>`;
+            const open=forceOpen?' open':'';
+            let h=`<details style="margin-top:.7rem"${open}><summary style="cursor:pointer;font-size:.8rem;font-weight:700">수납 구분표 확인·수정</summary>`;
             h+='<div style="overflow-x:auto;margin-top:.4rem"><table style="border-collapse:collapse;font-size:.7rem;min-width:880px">';
             h+='<thead><tr style="background:var(--bg)"><th style="padding:.3rem .4rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;left:0;background:var(--bg)">구분</th>';
             DS_PAY_COL.forEach(([,l])=>{ h+=`<th style="padding:.3rem .4rem;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap">${l}</th>`; });
@@ -17713,12 +17867,12 @@
             return h+'</div></details>';
         }
 
-        function _dsEditSalesHtml(scope,title,d,cols,nameHead){
+        function _dsEditSalesHtml(scope,title,d,cols,nameHead,forceOpen){
             const cs=cols||DS_SALES_COL;
             const map=d[scope]||{};
             const names=Object.keys(map);
             const total=d[scope+'Total'];
-            const open=names.length?' open':'';
+            const open=forceOpen?' open':'';
             let h=`<details style="margin-top:.5rem"${open}><summary style="cursor:pointer;font-size:.8rem;font-weight:700">${_esc(title)} 확인·수정</summary>`;
             if(!names.length){
                 h+='<div style="font-size:.72rem;color:var(--text-muted);padding:.5rem 0">'
