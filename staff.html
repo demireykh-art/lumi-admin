@@ -5039,6 +5039,7 @@
                 renderAttendance();
             }finally{
                 _checkInBusy=false;
+                inBtn.disabled=false;   // 버튼 재활성화 (실패/재시도 시 눌리지 않는 문제 방지)
                 inBtn.querySelector('.att-v2-label').textContent='출근';
             }
         }
@@ -5118,6 +5119,7 @@
                 renderAttendance();
             }finally{
                 _checkOutBusy=false;
+                outBtn.disabled=false;   // 버튼 재활성화 (실패/재시도 시 눌리지 않는 문제 방지)
                 outBtn.querySelector('.att-v2-label').textContent='퇴근';
             }
         }
