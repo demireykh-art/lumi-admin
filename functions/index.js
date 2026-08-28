@@ -1899,13 +1899,29 @@ function dsParsePatients(wordRows) {
     });
   }
 
-  // ② 라벨 줄 — 한글 단어가 둘 이상인 줄 중 가장 아래
-  let labelRow = null;
+  // ② 라벨 줄 찾기
+  //    "한글이 둘 이상인 가장 아래 줄" 로 잡으면 화면을 통째로 캡처했을 때
+  //    표 머리글이나 메뉴 줄을 물어온다. 그래서 두 가지로 점수를 매긴다.
+  //     · 아는 보험유형 이름이 몇 개 들어 있나 (제일 강한 신호)
+  //     · 그 줄 위쪽의 "N명" 값들과 x 가 몇 개나 맞나 (막대 아래 라벨이라는 증거)
+  const KNOWN = ['건강보험', '의료급여', '자동차보험', '일반보험', '산재보험', '보훈'];
+  let labelRow = null; let bestScore = 0;
   for (const row of wordRows) {
     const ko = row.filter((w) => /^[가-힣]{2,10}$/.test(w.text));
     if (ko.length < 2) continue;
-    const y = Math.max(...ko.map((w) => w.y));
-    if (!labelRow || y > labelRow.y) labelRow = {y, words: ko};
+    const y = Math.max(...ko.map((w) => w.y || 0));
+    const above = values.filter((v) => (v.y || 0) < y);
+    const xs = ko.map((w) => w.x);
+    const gap = ko.length > 1
+      ? (Math.max(...xs) - Math.min(...xs)) / (ko.length - 1) : 60;
+    const tol = Math.max(40, gap * 0.6);
+    let aligned = 0;
+    for (const w of ko) if (above.some((v) => Math.abs(v.x - w.x) <= tol)) aligned++;
+    const known = ko.filter((w) => KNOWN.includes(w.text)).length;
+    const score = known * 1000 + aligned * 100 + (y || 0) * 0.001;
+    if ((known >= 1 || aligned >= 2) && score > bestScore) {
+      bestScore = score; labelRow = {y, words: ko};
+    }
   }
   if (!labelRow) return {types: {}, total: 0, matched: 0};
 
@@ -1992,6 +2008,74 @@ function dsVerifyProcedure(rows, total) {
  * 키워드만 세면 전부 뒤섞인다. 표 제목 "○○별 매출집계" 한 줄만 본다.
  * 제목을 못 찾으면 null 을 돌려 경고를 띄우지 않는다 (슬롯은 사용자가 고른다).
  */
+// 표 한 종류를 읽어 "블록" 하나로 만든다. 못 읽으면 null.
+function dsBlock(kind, wordRows) {
+  if (kind === 'payment') {
+    const p = dsParsePayment(wordRows);
+    if (!(p.matched >= 6 && Object.keys(p.rows).length >= 4)) return null;
+    return {kind, payment: {rows: p.rows, notes: p.notes}, warnings: dsVerifyPayment(p.rows)};
+  }
+  if (kind === 'patients') {
+    const pt = dsParsePatients(wordRows);
+    if (!Object.keys(pt.types).length) return null;
+    return {kind, patients: {types: pt.types, total: pt.total}, warnings: []};
+  }
+  if (kind === 'procedure') {
+    const pc = dsParseSales(wordRows, DS_PROC_COLS);
+    if (!Object.keys(pc.staff).length) return null;
+    return {kind, procedure: {rows: pc.staff, total: pc.total},
+      warnings: dsVerifyProcedure(pc.staff, pc.total)};
+  }
+  const sa = dsParseSales(wordRows, DS_SALES_COLS);
+  if (!Object.keys(sa.staff).length) return null;
+  return {kind, sales: {rows: sa.staff, total: sa.total},
+    warnings: dsVerifySales(sa.staff, sa.total, kind === 'doctor' ? '담당의' : '담당직원')};
+}
+
+/**
+ * 사진 한 장에서 읽을 수 있는 표를 전부 뽑는다.
+ *
+ * 화면을 통째로 캡처하면 한 장에 표가 둘 이상 들어올 수 있다(일일결산 화면에
+ * 수납 구분표와 보험유형별 그래프가 같이 뜨는 식). 각 파서는 자기 표의 행만
+ * 골라내므로 같은 wordRows 위에 그냥 다 돌려도 서로 섞이지 않는다.
+ *  · 수납 구분표 — 정해진 행 라벨(현금·카드…)이 있어야 매칭
+ *  · 매출집계    — "이름 (건수)" 행. 수납 구분표 행에는 (건수)가 없어 안 걸린다
+ *  · 환자 수 그래프 — 보험유형 이름이 둘 이상 있을 때만 (담당의별 교차표의
+ *    "15건/15명" 에 오작동하지 않도록 하는 안전장치)
+ * 매출집계는 제목이 정확히 하나일 때만 읽는다 — 두 표가 한 화면에 있으면
+ * 행이 섞이므로 아예 건드리지 않는다.
+ */
+function dsExtractAll(wordRows, lines) {
+  const out = [];
+  const all = lines.join(' ').replace(/\s/g, '');
+
+  if (/보험본인부담금|수납금액합계/.test(all)) {
+    const b = dsBlock('payment', wordRows);
+    if (b) out.push(b);
+  }
+
+  const titles = new Set();
+  for (const line of lines) {
+    const m = String(line).match(/([가-힣]{1,6})별\s*매출집계/);
+    if (m) titles.add(m[1]);
+  }
+  if (titles.size === 1) {
+    const kind = {시술: 'procedure', 담당의: 'doctor', 담당직원: 'staff'}[[...titles][0]];
+    if (kind) {
+      const b = dsBlock(kind, wordRows);
+      if (b) out.push(b);
+    }
+  }
+
+  const ptHits = ['건강보험', '의료급여', '자동차보험', '일반보험', '산재보험']
+    .filter((t) => all.includes(t)).length;
+  if (ptHits >= 2) {
+    const b = dsBlock('patients', wordRows);
+    if (b) out.push(b);
+  }
+  return out;
+}
+
 function dsDetectKind(lines) {
   for (const line of lines) {
     const m = String(line).match(/([가-힣]{1,6})별\s*매출집계/);
@@ -2080,65 +2164,38 @@ exports.ocrDailySales = onCall(
     }
     const lines = wordRows.map((row) => row.map((w) => w.text).join(' ').replace(/\s+/g, ' ').trim())
       .filter(Boolean);
-    const detected = dsDetectKind(lines);
-    const kind = wantKind || detected;
-    if (!kind) {
-      return {ok: false, reason: '어떤 표인지 알아보지 못했습니다. 표 머리글까지 나오게 찍어주세요.',
-        kind: null, detectedKind: null, lines};
+
+    // 표 종류를 지정해 부르면 그것만, 아니면 한 장에서 읽히는 걸 전부 돌려준다.
+    let blocks;
+    if (wantKind) {
+      const b = dsBlock(wantKind, wordRows);
+      blocks = b ? [b] : [];
+    } else {
+      blocks = dsExtractAll(wordRows, lines);
     }
 
-    if (kind === 'patients') {
-      const pt = dsParsePatients(wordRows);
-      const ok = Object.keys(pt.types).length > 0;
-      logger.info(`ocrDailySales(patients) by ${request.auth.token.email || request.auth.uid}: ` +
-        `labels=${pt.matched} total=${pt.total}`);
+    const warnings = blocks.reduce((acc, b) => acc.concat(b.warnings || []), []);
+    const who = request.auth.token.email || request.auth.uid;
+    logger.info(`ocrDailySales by ${who}: blocks=[${blocks.map((b) => b.kind).join(',')}] ` +
+      `warn=${warnings.length}`);
+
+    if (!blocks.length) {
       return {
-        ok, kind: 'patients', detectedKind: detected,
-        reason: ok ? null : '보험유형과 환자 수를 읽지 못했습니다. 막대 위 숫자와 아래 항목 이름이 모두 나오게 찍어주세요.',
-        patients: {types: pt.types, total: pt.total},
-        warnings: [], lines,
+        ok: false, kind: null, blocks: [], warnings: [], lines,
+        reason: wantKind
+          ? '표를 읽지 못했습니다. 표 전체가 화면에 나오게 다시 캡처해주세요.'
+          : '아는 표를 찾지 못했습니다. 마감결산 화면 전체가 나오게 다시 캡처해주세요.',
       };
     }
 
-    if (kind === 'payment') {
-      const p = dsParsePayment(wordRows);
-      const warnings = dsVerifyPayment(p.rows);
-      const ok = p.matched >= 6 && Object.keys(p.rows).length >= 4;
-      logger.info(`ocrDailySales(payment) by ${request.auth.token.email || request.auth.uid}: ` +
-        `rows=${p.matched} warn=${warnings.length}`);
-      return {
-        ok, kind: 'payment', detectedKind: detected,
-        reason: ok ? null : '수납 구분표의 행을 충분히 읽지 못했습니다. 직접 입력하거나 다시 찍어주세요.',
-        payment: {rows: p.rows, notes: p.notes},
-        warnings, lines,
-      };
-    }
-
-    if (kind === 'procedure') {
-      const pc = dsParseSales(wordRows, DS_PROC_COLS);
-      const warnings = dsVerifyProcedure(pc.staff, pc.total);
-      const ok = Object.keys(pc.staff).length > 0;
-      logger.info(`ocrDailySales(procedure) by ${request.auth.token.email || request.auth.uid}: ` +
-        `rows=${pc.matched} warn=${warnings.length}`);
-      return {
-        ok, kind: 'procedure', detectedKind: detected,
-        reason: ok ? null : '시술별 매출집계에서 행을 읽지 못했습니다. 표 전체가 나오게 다시 찍어주세요.',
-        procedure: {rows: pc.staff, total: pc.total},
-        warnings, lines,
-      };
-    }
-
-    const s = dsParseSales(wordRows, DS_SALES_COLS);
-    const label = kind === 'doctor' ? '담당의' : '담당직원';
-    const warnings = dsVerifySales(s.staff, s.total, label);
-    const ok = Object.keys(s.staff).length > 0;
-    logger.info(`ocrDailySales(${kind}) by ${request.auth.token.email || request.auth.uid}: ` +
-      `rows=${s.matched} warn=${warnings.length}`);
+    // 예전 호출부 호환 — 첫 블록의 내용을 최상위에도 실어 준다
+    const first = blocks[0];
     return {
-      ok, kind, detectedKind: detected,
-      reason: ok ? null : `${label}별 매출집계에서 행을 읽지 못했습니다. 표 전체가 나오게 다시 찍어주세요.`,
-      sales: {rows: s.staff, total: s.total},
-      warnings, lines,
+      ok: true, kind: first.kind, blocks, warnings, lines, reason: null,
+      payment: first.payment || null,
+      sales: first.sales || null,
+      procedure: first.procedure || null,
+      patients: first.patients || null,
     };
   }
 );

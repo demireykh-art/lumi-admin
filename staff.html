@@ -17012,6 +17012,7 @@
                 alert('매출 결산은 관리자 전용입니다.'); showTopHome(); return;
             }
             if(!_dsMonth) _dsMonth=_todayYmd().slice(0,7);
+            _dsBindPaste();
             if(_dsView!=='upload'){ _dsView='month'; }
             _dsRender();
             await _dsLoadMonth(_dsMonth);
@@ -17453,7 +17454,7 @@
                     procedure:Object.keys(doc.procedure||{}).length?'saved':null,
                     patients:Object.keys((doc.patients&&doc.patients.types)||{}).length?'saved':null
                 },
-                lines:{}, unknown:[], errors:[], progress:'',
+                lines:{}, unknown:null, errors:[], progress:'',
                 source:(doc.meta&&doc.meta.source)||'manual', editing:true
             }));
             _dsView='upload'; _dsRender();
@@ -17463,7 +17464,7 @@
                     doctor:{}, doctorTotal:null, procedure:{}, procedureTotal:null,
                     patients:{types:{}},
                     shots:{payment:null,staff:null,doctor:null,procedure:null,patients:null},
-                    lines:{}, unknown:[], errors:[], progress:'',
+                    lines:{}, unknown:null, errors:[], progress:'',
                     source:'ocr', editing:false};
         }
 
@@ -17484,119 +17485,153 @@
             return c.toDataURL('image/jpeg',0.92).split(',')[1];
         }
 
-        // ── 사진 → OCR ────────────────────────────────────────────────
-        //  마감정산은 코디가 매일 하는 일이다. 표 종류를 고르게 하지 않는다.
-        //  사진을 여러 장 한꺼번에 고르면 표 제목을 보고 알아서 분류한다.
-        //  못 알아본 사진만 "어떤 표인가요?" 하고 되묻는다.
+        // ── 화면 캡처 / 붙여넣기 / 사진 → OCR ─────────────────────────
+        //  마감정산은 코디가 매일 PC 앞에서 하는 일이다. 사진을 파일로 저장했다가
+        //  고르는 과정 자체가 부담이라 세 가지 길을 모두 열어 둔다.
+        //    · [화면 캡처]  getDisplayMedia 로 마감 화면을 그대로 한 장
+        //    · Ctrl+V       윈도우 캡처(Win+Shift+S)를 그대로 붙여넣기
+        //    · 사진 파일     모바일·태블릿에서는 이쪽
+        //  한 장에 표가 둘 이상 들어와도 서버가 알아서 다 뽑아 준다.
 
-        // OCR 결과를 초안에 반영
-        function _dsApplyOcr(kind,d){
-            _dsDraft.lines[kind]=d.lines||[];
-            _dsDraft.shots[kind]=d.ok?'ok':('err:'+(d.reason||'인식 실패'));
-            if(kind==='patients'&&d.patients){
-                _dsDraft.patients={types:d.patients.types||{}};
-            }else if(kind==='procedure'&&d.procedure){
-                _dsDraft.procedure=d.procedure.rows||{};
-                _dsDraft.procedureTotal=d.procedure.total||null;
-            }else if(kind==='payment'&&d.payment){
-                const rows={};
-                DS_PAY_BODY.forEach(k=>{ rows[k]={..._dsEmptyPayRow(),...(d.payment.rows[k]||{})}; });
-                _dsDraft.payment={rows,notes:d.payment.notes||{}};
-            }else if(d.sales){
-                _dsDraft[kind]=d.sales.rows||{};
-                _dsDraft[kind+'Total']=d.sales.total||null;
-            }
+        // OCR 응답의 블록들을 초안에 반영
+        function _dsApplyBlocks(blocks,lines){
+            let n=0;
+            (blocks||[]).forEach(b=>{
+                const kind=b.kind; if(!kind) return;
+                _dsDraft.lines[kind]=lines||[];
+                _dsDraft.shots[kind]='ok';
+                if(kind==='patients'&&b.patients){
+                    _dsDraft.patients={types:b.patients.types||{}};
+                }else if(kind==='procedure'&&b.procedure){
+                    _dsDraft.procedure=b.procedure.rows||{};
+                    _dsDraft.procedureTotal=b.procedure.total||null;
+                }else if(kind==='payment'&&b.payment){
+                    const rows={};
+                    DS_PAY_BODY.forEach(k=>{ rows[k]={..._dsEmptyPayRow(),...(b.payment.rows[k]||{})}; });
+                    _dsDraft.payment={rows,notes:b.payment.notes||{}};
+                }else if(b.sales){
+                    _dsDraft[kind]=b.sales.rows||{};
+                    _dsDraft[kind+'Total']=b.sales.total||null;
+                }else return;
+                n++;
+            });
+            return n;
         }
 
         function _dsOcrErrMsg(e){
             const code=String((e&&e.code)||'');
-            if(/not-found/.test(code)) return 'OCR 함수가 아직 배포되지 않았습니다. (functions 배포 필요)';
+            if(/not-found/.test(code)) return 'OCR 기능이 아직 준비되지 않았습니다. 관리자에게 문의해주세요.';
             if(/unauthenticated/.test(code)) return '로그인이 만료되었습니다. 다시 로그인해주세요.';
             return (e&&e.message)||'알 수 없는 오류';
         }
 
-        // 사진 한 장 처리. kind 를 주면 그 표로 강제, 안 주면 자동 판별.
+        // 캔버스 → base64. 화면 캡처는 글씨가 얇아 되도록 무손실(PNG)로 보낸다.
+        function _dsCanvasToB64(c){
+            const png=c.toDataURL('image/png').split(',')[1];
+            if(png.length<=6*1024*1024) return png;
+            return c.toDataURL('image/jpeg',0.92).split(',')[1];
+        }
+
+        // 이미지 한 장을 읽어 초안에 반영. src 는 File/Blob 또는 base64 문자열.
         async function _dsIngestPhoto(src,kind){
-            let b64;
-            try{ b64=(typeof src==='string')?src:await _dsCompressImage(src); }
-            catch(e){ _dsDraft.errors.push('사진을 열지 못했습니다: '+((e&&e.message)||'')); return; }
+            if(!functions){
+                alert('OCR 기능을 쓸 수 없는 환경입니다. [숫자 확인·수정]에서 직접 입력해주세요.');
+                return;
+            }
+            if(_dsBusy) return;
+            _dsBusy=true; _dsDraft.errors=[]; _dsDraft.unknown=null;
+            _dsDraft.progress='화면을 읽는 중…'; _dsRender();
             try{
+                let b64;
+                try{ b64=(typeof src==='string')?src:await _dsCompressImage(src); }
+                catch(e){ _dsDraft.errors.push('이미지를 열지 못했습니다: '+((e&&e.message)||'')); return; }
                 const arg=kind?{imageBase64:b64,kind}:{imageBase64:b64};
                 const res=await functions.httpsCallable('ocrDailySales')(arg);
                 const d=res.data||{};
-                if(!d.kind){
-                    // 표 제목을 못 찾았다 — 버리지 말고 되묻는다 (사진은 들고 있는다)
-                    _dsDraft.unknown.push({b64, reason:d.reason||'어떤 표인지 알아보지 못했습니다.'});
-                    return;
+                const n=_dsApplyBlocks(d.blocks,d.lines);
+                if(!n){
+                    // 못 알아봤으면 버리지 말고 되묻는다 (지정해서 다시 읽으려고 들고 있는다)
+                    _dsDraft.unknown={b64, reason:d.reason||'아는 표를 찾지 못했습니다.'};
                 }
-                _dsApplyOcr(d.kind,d);
-            }catch(e){ _dsDraft.errors.push(_dsOcrErrMsg(e)); }
-        }
-
-        // [📷 사진 올리기] — 여러 장 한 번에
-        async function dsPickShots(input){
-            const files=Array.from(input.files||[]);
-            input.value='';
-            if(!files.length) return;
-            if(!functions){ alert('OCR 기능을 쓸 수 없는 환경입니다. 아래 [숫자 확인·수정]에서 직접 입력해주세요.'); return; }
-            if(_dsBusy) return;
-            _dsBusy=true; _dsDraft.errors=[];
-            try{
-                for(let i=0;i<files.length;i++){
-                    _dsDraft.progress=`사진 읽는 중… (${i+1}/${files.length})`;
-                    _dsRender();
-                    await _dsIngestPhoto(files[i],null);
-                }
+            }catch(e){
+                _dsDraft.errors.push(_dsOcrErrMsg(e));
             }finally{
                 _dsDraft.progress=''; _dsBusy=false; _dsRender();
             }
         }
 
-        // 못 알아본 사진에 표 종류를 지정해 다시 읽기
-        async function dsAssignUnknown(idx,kind){
-            const u=(_dsDraft.unknown||[])[idx];
-            if(!u||_dsBusy) return;
-            _dsBusy=true; _dsDraft.progress='다시 읽는 중…';
-            _dsDraft.unknown.splice(idx,1);
-            _dsRender();
-            try{ await _dsIngestPhoto(u.b64,kind); }
-            finally{ _dsDraft.progress=''; _dsBusy=false; _dsRender(); }
-        }
-        function dsDropUnknown(idx){ (_dsDraft.unknown||[]).splice(idx,1); _dsRender(); }
-
-        // 표 하나만 다시 찍어 올리기 (접어둔 보조 수단)
-        async function dsPickShot(input,kind){
+        // 파일 선택 (모바일에서는 카메라/사진첩)
+        function dsPickShot(input,kind){
             const file=(input.files||[])[0];
             input.value='';
-            if(!file) return;
-            if(!functions){ alert('OCR 기능을 쓸 수 없는 환경입니다. 직접 입력해주세요.'); return; }
-            if(_dsBusy) return;
-            _dsBusy=true; _dsDraft.errors=[];
-            _dsDraft.shots[kind]='busy'; _dsRender();
-            try{ await _dsIngestPhoto(file,kind); }
-            finally{ _dsBusy=false; _dsRender(); }
+            if(file) _dsIngestPhoto(file,kind||null);
         }
 
-        function _dsShotRow(kind,label,desc){
-            const st=_dsDraft.shots[kind]||null;
-            let badge='<span style="font-size:.7rem;color:var(--text-muted)">미등록</span>';
-            if(st==='busy') badge='<span style="font-size:.7rem;color:#4338ca">읽는 중…</span>';
-            else if(st==='ok') badge='<span style="font-size:.7rem;color:#166534;font-weight:600">✅ 인식됨</span>';
-            else if(st==='saved') badge='<span style="font-size:.7rem;color:#166534;font-weight:600">저장된 값</span>';
-            else if(st&&st.startsWith('err:')) badge=`<span style="font-size:.7rem;color:var(--red)">⚠ ${_esc(st.slice(4))}</span>`;
-            return `<div style="display:flex;align-items:center;gap:.5rem;padding:.45rem .6rem;background:var(--bg);
-                border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:.3rem">
-                <div style="flex:1;min-width:0">
-                    <div style="font-size:.78rem;font-weight:600">${_esc(label)}</div>
-                    <div style="font-size:.66rem;color:var(--text-muted)">${_esc(desc)}</div>
-                    <div style="margin-top:.1rem">${badge}</div>
-                </div>
-                <label style="flex:0 0 auto;padding:.35rem .6rem;border:1px solid var(--border);border-radius:var(--r-sm);
-                    background:var(--bg-card);font-size:.73rem;font-weight:600;cursor:pointer;white-space:nowrap">
-                    📷 사진
-                    <input type="file" accept="image/*" style="display:none" onchange="dsPickShot(this,'${kind}')">
-                </label>
-            </div>`;
+        // 못 알아본 화면에 표 종류를 지정해 다시 읽기
+        async function dsAssignUnknown(kind){
+            const u=_dsDraft.unknown;
+            if(!u||_dsBusy) return;
+            const b64=u.b64;
+            _dsDraft.unknown=null;
+            await _dsIngestPhoto(b64,kind);
+        }
+        function dsDropUnknown(){ _dsDraft.unknown=null; _dsRender(); }
+
+        function _dsCanCapture(){
+            return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+        }
+
+        // [화면 캡처] — 브라우저에 창/화면을 고르게 하고 한 프레임을 그대로 딴다
+        async function dsCaptureScreen(){
+            if(_dsBusy) return;
+            if(!_dsCanCapture()){
+                alert('이 기기에서는 화면 캡처를 쓸 수 없습니다.\n사진으로 올리거나, 화면을 캡처해 Ctrl+V 로 붙여넣어 주세요.');
+                return;
+            }
+            let stream=null;
+            try{
+                stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
+            }catch(e){
+                return;   // 사용자가 취소한 경우 — 조용히 넘어간다
+            }
+            try{
+                const video=document.createElement('video');
+                video.srcObject=stream; video.muted=true; video.playsInline=true;
+                await video.play();
+                // 첫 프레임이 검게 나오는 브라우저가 있어 잠깐 기다린다
+                await new Promise(r=>setTimeout(r,400));
+                const w=video.videoWidth, h=video.videoHeight;
+                if(!w||!h) throw new Error('화면을 가져오지 못했습니다.');
+                const c=document.createElement('canvas');
+                c.width=w; c.height=h;
+                c.getContext('2d').drawImage(video,0,0,w,h);
+                video.pause(); video.srcObject=null;
+                await _dsIngestPhoto(_dsCanvasToB64(c),null);
+            }catch(e){
+                _dsDraft.errors=['화면 캡처 실패: '+((e&&e.message)||'')];
+                _dsRender();
+            }finally{
+                stream.getTracks().forEach(t=>{ try{t.stop();}catch(_){} });
+            }
+        }
+
+        // Ctrl+V — 윈도우 캡처(Win+Shift+S)한 이미지를 그대로 받는다
+        let _dsPasteBound=false;
+        function _dsBindPaste(){
+            if(_dsPasteBound) return;
+            _dsPasteBound=true;
+            document.addEventListener('paste', e=>{
+                if(_dsView!=='upload'||!_dsDraft||_dsBusy) return;
+                const items=(e.clipboardData&&e.clipboardData.items)||[];
+                for(let i=0;i<items.length;i++){
+                    if(String(items[i].type||'').indexOf('image')!==0) continue;
+                    const f=items[i].getAsFile();
+                    if(!f) continue;
+                    e.preventDefault();
+                    _dsIngestPhoto(f,null);
+                    return;
+                }
+            });
         }
 
         // 검산 경고가 어느 표에서 났는지 — 그 표만 펼쳐 준다
@@ -17640,7 +17675,6 @@
         function _dsUploadHtml(){
             const d=_dsDraft;
             d.payment=_dsNormPayment(d.payment);
-            if(!d.unknown) d.unknown=[];
             if(!d.errors) d.errors=[];
 
             let h=`<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.7rem">
@@ -17650,25 +17684,57 @@
                     style="padding:.35rem .5rem;font-size:.85rem;font-weight:600;border:1px solid var(--border);border-radius:var(--r-sm)">
             </div>`;
 
-            // ── 사진 한 방 ──
-            const busy=!!d.progress;
-            h+=`<label style="display:flex;flex-direction:column;align-items:center;gap:.2rem;
-                padding:1.1rem .8rem;border:2px dashed ${busy?'#c7d2fe':'var(--primary)'};border-radius:var(--r);
-                background:${busy?'#eef2ff':'var(--bg-card)'};cursor:${busy?'default':'pointer'}">
-                <span style="font-size:1.6rem">📷</span>
-                <span style="font-size:.95rem;font-weight:700;color:${busy?'#4338ca':'var(--text)'}">
-                    ${busy?_esc(d.progress):'마감 화면 사진 올리기'}</span>
-                <span style="font-size:.73rem;color:var(--text-muted);text-align:center">
-                    ${busy?'잠시만 기다려주세요':'여러 장 한 번에 골라도 됩니다 · 어떤 표인지 알아서 구분합니다'}</span>
-                <input type="file" accept="image/*" multiple style="display:none"
-                    ${busy?'disabled':''} onchange="dsPickShots(this)">
-            </label>`;
-            h+='<div class="view-note" style="text-align:center">'
-              +'<strong>수납 구분표 한 장</strong>이면 마감정산은 끝납니다. 매출 상세(시술별·담당의별·직원별)는 선택이에요.</div>';
-
-            // ── 인식된 표 뱃지 ──
             const done=['payment','procedure','doctor','staff','patients']
                 .filter(k=>{ const st=d.shots[k]; return st==='ok'||st==='saved'; });
+            const busy=!!d.progress;
+            const canCap=_dsCanCapture();
+
+            // ── 화면 한 장 가져오기 ──
+            if(busy){
+                h+=`<div style="padding:1.3rem .8rem;border:2px dashed #c7d2fe;border-radius:var(--r);
+                    background:#eef2ff;text-align:center">
+                    <div style="font-size:1.6rem">⏳</div>
+                    <div style="font-size:.95rem;font-weight:700;color:#4338ca;margin-top:.2rem">${_esc(d.progress)}</div>
+                    <div style="font-size:.73rem;color:#4338ca;opacity:.8">잠시만 기다려주세요</div>
+                </div>`;
+            }else{
+                h+='<div style="display:flex;flex-direction:column;gap:.4rem">';
+                if(canCap){
+                    h+=`<button type="button" onclick="dsCaptureScreen()"
+                        style="display:flex;flex-direction:column;align-items:center;gap:.15rem;width:100%;
+                        padding:1.15rem .8rem;border:2px solid var(--text);border-radius:var(--r);
+                        background:var(--text);color:#fff;cursor:pointer;font-family:inherit">
+                        <span style="font-size:1.6rem">🖥️</span>
+                        <span style="font-size:1rem;font-weight:700">${done.length?'화면 더 캡처하기':'마감 화면 캡처하기'}</span>
+                        <span style="font-size:.73rem;opacity:.8">누르면 창을 고르는 화면이 뜹니다</span>
+                    </button>`;
+                }
+                // Ctrl+V 는 PC 에서만 의미가 있다. 화면 캡처를 지원하지 않는 기기
+                // (모바일·태블릿)에서는 붙여넣기도 안 되므로 사진만 남긴다.
+                h+='<div style="display:flex;gap:.4rem">';
+                if(canCap){
+                    h+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;
+                        padding:.7rem .5rem;border:1px dashed var(--border);border-radius:var(--r-sm);background:var(--bg)">
+                        <span style="font-size:1.05rem">📋</span>
+                        <span style="font-size:.78rem;font-weight:700">Ctrl + V</span>
+                        <span style="font-size:.66rem;color:var(--text-muted);text-align:center">캡처한 걸<br>여기서 붙여넣기</span>
+                    </div>`;
+                }
+                h+=`<label style="flex:1;display:flex;flex-direction:${canCap?'column':'row'};align-items:center;justify-content:center;
+                        gap:${canCap?'.1rem':'.5rem'};padding:${canCap?'.7rem .5rem':'1rem .5rem'};
+                        border:1px dashed var(--border);border-radius:var(--r-sm);background:var(--bg-card);cursor:pointer">
+                        <span style="font-size:1.05rem">📷</span>
+                        <span style="font-size:${canCap?'.78rem':'.95rem'};font-weight:700">${canCap?'사진':'마감 화면 사진 올리기'}</span>
+                        ${canCap?'<span style="font-size:.66rem;color:var(--text-muted);text-align:center">찍거나<br>파일 고르기</span>':''}
+                        <input type="file" accept="image/*" style="display:none" onchange="dsPickShot(this)">
+                    </label>`;
+                h+='</div>';
+                h+='</div>';
+            }
+            h+='<div class="view-note" style="text-align:center">'
+              +'마감결산 화면을 <strong>그대로 한 장</strong> 넣으면 됩니다. 한 화면에 표가 여러 개여도 알아서 나눠 읽습니다.</div>';
+
+            // ── 읽어들인 표 ──
             if(done.length){
                 h+='<div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem">';
                 done.forEach(k=>{
@@ -17678,18 +17744,19 @@
                 h+='</div>';
             }
 
-            // ── 못 알아본 사진 되묻기 ──
-            (d.unknown||[]).forEach((u,i)=>{
+            // ── 못 알아본 화면 되묻기 ──
+            if(d.unknown){
                 h+=`<div style="margin-top:.5rem;padding:.6rem .7rem;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r-sm)">
-                    <div style="font-size:.78rem;font-weight:700;color:#92400e">이 사진은 어떤 표인가요?</div>
-                    <div style="font-size:.68rem;color:#92400e;opacity:.85;margin:.1rem 0 .4rem">${_esc(u.reason)}</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#92400e">어떤 표인지 못 알아봤습니다</div>
+                    <div style="font-size:.68rem;color:#92400e;opacity:.85;margin:.1rem 0 .4rem">
+                        ${_esc(d.unknown.reason)} 아래에서 골라주시면 그걸로 다시 읽습니다.</div>
                     <div style="display:flex;flex-wrap:wrap;gap:.3rem">`;
                 ['payment','procedure','doctor','staff','patients'].forEach(k=>{
-                    h+=`<button class="view-btn" onclick="dsAssignUnknown(${i},'${k}')">${DS_KIND_NAME[k]}</button>`;
+                    h+=`<button class="view-btn" onclick="dsAssignUnknown('${k}')">${DS_KIND_NAME[k]}</button>`;
                 });
-                h+=`<button class="view-btn" style="color:var(--red)" onclick="dsDropUnknown(${i})">버리기</button>`;
+                h+=`<button class="view-btn" style="color:var(--red)" onclick="dsDropUnknown()">버리기</button>`;
                 h+='</div></div>';
-            });
+            }
 
             (d.errors||[]).forEach(msg=>{
                 h+=`<div style="margin-top:.5rem;padding:.5rem .7rem;background:#fef2f2;border:1px solid #fecaca;
@@ -17707,8 +17774,8 @@
                 h+='<div style="margin-top:.6rem;padding:.6rem .7rem;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r-sm)">'
                   +`<div style="font-size:.8rem;font-weight:700;color:#b91c1c">⚠ 숫자 ${warns.length}곳이 표와 맞지 않습니다</div>`
                   +'<div style="font-size:.7rem;color:#7f1d1d;margin-top:.2rem;line-height:1.55">'
-                  +'사진이 흐려 숫자를 잘못 읽은 자리입니다. 아래 <strong>숫자 확인·수정</strong>에서 고치거나, '
-                  +'그 표만 다시 찍어 올리세요.</div>'
+                  +'화면이 작아 숫자를 잘못 읽은 자리입니다. 아래 <strong>숫자 확인·수정</strong>에서 고치거나, '
+                  +'그 표를 크게 해서 다시 캡처하세요.</div>'
                   +'<ul style="margin:.35rem 0 0 1rem;font-size:.7rem;color:#b91c1c;line-height:1.7">'
                   +warns.slice(0,6).map(x=>'<li>'+_esc(x)+'</li>').join('')
                   +(warns.length>6?`<li>… 외 ${warns.length-6}곳</li>`:'')
@@ -17719,13 +17786,12 @@
                   +'✅ 검산 통과 — 표의 산식과 모두 맞습니다. 그대로 저장하세요.</div>';
             }
 
-            // ── 저장 ──
             h+=`<div style="display:flex;gap:.4rem;margin-top:.8rem">
                 <button class="btn btn-secondary" style="margin:0;flex:0 0 32%" onclick="dsCancelUpload()">취소</button>
                 <button class="btn btn-primary" style="margin:0;flex:1" id="dsSaveBtn" onclick="dsSaveDraft()">${d.editing?'수정 저장':'저장'}</button>
             </div>`;
 
-            // ── 여기서부터는 평소엔 접혀 있다 ──
+            // ── 평소엔 접혀 있다 ──
             const bad=_dsWarnScopes(warns);
             h+=`<details style="margin-top:.8rem"${warns.length?' open':''}>
                 <summary style="cursor:pointer;font-size:.82rem;font-weight:700;padding:.3rem 0">
@@ -17737,25 +17803,12 @@
             h+=_dsEditPatientsHtml(d);
             h+='</details>';
 
-            h+='<details style="margin-top:.4rem"><summary style="cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text-secondary);padding:.3rem 0">📷 표를 하나씩 골라서 올리기</summary>'
-              +'<div style="font-size:.7rem;color:var(--text-muted);margin:.2rem 0 .4rem">한 장만 다시 찍어 바꾸고 싶을 때 씁니다.</div>';
-            h+=_dsShotRow('payment','수납 구분표','현금·통장·카드·간편결제 / 부가세·합계');
-            h+=_dsShotRow('procedure','시술별 매출집계','구분없음 — 보험진료·시술 등 분류별');
-            h+=_dsShotRow('doctor','담당의별 매출집계','담당의 이름(건수) + 매출 열');
-            h+=_dsShotRow('staff','담당직원별 매출집계','직원 이름(건수) + 매출 열');
-            h+=_dsShotRow('patients','보험유형별 환자 수','막대그래프 — 내원 환자 수');
-            h+='</details>';
-
             const linesKeys=Object.keys(d.lines||{}).filter(k=>(d.lines[k]||[]).length);
             if(linesKeys.length){
-                h+='<details style="margin-top:.4rem"><summary style="cursor:pointer;color:var(--text-muted);font-size:.72rem;padding:.3rem 0">인식된 원문 보기</summary>';
-                linesKeys.forEach(k=>{
-                    h+=`<div style="font-size:.7rem;font-weight:600;margin-top:.35rem">${_esc(DS_KIND_NAME[k]||k)}</div>`
-                      +'<pre style="white-space:pre-wrap;word-break:break-all;font-size:.66rem;color:var(--text-muted);'
-                      +'background:var(--bg);padding:.4rem;border-radius:var(--r-sm);margin:.15rem 0 0;max-height:180px;overflow:auto">'
-                      +_esc((d.lines[k]||[]).join('\n'))+'</pre>';
-                });
-                h+='</details>';
+                h+='<details style="margin-top:.4rem"><summary style="cursor:pointer;color:var(--text-muted);font-size:.72rem;padding:.3rem 0">인식된 원문 보기</summary>'
+                  +'<pre style="white-space:pre-wrap;word-break:break-all;font-size:.66rem;color:var(--text-muted);'
+                  +'background:var(--bg);padding:.4rem;border-radius:var(--r-sm);margin:.3rem 0 0;max-height:200px;overflow:auto">'
+                  +_esc((d.lines[linesKeys[linesKeys.length-1]]||[]).join('\n'))+'</pre></details>';
             }
             return h;
         }
