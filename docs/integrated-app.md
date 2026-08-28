@@ -96,11 +96,71 @@
 - 승인 시 `leaveRequests` 상태 업데이트 → 캘린더 즉시 갱신
 - 급여 명세서 발행·복잡한 급여 산정은 여전히 index.html에서 (다음 단계)
 
+### 💵 매출 결산 (관리자 전용, `bizAdmins` 또는 `adminHigh`)
+마감 화면 사진 3장 → OCR → **사람이 검수** → `dailySales/{YYYY-MM-DD}` 저장.
+
+- 홈 카드 `💵 매출 결산` — 관리자 계정에만 노출 (`tab-dailySales`)
+- **업로드·검수 화면**
+  - 날짜 선택 + 슬롯 3개: ① 수납 구분표 ② 담당직원별 매출집계 ③ 담당의별 매출집계
+  - `ocrDailySales` 가 표를 읽어 채움 → **모든 칸이 수정 가능한 표**로 보여줌
+  - 표의 산식으로 자동 검산 → 어긋난 항목을 빨갛게 나열 (셀 단위로 지목)
+  - 사진 없이 직접 입력도 가능 · 기존 날짜 [✏️ 수정] 도 같은 화면
+  - `보험(급여) 건수` 만 수기 입력 (마감결산표에 없는 값 — 보험 객단가 계산용)
+- **월 뷰**: 월 이동 · 달력 히트맵(칸=일별 발생매출·건수) · 월 누계 카드
+  (총매출·객단가/수납 합계/보험/비보험/과세 수납금액·부가세/입력한 날) ·
+  직원별·담당의별 월 누계 랭킹
+- **일 뷰**: 날짜 ‹ › 이동 · 요약 카드 · 🩺 진료 실적(발생매출) 섹션 ·
+  💳 수납(현금흐름) 섹션 + 수단별 비중 막대 · 원본 표 3종 접기 · 수정/삭제
+
+**⚠️ 발생매출 ≠ 수납액.** 화면과 스키마 모두 두 축을 분리해서 다룬다.
+- 발생매출(진료실적) = 담당직원별·담당의별 집계 (표 머리글: "수납한 금액 기준이 아님")
+- 수납(현금흐름) = 수납 구분표
+선수납·미수·환불 때문에 원래 다른 값이라 절대 합치거나 대조하지 않는다.
+
+**데이터**: `dailySales/{YYYY-MM-DD}`
+```
+{ date, ym,
+  payment: { rows: {cash|cashReceipt|bank|bankReceipt|cashSum|etc|card|
+                    easy|easyReceipt|easySum|unclassified|total:
+                      {copay,prepaidTax,prepaidFree,nonTaxAmt,taxGross,taxAmt,vat,sum}},
+             notes: {noteTaxPlusNonTax,notePrepaidUsed,notePointUsed,
+                     noteRefund,noteUnpaid,noteHealthFee} },
+  staff:  {이름: {count,nonTaxFree,taxFreeGross,taxFree,vat,copay,claim,
+                  copaySum,support,discount,totalSales,refundOrder}},
+  staffTotal, doctor, doctorTotal,      // 합계 행은 표에 찍힌 값 그대로
+  insuranceCount,                        // 수기 입력(선택) — 없으면 보험 객단가 미표시
+  warnings: [...],                       // 저장 시점에 남아 있던 검산 경고
+  meta: {by,byName,source:'ocr'|'manual',savedAt,updatedAt} }
+```
+Firestore 규칙은 **관리자 전용**(`isAdmin() || isAdminHigh()`). 병원 전체 매출이
+보이는 문서라 공용 staff 계정(`signedIn()`)에는 열지 않는다.
+
+**검산 산식** (Cloud Function·클라이언트 양쪽 동일)
+- 수납: 합계 = 보험본인부담금+선수납(과세)+선수납(비과세)+비과세+과세 총수납금액 /
+  과세 총수납금액 = 과세 수납금액+부가세 /
+  현금 합계·간편결제 합계·수납금액 합계 = 각 구성 줄의 열별 합
+- 매출집계: 과세비급여 총금액 = 과세비급여+부가세 /
+  본부금합 = 비과세비급여+과세비급여 총금액+급여본부금 /
+  총매출액 = 본부금합+급여청구액−지원금−할인금액 / 합계 행 = 각 행의 합 /
+  담당직원 합계 == 담당의 합계
+
+**Cloud Function**: `ocrDailySales` (Vision `DOCUMENT_TEXT_DETECTION`)
+- `layoutWordRows()` 로 글자 좌표에서 줄 복원 → 금액 토큰의 x좌표를 열 기준선에
+  DP 로 맞춤. **OCR 이 `0` 한 칸을 놓쳐도 뒤 숫자가 밀리지 않는다.**
+- 행 라벨은 정규화 + 편집거리 매칭 (`간편결제`→`간편결재` 정도는 잡음)
+- 원본 사진은 저장하지 않는다 — Storage 는 `allow read: if true` 라 매출
+  스크린샷을 올리면 URL 만 알면 누구나 본다. 대신 인식된 텍스트를 화면에서 확인.
+
+**배포**: `functions/**` 가 main 에 푸시되면 `deploy-functions.yml` 이 자동 배포한다.
+Cloud Vision API 가 GCP 콘솔에서 켜져 있어야 한다(`ocrReceipt` 와 같은 API).
+
 ### 홈 카드 라우팅
 개인계정만 노출:
 - 📋 상담 차팅
 - 💬 고객채팅 (Phase 1+2 완성, 실 연동 대기 — 상담챗 세션 담당)
 - 👥 STAFF (adminHigh만)
+
+- 💵 매출 결산 (bizAdmin 또는 adminHigh)
 
 공용·개인 모두 노출:
 - 홈페이지 · 재고 · 수가표 · 상담 · 직원 교육·인계 · 공지
@@ -158,7 +218,8 @@
 
 ### 배포
 - `staff.html`·`index.html`: main 푸시 → Vercel 자동 배포
-- Cloud Functions: `cd functions && firebase deploy --only functions`
+- Cloud Functions: `functions/**` main 푸시 → `deploy-functions.yml` 자동 배포
+  (수동: `cd functions && firebase deploy --only functions`)
 
 ### 커밋 메시지 규칙
 - `feat(staff|admin|functions): ...` — 신규 기능

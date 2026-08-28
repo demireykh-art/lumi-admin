@@ -762,7 +762,7 @@ function parseWon(token) {
  *   3) 보정된 y 로 같은 줄을 묶고, 줄 안에서는 x 순으로 이어 붙인다.
  * Vision 호출은 그대로라 추가 비용이 없다.
  */
-function layoutLines(fullTextAnnotation) {
+function layoutWordRows(fullTextAnnotation) {
   const words = [];
   const pages = (fullTextAnnotation && fullTextAnnotation.pages) || [];
   for (const page of pages) {
@@ -782,6 +782,7 @@ function layoutLines(fullTextAnnotation) {
           words.push({
             text,
             x: (Math.min(...xs) + Math.max(...xs)) / 2,
+            x1: Math.max(...xs),   // 오른쪽 끝 — 표 파서가 열을 맞출 때 쓴다
             y: (Math.min(...ys) + Math.max(...ys)) / 2,
             h: Math.max(...ys) - Math.min(...ys),
             w: Math.max(...xs) - Math.min(...xs),
@@ -825,9 +826,19 @@ function layoutLines(fullTextAnnotation) {
   }
   if (cur.length) rows.push(cur);
 
-  return rows.map((row) =>
-    row.sort((a, b) => a.x - b.x).map((w) => w.text).join(' ').replace(/\s+/g, ' ').trim()
-  ).filter(Boolean);
+  return rows.map((row) => row.sort((a, b) => a.x - b.x)).filter((row) => row.length);
+}
+
+/**
+ * Vision 응답의 글자 좌표로 "실제 인쇄된 줄"을 복원한다. (문자열 버전)
+ * 표 파서는 열 좌표가 필요해서 layoutWordRows() 를 직접 쓴다.
+ */
+function layoutLines(fullTextAnnotation) {
+  const rows = layoutWordRows(fullTextAnnotation);
+  if (!rows) return null;
+  return rows
+    .map((row) => row.map((w) => w.text).join(' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
 }
 
 // 금액만 적힌 줄인지 (라벨 없이 숫자만 있는 오른쪽 컬럼).
@@ -1495,5 +1506,441 @@ exports.onClosingDelegated = onDocumentWritten(
     const {remaining} = await _computeClosingRemaining(dateStr);
     if (!remaining.length) return;
     await _sendClosingPush(dateStr, remaining, after.delegated || null);
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  📷 일일 마감결산표 OCR — ocrDailySales
+ *
+ *  통합앱 [💵 매출 결산] 에서 하루치 마감 화면을 찍어 올리면 표를 읽어
+ *  숫자로 돌려준다. 매일 올리는 사진은 세 종류다.
+ *    ① payment : 수납 구분표 (현금·통장·카드·간편결제 … + 부가세/합계)
+ *    ② staff   : 담당직원별 매출집계
+ *    ③ doctor  : 담당의별 매출집계
+ *
+ *  OCR 은 반드시 틀린다는 전제로 만들었다. 그래서
+ *   · 열은 글자 x좌표로 맞춘다 (0 한 칸을 놓쳐도 뒤 숫자가 밀리지 않게)
+ *   · 표가 원래 갖는 산식(합계=열의 합, 과세총액=과세+부가세 …)으로 검산해
+ *     어긋난 행을 warnings 로 같이 돌려준다 → 앱에서 빨갛게 띄우고 손으로 고친다
+ *  즉 이 함수는 "자동 입력"이 아니라 "받아쓰기 + 검산"이다. 저장 전 사람이 본다.
+ * ═══════════════════════════════════════════════════════════════════ */
+
+// 수납 구분표 — 구분(라벨) 다음에 오는 금액 열 순서
+const DS_PAY_COLS = [
+  'copay',        // 보험본인부담금
+  'prepaidTax',   // 선수납(과세)
+  'prepaidFree',  // 선수납(비과세)
+  'nonTaxAmt',    // 비과세 수납금액
+  'taxGross',     // 과세 총수납금액
+  'taxAmt',       // 과세 수납금액
+  'vat',          // 부가세
+  'sum',          // 합계
+];
+
+// 수납 구분표 — 행 라벨. dsNorm() 으로 정규화한 형태로 적는다.
+const DS_PAY_ROWS = [
+  ['cash', '현금'],
+  ['cashReceipt', '현금현금영수증'],
+  ['bank', '통장'],
+  ['bankReceipt', '통장현금영수증'],
+  ['cashSum', '현금합계'],
+  ['etc', '기타'],
+  ['card', '카드'],
+  ['easy', '간편결제'],
+  ['easyReceipt', '간편결제현금영수증'],
+  ['easySum', '간편결제합계'],
+  ['unclassified', '미분류환불금미수처리'],
+  ['total', '수납금액합계'],
+  // ※ 로 시작하는 아래 줄들은 셀이 합쳐져 있어 값이 합계 열에만 찍힌다.
+  ['noteTaxPlusNonTax', '과세+비과세수납금액'],
+  ['notePrepaidUsed', '선수납사용금액'],
+  ['notePointUsed', '포인트사용내역'],
+  ['noteRefund', '환불금액'],
+  ['noteUnpaid', '남은미수액'],
+  ['noteHealthFee', '건강생활유지비'],
+];
+// 담당직원별·담당의별 매출집계 — 이름(건수) 다음에 오는 금액 열 순서
+const DS_SALES_COLS = [
+  'nonTaxFree',    // 비과세비급여
+  'taxFreeGross',  // 과세비급여 총금액
+  'taxFree',       // 과세비급여
+  'vat',           // 부가세
+  'copay',         // 급여본부금
+  'claim',         // 급여청구액
+  'copaySum',      // 본부금합(수납할금액)
+  'support',       // 지원금
+  'discount',      // 할인금액
+  'totalSales',    // 총매출액(환불오더미포함)
+  'refundOrder',   // 환불오더
+];
+
+// 표 라벨 비교용 정규화 — 한글·숫자·+ 만 남긴다.
+// "※ 과세 + 비과세 수납금액" → "과세+비과세수납금액"
+function dsNorm(s) {
+  return String(s || '').replace(/[^가-힣0-9+]/g, '');
+}
+
+// 편집거리 기반 유사도 0~1 (OCR 이 "간편결제"를 "간편결재"로 읽는 정도는 잡는다)
+function dsSim(a, b) {
+  a = String(a || ''); b = String(b || '');
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const prev = new Array(b.length + 1);
+  const curr = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      curr[j] = Math.min(
+        prev[j] + 1, curr[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+  }
+  return 1 - prev[b.length] / Math.max(a.length, b.length);
+}
+
+/**
+ * 한 줄(단어 배열)에서 금액 토큰을 x좌표와 함께 뽑는다.
+ *  · 비율(%) 열은 금액이 아니므로 미리 지운다.
+ *  · skipChars 만큼 앞부분(이름 셀 등)은 건너뛴다.
+ * 좌표는 토큰이 끝나는 단어의 오른쪽 끝을 쓴다 — 금액 열은 오른쪽 정렬이라
+ * 자릿수가 달라도 오른쪽 끝은 열마다 거의 같은 자리에 온다.
+ */
+function dsRowNumbers(words, skipChars) {
+  let joined = '';
+  const map = [];
+  for (const w of words) {
+    if (joined) joined += ' ';
+    const s = joined.length;
+    joined += w.text;
+    map.push({s, e: joined.length, x1: w.x1 != null ? w.x1 : w.x});
+  }
+  // 오프셋을 유지한 채로 지운다 (같은 길이의 공백으로 치환)
+  const blank = (m) => ' '.repeat(m.length);
+  let work = joined.replace(/-?[\d.,]+\s*%/g, blank);
+  if (skipChars > 0) work = blank({length: skipChars}) + work.slice(skipChars);
+
+  const re = /-?\d{1,3}(?:[,.'，·]\s?\d{3})+|-?\d+/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(work)) !== null) {
+    const endIdx = m.index + m[0].length - 1;
+    const hit = map.find((k) => endIdx >= k.s && endIdx < k.e) || map[map.length - 1];
+    const v = tokenToWon(m[0]);
+    if (v === null) continue;
+    out.push({v, x: hit ? hit.x1 : 0});
+  }
+  return {tokens: out, text: joined};
+}
+
+/**
+ * 토큰을 열 기준선(anchors)에 맞춰 배치한다.
+ * 순서를 유지한 채 |x - anchor| 합이 최소가 되도록 DP 로 고른다.
+ * 빈 칸(OCR 이 놓친 0)은 0 으로 남고, 남는 토큰(%처럼 열 밖 숫자)은 버린다.
+ */
+function dsAlign(tokens, anchors) {
+  const n = tokens.length;
+  const m = anchors.length;
+  const values = new Array(m).fill(0);
+  const filled = new Array(m).fill(false);
+  if (!n || !m) return {values, filled, dropped: n};
+
+  const DROP = Math.max(1, anchors[m - 1] - anchors[0]);
+  const INF = Infinity;
+  const dp = Array.from({length: n + 1}, () => new Array(m + 1).fill(INF));
+  const bk = Array.from({length: n + 1}, () => new Array(m + 1).fill(0));
+  for (let j = 0; j <= m; j++) dp[0][j] = 0;
+  for (let i = 1; i <= n; i++) dp[i][0] = i * DROP;   // 열이 없으면 전부 버림
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      let best = dp[i][j - 1]; let b = 0;              // 이 열은 비움
+      const put = dp[i - 1][j - 1] + Math.abs(tokens[i - 1].x - anchors[j - 1]);
+      if (put < best) { best = put; b = 1; }           // 토큰을 이 열에
+      const drop = dp[i - 1][j] + DROP;
+      if (drop < best) { best = drop; b = 2; }         // 토큰 버림
+      dp[i][j] = best; bk[i][j] = b;
+    }
+  }
+  let i = n; let j = m; let dropped = 0;
+  while (i > 0 || j > 0) {
+    if (j === 0) { dropped += i; break; }
+    const b = i > 0 ? bk[i][j] : 0;
+    if (i > 0 && b === 1) { values[j - 1] = tokens[i - 1].v; filled[j - 1] = true; i--; j--; }
+    else if (i > 0 && b === 2) { dropped++; i--; }
+    else j--;
+  }
+  return {values, filled, dropped};
+}
+
+// 여러 행의 토큰 x좌표에서 열 기준선을 뽑는다.
+// 완전한 행(토큰 수 == 열 수)들의 열별 중앙값을 쓴다.
+function dsAnchors(rowTokens, expected) {
+  const full = rowTokens.filter((t) => t.length === expected);
+  if (full.length >= 2) {
+    return Array.from({length: expected}, (_, c) => {
+      const xs = full.map((t) => t[c].x).sort((a, b) => a - b);
+      return xs[Math.floor(xs.length / 2)];
+    });
+  }
+  // 완전한 행이 거의 없으면 가장 토큰이 많은 행을 기준으로 삼는다.
+  const best = rowTokens.slice().sort((a, b) => b.length - a.length)[0];
+  if (!best || !best.length) return null;
+  if (best.length === expected) return best.map((t) => t.x);
+  // 열 수를 못 맞추면 오른쪽 끝을 맞춰 등간격으로 깐다 (금액 열은 우측 정렬)
+  const first = best[0].x; const last = best[best.length - 1].x;
+  const gap = best.length > 1 ? (last - first) / (best.length - 1) : 40;
+  return Array.from({length: expected}, (_, c) => last - gap * (expected - 1 - c));
+}
+
+// 수납 구분표 파싱
+function dsParsePayment(wordRows) {
+  const cand = [];
+  for (const words of wordRows) {
+    const text = words.map((w) => w.text).join(' ');
+    // 라벨(첫 숫자 앞)과 금액 부분을 나눈다. 수납 구분표 라벨엔 숫자가 없다.
+    const firstDigit = text.search(/\d/);
+    const label = firstDigit < 0 ? text : text.slice(0, firstDigit);
+    const norm = dsNorm(label);
+    if (!norm) continue;
+    if (/보험본인부담금|구분|부가세/.test(norm) && firstDigit < 0) continue;  // 머리글
+    let key = null;
+    for (const [k, lab] of DS_PAY_ROWS) if (norm === lab) { key = k; break; }
+    if (!key) {
+      const hits = DS_PAY_ROWS.filter(([, lab]) => norm.includes(lab) || lab.includes(norm));
+      if (hits.length === 1) key = hits[0][0];
+    }
+    if (!key) {
+      let bestScore = 0;
+      for (const [k, lab] of DS_PAY_ROWS) {
+        const s = dsSim(norm, lab);
+        if (s > bestScore) { bestScore = s; key = k; }
+      }
+      if (bestScore < 0.7) key = null;
+    }
+    if (!key) continue;
+    cand.push({key, words, skip: Math.max(0, firstDigit)});
+  }
+
+  // 같은 라벨이 두 번 잡히면 먼저 나온 줄만 쓴다.
+  const seen = new Set();
+  const rows = cand.filter((c) => (seen.has(c.key) ? false : (seen.add(c.key), true)));
+  const nums = rows.map((r) => dsRowNumbers(r.words, r.skip));
+  // 기준선은 금액 열이 다 있는 본문 행(※ 줄 제외)으로만 잡는다.
+  const bodyIdx = rows.map((r, i) => (r.key.startsWith('note') ? -1 : i)).filter((i) => i >= 0);
+  const anchors = dsAnchors(bodyIdx.map((i) => nums[i].tokens), DS_PAY_COLS.length);
+
+  const out = {};
+  const notes = {};
+  rows.forEach((r, i) => {
+    const a = dsAlign(nums[i].tokens, anchors || []);
+    if (r.key.startsWith('note')) {
+      // 셀이 합쳐진 줄 — 값은 합계 열 하나뿐이다. 정렬 결과가 비면 마지막 토큰을 쓴다.
+      const sumIdx = DS_PAY_COLS.indexOf('sum');
+      const t = nums[i].tokens;
+      notes[r.key] = a.filled[sumIdx] ? a.values[sumIdx] : (t.length ? t[t.length - 1].v : 0);
+      return;
+    }
+    const row = {};
+    DS_PAY_COLS.forEach((c, ci) => { row[c] = a.values[ci]; });
+    out[r.key] = row;
+  });
+  return {rows: out, notes, anchors, matched: rows.length};
+}
+
+// 담당직원별 / 담당의별 매출집계 파싱
+function dsParseSales(wordRows) {
+  const cand = [];
+  for (const words of wordRows) {
+    const text = words.map((w) => w.text).join(' ');
+    // "박지윤 (1)" / "합계 (19)" — 이름 + 건수
+    const m = text.match(/^\s*(\S[^()]{0,20}?)\s*\(\s*(\d{1,5})\s*\)/);
+    if (!m) continue;
+    const name = m[1].trim();
+    if (!/[가-힣A-Za-z]/.test(name)) continue;                       // 숫자만 있는 줄
+    if (/^(담당의|담당직원|매출비율|비율|구분)$/.test(dsNorm(name))) continue;  // 머리글
+    cand.push({name, count: parseInt(m[2], 10), words, skip: m[0].length});
+  }
+  if (!cand.length) return {staff: {}, total: null, matched: 0};
+
+  const nums = cand.map((c) => dsRowNumbers(c.words, c.skip));
+  const anchors = dsAnchors(nums.map((n) => n.tokens), DS_SALES_COLS.length);
+
+  const staff = {};
+  let total = null;
+  cand.forEach((c, i) => {
+    const a = dsAlign(nums[i].tokens, anchors || []);
+    const row = {count: c.count};
+    DS_SALES_COLS.forEach((col, ci) => { row[col] = a.values[ci]; });
+    if (dsNorm(c.name) === '합계') total = row;
+    else staff[c.name] = row;
+  });
+  return {staff, total, anchors, matched: cand.length};
+}
+
+// 표가 원래 갖는 산식으로 검산한다. 어긋난 곳을 사람이 볼 문장으로 돌려준다.
+function dsVerifyPayment(rows) {
+  const w = [];
+  const g = (k) => rows[k] || {};
+  const n = (v) => Math.round(Number(v) || 0);
+  for (const [k, r] of Object.entries(rows)) {
+    const line = n(r.copay) + n(r.prepaidTax) + n(r.prepaidFree) + n(r.nonTaxAmt) + n(r.taxGross);
+    if (line !== n(r.sum)) w.push(`${k}: 가로합 ${line.toLocaleString()} ≠ 합계 ${n(r.sum).toLocaleString()}`);
+    if (n(r.taxAmt) + n(r.vat) !== n(r.taxGross)) {
+      w.push(`${k}: 과세 수납금액+부가세 ≠ 과세 총수납금액`);
+    }
+  }
+  const colSum = (keys, col) => keys.reduce((s, k) => s + n(g(k)[col]), 0);
+  for (const col of DS_PAY_COLS) {
+    if (rows.cashSum && colSum(['cash', 'cashReceipt', 'bank', 'bankReceipt'], col) !== n(g('cashSum')[col])) {
+      w.push(`현금 합계(${col})가 현금·통장 네 줄의 합과 다릅니다`);
+    }
+    if (rows.easySum && colSum(['easy', 'easyReceipt'], col) !== n(g('easySum')[col])) {
+      w.push(`간편결제 합계(${col})가 두 줄의 합과 다릅니다`);
+    }
+    if (rows.total && colSum(['cashSum', 'etc', 'card', 'easySum', 'unclassified'], col) !== n(g('total')[col])) {
+      w.push(`수납금액 합계(${col})가 각 줄의 합과 다릅니다`);
+    }
+  }
+  return w;
+}
+
+function dsVerifySales(staff, total, label) {
+  const w = [];
+  const n = (v) => Math.round(Number(v) || 0);
+  const all = Object.entries(staff);
+  for (const [name, r] of all) {
+    if (n(r.taxFree) + n(r.vat) !== n(r.taxFreeGross)) {
+      w.push(`${label} ${name}: 과세비급여+부가세 ≠ 과세비급여 총금액`);
+    }
+    if (n(r.nonTaxFree) + n(r.taxFreeGross) + n(r.copay) !== n(r.copaySum)) {
+      w.push(`${label} ${name}: 비과세+과세총액+급여본부금 ≠ 본부금합`);
+    }
+    if (n(r.copaySum) + n(r.claim) - n(r.support) - n(r.discount) !== n(r.totalSales)) {
+      w.push(`${label} ${name}: 본부금합+급여청구액−지원금−할인 ≠ 총매출액`);
+    }
+  }
+  if (total) {
+    for (const col of ['count'].concat(DS_SALES_COLS)) {
+      const s = all.reduce((acc, [, r]) => acc + n(r[col]), 0);
+      if (s !== n(total[col])) w.push(`${label} 합계(${col})가 각 행의 합과 다릅니다`);
+    }
+  }
+  return w;
+}
+
+function dsDetectKind(lines) {
+  const all = lines.join(' ').replace(/\s/g, '');
+  if (/보험본인부담금|수납금액합계|간편결제/.test(all)) return 'payment';
+  if (/담당의/.test(all)) return 'doctor';
+  if (/담당직원/.test(all)) return 'staff';
+  if (/본부금합|매출비율|급여청구액/.test(all)) return 'staff';
+  return null;
+}
+
+exports.ocrDailySales = onCall(
+  {region: 'asia-northeast3', cors: true, memory: '512MiB', timeoutSeconds: 120},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
+    }
+    const b64 = String((request.data && request.data.imageBase64) || '')
+      .replace(/^data:image\/\w+;base64,/, '');
+    if (!b64) throw new HttpsError('invalid-argument', '이미지가 없습니다.');
+    if (b64.length > 11 * 1024 * 1024) {
+      throw new HttpsError('invalid-argument', '이미지가 너무 큽니다. 더 작게 잘라서 올려주세요.');
+    }
+    const wantKind = String((request.data && request.data.kind) || '') || null;
+
+    let token;
+    try {
+      const {GoogleAuth} = require('google-auth-library');
+      const auth = new GoogleAuth({scopes: ['https://www.googleapis.com/auth/cloud-platform']});
+      token = await auth.getAccessToken();
+    } catch (e) {
+      logger.error('ocrDailySales auth 실패', e);
+      throw new HttpsError('internal', 'OCR 인증에 실패했습니다.');
+    }
+
+    let visionJson;
+    try {
+      const res = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+        body: JSON.stringify({
+          requests: [{
+            image: {content: b64},
+            features: [{type: 'DOCUMENT_TEXT_DETECTION'}],
+            imageContext: {languageHints: ['ko', 'en']},
+          }],
+        }),
+      });
+      visionJson = await res.json();
+      if (!res.ok) {
+        const msg = (visionJson && visionJson.error && visionJson.error.message) || `HTTP ${res.status}`;
+        logger.error('Vision API 오류', msg);
+        if (/has not been used|is disabled|SERVICE_DISABLED/i.test(msg)) {
+          throw new HttpsError('failed-precondition',
+            'Cloud Vision API 가 아직 활성화되지 않았습니다. GCP 콘솔에서 lumiclinic-c1a95 프로젝트에 Vision API 를 켜주세요.');
+        }
+        throw new HttpsError('internal', 'OCR 실패: ' + msg);
+      }
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      logger.error('ocrDailySales 호출 실패', e);
+      throw new HttpsError('internal', 'OCR 호출에 실패했습니다: ' + e.message);
+    }
+
+    const r = (visionJson.responses && visionJson.responses[0]) || {};
+    if (r.error && r.error.message) throw new HttpsError('internal', 'OCR 실패: ' + r.error.message);
+    if (!r.fullTextAnnotation) {
+      return {ok: false, reason: '이미지에서 글자를 찾지 못했습니다.', kind: wantKind, lines: []};
+    }
+
+    let wordRows = null;
+    try {
+      wordRows = layoutWordRows(r.fullTextAnnotation);
+    } catch (e) {
+      logger.warn('layoutWordRows 실패', e);
+    }
+    if (!wordRows || !wordRows.length) {
+      return {ok: false, reason: '표를 읽지 못했습니다. 표 전체가 나오게 다시 찍어주세요.',
+        kind: wantKind, lines: []};
+    }
+    const lines = wordRows.map((row) => row.map((w) => w.text).join(' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    const detected = dsDetectKind(lines);
+    const kind = wantKind || detected;
+    if (!kind) {
+      return {ok: false, reason: '어떤 표인지 알아보지 못했습니다. 표 머리글까지 나오게 찍어주세요.',
+        kind: null, detectedKind: null, lines};
+    }
+
+    if (kind === 'payment') {
+      const p = dsParsePayment(wordRows);
+      const warnings = dsVerifyPayment(p.rows);
+      const ok = p.matched >= 6 && Object.keys(p.rows).length >= 4;
+      logger.info(`ocrDailySales(payment) by ${request.auth.token.email || request.auth.uid}: ` +
+        `rows=${p.matched} warn=${warnings.length}`);
+      return {
+        ok, kind: 'payment', detectedKind: detected,
+        reason: ok ? null : '수납 구분표의 행을 충분히 읽지 못했습니다. 직접 입력하거나 다시 찍어주세요.',
+        payment: {rows: p.rows, notes: p.notes},
+        warnings, lines,
+      };
+    }
+
+    const s = dsParseSales(wordRows);
+    const label = kind === 'doctor' ? '담당의' : '담당직원';
+    const warnings = dsVerifySales(s.staff, s.total, label);
+    const ok = Object.keys(s.staff).length > 0;
+    logger.info(`ocrDailySales(${kind}) by ${request.auth.token.email || request.auth.uid}: ` +
+      `rows=${s.matched} warn=${warnings.length}`);
+    return {
+      ok, kind, detectedKind: detected,
+      reason: ok ? null : `${label}별 매출집계에서 행을 읽지 못했습니다. 표 전체가 나오게 다시 찍어주세요.`,
+      sales: {rows: s.staff, total: s.total},
+      warnings, lines,
+    };
   }
 );
