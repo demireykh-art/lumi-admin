@@ -3185,7 +3185,17 @@
         }
         async function openMixManager(){
             const modal=document.getElementById('mixModal'); if(modal) modal.classList.add('active');
-            const list=document.getElementById('mixList'); if(list) list.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            const list=document.getElementById('mixList');
+            // 이미 한번 로드했으면 캐시로 즉시 표시(빠르게 열림) → 최신본은 백그라운드로 동기화
+            if(_mixesLoaded && invItems && invItems.length){
+                _renderMixList();
+                _loadMixes(true).then(()=>{
+                    // 갱신 완료 시, 모달이 아직 열려 있고 편집 중이 아니면 다시 그림
+                    if(document.getElementById('mixModal')?.classList.contains('active') && !_mixEditingId) _renderMixList();
+                }).catch(()=>{});
+                return;
+            }
+            if(list) list.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
             try{ await _ensureInvItems(); await _loadMixes(true); _renderMixList(); }
             catch(e){ if(list) list.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+_esc(e?.message||String(e))+'</div>'; }
         }
