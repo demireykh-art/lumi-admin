@@ -11848,8 +11848,9 @@
         let _staffIncRecords=[];        // incentiveRecords 컬렉션
         let _staffRevenueMap={};        // {ym: {totalRevenue, japanVisitors, ...}}
         let _staffMonthIncInput={totalRevenue:0, japanVisitors:0, staffRevenue:{}};
-        // 통합앱용 정규 퇴근 시각 (요일별) — 나중에 clinicHours settings 로 이전 가능
-        const _STAFF_END_MIN={0:1080, 1:1080, 2:1080, 3:1080, 4:1080, 5:1110, 6:900}; // 일:18, 월-목:18, 금:18:30, 토:15
+        // (참고용 폴백) 요일별 정규 퇴근 분 — 실제 계산은 getWorkEndMin(설정 반영) 사용
+        //   월·화·금 18:30(1110), 수·목 18:00(1080), 토 15:00(900), 일 휴무
+        const _STAFF_END_MIN={0:1080, 1:1110, 2:1110, 3:1080, 4:1080, 5:1110, 6:900};
         const _STAFF_EARLY_GRACE=10;
 
         // 대기 배지 (홈 카드에 노란 뱃지)
@@ -13524,8 +13525,8 @@
             const [h,m]=String(checkOut).split(':').map(Number);
             if(isNaN(h)||isNaN(m)) return 0;
             const co=h*60+m;
-            const dow=new Date(dateStr).getDay();
-            const endMin=_STAFF_END_MIN[dow]??1080;
+            // 개인 로직과 동일하게 요일별 정규 퇴근(설정 반영)을 사용
+            const endMin=getWorkEndMin(dateStr);
             if(co>endMin) return co-endMin;
             const graceMin=endMin-_STAFF_EARLY_GRACE;
             if(co>=graceMin) return 0;
