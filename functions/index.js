@@ -2138,8 +2138,12 @@ function dsDetectKind(lines) {
 }
 
 exports.ocrDailySales = onCall(
-  {region: 'asia-northeast3', cors: true, memory: '512MiB', timeoutSeconds: 120},
+  // 메모리 1GiB: ocrReceipt 와 같은 이유(#170). base64 문자열(최대 11MB)과
+  // JSON.stringify 사본, Vision 응답이 동시에 올라간다. 이쪽은 한 장에서
+  // 파서를 최대 넷까지 돌려 더 무거우니 같은 여유를 준다.
+  {region: 'asia-northeast3', cors: true, memory: '1GiB', timeoutSeconds: 120},
   async (request) => {
+   try {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
     }
@@ -2241,5 +2245,19 @@ exports.ocrDailySales = onCall(
       procedure: first.procedure || null,
       patients: first.patients || null,
     };
+   } catch (e) {
+    // HttpsError 는 사유가 이미 담겨 있으니 그대로 올린다.
+    if (e instanceof HttpsError) throw e;
+    // 그 밖의 예외를 그냥 두면 클라이언트에는 사유 없는 'internal' 만 뜬다.
+    // 표 파서는 정규식·DP 정렬이 많아 예상 못 한 입력에서 터질 여지가 있으니
+    // 무엇이 터졌는지 화면에서 바로 보이게 사유를 붙여 올린다.
+    logger.error('ocrDailySales 예기치 못한 오류', {
+      message: e && e.message,
+      stack: e && e.stack,
+      kind: (request.data && request.data.kind) || null,
+      bytes: String((request.data && request.data.imageBase64) || '').length,
+    });
+    throw new HttpsError('internal', 'OCR 처리 중 오류: ' + ((e && e.message) || e));
+   }
   }
 );
