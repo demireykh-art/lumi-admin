@@ -15,7 +15,12 @@ on:
     paths:
       - 'functions/**'
       - 'firebase.json'
-  workflow_dispatch: {}   # 모바일/웹에서 수동 실행 버튼
+  workflow_dispatch:      # 모바일/웹에서 수동 실행 버튼
+    inputs:
+      only:
+        description: '특정 함수만 배포 (예: ocrReceipt). 비우면 전체 배포.'
+        required: false
+        default: ''
 
 concurrency:
   group: functions-deploy
@@ -65,11 +70,22 @@ jobs:
           fi
           printf '%s' "$SA_KEY" > "$RUNNER_TEMP/sa.json"
 
+      # 스케줄러·Eventarc 를 쓰는 함수가 하나라도 있으면 배포 전에 프로젝트 IAM
+      # 정책 수정이 필요하다. 그 권한이 없으면 "We failed to modify the IAM policy"
+      # 로 전체 배포가 멈춘다. 그럴 때 only 에 함수 이름을 넣어 급한 것만 먼저
+      # 올릴 수 있다. (예: ocrReceipt — 스케줄러를 쓰지 않아 IAM 수정이 불필요)
       - name: Deploy functions
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          ONLY: ${{ github.event.inputs.only }}
         run: |
-          firebase deploy --only functions \
+          if [ -n "$ONLY" ]; then
+            TARGET="functions:$ONLY"
+            echo "::notice::선택 배포 — $TARGET"
+          else
+            TARGET="functions"
+          fi
+          firebase deploy --only "$TARGET" \
             --project lumiclinic-c1a95 \
             --non-interactive
 
