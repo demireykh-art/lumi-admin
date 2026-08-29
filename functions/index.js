@@ -701,6 +701,28 @@ exports.parseRevenueFile = onCall(
  *         없으면: "Permissions denied enabling cloudbilling.googleapis.com"
  *         (API 활성화 · Cloud Build · Artifact Registry · Cloud Run 용)
  *
+ *   [서비스 에이전트 바인딩 — 스케줄러·Eventarc 함수를 추가한 뒤부터 필요]
+ *   마감 체크리스트(closingNightlyCheck·onClosingDelegated)처럼 Cloud Scheduler
+ *   나 Firestore 트리거를 쓰는 함수가 하나라도 있으면, 배포 전에 Firebase CLI 가
+ *   프로젝트 IAM 정책을 고쳐 서비스 에이전트에 권한을 준다. 그 권한이 없으면
+ *   "We failed to modify the IAM policy for the project." 로 전체 배포가 멈춘다.
+ *   (2026-08-27 ~ 08-29 배포 4연속 실패의 원인. 함수 코드와 무관하게 막히므로
+ *    OCR 수정 같은 다른 작업까지 같이 묶여 못 나간다.)
+ *
+ *   프로젝트 소유자가 Cloud Shell 에서 1회 실행:
+ *     gcloud projects add-iam-policy-binding lumiclinic-c1a95 \
+ *       --member=serviceAccount:service-901456209944@gcp-sa-pubsub.iam.gserviceaccount.com \
+ *       --role=roles/iam.serviceAccountTokenCreator
+ *     gcloud projects add-iam-policy-binding lumiclinic-c1a95 \
+ *       --member=serviceAccount:901456209944-compute@developer.gserviceaccount.com \
+ *       --role=roles/run.invoker
+ *     gcloud projects add-iam-policy-binding lumiclinic-c1a95 \
+ *       --member=serviceAccount:901456209944-compute@developer.gserviceaccount.com \
+ *       --role=roles/eventarc.eventReceiver
+ *
+ *   급할 땐 Actions > Deploy Cloud Functions > Run workflow 의 only 칸에
+ *   함수 이름을 넣어 그것만 먼저 올릴 수 있다(스케줄러를 안 쓰는 함수 한정).
+ *
  *   Firestore 규칙 배포(deploy-firestore-rules.yml)는 위 권한이 하나도
  *   필요 없어서, 규칙 배포가 잘 된다고 해서 함수 배포도 되는 건 아니다.
  * ═══════════════════════════════════════════════════════════════════ */
