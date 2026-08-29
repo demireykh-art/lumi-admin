@@ -15,7 +15,12 @@ on:
     paths:
       - 'functions/**'
       - 'firebase.json'
-  workflow_dispatch: {}   # 모바일/웹에서 수동 실행 버튼
+  workflow_dispatch:      # 모바일/웹에서 수동 실행 버튼
+    inputs:
+      only:
+        description: '특정 함수만 배포 (예: ocrReceipt). 비우면 전체 배포.'
+        required: false
+        default: ''
 
 concurrency:
   group: functions-deploy
@@ -65,13 +70,38 @@ jobs:
           fi
           printf '%s' "$SA_KEY" > "$RUNNER_TEMP/sa.json"
 
+      # 스케줄러·Eventarc 를 쓰는 함수가 하나라도 있으면 배포 전에 프로젝트 IAM
+      # 정책 수정이 필요하다. 그 권한이 없으면 "We failed to modify the IAM policy"
+      # 로 전체 배포가 멈춘다. 그럴 때 only 에 함수 이름을 넣어 급한 것만 먼저
+      # 올릴 수 있다. (예: ocrReceipt — 스케줄러를 쓰지 않아 IAM 수정이 불필요)
       - name: Deploy functions
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          ONLY: ${{ github.event.inputs.only }}
         run: |
-          firebase deploy --only functions \
+          if [ -n "$ONLY" ]; then
+            TARGET="functions:$ONLY"
+            echo "::notice::선택 배포 — $TARGET"
+          else
+            TARGET="functions"
+          fi
+          firebase deploy --only "$TARGET" \
             --project lumiclinic-c1a95 \
             --non-interactive
+
+      # 배포할 때마다 함수 컨테이너 이미지가 Artifact Registry 에 쌓인다.
+      # 이 저장 용량이 이 프로젝트에서 사실상 유일한 고정 지출이라, 오래된
+      # 이미지를 자동 삭제하도록 정리 정책을 걸어 둔다(멱등, 매번 실행해도 무방).
+      - name: Set artifact cleanup policy
+        if: always()
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        continue-on-error: true      # 정책 설정 실패가 배포 결과를 뒤집지 않게
+        run: |
+          firebase functions:artifacts:setpolicy \
+            --project lumiclinic-c1a95 \
+            --location asia-northeast3 \
+            --days 1 --force --non-interactive
 
       - name: Cleanup
         if: always()

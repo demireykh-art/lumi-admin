@@ -701,6 +701,28 @@ exports.parseRevenueFile = onCall(
  *         없으면: "Permissions denied enabling cloudbilling.googleapis.com"
  *         (API 활성화 · Cloud Build · Artifact Registry · Cloud Run 용)
  *
+ *   [서비스 에이전트 바인딩 — 스케줄러·Eventarc 함수를 추가한 뒤부터 필요]
+ *   마감 체크리스트(closingNightlyCheck·onClosingDelegated)처럼 Cloud Scheduler
+ *   나 Firestore 트리거를 쓰는 함수가 하나라도 있으면, 배포 전에 Firebase CLI 가
+ *   프로젝트 IAM 정책을 고쳐 서비스 에이전트에 권한을 준다. 그 권한이 없으면
+ *   "We failed to modify the IAM policy for the project." 로 전체 배포가 멈춘다.
+ *   (2026-08-27 ~ 08-29 배포 4연속 실패의 원인. 함수 코드와 무관하게 막히므로
+ *    OCR 수정 같은 다른 작업까지 같이 묶여 못 나간다.)
+ *
+ *   프로젝트 소유자가 Cloud Shell 에서 1회 실행:
+ *     gcloud projects add-iam-policy-binding lumiclinic-c1a95 \
+ *       --member=serviceAccount:service-901456209944@gcp-sa-pubsub.iam.gserviceaccount.com \
+ *       --role=roles/iam.serviceAccountTokenCreator
+ *     gcloud projects add-iam-policy-binding lumiclinic-c1a95 \
+ *       --member=serviceAccount:901456209944-compute@developer.gserviceaccount.com \
+ *       --role=roles/run.invoker
+ *     gcloud projects add-iam-policy-binding lumiclinic-c1a95 \
+ *       --member=serviceAccount:901456209944-compute@developer.gserviceaccount.com \
+ *       --role=roles/eventarc.eventReceiver
+ *
+ *   급할 땐 Actions > Deploy Cloud Functions > Run workflow 의 only 칸에
+ *   함수 이름을 넣어 그것만 먼저 올릴 수 있다(스케줄러를 안 쓰는 함수 한정).
+ *
  *   Firestore 규칙 배포(deploy-firestore-rules.yml)는 위 권한이 하나도
  *   필요 없어서, 규칙 배포가 잘 된다고 해서 함수 배포도 되는 건 아니다.
  * ═══════════════════════════════════════════════════════════════════ */
@@ -1326,8 +1348,12 @@ function parseReceiptText(text, layoutRows) {
 }
 
 exports.ocrReceipt = onCall(
-  {region: 'asia-northeast3', cors: true, memory: '512MiB', timeoutSeconds: 60},
+  // 메모리 1GiB: base64 문자열(최대 11MB)과 JSON.stringify 사본, Vision 응답이
+  // 동시에 올라간다. 512MiB 에서는 큰 사진이 OOM 으로 죽을 수 있는데,
+  // OOM 은 메시지 없는 'internal' 로만 보여서 원인을 못 찾는다.
+  {region: 'asia-northeast3', cors: true, memory: '1GiB', timeoutSeconds: 60},
   async (request) => {
+   try {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
     }
@@ -1415,6 +1441,18 @@ exports.ocrReceipt = onCall(
         discount: parsed.discount,
       },
     };
+   } catch (e) {
+    // HttpsError 는 사유가 이미 담겨 있으니 그대로 올린다.
+    if (e instanceof HttpsError) throw e;
+    // 그 밖의 예외를 그냥 두면 클라이언트에는 사유 없는 'internal' 만 뜬다.
+    // 무엇이 터졌는지 화면에서 바로 보이게 사유를 붙여 올린다.
+    logger.error('ocrReceipt 예기치 못한 오류', {
+      message: e && e.message,
+      stack: e && e.stack,
+      bytes: String((request.data && request.data.imageBase64) || '').length,
+    });
+    throw new HttpsError('internal', 'OCR 처리 중 오류: ' + ((e && e.message) || e));
+   }
   }
 );
 
