@@ -1138,6 +1138,10 @@
                             🏳️ 단종 <span id="invDiscontinuedCount" style="opacity:.7;font-size:.72rem">0</span>
                         </button>
                     </div>
+                    <button type="button" onclick="exportInventoryXlsx()"
+                        style="width:100%;margin-top:.5rem;padding:.6rem;border:1px solid #bbf7d0;background:#f0fdf4;color:#166534;font-weight:700;font-size:.85rem;border-radius:var(--r);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.35rem">
+                        📥 재고 목록 엑셀 다운로드
+                    </button>
                 </div>
 
                 <!-- === 재고 실사 상세 (홈에서 카테고리 선택 시 노출) === -->
@@ -3204,7 +3208,17 @@
         }
         async function openMixManager(){
             const modal=document.getElementById('mixModal'); if(modal) modal.classList.add('active');
-            const list=document.getElementById('mixList'); if(list) list.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            const list=document.getElementById('mixList');
+            // 이미 한번 로드했으면 캐시로 즉시 표시(빠르게 열림) → 최신본은 백그라운드로 동기화
+            if(_mixesLoaded && invItems && invItems.length){
+                _renderMixList();
+                _loadMixes(true).then(()=>{
+                    // 갱신 완료 시, 모달이 아직 열려 있고 편집 중이 아니면 다시 그림
+                    if(document.getElementById('mixModal')?.classList.contains('active') && !_mixEditingId) _renderMixList();
+                }).catch(()=>{});
+                return;
+            }
+            if(list) list.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
             try{ await _ensureInvItems(); await _loadMixes(true); _renderMixList(); }
             catch(e){ if(list) list.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+_esc(e?.message||String(e))+'</div>'; }
         }
@@ -5098,13 +5112,13 @@
 
             if(!confirm('퇴근하시겠습니까?')) return;
 
-            // ── 🌙 퇴근 마감 체크 ── 마지막 퇴근자는 남은 항목을 마감(체크)해야 퇴근 가능
-            const _remain=_closingRemaining();
-            if(_remain.length){
-                const _last=await _isLastToClockOut();
-                if(_last){
-                    const _msg='🌙 아직 마감되지 않은 항목이 있습니다:\n\n'+_remain.map(i=>'· '+i.label).join('\n')
-                        +'\n\n당신이 오늘 마지막 퇴근자입니다.\n\n[확인] 관리자에게 위임(사유 입력)하고 퇴근\n[취소] 먼저 위 "🌙 오늘 마감 체크리스트"에서 직접 마감';
+            // ── 🌙 퇴근 마감 체크 ── 해당 파트(담당자들)의 마지막 퇴근자는 본인 항목을 마감해야 퇴근 가능
+            if(_closingRemaining().length){
+                const _myItems=await _myLastResponsibleItems();
+                if(_myItems.length){
+                    const _joined=_myItems.map(i=>i.label).join('/');
+                    const _msg='🚨 '+_joined+' 마감하고 가요!!\n\n'+_myItems.map(i=>'· '+i.label).join('\n')
+                        +'\n\n당신이 이 파트의 마지막 퇴근자예요.\n\n[확인] 관리자에게 위임(사유 입력)하고 퇴근\n[취소] 먼저 위 "🌙 오늘 마감 체크리스트"에서 직접 마감';
                     if(!confirm(_msg)){
                         alert('퇴근 버튼 위 "🌙 오늘 마감 체크리스트"에서 항목을 체크한 뒤 다시 퇴근을 눌러주세요.');
                         return;
@@ -5112,9 +5126,9 @@
                     const _reason=prompt('관리자에게 위임할 사유/메모를 남겨주세요.\n(예: 6층 에어컨 리모컨 고장으로 실장님께 인계)','');
                     if(_reason===null) return;
                     if(!_reason.trim()){ alert('위임 사유를 입력해야 퇴근할 수 있습니다.'); return; }
-                    await _markClosingDelegated(_remain, _reason.trim());
+                    await _markClosingDelegated(_myItems, _reason.trim());
                 }
-                // 마지막이 아니면 차단하지 않음 (체크리스트 카드로 이미 리마인드됨)
+                // 내 파트 담당이 아니면 차단하지 않음 (체크리스트 카드로 이미 리마인드됨)
             }
 
             // 즉시 비활성
@@ -11873,8 +11887,9 @@
         let _staffIncRecords=[];        // incentiveRecords 컬렉션
         let _staffRevenueMap={};        // {ym: {totalRevenue, japanVisitors, ...}}
         let _staffMonthIncInput={totalRevenue:0, japanVisitors:0, staffRevenue:{}};
-        // 통합앱용 정규 퇴근 시각 (요일별) — 나중에 clinicHours settings 로 이전 가능
-        const _STAFF_END_MIN={0:1080, 1:1080, 2:1080, 3:1080, 4:1080, 5:1110, 6:900}; // 일:18, 월-목:18, 금:18:30, 토:15
+        // (참고용 폴백) 요일별 정규 퇴근 분 — 실제 계산은 getWorkEndMin(설정 반영) 사용
+        //   월·화·금 18:30(1110), 수·목 18:00(1080), 토 15:00(900), 일 휴무
+        const _STAFF_END_MIN={0:1080, 1:1110, 2:1110, 3:1080, 4:1080, 5:1110, 6:900};
         const _STAFF_EARLY_GRACE=10;
 
         // 대기 배지 (홈 카드에 노란 뱃지)
@@ -11994,6 +12009,12 @@
 
         function _activeClosingItems(){ return (_closingItems||[]).filter(it=>it&&it.active!==false&&it.label); }
         function _closingRemaining(){ return _activeClosingItems().filter(it=>!(_closingChecks[it.id]&&_closingChecks[it.id].done)); }
+        // 항목 담당자(복수) — 신규 assignees[] 우선, 구 assigneeId 호환
+        function _itemAssignees(it){
+            if(Array.isArray(it.assignees)) return it.assignees.filter(a=>a&&a.id);
+            if(it.assigneeId) return [{id:it.assigneeId, name:it.assigneeName||''}];
+            return [];
+        }
 
         async function loadClosingItems(){
             try{
@@ -12034,10 +12055,13 @@
                 const c=_closingChecks[it.id];
                 const done=!!(c&&c.done);
                 const who=done?`<div style="font-size:.68rem;color:#9ca3af">✓ ${_esc(c.byName||'')}${c.at?(' · '+String(c.at).slice(11,16)):''}</div>`:'';
-                return `<div onclick="toggleClosingItem('${it.id}')" style="display:flex;align-items:center;gap:.55rem;padding:.5rem .6rem;border:1px solid ${done?'#d1fae5':'#e5e7eb'};border-radius:var(--r-sm);margin-bottom:.35rem;background:${done?'#f0fdf4':'#fff'};cursor:pointer">
+                const as=_itemAssignees(it);
+                const mine=as.some(a=>a.id===currentUser?.id);
+                const assignee=as.length?`<span style="font-size:.66rem;font-weight:600;padding:1px 6px;border-radius:8px;${mine?'background:#4338ca;color:#fff':'background:#eef2ff;color:#4338ca'}">담당 ${_esc(as.map(a=>a.name||a.id).join(', '))}${mine?' · 나':''}</span>`:'';
+                return `<div onclick="toggleClosingItem('${it.id}')" style="display:flex;align-items:center;gap:.55rem;padding:.5rem .6rem;border:1px solid ${mine&&!done?'#4338ca':(done?'#d1fae5':'#e5e7eb')};border-radius:var(--r-sm);margin-bottom:.35rem;background:${done?'#f0fdf4':'#fff'};cursor:pointer">
                     <span style="font-size:1.05rem">${done?'✅':'⬜'}</span>
                     <div style="flex:1;min-width:0">
-                        <div style="font-size:.85rem;font-weight:600;color:${done?'#9ca3af':'#111827'};${done?'text-decoration:line-through':''}">${_esc(it.label)}</div>
+                        <div style="font-size:.85rem;font-weight:600;color:${done?'#9ca3af':'#111827'};${done?'text-decoration:line-through':''}">${_esc(it.label)} ${assignee}</div>
                         ${who}
                     </div>
                     ${it.photo?`<img src="${it.photo}" onclick="event.stopPropagation();_showClosingPhoto('${it.id}')" style="width:34px;height:34px;object-fit:cover;border-radius:var(--r-sm);border:1px solid #e5e7eb" alt="참고">`:''}
@@ -12080,17 +12104,34 @@
         }
 
         // 오늘 마지막 퇴근자인지 판정 (본인 외 '출근했고 아직 미퇴근'인 사람이 없으면 마지막)
-        async function _isLastToClockOut(){
+        // 오늘 아직 재실(출근O·퇴근X) 중인 '나를 제외한' 직원 id 집합
+        async function _presentOthersToday(){
             const today=getToday();
+            const set=new Set();
             try{
                 const snap=await db.collection('attendance').where('date','==',today).get();
-                const othersOpen=snap.docs.some(d=>{
+                snap.docs.forEach(d=>{
                     const a=d.data()||{};
-                    if((a.employeeId||a.empId)===currentUser.id) return false;
-                    return (a.checkIn||a.clockIn) && !(a.checkOut||a.clockOut);
+                    const id=a.employeeId||a.empId;
+                    if(!id || id===currentUser?.id) return;
+                    if((a.checkIn||a.clockIn) && !(a.checkOut||a.clockOut)) set.add(id);
                 });
-                return !othersOpen;
-            }catch(e){ console.error('마지막 퇴근 판정 오류:',e); return false; }
+            }catch(e){ console.error('재실 인원 조회 오류:',e); }
+            return set;
+        }
+        // 내가 '해당 파트의 마지막 퇴근자'가 되는 미완료 항목들
+        //   - 담당 있음: 내가 담당이고, 나 외의 담당자가 아무도 재실하지 않으면 → 내가 마감해야 함
+        //   - 담당 없음: 내가 전체 마지막 퇴근자일 때만
+        async function _myLastResponsibleItems(){
+            const remain=_closingRemaining();
+            if(!remain.length) return [];
+            const others=await _presentOthersToday();
+            return remain.filter(it=>{
+                const as=_itemAssignees(it);
+                if(!as.length) return others.size===0;             // 담당 미지정 → 전체 마지막일 때
+                if(!as.some(a=>a.id===currentUser?.id)) return false; // 내가 담당 아님
+                return !as.some(a=>a.id!==currentUser?.id && others.has(a.id)); // 다른 담당자 아무도 안 남음
+            });
         }
 
         // 마감 미완료를 관리자에게 위임 기록
@@ -12113,9 +12154,11 @@
             const remaining=_closingRemaining();
             if(isAdminHigh && _closingDelegated && remaining.length){
                 el.style.display='block';
-                el.innerHTML=`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r-sm);padding:.6rem .75rem;margin:.4rem 0">
-                    <div style="font-weight:700;color:#991b1b;font-size:.85rem">🚨 오늘 마감 미완료 ${remaining.length}개 (관리자 위임됨)</div>
-                    <div style="font-size:.75rem;color:#b91c1c;margin-top:.25rem">${remaining.map(i=>'· '+_esc(i.label)).join('<br>')}</div>
+                const joined=remaining.map(i=>_esc(i.label)).join('/');
+                const lines=remaining.map(i=>{ const as=_itemAssignees(i); return '· '+_esc(i.label)+(as.length?` <b>(${_esc(as.map(a=>a.name||a.id).join(', '))})</b>`:''); }).join('<br>');
+                el.innerHTML=`<div style="background:#fef2f2;border:2px solid #ef4444;border-radius:var(--r-sm);padding:.7rem .8rem;margin:.4rem 0">
+                    <div style="font-weight:800;color:#dc2626;font-size:1rem">🚨 ${joined} 마감해야지!!</div>
+                    <div style="font-size:.75rem;color:#b91c1c;margin-top:.35rem">${lines}</div>
                     <div style="font-size:.72rem;color:#7f1d1d;margin-top:.3rem">위임: ${_esc(_closingDelegated.byName||'')} — ${_esc(_closingDelegated.reason||'')}</div>
                 </div>`;
             }else{ el.style.display='none'; el.innerHTML=''; }
@@ -12135,11 +12178,20 @@
             }else{
                 h+=items.map(it=>{
                     const off=(it.active===false);
-                    return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:var(--r-sm);margin-bottom:.35rem;background:${off?'#f9fafb':'#fff'}">
+                    const as=_itemAssignees(it);
+                    const chips=as.length
+                        ? as.map(a=>`<span style="font-size:.66rem;background:#eef2ff;color:#4338ca;padding:1px 6px;border-radius:8px">${_esc(a.name||a.id)}</span>`).join(' ')
+                        : '<span style="font-size:.66rem;color:#9ca3af">담당 미지정</span>';
+                    return `<div style="display:flex;align-items:flex-start;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:var(--r-sm);margin-bottom:.35rem;background:${off?'#f9fafb':'#fff'}">
                         ${it.photo?`<img src="${it.photo}" onclick="_showClosingPhoto('${it.id}')" style="width:38px;height:38px;object-fit:cover;border-radius:var(--r-sm);border:1px solid #e5e7eb;cursor:pointer;flex-shrink:0">`:'<div style="width:38px;height:38px;border:1px dashed #d1d5db;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:.58rem;flex-shrink:0">사진</div>'}
                         <div style="flex:1;min-width:0">
                             <div style="font-size:.85rem;font-weight:600;color:${off?'#9ca3af':'#111827'}">${_esc(it.label)}${off?' <span style=\"font-size:.68rem;color:#9ca3af\">(미사용)</span>':''}</div>
-                            <div style="display:flex;gap:.3rem;margin-top:.3rem;flex-wrap:wrap">
+                            <div style="display:flex;align-items:center;gap:.35rem;margin-top:.3rem;flex-wrap:wrap">
+                                <span style="font-size:.68rem;color:#6b7280;flex-shrink:0">담당</span>
+                                ${chips}
+                                <button onclick="_closingOpenAssignees('${it.id}')" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.1rem .45rem;font-size:.66rem;border-radius:var(--r-sm);cursor:pointer">지정</button>
+                            </div>
+                            <div style="display:flex;gap:.3rem;margin-top:.35rem;flex-wrap:wrap">
                                 <button onclick="_closingPickPhoto('${it.id}')" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.2rem .5rem;font-size:.68rem;border-radius:var(--r-sm);cursor:pointer">사진</button>
                                 <button onclick="_closingRenameItem('${it.id}')" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.2rem .5rem;font-size:.68rem;border-radius:var(--r-sm);cursor:pointer">이름</button>
                                 <button onclick="_closingMoveItem('${it.id}',-1)" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.2rem .45rem;font-size:.68rem;border-radius:var(--r-sm);cursor:pointer">▲</button>
@@ -12151,7 +12203,6 @@
                     </div>`;
                 }).join('');
             }
-            h+='<input id="_closingPhotoInput" type="file" accept="image/*" style="display:none">';
             // 📲 관리자 푸시 알림 (Phase 2)
             const pushOn=_fcmPushEnabledHere();
             const hasVapid=!!_fcmVapidKey;
@@ -12214,21 +12265,119 @@
             try{ await db.collection('closingItems').doc(id).delete(); _closingItems=_closingItems.filter(x=>x.id!==id); renderClosingChecklist(); _renderStaffAdminBody(); }
             catch(e){ alert('삭제 실패: '+(e?.message||e)); }
         }
+        // 담당 직원 복수 지정 (재직 직원 체크박스 모달)
+        let _closingAssigneeTargetId=null;
+        function _closingOpenAssignees(id){
+            _closingAssigneeTargetId=id;
+            const it=(_closingItems||[]).find(x=>x.id===id); if(!it) return;
+            const cur=new Set(_itemAssignees(it).map(a=>a.id));
+            const emps=(_staffAdminEmployees||[]).filter(e=>!e.status||e.status==='active')
+                .slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+            let ov=document.getElementById('_closingAssigneeModal');
+            if(!ov){
+                ov=document.createElement('div'); ov.id='_closingAssigneeModal';
+                ov.style.cssText='display:none;position:fixed;inset:0;z-index:3200;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:1rem';
+                document.body.appendChild(ov);
+            }
+            const rows=emps.length? emps.map(e=>`<label style="display:flex;align-items:center;gap:.5rem;padding:.4rem .3rem;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:.85rem">
+                <input type="checkbox" class="_clAsgChk" value="${e.id}" data-name="${_esc(e.name||e.id)}" ${cur.has(e.id)?'checked':''} style="width:16px;height:16px">
+                ${_esc(e.name||e.id)}
+            </label>`).join('') : '<div style="color:#9ca3af;font-size:.82rem;padding:.5rem">재직 직원이 없습니다.</div>';
+            ov.innerHTML=`<div style="background:#fff;border-radius:10px;max-width:420px;width:100%;padding:1rem;max-height:80vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+                <div style="font-weight:700;font-size:.95rem;margin-bottom:.2rem">담당 직원 (복수 선택)</div>
+                <div style="font-size:.72rem;color:#6b7280;margin-bottom:.5rem">${_esc(it.label)} · 이 파트의 <b>마지막 퇴근자</b>가 마감하도록 알림이 갑니다.</div>
+                <div style="overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;padding:.2rem .4rem;margin-bottom:.6rem">${rows}</div>
+                <div style="display:flex;gap:.4rem;justify-content:flex-end">
+                    <button onclick="_closingAssigneeClose()" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">닫기</button>
+                    <button onclick="_closingAssigneeSave()" style="background:#4338ca;color:#fff;border:none;padding:.45rem .9rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">저장</button>
+                </div>
+            </div>`;
+            ov.onclick=()=>_closingAssigneeClose();
+            ov.style.display='flex';
+        }
+        function _closingAssigneeClose(){ const ov=document.getElementById('_closingAssigneeModal'); if(ov) ov.style.display='none'; }
+        async function _closingAssigneeSave(){
+            const id=_closingAssigneeTargetId; if(!id) return;
+            const chosen=[...document.querySelectorAll('._clAsgChk:checked')].map(c=>({id:c.value, name:c.getAttribute('data-name')||''}));
+            try{
+                await db.collection('closingItems').doc(id).update({
+                    assignees: chosen,
+                    assigneeId: firebase.firestore.FieldValue.delete(),
+                    assigneeName: firebase.firestore.FieldValue.delete()
+                });
+                const it=_closingItems.find(x=>x.id===id);
+                if(it){ it.assignees=chosen; delete it.assigneeId; delete it.assigneeName; }
+                _closingAssigneeClose();
+                renderClosingChecklist();
+                _renderStaffAdminBody();
+            }catch(e){ alert('담당 저장 실패: '+(e?.message||e)); }
+        }
+        // ── 사진 편집 모달 (PC 캡처 붙여넣기 Ctrl+V / 파일 선택 / 삭제) ──
+        let _closingPhotoDraft=null;
+        let _closingPasteHandler=null;
         function _closingPickPhoto(id){
             _closingPhotoTargetId=id;
-            const inp=document.getElementById('_closingPhotoInput'); if(!inp) return;
-            inp.value='';
-            inp.onchange=async ()=>{
-                const f=inp.files&&inp.files[0]; if(!f) return;
-                try{
-                    const dataUrl=await _closingDownscaleImage(f,900,0.6);
-                    await db.collection('closingItems').doc(_closingPhotoTargetId).update({photo:dataUrl});
-                    const it=_closingItems.find(x=>x.id===_closingPhotoTargetId); if(it) it.photo=dataUrl;
-                    renderClosingChecklist();
-                    _renderStaffAdminBody();
-                }catch(e){ alert('사진 처리 실패: '+(e?.message||e)); }
+            const it=(_closingItems||[]).find(x=>x.id===id);
+            _closingPhotoDraft=(it&&it.photo)||null;
+            let ov=document.getElementById('_closingPhotoModal');
+            if(!ov){
+                ov=document.createElement('div'); ov.id='_closingPhotoModal';
+                ov.style.cssText='display:none;position:fixed;inset:0;z-index:3200;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:1rem';
+                document.body.appendChild(ov);
+            }
+            _closingRenderPhotoModal();
+            ov.style.display='flex';
+            if(_closingPasteHandler) document.removeEventListener('paste', _closingPasteHandler);
+            _closingPasteHandler=async (e)=>{
+                const items=(e.clipboardData&&e.clipboardData.items)||[];
+                for(const itm of items){
+                    if(itm.type && itm.type.indexOf('image')===0){
+                        const f=itm.getAsFile();
+                        if(f){ e.preventDefault(); try{ _closingPhotoDraft=await _closingDownscaleImage(f,900,0.6); _closingRenderPhotoModal(); }catch(err){ alert('붙여넣기 실패: '+(err?.message||err)); } }
+                        return;
+                    }
+                }
             };
-            inp.click();
+            document.addEventListener('paste', _closingPasteHandler);
+        }
+        function _closingRenderPhotoModal(){
+            const ov=document.getElementById('_closingPhotoModal'); if(!ov) return;
+            const has=!!_closingPhotoDraft;
+            ov.innerHTML=`<div style="background:#fff;border-radius:10px;max-width:440px;width:100%;padding:1rem" onclick="event.stopPropagation()">
+                <div style="font-weight:700;font-size:.95rem;margin-bottom:.6rem">📷 마감 항목 사진</div>
+                <div style="border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;min-height:150px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:.6rem">
+                    ${has?`<img src="${_closingPhotoDraft}" style="max-width:100%;max-height:300px;object-fit:contain">`:'<div style="color:#94a3b8;font-size:.82rem;text-align:center;padding:1rem">미리보기 없음<br><span style="font-size:.72rem">아래에서 캡처 붙여넣기(Ctrl+V) 또는 파일 선택</span></div>'}
+                </div>
+                <div style="font-size:.75rem;color:#475569;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:.5rem .6rem;margin-bottom:.6rem">💡 <b>PC 캡처 붙여넣기:</b> 캡처(⊞+Shift+S / ⌘+⌃+⇧+4) 후 이 창에서 <b>Ctrl+V</b> (⌘+V)</div>
+                <input id="_closingModalFile" type="file" accept="image/*" style="display:none">
+                <div style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end">
+                    <button onclick="document.getElementById('_closingModalFile').click()" style="background:#fff;border:1px solid #a5b4fc;color:#4338ca;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">파일 선택</button>
+                    ${has?`<button onclick="_closingPhotoModalRemove()" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">사진 삭제</button>`:''}
+                    <button onclick="_closingPhotoModalClose()" style="background:#fff;border:1px solid #d1d5db;color:#374151;padding:.45rem .8rem;border-radius:6px;font-size:.8rem;cursor:pointer">닫기</button>
+                    <button onclick="_closingPhotoModalSave()" style="background:#4338ca;color:#fff;border:none;padding:.45rem .9rem;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer">저장</button>
+                </div>
+            </div>`;
+            ov.onclick=()=>_closingPhotoModalClose();
+            const fi=document.getElementById('_closingModalFile');
+            if(fi) fi.onchange=async ()=>{ const f=fi.files&&fi.files[0]; if(!f) return; try{ _closingPhotoDraft=await _closingDownscaleImage(f,900,0.6); _closingRenderPhotoModal(); }catch(e){ alert('사진 처리 실패: '+(e?.message||e)); } };
+        }
+        function _closingPhotoModalClose(){
+            const ov=document.getElementById('_closingPhotoModal'); if(ov) ov.style.display='none';
+            if(_closingPasteHandler){ document.removeEventListener('paste', _closingPasteHandler); _closingPasteHandler=null; }
+            _closingPhotoDraft=null;
+        }
+        function _closingPhotoModalRemove(){ _closingPhotoDraft=null; _closingRenderPhotoModal(); }
+        async function _closingPhotoModalSave(){
+            const id=_closingPhotoTargetId; if(!id){ _closingPhotoModalClose(); return; }
+            try{
+                const val=_closingPhotoDraft?_closingPhotoDraft:firebase.firestore.FieldValue.delete();
+                await db.collection('closingItems').doc(id).update({photo: val});
+                const it=_closingItems.find(x=>x.id===id);
+                if(it){ if(_closingPhotoDraft) it.photo=_closingPhotoDraft; else delete it.photo; }
+                _closingPhotoModalClose();
+                renderClosingChecklist();
+                _renderStaffAdminBody();
+            }catch(e){ alert('저장 실패: '+(e?.message||e)); }
         }
         // 이미지 축소 → dataURL (Firestore 문서 한도 고려)
         function _closingDownscaleImage(file, maxDim, quality){
@@ -13415,8 +13564,8 @@
             const [h,m]=String(checkOut).split(':').map(Number);
             if(isNaN(h)||isNaN(m)) return 0;
             const co=h*60+m;
-            const dow=new Date(dateStr).getDay();
-            const endMin=_STAFF_END_MIN[dow]??1080;
+            // 개인 로직과 동일하게 요일별 정규 퇴근(설정 반영)을 사용
+            const endMin=getWorkEndMin(dateStr);
             if(co>endMin) return co-endMin;
             const graceMin=endMin-_STAFF_EARLY_GRACE;
             if(co>=graceMin) return 0;
@@ -15075,6 +15224,53 @@
             const a=document.createElement('a');
             const stamp=new Date().toISOString().slice(0,10).replace(/-/g,'');
             a.href=url; a.download=`재고_정리목록_${stamp}.csv`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }
+
+        // 재고 목록 전체를 관련 정보와 함께 엑셀(.xlsx)로 다운로드 (XLSX 없으면 CSV 폴백)
+        function exportInventoryXlsx(){
+            const items=(invItems||[]).slice().sort((a,b)=>{
+                const pa=String(a.parentName||'').localeCompare(String(b.parentName||''),'ko');
+                if(pa!==0) return pa;
+                return String(a.name||'').localeCompare(String(b.name||''),'ko');
+            });
+            if(!items.length){ alert('재고 품목이 없습니다.'); return; }
+            const header=['상위품목','품목명','카테고리','타입','현재고','단위','안전재고','발주필요','낱개단가(원)','재고가치(원)','보관장소','유통기한','1개용량(ml)','거래처','구매링크','최근입고','단종'];
+            const aoa=[header];
+            items.forEach(i=>{
+                const up=(typeof _overviewItemUnitPrice==='function')?_overviewItemUnitPrice(i):(Number(i.unitPrice)||0);
+                const stock=Number(i.currentStock)||0;
+                const safe=Number(i.safetyStock)||0;
+                const low=(!i.discontinued && safe && stock<safe)?'Y':'';
+                const locSummary=(typeof _overviewLocationSummary==='function')?_overviewLocationSummary(i)
+                    : Object.entries(i.locations||{}).filter(([,q])=>(Number(q)||0)>0).map(([k,q])=>`${k}:${q}`).join(' | ');
+                const vName=(i.vendorId&&typeof _vendorById==='function'?(_vendorById(i.vendorId)?.name||''):'')||i.contactName||'';
+                aoa.push([
+                    i.parentName||'', i.name||'', INV_CATEGORIES[i.category]||i.category||'', INV_TYPES[i.type]||i.type||'',
+                    stock, i.unit||'개', safe, low,
+                    Math.round(up||0), Math.round((up||0)*stock),
+                    locSummary, i.expiryDate||'', Number(i.volumeMl)||'',
+                    vName, i.purchaseLink||'', i.lastReceiveDate||'', i.discontinued?'Y':''
+                ]);
+            });
+            const stamp=new Date().toISOString().slice(0,10).replace(/-/g,'');
+            try{
+                if(typeof XLSX!=='undefined'){
+                    const ws=XLSX.utils.aoa_to_sheet(aoa);
+                    ws['!cols']=[{wch:12},{wch:22},{wch:8},{wch:8},{wch:7},{wch:5},{wch:7},{wch:6},{wch:11},{wch:12},{wch:28},{wch:11},{wch:10},{wch:14},{wch:32},{wch:11},{wch:5}];
+                    const wb=XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, '재고목록');
+                    XLSX.writeFile(wb, `재고목록_${stamp}.xlsx`);
+                    return;
+                }
+            }catch(e){ console.warn('xlsx 내보내기 실패, CSV로 대체:', e); }
+            // CSV 폴백 (엑셀에서 열 수 있게 BOM 추가)
+            const esc=v=>{ const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+            const csv='﻿'+aoa.map(r=>r.map(esc).join(',')).join('\r\n');
+            const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a'); a.href=url; a.download=`재고목록_${stamp}.csv`;
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(()=>URL.revokeObjectURL(url),1000);
         }
