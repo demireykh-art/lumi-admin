@@ -17716,9 +17716,18 @@
 
         function _dsOcrErrMsg(e){
             const code=String((e&&e.code)||'');
-            if(/not-found/.test(code)) return 'OCR 기능이 아직 준비되지 않았습니다. 관리자에게 문의해주세요.';
+            const msg=String((e&&e.message)||'').trim();
+            if(/not-found/.test(code)) return 'OCR 기능이 아직 배포되지 않았습니다. 관리자에게 문의해주세요.';
             if(/unauthenticated/.test(code)) return '로그인이 만료되었습니다. 다시 로그인해주세요.';
-            return (e&&e.message)||'알 수 없는 오류';
+            // 서버는 어떤 예외든 사유를 붙여서 올린다(ocrReceipt #170 과 동일).
+            // 그런데도 사유가 'internal' 뿐이면 요청이 함수까지 닿지 못한 것이다.
+            // 배포되지 않은 함수 URL 은 CORS 헤더 없이 404 를 주기 때문에 브라우저가
+            // 이를 CORS 오류로 막고, SDK 에는 사유 없는 internal 만 남는다.
+            if(/internal/.test(code)&&(!msg||/^internal$/i.test(msg))){
+                return 'OCR 함수에 연결하지 못했습니다. 아직 배포되지 않았을 수 있습니다. '
+                    +'(관리자: Actions → Deploy Cloud Functions → only 칸에 ocrDailySales)';
+            }
+            return msg||'알 수 없는 오류';
         }
 
         // 캔버스 → base64. 화면 캡처는 글씨가 얇아 되도록 무손실(PNG)로 보낸다.
