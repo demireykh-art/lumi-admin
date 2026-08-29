@@ -17817,6 +17817,11 @@
             if(_dsPasteBound) return;
             _dsPasteBound=true;
             document.addEventListener('paste', e=>{
+                // 마감 체크리스트 사진 모달도 document 에 paste 를 건다. 화면을 떠나도
+                // _dsView 는 'upload' 로 남아 있으므로, 이 탭이 실제로 보일 때만 받는다.
+                // (안 그러면 마감 사진을 붙여넣을 때 여기서도 OCR 이 돈다)
+                const tab=document.getElementById('tab-dailySales');
+                if(!tab||!tab.classList.contains('active')) return;
                 if(_dsView!=='upload'||!_dsDraft||_dsBusy) return;
                 const items=(e.clipboardData&&e.clipboardData.items)||[];
                 for(let i=0;i<items.length;i++){
