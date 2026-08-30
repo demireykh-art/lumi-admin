@@ -446,6 +446,16 @@
         <div class="content">
             <!-- 출퇴근 탭 v2.1 -->
             <div class="tab-content active" id="tab-attendance">
+                <!-- 📢 오늘 공지 (개인계정 출퇴근 탭 최상단 — 공용계정 홈 공지와 동일) -->
+                <section class="home-sec home-sec-notice" id="attNoticeSection" style="display:none;margin-bottom:.75rem">
+                    <button type="button" class="home-notice-head" onclick="showTop('notice')">
+                        <span class="home-row-icon">📢</span>
+                        <span class="home-notice-title">공지 <span id="attHomeNoticeToday" class="home-notice-date"></span></span>
+                        <span class="home-row-arrow">→</span>
+                    </button>
+                    <div id="attHomeTodayStatus" class="home-notice-status"></div>
+                    <div id="attHomeNoticeInline" class="home-notice-body"></div>
+                </section>
                 <div class="gps-status loading" id="gpsStatus">📍 위치 확인 중...</div>
                 
                 <!-- 어제 퇴근 누락 알림 -->
@@ -9832,12 +9842,30 @@
             // 헤더 옆 오늘 날짜 표기
             const dateSpan=document.getElementById('topHomeNoticeToday');
             if(dateSpan) dateSpan.textContent='('+_todayYmd()+')';
+            _renderAttNotice(); // 개인계정 출퇴근 탭 상단 공지도 동기화
             if(!box) return;
             if(!today.length){
                 box.innerHTML='<div style="padding:.6rem;text-align:center;color:#9ca3af;font-size:.8rem">오늘 공지 없음</div>';
                 return;
             }
             box.innerHTML=today.map(n=>_noticeRowHtml(n,true)).join('');
+        }
+        // 📢 개인계정 출퇴근 탭 최상단 공지 (공용계정 홈 공지와 동일 내용)
+        function _renderAttNotice(){
+            const sec=document.getElementById('attNoticeSection');
+            if(!sec) return;
+            if(isSharedAccount()){ sec.style.display='none'; return; } // 공용계정은 홈에서 봄
+            sec.style.display='';
+            const today=_todayYmd();
+            const ds=document.getElementById('attHomeNoticeToday'); if(ds) ds.textContent='('+today+')';
+            const st=document.getElementById('attHomeTodayStatus'); if(st) st.innerHTML=_dayStatusChipsHtml(today);
+            const box=document.getElementById('attHomeNoticeInline');
+            if(box){
+                const notices=_todayNotices();
+                box.innerHTML = notices.length
+                    ? notices.map(n=>_noticeRowHtml(n,true)).join('')
+                    : '<div style="padding:.6rem;text-align:center;color:#9ca3af;font-size:.8rem">오늘 공지 없음</div>';
+            }
         }
 
         // ================================================================
@@ -10074,6 +10102,7 @@
         }
         function _renderHomeTodayStatus(){
             const box=document.getElementById('topHomeTodayStatus');
+            _renderAttNotice(); // 개인계정 출퇴근 탭 상단 공지 상태도 동기화
             if(!box) return;
             box.innerHTML=_dayStatusChipsHtml(_todayYmd());
         }
