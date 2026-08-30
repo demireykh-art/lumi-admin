@@ -346,6 +346,7 @@ HMAC 서명 검증을 구현하는 대신 **배포를 해제**하고, 코드와 
 | `AUDIT.md` | **Phase 0 전체 조사** — 하드코딩 인벤토리, 컬렉션 지도, CRM 결합 분석, 함수 목록, 공수 |
 | `AUDIT-REPLY.md` | 착수 전 확인 3 건 회신 |
 | `ISSUES.md` | 미해결 이슈 5 건 + 해결됨 3 건 + 제품 결정 기록 |
+| `RESEARCH.md` | **명세서 사진 → 입고 자동입력 설계** — 부가세 방침, OCR 방식 비교(Vision+좌표 vs 비전 LLM), 품목 매칭 3 단, 할인 안분. 설계만, 구현 대기 |
 | `admin.html` | Phase 4 운영 콘솔 목업 (순수 목업, 백엔드 호출 없음) |
 | `scripts/fix-currentstock.js` | 재고 정합성 조사·복구 (report/apply, 백업·멱등·테스트 19건) |
 
