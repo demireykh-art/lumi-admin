@@ -1,0 +1,18 @@
+{
+  "name": "lumi-admin-tooling",
+  "private": true,
+  "description": "개발·검증 도구 전용. 앱 런타임은 여전히 vanilla JS + Firebase SDK(CDN) 만 씁니다. 여기 의존성은 배포본에 포함되지 않습니다.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test scripts/fix-currentstock.test.js",
+    "emu": "firebase emulators:start --only firestore --project lumiclinic-c1a95",
+    "emu:seed": "node scripts/seed-emulator.js",
+    "stock:report": "node scripts/fix-currentstock.js report",
+    "stock:apply": "node scripts/fix-currentstock.js apply --confirm"
+  },
+  "devDependencies": {
+    "firebase-tools": "^15.28.1"
+  }
+}
