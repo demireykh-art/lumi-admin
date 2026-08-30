@@ -325,6 +325,15 @@ UI 숨김(`CRM_ENABLED`)을 먼저 배포하고, 그다음 함수 삭제입니�
 
 > 삭제하지 않고 남겨둡니다. 같은 것을 다시 이슈로 올리지 않기 위해서입니다.
 
+### FIXED-9 — 재고 목록 다운로드 버튼이 동작하지 않던 버그 ✅
+
+- **처리:** PR #177, main `bbbfb57`
+- **증상:** `exportInventoryXlsx()` 가 `INV_TYPES` 를 참조하는데 `staff.html` 에 정의가 없음.
+  `inventory.js:3`(관리자앱 전용)에만 존재. `ReferenceError` 가 `try/catch` **바깥**의
+  `items.forEach` 에서 터져 CSV 폴백까지 못 가고 함수가 통째로 죽음 → 버튼 먹통
+- **수정:** `INV_CATEGORIES` 옆에 같은 값으로 정의 (1 줄)
+- **뿌리:** 위 §앱 구성 결정 — 두 앱이 상수를 각자 가짐. 관리자앱 폐기로 해소 예정
+
 ### FIXED-8 — 입고 탭이 대부분 품목의 현재고를 0 으로 표시하던 버그 ✅
 
 - **처리:** HOTFIX-4 — PR #146, main `7fa509c`
@@ -443,6 +452,58 @@ UI 숨김(`CRM_ENABLED`)을 먼저 배포하고, 그다음 함수 삭제입니�
 - 통합앱 재고 탭에서 두 항목을 **삭제**하고, 필요하면 「비품 구입」 카탈로그에
   구매 링크로 등록하는 것이 맞습니다.
 - 재고 수량에 영향이 없고(각 1 개), 급하지 않습니다.
+
+---
+
+## 앱 구성 결정 (2026-08-22)
+
+### 관리자앱(`index.html`) 폐기 — 통합앱(`staff.html`) 단일 기준
+
+원장 방침: *"개발은 통합앱으로 계속 업데이트하고 있어서 앞으로 통합앱을 기준으로
+업데이트하면 된다. 추후에는 관리자앱은 안 쓸 예정."*
+
+**폐기 대상 11 개 파일 · 9,555 줄** — `index.html` `expense.js` `hr-attendance.js`
+`expense-upload-parser.html` `inventory.js` `card-statements.js` `firebase-config.js`
+`revenue.js` `finance.js` `expense-categories.js` `product-rating.js`
+
+### 이 결정이 해소하는 것 — ISSUE 계열 하나가 통째로 사라짐
+
+`AUDIT.md` §7 이 지적한 **"재고 구현이 두 벌"** 문제가 자연 해소됩니다.
+오늘 수정한 재고 버그 3 건이 전부 이 뿌리에서 나왔습니다.
+
+| PR | 버그 | 뿌리 |
+|---|---|---|
+| #142 | 입고 시 `currentStock` 미갱신 | 두 앱이 재고 갱신 규약을 각자 가짐 |
+| #146 | `totalStock` 만 읽어 현재고 0 표시 | 〃 |
+| #177 | `INV_TYPES` 가 `inventory.js` 에만 있어 다운로드 먹통 | 상수가 한쪽 앱에만 정의됨 |
+
+`ISSUE-4`(죽은 인센티브 유형)의 수정 지점도 줄어듭니다 — 합산 8 곳 중
+`hr-attendance.js` 3 곳이 폐기 대상입니다.
+
+### ⚠️ 갈 곳이 없어지는 기능 — 미결
+
+컬렉션 전수 조사 결과 **관리자앱에만 있는 것이 8 개**입니다.
+
+| 컬렉션 | 기능 |
+|---|---|
+| `fixedExpenses` · `variableExpenses` | 고정비 · 변동비 |
+| `cards` · `categoryRules` | 카드 명세서 · 비용 자동분류 |
+| `incomeTaxes` · `vatTaxes` · `withholdingTaxes` | 소득세 · 부가세 · 원천세 |
+| `config` | 비용 카테고리 설정 |
+| `recipes` | 레시피(시술 원가) |
+
+여기에 손익(P&L) 화면(`finance.js`)이 더해집니다.
+
+SaaS 관점에서는 문제없습니다 (`DECISIONS.md` 질문 1 에서 이미 판매 제외).
+**문제는 루미 자신입니다** — 관리자앱을 안 쓰면 루미도 비용·세무·손익을 못 씁니다.
+
+> **미결:** (a) 통합앱으로 이관 / (b) 버림 / (c) 관리자앱만 남겨둠 중 택일.
+> 세무·비용은 세무사 영역이라 실사용 빈도를 원장님이 판단해야 합니다.
+
+**통합앱에 이미 있어 안전한 것:** `revenue` `salesDetail` `payroll` `productRatings`
+`inventory` `employees` + 근태·연차·식대·OT·인센티브·급여명세서.
+통합앱이 매출 Cloud Function 을 직접 호출하고 있고, 직원관리·급여는 코드 주석에
+*"admin 웹 직원관리 이관"* 으로 이미 옮겨진 것이 명시돼 있습니다.
 
 ---
 
