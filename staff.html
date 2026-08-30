@@ -17072,6 +17072,9 @@
             const base=has(dTot)?dTot:(has(sTot)?sTot:(has(procTotal)?procTotal:sTot));
             const p=(d.payment&&d.payment.rows)||{};
             const pr=k=>p[k]||{};
+            // 환불금액은 수납금액 합계에서 이미 빠진 값이다. 금액이 크면 "왜 이렇게
+            // 적지?" 가 되므로 합계 옆에 같이 적어 준다.
+            const refund=_dsN(((d.payment&&d.payment.notes)||{}).noteRefund);
             // ── 보험 / 비보험 분해 ──
             // 시술별 표가 있으면 그 표의 '보험진료' 행을 쓴다. 원장님이 말하는
             // "보험진료 매출·객단가" 가 바로 이 행이고, 건수까지 같이 들어 있어
@@ -17126,7 +17129,7 @@
                 cash:_dsN(pr('cashSum').sum), card:_dsN(pr('card').sum),
                 easy:_dsN(pr('easySum').sum), etc:_dsN(pr('etc').sum),
                 unclassified:_dsN(pr('unclassified').sum),
-                received:_dsN(pr('total').sum),
+                received:_dsN(pr('total').sum), refund,
                 taxAmt:_dsN(pr('total').taxAmt), vat:_dsN(pr('total').vat),
                 taxGross:_dsN(pr('total').taxGross), nonTaxAmt:_dsN(pr('total').nonTaxAmt),
                 staff, doctor, staffTotal:sTot, doctorTotal:dTot, base
@@ -17144,13 +17147,27 @@
                     w.push(`수납 [${DS_PAY_LABEL[k]||k}] 과세 수납금액+부가세 ≠ 과세 총수납금액`);
             });
             const colSum=(keys,col)=>keys.reduce((s,k)=>s+_dsN((rows[k]||{})[col]),0);
+            // ⚠️ 수납금액 합계 행은 각 줄의 단순 합이 아니라 환불금액을 뺀 순액이다.
+            //   실제 마감표에서 확인: 합계 열 각 줄의 합 1,757,100 − ※환불금액 910,000
+            //   = 표의 수납금액 합계 847,100. 과세 총수납금액·과세 수납금액·부가세도
+            //   같은 만큼 줄어 있었다. 환불이 어느 열에서 빠졌는지는 표가 알려주지
+            //   않으므로, 환불이 있으면 합계 열만 검산하고 나머지 열은 건너뛴다.
+            const refund=_dsN(((draft&&draft.payment&&draft.payment.notes)||{}).noteRefund);
             DS_PAY_COL.forEach(([col,label])=>{
                 if(rows.cashSum&&colSum(['cash','cashReceipt','bank','bankReceipt'],col)!==_dsN(rows.cashSum[col]))
                     w.push(`수납 [현금 합계 · ${label}] 이 현금·통장 네 줄의 합과 다릅니다`);
                 if(rows.easySum&&colSum(['easy','easyReceipt'],col)!==_dsN(rows.easySum[col]))
                     w.push(`수납 [간편결제 합계 · ${label}] 이 두 줄의 합과 다릅니다`);
-                if(rows.total&&colSum(['cashSum','etc','card','easySum','unclassified'],col)!==_dsN(rows.total[col]))
-                    w.push(`수납 [수납금액 합계 · ${label}] 이 각 줄의 합과 다릅니다`);
+                if(rows.total){
+                    const sum=colSum(['cashSum','etc','card','easySum','unclassified'],col);
+                    if(col==='sum'){
+                        if(sum-refund!==_dsN(rows.total.sum))
+                            w.push(`수납 [수납금액 합계] 가 각 줄의 합 − 환불금액과 다릅니다 `
+                                +`(${_dsWon(sum)} − ${_dsWon(refund)} ≠ ${_dsWon(rows.total.sum)})`);
+                    }else if(!refund&&sum!==_dsN(rows.total[col])){
+                        w.push(`수납 [수납금액 합계 · ${label}] 이 각 줄의 합과 다릅니다`);
+                    }
+                }
             });
             [['staff','담당직원'],['doctor','담당의']].forEach(([scope,label])=>{
                 const map=draft[scope]||{};
@@ -17289,7 +17306,7 @@
                 h+=`<div style="padding:.8rem .9rem;background:#dcfce7;border-radius:var(--r)">
                     <div style="font-size:.8rem;font-weight:700;color:#166534">✅ 오늘(${today}) 마감 결산 저장 완료</div>
                     <div style="font-size:1.3rem;font-weight:700;color:#166534;letter-spacing:-.5px;margin:.25rem 0 .1rem">${_dsWon(k.received)}</div>
-                    <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}</div>
+                    <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}${k.refund?` · 환불 −${_dsWon(k.refund)}`:''}</div>
                     <div style="font-size:.68rem;color:#166534;opacity:.8;margin-top:.15rem">입력: ${_esc((todayDoc.meta&&todayDoc.meta.byName)||'-')}</div>
                 </div>
                 <button class="btn btn-secondary" style="margin-top:.5rem" onclick="dsEditDay('${today}')">✏️ 오늘 결산 고치기</button>`;
@@ -17535,7 +17552,8 @@
             // ② 수납 (현금흐름)
             h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">💳 수납 (실제 들어온 돈)</div>';
             h+=_dsCards([
-                ['수납 합계',_dsWon(k.received),`현금 ${_dsShort(k.cash)}원 · 카드 ${_dsShort(k.card)}원`,'#166534','#dcfce7'],
+                ['수납 합계',_dsWon(k.received),
+                 `현금 ${_dsShort(k.cash)}원 · 카드 ${_dsShort(k.card)}원`+(k.refund?` · 환불 −${_dsShort(k.refund)}원`:''),'#166534','#dcfce7'],
                 ['과세 수납금액',_dsWon(k.taxAmt),`부가세 ${_dsWon(k.vat)} · 비과세 ${_dsWon(k.nonTaxAmt)}`,'#0f766e','#ccfbf1'],
             ]);
             h+=_dsPayBarHtml(k);
@@ -17950,6 +17968,7 @@
                     <div style="font-size:1.45rem;font-weight:700;color:#166534;letter-spacing:-.5px;margin:.1rem 0">${_dsWon(k.received)}</div>
                     <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}${k.etc?' · 기타 '+_dsWon(k.etc):''}${k.easy?' · 간편결제 '+_dsWon(k.easy):''}</div>
                     <div style="font-size:.72rem;color:#166534;opacity:.8">과세 수납 ${_dsWon(k.taxAmt)} · 부가세 ${_dsWon(k.vat)}</div>
+                    ${k.refund?`<div style="font-size:.72rem;color:#b45309;margin-top:.15rem">↩ 환불 ${_dsWon(k.refund)} 이 빠진 금액입니다</div>`:''}
                 </div>`;
             }
             if(hasSales){

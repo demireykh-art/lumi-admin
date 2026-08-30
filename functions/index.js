@@ -1865,10 +1865,22 @@ function dsParseSales(wordRows, cols) {
 }
 
 // 표가 원래 갖는 산식으로 검산한다. 어긋난 곳을 사람이 볼 문장으로 돌려준다.
-function dsVerifyPayment(rows) {
+/**
+ * 수납 구분표 검산.
+ *
+ * ⚠️ 수납금액 합계 행은 각 줄의 단순 합이 아니다 — 환불금액을 뺀 순액이다.
+ * 실제 마감표에서 확인: 합계 열 각 줄의 합 1,757,100 − ※환불금액 910,000
+ * = 표의 수납금액 합계 847,100. 과세 총수납금액·과세 수납금액·부가세 열도
+ * 같은 만큼 줄어 있었다.
+ * 환불이 어느 열에서 빠졌는지(과세인지 비과세인지)는 표가 알려주지 않으므로,
+ * 환불이 있으면 합계 열만 "각 줄의 합 − 환불금액" 으로 검산하고 나머지 열은
+ * 건너뛴다. 환불이 없으면 예전처럼 전 열을 검산한다.
+ */
+function dsVerifyPayment(rows, notes) {
   const w = [];
   const g = (k) => rows[k] || {};
   const n = (v) => Math.round(Number(v) || 0);
+  const refund = n((notes || {}).noteRefund);
   for (const [k, r] of Object.entries(rows)) {
     const line = n(r.copay) + n(r.prepaidTax) + n(r.prepaidFree) + n(r.nonTaxAmt) + n(r.taxGross);
     if (line !== n(r.sum)) w.push(`${k}: 가로합 ${line.toLocaleString()} ≠ 합계 ${n(r.sum).toLocaleString()}`);
@@ -1884,8 +1896,16 @@ function dsVerifyPayment(rows) {
     if (rows.easySum && colSum(['easy', 'easyReceipt'], col) !== n(g('easySum')[col])) {
       w.push(`간편결제 합계(${col})가 두 줄의 합과 다릅니다`);
     }
-    if (rows.total && colSum(['cashSum', 'etc', 'card', 'easySum', 'unclassified'], col) !== n(g('total')[col])) {
-      w.push(`수납금액 합계(${col})가 각 줄의 합과 다릅니다`);
+    if (rows.total) {
+      const sum = colSum(['cashSum', 'etc', 'card', 'easySum', 'unclassified'], col);
+      if (col === 'sum') {
+        if (sum - refund !== n(g('total').sum)) {
+          w.push('수납금액 합계(합계)가 각 줄의 합 − 환불금액과 다릅니다 ' +
+            `(${sum.toLocaleString()} − ${refund.toLocaleString()} ≠ ${n(g('total').sum).toLocaleString()})`);
+        }
+      } else if (!refund && sum !== n(g('total')[col])) {
+        w.push(`수납금액 합계(${col})가 각 줄의 합과 다릅니다`);
+      }
     }
   }
   return w;
@@ -2057,7 +2077,8 @@ function dsBlock(kind, wordRows) {
   if (kind === 'payment') {
     const p = dsParsePayment(wordRows);
     if (!(p.matched >= 6 && Object.keys(p.rows).length >= 4)) return null;
-    return {kind, payment: {rows: p.rows, notes: p.notes}, warnings: dsVerifyPayment(p.rows)};
+    return {kind, payment: {rows: p.rows, notes: p.notes},
+      warnings: dsVerifyPayment(p.rows, p.notes)};
   }
   if (kind === 'patients') {
     const pt = dsParsePatients(wordRows);
