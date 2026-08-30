@@ -1,0 +1,18 @@
+{
+  "name": "jaegodak",
+  "private": true,
+  "description": "재고닥 — 소규모 병원 재고 관리 SaaS",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "emu": "firebase emulators:start --only auth,firestore,functions,storage",
+    "test": "firebase emulators:exec --only firestore \"node --test tests/rules.test.js\"",
+    "test:watch": "node --test --watch tests/rules.test.js",
+    "deploy": "firebase deploy",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage",
+    "migrate:report": "node scripts/migrate-from-lumi.js report"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase-tools": "^15.28.1"
+  }
+}

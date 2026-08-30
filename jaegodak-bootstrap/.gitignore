@@ -1,0 +1,22 @@
+node_modules/
+.firebase/
+*.log
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# 프로젝트마다 다른 값. 비밀은 아니지만 커밋하지 않는다.
+public/firebase-config.js
+.firebaserc
+
+# 자격증명 — 절대 커밋하지 않는다
+serviceAccount*.json
+service-account*.json
+*-adminsdk-*.json
+*.credentials.json
+gcp-key*.json
+
+# 실데이터가 든 보고서·백업
+migrate-report.*
+backup/
+snapshot/

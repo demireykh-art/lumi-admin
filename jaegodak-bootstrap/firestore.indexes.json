@@ -1,0 +1,41 @@
+{
+  "indexes": [
+    {
+      "comment": "품목 목록 — 분류별 이름순",
+      "collectionGroup": "items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "comment": "품목별 입출고 이력 — 최신순",
+      "collectionGroup": "movements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "itemId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "comment": "기간별 입출고 — 월별 소진·손익 집계",
+      "collectionGroup": "movements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "comment": "거래처 품목코드 역인덱스 — 명세서 OCR 이 코드로 품목을 찾는다 (P2)",
+      "collectionGroup": "items",
+      "fieldPath": "vendorCodeKeys",
+      "indexes": [
+        { "queryScope": "COLLECTION", "arrayConfig": "CONTAINS" }
+      ]
+    }
+  ]
+}

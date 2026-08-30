@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>재고닥</title>
+<style>
+:root{--bg:#f8fafc;--card:#fff;--text:#111827;--muted:#6b7280;--border:#e5e7eb;
+      --primary:#0d9488;--danger:#dc2626;--r:10px}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+     background:var(--bg);color:var(--text)}
+.wrap{max-width:420px;margin:0 auto;padding:1.5rem 1rem 3rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem}
+h1{font-size:1.5rem;margin:.5rem 0 1.5rem;text-align:center}
+h2{font-size:1.05rem;margin:0 0 .85rem}
+label{display:block;font-size:.82rem;color:var(--muted);margin:.7rem 0 .25rem}
+input{width:100%;padding:.65rem .7rem;font-size:1rem;border:1px solid var(--border);
+      border-radius:8px;background:#fff;color:var(--text)}
+button{width:100%;padding:.7rem;margin-top:.9rem;font-size:.95rem;font-weight:600;
+       border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer}
+button.ghost{background:none;color:var(--muted);font-weight:500;border:1px solid var(--border)}
+button:disabled{opacity:.55;cursor:default}
+.msg{margin-top:.8rem;padding:.6rem .7rem;border-radius:8px;font-size:.85rem;display:none}
+.msg.err{display:block;background:#fef2f2;color:var(--danger);border:1px solid #fecaca}
+.msg.ok{display:block;background:#f0fdfa;color:#0f766e;border:1px solid #99f6e4}
+.row{display:flex;justify-content:space-between;align-items:center;gap:.5rem;
+     padding:.55rem 0;border-bottom:1px solid #f3f4f6;font-size:.9rem}
+.row:last-child{border-bottom:none}
+.muted{color:var(--muted);font-size:.82rem}
+code{background:#f3f4f6;padding:.15rem .35rem;border-radius:4px;font-size:.82rem;word-break:break-all}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>재고닥</h1>
+
+  <!-- ① 로그인 전 -->
+  <section id="viewAuth" class="card" hidden>
+    <h2 id="authTitle">로그인</h2>
+    <label for="email">이메일</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="password">비밀번호</label>
+    <input id="password" type="password" autocomplete="current-password">
+    <div id="nameWrap" hidden>
+      <label for="displayName">이름</label>
+      <input id="displayName" type="text" autocomplete="name">
+    </div>
+    <button id="btnAuth">로그인</button>
+    <button id="btnToggle" class="ghost">계정이 없으신가요? 회원가입</button>
+    <div id="authMsg" class="msg"></div>
+  </section>
+
+  <!-- ② 로그인했지만 소속이 없을 때 -->
+  <section id="viewOnboard" class="card" hidden>
+    <h2>시작하기</h2>
+    <p class="muted">병원을 새로 만들거나, 받은 초대 코드로 합류하세요.</p>
+    <label for="clinicName">새 병원 이름</label>
+    <input id="clinicName" type="text" placeholder="예: 루미클리닉">
+    <button id="btnCreateClinic">병원 만들기</button>
+    <label for="inviteCode">또는 초대 코드</label>
+    <input id="inviteCode" type="text" placeholder="초대 코드를 붙여넣으세요">
+    <button id="btnAcceptInvite" class="ghost">합류하기</button>
+    <div id="onboardMsg" class="msg"></div>
+    <button id="btnSignOut1" class="ghost">로그아웃</button>
+  </section>
+
+  <!-- ③ 앱 셸 — P1 에서 여기에 화면이 붙는다 -->
+  <section id="viewApp" hidden>
+    <div class="card">
+      <h2 id="clinicName2">—</h2>
+      <div class="row"><span class="muted">내 계정</span><span id="meEmail">—</span></div>
+      <div class="row"><span class="muted">권한</span><span id="meRole">—</span></div>
+      <div class="row"><span class="muted">품목</span><span id="itemCount">—</span></div>
+      <div class="row"><span class="muted">구성원</span><span id="memberCount">—</span></div>
+    </div>
+
+    <div class="card" id="inviteCard" hidden>
+      <h2>직원 초대</h2>
+      <p class="muted">코드를 만들어 직원에게 전달하세요. 14일 뒤 만료됩니다.</p>
+      <button id="btnMakeInvite">초대 코드 만들기</button>
+      <div id="inviteOut" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>P0 완료</h2>
+      <p class="muted">멀티테넌시 뼈대가 섰습니다. 다음은 <b>P1 — 품목·위치·등급·UOM</b>입니다.</p>
+      <button id="btnSignOut2" class="ghost">로그아웃</button>
+    </div>
+  </section>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="repo.js"></script>
+<script src="auth.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+
+  if (!window.FIREBASE_CONFIG) {
+    document.body.innerHTML =
+      '<div class="wrap"><div class="card"><h2>설정이 없습니다</h2>' +
+      '<p class="muted">firebase-config.example.js 를 firebase-config.js 로 복사하고 ' +
+      'Firebase 콘솔의 값으로 채우세요. (README 4단계)</p></div></div>';
+    return;
+  }
+  firebase.initializeApp(window.FIREBASE_CONFIG);
+
+  // 에뮬레이터에서 열었으면 자동으로 붙는다. 프로덕션 설정을 건드릴 필요가 없다.
+  if (['localhost', '127.0.0.1'].includes(location.hostname)) {
+    firebase.auth().useEmulator('http://127.0.0.1:9099');
+    firebase.firestore().useEmulator('127.0.0.1', 8080);
+    firebase.app().functions('asia-northeast3').useEmulator('127.0.0.1', 5001);
+    console.info('[재고닥] 에뮬레이터에 연결했습니다.');
+  }
+
+  let signUpMode = false;
+
+  function say(el, text, kind) {
+    el.className = 'msg ' + (kind || 'err');
+    el.textContent = text;
+  }
+  function clear(el) { el.className = 'msg'; el.textContent = ''; }
+
+  // Firebase 오류 코드를 사람 말로. 원문은 영어라 직원이 못 읽는다.
+  function human(e) {
+    const m = {
+      'auth/invalid-email': '이메일 형식이 올바르지 않습니다.',
+      'auth/missing-password': '비밀번호를 입력해주세요.',
+      'auth/weak-password': '비밀번호는 6자 이상이어야 합니다.',
+      'auth/email-already-in-use': '이미 가입된 이메일입니다.',
+      'auth/invalid-credential': '이메일 또는 비밀번호가 맞지 않습니다.',
+      'auth/user-not-found': '가입되지 않은 이메일입니다.',
+      'auth/wrong-password': '비밀번호가 맞지 않습니다.',
+      'auth/too-many-requests': '시도가 너무 많습니다. 잠시 후 다시 해주세요.',
+      'auth/network-request-failed': '네트워크에 연결할 수 없습니다.',
+    };
+    return m[e && e.code] || (e && e.message) || '알 수 없는 오류가 발생했습니다.';
+  }
+
+  async function busy(btn, fn) {
+    const label = btn.textContent;
+    btn.disabled = true; btn.textContent = '처리 중…';
+    try { await fn(); } finally { btn.disabled = false; btn.textContent = label; }
+  }
+
+  $('btnToggle').onclick = () => {
+    signUpMode = !signUpMode;
+    $('authTitle').textContent = signUpMode ? '회원가입' : '로그인';
+    $('btnAuth').textContent = signUpMode ? '가입하기' : '로그인';
+    $('btnToggle').textContent = signUpMode ? '이미 계정이 있으신가요? 로그인' : '계정이 없으신가요? 회원가입';
+    $('nameWrap').hidden = !signUpMode;
+    $('password').autocomplete = signUpMode ? 'new-password' : 'current-password';
+    clear($('authMsg'));
+  };
+
+  $('btnAuth').onclick = () => busy($('btnAuth'), async () => {
+    clear($('authMsg'));
+    const email = $('email').value.trim();
+    const pw = $('password').value;
+    try {
+      if (signUpMode) await Auth.signUp(email, pw, $('displayName').value.trim());
+      else await Auth.signIn(email, pw);
+    } catch (e) { say($('authMsg'), human(e)); }
+  });
+
+  $('btnCreateClinic').onclick = () => busy($('btnCreateClinic'), async () => {
+    clear($('onboardMsg'));
+    const name = $('clinicName').value.trim();
+    if (!name) return say($('onboardMsg'), '병원 이름을 입력해주세요.');
+    try { await Auth.createClinic(name); }
+    catch (e) { say($('onboardMsg'), human(e)); }
+  });
+
+  $('btnAcceptInvite').onclick = () => busy($('btnAcceptInvite'), async () => {
+    clear($('onboardMsg'));
+    const code = $('inviteCode').value.trim();
+    if (!code) return say($('onboardMsg'), '초대 코드를 입력해주세요.');
+    try { await Auth.acceptInvite(code); }
+    catch (e) { say($('onboardMsg'), human(e)); }
+  });
+
+  $('btnMakeInvite').onclick = () => busy($('btnMakeInvite'), async () => {
+    try {
+      const r = await Auth.createInvite('staff');
+      say($('inviteOut'), '', 'ok');
+      $('inviteOut').innerHTML = '초대 코드 (14일 유효)<br><code>' + r.code + '</code>';
+    } catch (e) { say($('inviteOut'), human(e)); }
+  });
+
+  $('btnSignOut1').onclick = $('btnSignOut2').onclick = () => Auth.signOut();
+
+  Auth.onChange(async (s) => {
+    $('viewAuth').hidden = s.signedIn;
+    $('viewOnboard').hidden = !(s.signedIn && !s.hasClinic);
+    $('viewApp').hidden = !(s.signedIn && s.hasClinic);
+    if (!(s.signedIn && s.hasClinic)) return;
+
+    $('meEmail').textContent = (s.user && s.user.email) || '—';
+    $('meRole').textContent = s.role || '—';
+    $('inviteCard').hidden = !Auth.can(['owner', 'manager']);
+
+    try {
+      const [clinic, items, members] = await Promise.all([
+        Repo.getClinic(), Repo.listItems(), Repo.listMembers(),
+      ]);
+      $('clinicName2').textContent = (clinic && clinic.name) || '—';
+      $('itemCount').textContent = items.length + '개';
+      $('memberCount').textContent = members.length + '명';
+    } catch (e) {
+      // 대개는 클레임이 아직 안 퍼진 것이다. 한 번 더 갱신하면 풀린다.
+      console.warn('초기 로드 실패:', e);
+      $('clinicName2').textContent = '불러오지 못했습니다';
+    }
+  });
+
+  Auth.start();
+})();
+</script>
+</body>
+</html>

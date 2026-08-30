@@ -27,3 +27,7 @@ report*.json
 
 # 재고 단가 조사 보고서 — 실데이터. 커밋 금지
 price-audit.*
+
+# 재고닥 부트스트랩 키트 — 새 레포로 옮길 짐. 의존성은 커밋하지 않는다
+jaegodak-bootstrap/node_modules/
+jaegodak-bootstrap/.firebase/

@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// 명세서 사진 등 병원별 파일. 경로 규칙은 Firestore 와 같다.
+//   clinics/{clinicId}/purchaseDocs/{docId}/{fileName}
+//
+// ⚠️ Storage 규칙은 Firestore 클레임과 같은 토큰을 본다.
+//    소속이 바뀌면 여기도 같이 바뀐다 — 따로 관리할 것이 없다.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function member(cid) {
+      return request.auth != null
+        && request.auth.token.clinicId is string
+        && request.auth.token.clinicId == cid;
+    }
+
+    match /clinics/{clinicId}/{allPaths=**} {
+      allow read: if member(clinicId);
+      // 20MB 상한. 명세서 사진은 압축 후 1MB 안쪽이라 넉넉하다.
+      allow write: if member(clinicId)
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|application/pdf');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
