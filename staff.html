@@ -2778,9 +2778,10 @@
             // 홈페이지 관리자 타일: 관리자 계정(bizAdmin/adminHigh)에게만 노출
             const siteAdminBtn=document.getElementById('topHomeSiteAdminBtn');
             if(siteAdminBtn) siteAdminBtn.style.display=(isBizAdmin||isAdminHigh)?'flex':'none';
-            // 💵 매출 결산: 병원 전체 매출이 보이므로 관리자에게만 노출 (규칙도 관리자 전용)
+            // 💵 매출 결산: 마감정산은 코디(공용계정)가 하므로 직원에게도 보인다.
+            //    직원에게는 입력 화면만, 월 누계·직원별·담당의별 집계는 관리자에게만.
             const dsBtn=document.getElementById('topHomeDailySalesBtn');
-            if(dsBtn) dsBtn.style.display=(isBizAdmin||isAdminHigh)?'flex':'none';
+            if(dsBtn) dsBtn.style.display='flex';
             if(typeof _homeSyncSections==='function') _homeSyncSections();
         }
 
@@ -17000,10 +17001,11 @@
         let _dsMonth=null;        // 보고 있는 월 'YYYY-MM'
         let _dsCache={};          // {ym:{date:doc}} — 월 단위 캐시
         let _dsDocs={};           // 현재 월 문서
-        let _dsView='month';      // month | day | upload
+        let _dsView='month';      // month | day | upload | staff(직원 마감 화면)
         let _dsSelDate=null;      // 상세로 열어둔 날짜
         let _dsDraft=null;        // 업로드·수정 중인 초안
         let _dsBusy=false;        // OCR/저장 진행 중 (중복 실행 방지)
+        let _dsLoadErr=null;      // 목록 로드 실패 사유 (화면 상단 배너)
 
         const _dsN=v=>Math.round(Number(v)||0);
         const _dsWon=v=>_dsN(v).toLocaleString('ko-KR')+'원';
@@ -17203,16 +17205,30 @@
         }
 
         // ── 진입 · 데이터 로드 ──────────────────────────────────────────
+        // 관리자만 매출 집계를 본다. 직원은 입력·수정만.
+        function _dsCanSeeSales(){ return !!(isBizAdmin||isAdminHigh); }
+
         async function _initDailySales(){
-            if(!(isBizAdmin||isAdminHigh)){
-                alert('매출 결산은 관리자 전용입니다.'); showTopHome(); return;
-            }
             if(!_dsMonth) _dsMonth=_todayYmd().slice(0,7);
             _dsBindPaste();
-            if(_dsView!=='upload'){ _dsView='month'; }
+            if(_dsView!=='upload'){ _dsView=_dsCanSeeSales()?'month':'staff'; }
             _dsRender();
             await _dsLoadMonth(_dsMonth);
+            // 직원 화면은 최근 7일을 보여주므로 달이 바뀐 직후엔 지난달도 필요하다
+            if(!_dsCanSeeSales()&&Number(_todayYmd().slice(8,10))<=7){
+                await _dsLoadMonth(_dsPrevYm(_dsMonth));
+            }
             _dsRender();
+        }
+        function _dsPrevYm(ym){
+            let [y,m]=ym.split('-').map(Number);
+            m--; if(m<1){m=12;y--;}
+            return y+'-'+String(m).padStart(2,'0');
+        }
+        // 캐시에 올라온 모든 달을 훑어 그 날짜의 문서를 찾는다 (직원 화면용)
+        function _dsDocOf(ymd){
+            const m=_dsCache[ymd.slice(0,7)];
+            return (m&&m[ymd])||null;
         }
 
         async function _dsLoadMonth(ym, force){
@@ -17222,28 +17238,92 @@
                 const map={};
                 snap.docs.forEach(d=>{ map[d.id]={id:d.id,...d.data()}; });
                 _dsCache[ym]=map; _dsDocs=map;
+                _dsLoadErr=null;
             }catch(e){
                 console.warn('dailySales 로드 실패',e);
-                _dsDocs={}; 
-                const el=document.getElementById('dsBody');
-                if(el) el.innerHTML='<div style="color:var(--red);padding:1rem;font-size:.85rem">'
-                    +'매출 결산을 불러오지 못했습니다: '+_esc(e.message)+'</div>';
+                _dsDocs={};
+                // 여기서 화면에 직접 쓰면 바로 뒤따르는 _dsRender 가 덮어쓴다.
+                // 상태로 남겨 각 화면 위에 띄운다 — 규칙 미배포 시 "전부 미입력"
+                // 으로 보이는 것보다 사유가 뜨는 편이 낫다.
+                _dsLoadErr=(/permission|insufficient/i.test(String(e&&e.message))
+                    ? '매출 결산을 읽을 권한이 없습니다. 관리자에게 문의해주세요. (Firestore 규칙 배포 필요)'
+                    : '매출 결산을 불러오지 못했습니다: '+((e&&e.message)||''));
             }
         }
 
         function _dsRender(){
             const el=document.getElementById('dsBody');
             if(!el) return;
-            // 초안·선택일이 없는데 그 화면에 있으면(새로고침·이탈 후 복귀) 월 뷰로 돌린다
-            if(_dsView==='upload'&&!_dsDraft) _dsView='month';
-            if(_dsView==='day'&&!_dsSelDate) _dsView='month';
+            const home=_dsCanSeeSales()?'month':'staff';
+            // 초안·선택일이 없는데 그 화면에 있으면(새로고침·이탈 후 복귀) 첫 화면으로 돌린다
+            if(_dsView==='upload'&&!_dsDraft) _dsView=home;
+            if(_dsView==='day'&&!_dsSelDate) _dsView=home;
+            // 매출 집계는 관리자만 — 직원이 월/일 화면으로 새는 경로를 여기서 막는다
+            if(!_dsCanSeeSales()&&(_dsView==='month'||_dsView==='day')) _dsView='staff';
             const title=document.getElementById('dsTitle');
             const upBtn=document.getElementById('dsUploadBtn');
-            if(upBtn) upBtn.style.display=(_dsView==='upload')?'none':'';
-            if(_dsView==='upload'){ if(title) title.textContent='💵 결산 입력'; el.innerHTML=_dsUploadHtml(); return; }
-            if(_dsView==='day'){ if(title) title.textContent='💵 일별 상세'; el.innerHTML=_dsDayHtml(); return; }
+            if(upBtn) upBtn.style.display=(_dsView==='upload'||_dsView==='staff')?'none':'';
+            const err=_dsLoadErr
+                ? `<div style="padding:.6rem .7rem;margin-bottom:.6rem;background:#fef2f2;border:1px solid #fecaca;
+                    border-radius:var(--r-sm);font-size:.78rem;color:#b91c1c">⚠ ${_esc(_dsLoadErr)}</div>`
+                : '';
+            if(_dsView==='upload'){ if(title) title.textContent='💵 결산 입력'; el.innerHTML=err+_dsUploadHtml(); return; }
+            if(_dsView==='staff'){ if(title) title.textContent='💵 마감 결산'; el.innerHTML=err+_dsStaffHtml(); return; }
+            if(_dsView==='day'){ if(title) title.textContent='💵 일별 상세'; el.innerHTML=err+_dsDayHtml(); return; }
             if(title) title.textContent='💵 매출 결산';
-            el.innerHTML=_dsMonthHtml();
+            el.innerHTML=err+_dsMonthHtml();
+        }
+
+        // ── 직원 화면 (마감정산 담당자용) ────────────────────────────────
+        //  코디가 매일 하는 일은 "오늘 마감 올리기" 하나다. 그래서 최근 며칠의
+        //  입력 여부만 보여주고, 매출 집계(월 누계·직원별·담당의별)는 숨긴다.
+        //  숫자를 아예 안 보여주면 자기가 뭘 저장했는지 확인할 수 없으므로
+        //  본인이 넣은 그 날의 수납 합계만 한 줄로 남긴다.
+        function _dsStaffHtml(){
+            const today=_todayYmd();
+            let h='<div style="font-weight:700;font-size:.9rem;margin-bottom:.5rem">🌙 오늘 마감 결산</div>';
+
+            const todayDoc=_dsDocOf(today);
+            if(todayDoc){
+                const k=_dsMetrics(todayDoc);
+                h+=`<div style="padding:.8rem .9rem;background:#dcfce7;border-radius:var(--r)">
+                    <div style="font-size:.8rem;font-weight:700;color:#166534">✅ 오늘(${today}) 마감 결산 저장 완료</div>
+                    <div style="font-size:1.3rem;font-weight:700;color:#166534;letter-spacing:-.5px;margin:.25rem 0 .1rem">${_dsWon(k.received)}</div>
+                    <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}</div>
+                    <div style="font-size:.68rem;color:#166534;opacity:.8;margin-top:.15rem">입력: ${_esc((todayDoc.meta&&todayDoc.meta.byName)||'-')}</div>
+                </div>
+                <button class="btn btn-secondary" style="margin-top:.5rem" onclick="dsEditDay('${today}')">✏️ 오늘 결산 고치기</button>`;
+            }else{
+                h+=`<div style="padding:.9rem;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r);
+                    font-size:.82rem;color:#92400e">아직 오늘(${today}) 마감 결산이 올라가지 않았습니다.</div>
+                <button class="btn btn-primary" style="margin-top:.5rem" onclick="dsOpenUpload('${today}')">🖥️ 오늘 마감 화면 올리기</button>`;
+            }
+
+            // 최근 7일 — 빠뜨린 날을 바로 알아채고 그 자리에서 채울 수 있게
+            h+='<div style="font-weight:700;font-size:.85rem;margin:1rem 0 .4rem">최근 7일</div>';
+            h+='<div style="display:flex;flex-direction:column;gap:.3rem">';
+            for(let i=0;i<7;i++){
+                const ymd=_dsShiftDate(today,-i);
+                const doc=_dsDocOf(ymd);
+                const done=!!doc;
+                h+=`<button type="button" onclick="${done?`dsEditDay('${ymd}')`:`dsOpenUpload('${ymd}')`}"
+                    style="display:flex;align-items:center;gap:.5rem;width:100%;text-align:left;font-family:inherit;
+                    padding:.55rem .7rem;border:1px solid ${done?'#bbf7d0':'var(--border)'};
+                    background:${done?'#f0fdf4':'var(--bg-card)'};border-radius:var(--r-sm);cursor:pointer">
+                    <span style="flex:1;min-width:0">
+                        <span style="font-size:.82rem;font-weight:600">${ymd} (${_dsDow(ymd)})</span>
+                        ${i===0?'<span style="font-size:.68rem;color:var(--text-muted);margin-left:.3rem">오늘</span>':''}
+                    </span>
+                    <span style="font-size:.75rem;font-weight:600;color:${done?'#166534':'var(--text-muted)'};white-space:nowrap">
+                        ${done?'✅ 저장됨':'미입력'}</span>
+                    <span style="color:var(--text-muted)">›</span>
+                </button>`;
+            }
+            h+='</div>';
+            h+='<div class="view-note">마감 화면을 캡처해 올리면 숫자를 읽어 기록합니다. '
+              +'저장 전에 큰 숫자가 화면과 맞는지 한 번만 봐주세요. '
+              +'월별·직원별 매출 집계는 원장님 계정에서 보입니다.</div>';
+            return h;
         }
 
         // ── 월 뷰 ───────────────────────────────────────────────────────
@@ -18073,7 +18153,7 @@
         function dsCancelUpload(){
             if(_dsBusy){ alert('사진을 읽는 중입니다. 잠시만 기다려주세요.'); return; }
             _dsDraft=null;
-            _dsView=_dsSelDate?'day':'month';
+            _dsView=_dsCanSeeSales()?(_dsSelDate?'day':'month'):'staff';
             _dsRender();
         }
 
@@ -18251,7 +18331,8 @@
                 await db.collection('dailySales').doc(d.date).set(payload);
                 const ym=d.date.slice(0,7);
                 delete _dsCache[ym];
-                _dsMonth=ym; _dsSelDate=d.date; _dsDraft=null; _dsView='day';
+                _dsMonth=ym; _dsSelDate=d.date; _dsDraft=null;
+                _dsView=_dsCanSeeSales()?'day':'staff';
                 await _dsLoadMonth(ym,true);
                 _dsRender();
                 alert(`✅ ${payload.date} 결산 저장 완료\n· 총매출 ${_dsWon(_dsMetrics(payload).totalSales)}\n· 수납 합계 ${_dsWon(_dsMetrics(payload).received)}`);
@@ -18268,7 +18349,7 @@
                 const ym=ymd.slice(0,7);
                 delete _dsCache[ym];
                 await _dsLoadMonth(ym,true);
-                _dsView='month'; _dsRender();
+                _dsView=_dsCanSeeSales()?'month':'staff'; _dsRender();
             }catch(e){ alert('삭제 실패: '+(e&&e.message||e)); }
         }
 
