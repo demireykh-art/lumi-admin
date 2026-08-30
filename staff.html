@@ -2710,8 +2710,40 @@
         }
         
         // GPS
+        //
+        //  위치를 물어볼 이유가 있는 계정에서만 브라우저 권한 팝업을 띄운다.
+        //  GPS 는 오직 출퇴근 찍을 때 클리닉 범위를 확인하려고 쓴다. 그러니
+        //  아래 세 경우는 물어볼 일이 없다.
+        //   · 공용계정(staff@…) — 재고·입고·비품요청만 쓰고 출퇴근 탭이 없다
+        //   · 📍 위치 체크 면제 (직원 설정 체크박스) — 범위와 무관하게 출퇴근한다
+        //   · 출퇴근 탭을 안 쓰는 계정 (visibleTabs 에 attendance 가 없음)
+        //  로그인할 때마다 뜨던 "위치 정보 허용" 팝업이 이 계정들에서 사라진다.
+        function _needsGps(){
+            if(!currentUser) return false;
+            if(currentUser.role==='shared') return false;
+            if(currentUser.locationExempt) return false;
+            const tabs=(currentUser.visibleTabs&&currentUser.visibleTabs.length)
+                ? currentUser.visibleTabs
+                : ['attendance','meal','ot','leave','info'];   // displayTabs 의 기본값과 같다
+            return tabs.indexOf('attendance')>=0;
+        }
+
         function checkLocation(){
             const status=document.getElementById('gpsStatus');
+            if(!_needsGps()){
+                // 면제 계정은 출퇴근 탭에서 왜 위치 확인이 없는지 한 줄로 알려주고,
+                // 출퇴근 탭 자체가 없는 계정은 그냥 감춘다.
+                if(status){
+                    if(currentUser&&currentUser.locationExempt){
+                        status.className='gps-status ok';
+                        status.textContent='📍 위치 체크 면제 계정 — 위치 확인 없이 출퇴근합니다';
+                    }else{
+                        status.style.display='none';
+                    }
+                }
+                return;
+            }
+            if(status) status.style.display='';
             if(!navigator.geolocation){
                 status.className='gps-status error';
                 status.textContent='⚠️ GPS를 지원하지 않는 브라우저입니다';
