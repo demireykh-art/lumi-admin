@@ -13,7 +13,7 @@
 
 <https://github.com/new> 에서
 
-- 이름: `jaegodak`
+- 이름: `jaegodoc`
 - **Private**
 - README·.gitignore·license **체크하지 마세요** (여기 다 들어 있습니다)
 
@@ -22,11 +22,11 @@
 ```powershell
 # 새 레포를 받을 자리 (루미 폴더 밖에)
 cd C:\dev
-git clone https://github.com/demireykh-art/jaegodak.git
-cd jaegodak
+git clone https://github.com/demireykh-art/jaegodoc.git
+cd jaegodoc
 
 # 이 폴더 "안의 것들"을 복사합니다. 폴더째가 아닙니다.
-Copy-Item -Recurse -Force C:\경로\lumi-admin\jaegodak-bootstrap\* .
+Copy-Item -Recurse -Force C:\경로\lumi-admin\jaegodoc-bootstrap\* .
 
 git add -A
 git commit -m "P0 — 멀티테넌시 뼈대"
@@ -39,7 +39,7 @@ git push
 
 | 항목 | 값 |
 | --- | --- |
-| 프로젝트 이름 | `jaegodak-prod` |
+| 프로젝트 이름 | `jaegodoc-prod` |
 | Google 애널리틱스 | **끕니다** (지금 필요 없음) |
 
 만든 뒤 **콘솔에서 세 가지**를 켭니다.
@@ -69,7 +69,7 @@ git push
 ```powershell
 npm install -g firebase-tools     # 처음 한 번만
 firebase login
-firebase use --add                # jaegodak-prod 선택, 별칭 default
+firebase use --add                # jaegodoc-prod 선택, 별칭 default
 
 npm install
 cd functions

@@ -1,5 +1,5 @@
 {
-  "name": "jaegodak",
+  "name": "jaegodoc",
   "private": true,
   "description": "재고닥 — 소규모 병원 재고 관리 SaaS",
   "engines": { "node": ">=20" },

@@ -27,7 +27,7 @@ let env;
 
 test.before(async () => {
   env = await initializeTestEnvironment({
-    projectId: 'jaegodak-rules-test',
+    projectId: 'jaegodoc-rules-test',
     firestore: {
       rules: fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8'),
       host: '127.0.0.1',

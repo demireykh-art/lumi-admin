@@ -5,9 +5,9 @@
 // 접근 통제는 firestore.rules 가 합니다 — 여기가 아닙니다.
 window.FIREBASE_CONFIG = {
   apiKey: 'AIza...',
-  authDomain: 'jaegodak-prod.firebaseapp.com',
-  projectId: 'jaegodak-prod',
-  storageBucket: 'jaegodak-prod.firebasestorage.app',
+  authDomain: 'jaegodoc-prod.firebaseapp.com',
+  projectId: 'jaegodoc-prod',
+  storageBucket: 'jaegodoc-prod.firebasestorage.app',
   messagingSenderId: '000000000000',
   appId: '1:000000000000:web:0000000000000000000000',
 };

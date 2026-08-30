@@ -1,5 +1,5 @@
 {
-  "name": "jaegodak-functions",
+  "name": "jaegodoc-functions",
   "private": true,
   "engines": { "node": "20" },
   "main": "index.js",
