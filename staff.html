@@ -17305,8 +17305,10 @@
                 const k=_dsMetrics(todayDoc);
                 h+=`<div style="padding:.8rem .9rem;background:#dcfce7;border-radius:var(--r)">
                     <div style="font-size:.8rem;font-weight:700;color:#166534">✅ 오늘(${today}) 마감 결산 저장 완료</div>
-                    <div style="font-size:1.3rem;font-weight:700;color:#166534;letter-spacing:-.5px;margin:.25rem 0 .1rem">${_dsWon(k.received)}</div>
+                    <div style="font-size:.68rem;color:#166534;opacity:.85;margin-top:.3rem">💳 받은 돈 (수납)</div>
+                    <div style="font-size:1.3rem;font-weight:700;color:#166534;letter-spacing:-.5px;margin:.05rem 0 .1rem">${_dsWon(k.received)}</div>
                     <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}${k.refund?` · 환불 −${_dsWon(k.refund)}`:''}</div>
+                    ${k.totalSales?`<div style="font-size:.72rem;color:#166534;opacity:.85">🩺 진료 매출(발생) ${_dsWon(k.totalSales)}</div>`:''}
                     <div style="font-size:.68rem;color:#166534;opacity:.8;margin-top:.15rem">입력: ${_esc((todayDoc.meta&&todayDoc.meta.byName)||'-')}</div>
                 </div>
                 <button class="btn btn-secondary" style="margin-top:.5rem" onclick="dsEditDay('${today}')">✏️ 오늘 결산 고치기</button>`;
@@ -17379,12 +17381,12 @@
             </div>`;
 
             h+=_dsCards([
-                ['총매출(발생)',_dsWon(acc.totalSales),
+                ['🩺 진료 매출 (발생)',_dsWon(acc.totalSales),
                  `오더 ${acc.count.toLocaleString()}건${acc.patientTotal?` · 내원 ${acc.patientTotal.toLocaleString()}명`:''}`,'#4338ca','#eef2ff'],
                 ['객단가',
                  acc.patientTotal>0?_dsWon(Math.round(acc.totalSales/acc.patientTotal)):_dsWon(_dsAvg(acc.totalSales,acc.count)),
                  acc.patientTotal>0?`환자 기준 · 오더 기준 ${_dsWon(_dsAvg(acc.totalSales,acc.count))}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
-                ['수납 합계',_dsWon(acc.received),`현금 ${_dsShort(acc.cash)}원 · 카드 ${_dsShort(acc.card)}원`,'#166534','#dcfce7'],
+                ['💳 받은 돈 (수납)',_dsWon(acc.received),`현금 ${_dsShort(acc.cash)}원 · 카드 ${_dsShort(acc.card)}원`,'#166534','#dcfce7'],
                 [acc.insCnt>0?'보험진료':'보험(급여)',_dsWon(acc.insurance),
                  _dsDenomSub(acc.insurance,acc.insCnt,acc.insPt),'#92400e','#fef3c7'],
                 [acc.insCnt>0?'비보험 진료':'비보험(비급여)',_dsWon(acc.nonIns),
@@ -17413,9 +17415,13 @@
                     border-radius:var(--r-sm);padding:.3rem .1rem;min-height:52px;cursor:pointer;font-family:inherit;
                     display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:.1rem">
                     <span style="font-size:.66rem;color:${k?'#3f3a34':'var(--text-muted)'};font-weight:${isToday?'700':'500'}">${d}</span>
-                    ${k?`<span style="font-size:.7rem;font-weight:700;color:#3f3a34;line-height:1.15">${_dsShort(k.totalSales)}</span>
-                        <span style="font-size:.58rem;color:#6b6b6b">${k.count}건</span>`
-                       :'<span style="font-size:.6rem;color:#c9c4bd">–</span>'}
+                    ${!k?'<span style="font-size:.6rem;color:#c9c4bd">–</span>'
+                       :(k.totalSales||k.count
+                        ?`<span style="font-size:.7rem;font-weight:700;color:#3f3a34;line-height:1.15">${_dsShort(k.totalSales)}</span>
+                          <span style="font-size:.58rem;color:#6b6b6b">${k.count}건</span>`
+                        // 수납 구분표만 올린 날 — 0원으로 적으면 매출이 없던 날로 읽힌다
+                        :`<span style="font-size:.7rem;font-weight:700;color:#166534;line-height:1.15">${_dsShort(k.received)}</span>
+                          <span style="font-size:.58rem;color:#166534">수납만</span>`)}
                 </button>`;
             }
             h+='</div>';
@@ -17523,36 +17529,49 @@
                 return h;
             }
 
-            h+=_dsCards([
-                ['총매출(발생)',_dsWon(k.totalSales),
-                 `오더 ${k.count}건${k.patientTotal?` · 내원 ${k.patientTotal}명`:''}`,'#4338ca','#eef2ff'],
-                ['객단가',
-                 k.avgPerPatient!=null?_dsWon(k.avgPerPatient):_dsWon(k.avg),
-                 k.avgPerPatient!=null?`환자 기준 · 오더 기준 ${_dsWon(k.avg)}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
-            ]);
+            // 매출집계 표를 안 올린 날은 매출이 0 이다. 0원 카드를 늘어놓으면
+            // "매출이 0인 날" 로 읽히므로, 표가 없었다는 사실만 적는다.
+            const daySales=!!(k.totalSales||k.count);
+            if(daySales){
+                h+=_dsCards([
+                    ['🩺 진료 매출 (발생)',_dsWon(k.totalSales),
+                     `오더 ${k.count}건${k.patientTotal?` · 내원 ${k.patientTotal}명`:''}`,'#4338ca','#eef2ff'],
+                    ['객단가',
+                     k.avgPerPatient!=null?_dsWon(k.avgPerPatient):_dsWon(k.avg),
+                     k.avgPerPatient!=null?`환자 기준 · 오더 기준 ${_dsWon(k.avg)}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
+                ]);
 
-            // ① 진료 실적 (발생매출)
-            h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">🩺 진료 실적 (발생매출)</div>';
-            h+=_dsCards([
-                [k.insLabel+' 매출',_dsWon(k.insurance),
-                 k.insAvg!=null?`${k.insDenom}${k.insBasis} · 객단가 ${_dsWon(k.insAvg)}`:'객단가 — (건수·환자 수 없음)','#92400e','#fef3c7'],
-                [k.nonInsLabel+' 매출',_dsWon(k.nonIns),
-                 k.nonInsAvg!=null?`${k.nonInsDenom}${k.nonInsBasis} · 객단가 ${_dsWon(k.nonInsAvg)}`:'객단가 — (건수·환자 수 없음)','#7c3aed','#f5f3ff'],
-            ]);
-            if(k.insSrc!=='procedure'){
-                h+='<div style="font-size:.66rem;color:var(--text-muted);margin-top:.3rem;line-height:1.5">'
-                  +'※ 급여/비급여 <strong>금액</strong> 기준입니다. ⑤ 시술별 매출집계를 올리면 '
-                  +'<strong>보험진료 건수까지</strong> 있는 정확한 객단가로 바뀝니다.</div>';
+                // ① 진료 실적 (발생매출)
+                h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .15rem">🩺 진료 실적 — 오늘 진료로 생긴 매출</div>'
+                  +'<div style="font-size:.68rem;color:var(--text-muted);margin-bottom:.4rem;line-height:1.5">'
+                  +'아래 💳 수납과 금액이 다른 게 정상입니다 — 선수납을 오늘 쓰면 매출만, 미수가 나면 수납만 움직입니다.</div>';
+                h+=_dsCards([
+                    [k.insLabel+' 매출',_dsWon(k.insurance),
+                     k.insAvg!=null?`${k.insDenom}${k.insBasis} · 객단가 ${_dsWon(k.insAvg)}`:'객단가 — (건수·환자 수 없음)','#92400e','#fef3c7'],
+                    [k.nonInsLabel+' 매출',_dsWon(k.nonIns),
+                     k.nonInsAvg!=null?`${k.nonInsDenom}${k.nonInsBasis} · 객단가 ${_dsWon(k.nonInsAvg)}`:'객단가 — (건수·환자 수 없음)','#7c3aed','#f5f3ff'],
+                ]);
+                if(k.insSrc!=='procedure'){
+                    h+='<div style="font-size:.66rem;color:var(--text-muted);margin-top:.3rem;line-height:1.5">'
+                      +'※ 급여/비급여 <strong>금액</strong> 기준입니다. ⑤ 시술별 매출집계를 올리면 '
+                      +'<strong>보험진료 건수까지</strong> 있는 정확한 객단가로 바뀝니다.</div>';
+                }
+                h+=_dsProcHtml(k);
+                h+=_dsPtBarHtml(k);
+                h+=_dsRankHtml('👥 담당직원별',_dsRankMap(k.staff),k.totalSales);
+                h+=_dsRankHtml('👨‍⚕️ 담당의별',_dsRankMap(k.doctor),k.totalSales);
+            }else{
+                h+='<div style="padding:.6rem .75rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:var(--r-sm);'
+                  +'font-size:.75rem;color:#1e40af;line-height:1.6">'
+                  +'이 날은 <strong>수납 구분표만</strong> 올라왔습니다. 매출집계 표(시술별·담당의별·담당직원별)가 '
+                  +'없어 진료 매출·객단가는 비어 있습니다. 매출이 0원이었다는 뜻이 아닙니다.'
+                  +`<div style="margin-top:.35rem"><button class="view-btn" onclick="dsEditDay('${ymd}')">✏️ 매출집계 표 추가하기</button></div></div>`;
             }
-            h+=_dsProcHtml(k);
-            h+=_dsPtBarHtml(k);
-            h+=_dsRankHtml('👥 담당직원별',_dsRankMap(k.staff),k.totalSales);
-            h+=_dsRankHtml('👨‍⚕️ 담당의별',_dsRankMap(k.doctor),k.totalSales);
 
             // ② 수납 (현금흐름)
-            h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">💳 수납 (실제 들어온 돈)</div>';
+            h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">💳 수납 — 오늘 실제로 들어온 돈</div>';
             h+=_dsCards([
-                ['수납 합계',_dsWon(k.received),
+                ['💳 받은 돈 (수납)',_dsWon(k.received),
                  `현금 ${_dsShort(k.cash)}원 · 카드 ${_dsShort(k.card)}원`+(k.refund?` · 환불 −${_dsShort(k.refund)}원`:''),'#166534','#dcfce7'],
                 ['과세 수납금액',_dsWon(k.taxAmt),`부가세 ${_dsWon(k.vat)} · 비과세 ${_dsWon(k.nonTaxAmt)}`,'#0f766e','#ccfbf1'],
             ]);
@@ -17956,6 +17975,11 @@
         }
 
         // 저장 직전에 코디가 실제 화면·시재와 맞춰볼 큰 숫자
+        //
+        //  수납과 매출은 이름이 비슷해서 매일 헷갈린다. 카드에 뜻을 같이 적고,
+        //  둘이 다른 게 정상이라는 것도 한 줄로 밝힌다.
+        //   · 수납 = 오늘 실제로 들어온 돈 (현금·카드) — 시재·통장과 맞춰볼 숫자
+        //   · 매출 = 오늘 진료로 생긴 금액 — 선수납을 오늘 쓰거나 미수가 나면 수납과 어긋난다
         function _dsDraftSummaryHtml(d){
             const k=_dsMetrics(d);
             const hasPay=!!(k.received||k.cash||k.card||k.taxAmt);
@@ -17964,7 +17988,7 @@
             let h='<div style="display:flex;flex-direction:column;gap:.45rem;margin-top:.7rem">';
             if(hasPay){
                 h+=`<div style="padding:.7rem .8rem;background:#dcfce7;border-radius:var(--r-sm)">
-                    <div style="font-size:.72rem;color:#166534;font-weight:600">오늘 수납 합계</div>
+                    <div style="font-size:.72rem;color:#166534;font-weight:600">💳 받은 돈 (수납) <span style="font-weight:400;opacity:.75">— 오늘 실제로 들어온 금액</span></div>
                     <div style="font-size:1.45rem;font-weight:700;color:#166534;letter-spacing:-.5px;margin:.1rem 0">${_dsWon(k.received)}</div>
                     <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}${k.etc?' · 기타 '+_dsWon(k.etc):''}${k.easy?' · 간편결제 '+_dsWon(k.easy):''}</div>
                     <div style="font-size:.72rem;color:#166534;opacity:.8">과세 수납 ${_dsWon(k.taxAmt)} · 부가세 ${_dsWon(k.vat)}</div>
@@ -17973,12 +17997,33 @@
             }
             if(hasSales){
                 h+=`<div style="padding:.7rem .8rem;background:#eef2ff;border-radius:var(--r-sm)">
-                    <div style="font-size:.72rem;color:#4338ca;font-weight:600">오늘 매출(발생)</div>
+                    <div style="font-size:.72rem;color:#4338ca;font-weight:600">🩺 진료 매출 (발생) <span style="font-weight:400;opacity:.75">— 오늘 진료로 생긴 금액</span></div>
                     <div style="font-size:1.25rem;font-weight:700;color:#4338ca;letter-spacing:-.5px;margin:.1rem 0">${_dsWon(k.totalSales)}</div>
                     <div style="font-size:.72rem;color:#4338ca">오더 ${k.count}건${k.patientTotal?` · 내원 ${k.patientTotal}명`:''}${k.insCnt?` · 보험진료 ${k.insCnt}건 ${_dsWon(k.insurance)}`:''}</div>
                 </div>`;
             }
-            return h+'</div>';
+            h+='</div>';
+
+            // 둘 다 있으면 "왜 금액이 다른가" 를, 하나만 있으면 "무엇이 빠졌는가" 를 알려준다.
+            // 매출집계 표를 안 올린 걸 모르고 저장하면 그 날 매출이 통째로 비어 버린다.
+            if(hasPay&&hasSales){
+                h+='<div style="margin-top:.4rem;font-size:.68rem;color:var(--text-muted);line-height:1.55">'
+                  +'※ 두 금액은 원래 다릅니다 — 미리 받아 둔 선수납을 오늘 쓰면 매출만 오르고, '
+                  +'오늘 진료비를 아직 못 받으면(미수) 수납만 적습니다.</div>';
+            }else if(hasPay){
+                h+='<div style="margin-top:.45rem;padding:.55rem .7rem;background:#eff6ff;border:1px solid #bfdbfe;'
+                  +'border-radius:var(--r-sm);font-size:.72rem;color:#1e40af;line-height:1.6">'
+                  +'이 화면에는 <strong>수납 구분표</strong>만 있습니다. 지금 저장하면 받은 돈만 기록되고 '
+                  +'<strong>진료 매출은 비어 있습니다</strong>.<br>매출까지 남기려면 '
+                  +'<strong>매출집계 표</strong>(시술별·담당의별·담당직원별)가 보이는 화면을 한 장 더 올려주세요. '
+                  +'수납만 기록해도 마감 자체는 됩니다.</div>';
+            }else{
+                h+='<div style="margin-top:.45rem;padding:.55rem .7rem;background:#eff6ff;border:1px solid #bfdbfe;'
+                  +'border-radius:var(--r-sm);font-size:.72rem;color:#1e40af;line-height:1.6">'
+                  +'이 화면에는 <strong>매출집계 표</strong>만 있습니다. <strong>수납 구분표</strong>가 보이는 '
+                  +'화면을 한 장 더 올리면 받은 돈까지 함께 기록됩니다.</div>';
+            }
+            return h;
         }
 
         function _dsUploadHtml(){
@@ -18354,7 +18399,19 @@
                 _dsView=_dsCanSeeSales()?'day':'staff';
                 await _dsLoadMonth(ym,true);
                 _dsRender();
-                alert(`✅ ${payload.date} 결산 저장 완료\n· 총매출 ${_dsWon(_dsMetrics(payload).totalSales)}\n· 수납 합계 ${_dsWon(_dsMetrics(payload).received)}`);
+                // 무엇을 저장했는지만 적는다. 매출집계 표를 안 올린 날 "총매출 0원" 이
+                // 뜨면 잘못 저장된 것처럼 보인다 — 없는 건 없다고 말한다.
+                const km=_dsMetrics(payload);
+                const gotPay=!!(km.received||km.cash||km.card);
+                const gotSales=!!(km.totalSales||km.count);
+                const ln=[`✅ ${payload.date} 결산 저장 완료`];
+                if(gotPay) ln.push(`· 받은 돈(수납) ${_dsWon(km.received)}`);
+                if(gotSales) ln.push(`· 진료 매출(발생) ${_dsWon(km.totalSales)}`);
+                if(gotPay&&!gotSales) ln.push('','이 화면에는 수납 구분표만 있었습니다.',
+                    '매출집계 표(시술별·담당의별·담당직원별)가 없어 매출은 비어 있습니다.',
+                    '매출까지 남기려면 그 표가 보이는 화면을 한 장 더 올리면 됩니다.');
+                if(!gotPay&&gotSales) ln.push('','이 화면에는 매출집계 표만 있었습니다. 수납 구분표는 없었습니다.');
+                alert(ln.join('\n'));
             }catch(e){
                 alert('저장 실패: '+(e&&e.message||e));
                 if(btn){ btn.disabled=false; btn.textContent=d.editing?'수정 저장':'저장'; }
