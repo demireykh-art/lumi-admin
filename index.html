@@ -644,12 +644,19 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">식대 월 한도 (원)</label>
+                        <label class="form-label">식대 적용 방식</label>
+                        <select class="form-input" id="empMealMode">
+                            <option value="">기본 — 전체 정책 따름</option>
+                            <option value="monthly">월 한도제 (개별 고정)</option>
+                            <option value="daily">출근일 일할 적립제 (개별 고정)</option>
+                        </select>
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">「기본」이면 전체 정책을 따르고, 고르면 이 직원만 그 방식으로 고정됩니다.</p>
+                        <label class="form-label" style="margin-top:.6rem">식대 월 한도 (원)</label>
                         <input type="number" class="form-input" id="empMealLimit" placeholder="기본 300,000원">
                         <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">월 한도제일 때 사용 · 미입력시 정책 기본값</p>
                         <label class="form-label" style="margin-top:.6rem">식대 1일 지급액 (원)</label>
                         <input type="number" class="form-input" id="empMealDaily" placeholder="기본 14,000원">
-                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">출근일 일할 적립제일 때 사용 · 미입력시 정책 기본값<br>적용 방식 전환은 통합앱 STAFF 관리 &gt; OT·식사 탭에서</p>
+                        <p style="font-size:.75rem;color:var(--text-muted);margin-top:.25rem">출근일 일할 적립제일 때 사용 · 미입력시 정책 기본값<br>전체 정책 전환은 통합앱 STAFF 관리 &gt; OT·식사 탭에서</p>
                     </div>
                     <div class="form-group">
                         <label class="form-label">&nbsp;</label>
@@ -754,6 +761,16 @@
                             👤 내정보
                         </label>
                     </div>
+                    <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;font-size:.85rem;margin-top:.9rem;padding-top:.9rem;border-top:1px dashed var(--border)">
+                        <input type="checkbox" id="empIsTest" style="width:16px;height:16px;margin-top:.15rem">
+                        <span>🧪 <b>테스트 계정</b>
+                            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.2rem">
+                                직원 앱 점검용 계정입니다. 앱 기능은 똑같이 쓰지만
+                                <b>식사 그룹정산 인원·팀 연차 달력·공지 달력</b> 등
+                                다른 직원에게 보이는 목록에는 나타나지 않습니다.
+                            </div>
+                        </span>
+                    </label>
                 </div>
                 
                 <input type="hidden" id="empId">
@@ -1042,7 +1059,7 @@
     <script src="expense-categories.js"></script>
     <script src="card-statements.js"></script>
     <script src="expense.js"></script>
-    <script src="hr-attendance.js?v=20260816a"></script>
+    <script src="hr-attendance.js?v=20260825a"></script>
     <script src="inventory.js?v=20260823a"></script>
     <script src="product-rating.js?v=20260811a"></script>
     <script src="finance.js"></script>

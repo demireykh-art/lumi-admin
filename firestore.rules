@@ -98,6 +98,14 @@ service cloud.firestore {
 
     // ── 매출·비용·세무 ──
     match /revenue/{id}                        { allow read, write: if signedIn(); }
+
+    // ── 일일 마감결산(통합앱 💵 매출 결산): 하루치 수납·매출 원장 ──
+    //    문서ID = YYYY-MM-DD. 마감정산은 코디(공용 staff 계정)가 매일 하는 일이라
+    //    직원도 쓸 수 있어야 한다. 바로 옆 revenue·salesDetail·payroll 이 이미
+    //    signedIn() 이므로 여기만 잠가도 월별 매출은 어차피 열려 있다.
+    //    대신 앱에서 직원에게는 입력 화면만 보이고, 월 누계·직원별·담당의별
+    //    집계는 관리자에게만 보여준다.
+    match /dailySales/{id}                     { allow read, write: if signedIn(); }
     match /salesDetail/{id}                     { allow read, write: if signedIn(); }
     match /fixedExpenses/{id}                   { allow read, write: if signedIn(); }
     match /variableExpenses/{id}                { allow read, write: if signedIn(); }
@@ -105,6 +113,11 @@ service cloud.firestore {
     match /incomeTaxes/{id}                     { allow read, write: if signedIn(); }
     match /vatTaxes/{id}                        { allow read, write: if signedIn(); }
     match /withholdingTaxes/{id}                { allow read, write: if signedIn(); }
+
+    // ── 퇴근 마감 체크리스트 ──
+    match /closingItems/{id}                    { allow read, write: if signedIn(); }
+    match /closingStatus/{id}                   { allow read, write: if signedIn(); }
+    match /fcmTokens/{id}                        { allow read, write: if signedIn(); }
 
     // ── 공지·교육/인계·상담 트리·설정·관리자 ──
     match /notices/{id}                         { allow read, write: if signedIn(); }

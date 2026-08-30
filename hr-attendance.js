@@ -638,6 +638,7 @@ function openEmployeeModal(id=null){
     document.getElementById('empId').value='';
     document.getElementById('empMealLimit').value='';
     document.getElementById('empMealDaily').value='';
+    { const m=document.getElementById('empMealMode'); if(m) m.value=''; }
     document.getElementById('empLocationExempt').checked=false;
     // Firebase Auth 관련 입력 초기화
     // 신규: 입력 가능. 수정: staffId 이미 있으면 비활성화, 없으면 입력 가능 (기존 직원 마이그레이션)
@@ -655,6 +656,7 @@ function openEmployeeModal(id=null){
     document.getElementById('empPersonalSalesSource').value='manual';
     // 탭 체크박스 초기화
     document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
+    { const t=document.getElementById('empIsTest'); if(t) t.checked=false; }
     
     if(id){
         const emp=employees.find(e=>e.id===id);
@@ -690,6 +692,8 @@ function openEmployeeModal(id=null){
             document.getElementById('empUsedLeave').value=emp.usedLeave||0;
             document.getElementById('empMealLimit').value=emp.mealLimit||'';
             document.getElementById('empMealDaily').value=emp.mealDaily||'';
+            { const m=document.getElementById('empMealMode');
+              if(m) m.value=(emp.mealMode==='monthly'||emp.mealMode==='daily')?emp.mealMode:''; }
             document.getElementById('empLocationExempt').checked=!!emp.locationExempt;
             // 인센티브 설정 복원
             document.getElementById('empIncType').value=emp.incType||'none';
@@ -711,6 +715,7 @@ function openEmployeeModal(id=null){
                 });
             }
             // visibleTabs가 null이거나 없으면 기본값(모두 체크) 유지
+            { const t=document.getElementById('empIsTest'); if(t) t.checked=!!emp.isTestAccount; }
         }
     }
     openModal('employeeModal');
@@ -856,6 +861,8 @@ async function saveEmployee(){
         usedLeave:usedLeave,
         mealLimit:parseInt(document.getElementById('empMealLimit').value)||0,   // 0 = 정책 기본값 사용
         mealDaily:parseInt(document.getElementById('empMealDaily').value)||0,
+        // '' = 전체 정책 따름, 'monthly'/'daily' = 이 직원만 고정
+        mealMode:_empMealModeValue(),
         locationExempt:document.getElementById('empLocationExempt').checked,
         incType:document.getElementById('empIncType').value||'none',
         incPercent:parseFloat(document.getElementById('empIncPercent').value)||0,
@@ -863,7 +870,9 @@ async function saveEmployee(){
         incJapan:document.getElementById('empIncJapan').checked,
         personalSalesSource:document.getElementById('empPersonalSalesSource').value||'manual',
         isIncentiveTarget:isIncentiveTarget, // 인센티브 탭 체크 여부로 자동 설정
-        visibleTabs:visibleTabsValue // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
+        visibleTabs:visibleTabsValue, // null=모든 탭 표시(기본값), 배열=선택된 탭만 표시
+        // 테스트 계정은 다른 직원에게 보이는 공용 목록에서 제외된다
+        isTestAccount:!!(document.getElementById('empIsTest')||{}).checked
     };
     if(staffId){ data.staffId=staffId; }
     if(email){ data.email=email; }
@@ -1844,3 +1853,9 @@ async function deletePayslip(docId, name){
 }
 
 checkAuth();
+
+// 직원 식대 적용 방식 — '' 이면 전체 정책을 따른다
+function _empMealModeValue(){
+    const v=(document.getElementById('empMealMode')||{}).value||'';
+    return (v==='monthly'||v==='daily')?v:'';
+}
