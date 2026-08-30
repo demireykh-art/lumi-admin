@@ -13,13 +13,6 @@ service cloud.firestore {
         && (request.auth.token.email in get(/databases/$(database)/documents/settings/bizAdmins).data.emails);
     }
 
-    // 대표원장급 — settings/adminHigh.emails 화이트리스트
-    function isAdminHigh() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/settings/adminHigh)
-        && (request.auth.token.email in get(/databases/$(database)/documents/settings/adminHigh).data.emails);
-    }
-
     // ══════════════════════════════════════════════════════════════════
     //  공개 홈페이지(lumiclinic.co.kr, 비로그인 방문자) — 콘텐츠는 누구나 "읽기"만
     //  · 쓰기는 여전히 로그인(직원/관리자) 전용
@@ -107,9 +100,12 @@ service cloud.firestore {
     match /revenue/{id}                        { allow read, write: if signedIn(); }
 
     // ── 일일 마감결산(통합앱 💵 매출 결산): 하루치 수납·매출 원장 ──
-    //    문서ID = YYYY-MM-DD. 공용 staff 계정이 로그인해 있는 기기가 많아
-    //    signedIn() 만으로 열면 병원 전체 매출이 그대로 노출된다. 관리자 전용.
-    match /dailySales/{id}                     { allow read, write: if isAdmin() || isAdminHigh(); }
+    //    문서ID = YYYY-MM-DD. 마감정산은 코디(공용 staff 계정)가 매일 하는 일이라
+    //    직원도 쓸 수 있어야 한다. 바로 옆 revenue·salesDetail·payroll 이 이미
+    //    signedIn() 이므로 여기만 잠가도 월별 매출은 어차피 열려 있다.
+    //    대신 앱에서 직원에게는 입력 화면만 보이고, 월 누계·직원별·담당의별
+    //    집계는 관리자에게만 보여준다.
+    match /dailySales/{id}                     { allow read, write: if signedIn(); }
     match /salesDetail/{id}                     { allow read, write: if signedIn(); }
     match /fixedExpenses/{id}                   { allow read, write: if signedIn(); }
     match /variableExpenses/{id}                { allow read, write: if signedIn(); }
