@@ -24,3 +24,6 @@ gcp-key*.json
 
 # fix-currentstock.js report --out 산출물
 report*.json
+
+# 재고 단가 조사 보고서 — 실데이터. 커밋 금지
+price-audit.*

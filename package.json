@@ -6,10 +6,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test scripts/fix-currentstock.test.js",
+    "test": "node --test scripts/fix-currentstock.test.js scripts/price-audit.test.js",
     "emu": "firebase emulators:start --only firestore --project lumiclinic-c1a95",
     "emu:seed": "node scripts/seed-emulator.js",
     "stock:report": "node scripts/fix-currentstock.js report",
+    "price:audit": "node scripts/price-audit.js",
+    "price:audit:out": "node scripts/price-audit.js --out price-audit",
     "stock:apply": "node scripts/fix-currentstock.js apply --confirm"
   },
   "devDependencies": {
