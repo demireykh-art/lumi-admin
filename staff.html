@@ -4725,6 +4725,7 @@
             // 승인 + 대기중 모두 사용 예정으로 카운트
             const myRequests=leaveRequests.filter(r=>r.status==='approved'||r.status==='pending');
             const usedDays=myRequests.reduce((sum,r)=>{
+                if(r.type==='오프')return sum;              // 오프는 연차 차감 안 함
                 if(r.type?.includes('반차'))return sum+0.5;
                 return sum+(r.dates?.length||1);
             },0);
@@ -6046,17 +6047,33 @@
                 return;
             }
 
-            // 잔여 연차 확인
+            // ── 오프 규칙: 연차 차감 X · 주1회(월~일) · 일요일 정기휴무 제외 · 공휴일/자체휴무 주는 자동소진 ──
+            if(type==='오프'){
+                const myOffs=leaveRequests.filter(r=>r.type==='오프'&&(r.status==='approved'||r.status==='pending'));
+                const seen=new Set();
+                for(const d of selectedLeaveDates){
+                    if(_dowOf(d)===0){ alert('일요일은 병원 정기휴무라 오프로 신청할 수 없습니다.'); return; }
+                    const wk=_weekKey(d);
+                    if(seen.has(wk)){ alert('오프는 주 1회만 신청할 수 있습니다.\n같은 주에 여러 날짜를 선택하셨습니다.'); return; }
+                    seen.add(wk);
+                    const cl=_weekClosure(d);
+                    if(cl){ alert(`${cl.range} 주에는 병원 휴무(${cl.label})가 있어 이미 쉬는 주입니다.\n추가로 쉬려면 '연차'로 신청해주세요.`); return; }
+                    if(myOffs.some(r=>(r.dates||[]).some(x=>_weekKey(x)===wk))){ alert(`${_weekRangeLabel(d)} 주에는 이미 오프가 있습니다.\n오프는 주 1회만 가능합니다.`); return; }
+                }
+            }
+
+            // 잔여 연차 확인 (오프는 차감 제외)
             const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
             const myRequests=leaveRequests.filter(r=>r.status==='approved'||r.status==='pending');
             const usedDays=myRequests.reduce((sum,r)=>{
+                if(r.type==='오프')return sum;              // 오프는 연차 차감 안 함
                 if(r.type?.includes('반차'))return sum+0.5;
                 return sum+(r.dates?.length||1);
             },0);
             const adminUsed=currentUser.usedLeave||0;
             const totalUsed=usedDays+adminUsed;
             
-            const requestDays=type.includes('반차')?0.5:selectedLeaveDates.length;
+            const requestDays=(type==='오프')?0:(type.includes('반차')?0.5:selectedLeaveDates.length);
             const afterUse=totalUsed+requestDays;
             const remain=total-totalUsed;
             
@@ -6076,7 +6093,7 @@
                     createdAt:firebase.firestore.FieldValue.serverTimestamp()
                 });
                 closeModal('leaveModal');
-                alert('연차 신청이 완료되었습니다.');
+                alert((type==='오프'?'오프':'연차')+' 신청이 완료되었습니다.');
                 await loadLeaveRequests();
                 await loadTeamLeave();
                 renderLeave();
@@ -9943,6 +9960,25 @@
             return null;
         }
         function _dowOf(dateStr){ const [y,m,d]=String(dateStr).split('-').map(Number); return new Date(y,(m||1)-1,d||1).getDay(); }
+        // ── 오프 주(월~일) 계산 헬퍼 ──
+        function _dateFromYmd(s){ const [y,m,d]=String(s).split('-').map(Number); return new Date(y,(m||1)-1,d||1); }
+        function _ymdOf(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+        function _weekMonday(dateStr){ const dt=_dateFromYmd(dateStr); const dow=dt.getDay(); const diff=(dow===0)?-6:(1-dow); dt.setDate(dt.getDate()+diff); return dt; }
+        function _weekKey(dateStr){ return _ymdOf(_weekMonday(dateStr)); }               // 그 주 월요일 (주 식별자)
+        function _weekRangeLabel(dateStr){ const mon=_weekMonday(dateStr); const sun=new Date(mon); sun.setDate(mon.getDate()+6); return _ymdOf(mon)+'~'+_ymdOf(sun); }
+        // 그 주 월~토에 병원 휴무(공휴일/자체휴무)가 있으면 {label,date,range} 반환, 없으면 null (일요일 정기휴무는 제외)
+        function _weekClosure(dateStr){
+            const mon=_weekMonday(dateStr);
+            for(let i=0;i<6;i++){ // 월(0)~토(5)
+                const dt=new Date(mon); dt.setDate(mon.getDate()+i);
+                const ds=_ymdOf(dt);
+                const sc=_clinicSchedOf(ds);
+                if(sc && CLINIC_SCHED_TYPES[sc.type] && CLINIC_SCHED_TYPES[sc.type].off){
+                    return { label: sc.label||CLINIC_SCHED_TYPES[sc.type].label, date:ds, range:_weekRangeLabel(dateStr) };
+                }
+            }
+            return null;
+        }
         const _DOW_KO=['일','월','화','수','목','금','토'];
         // 그날 진료 여부 (지정 없으면 일요일만 휴무)
         function _isClinicOff(dateStr){
