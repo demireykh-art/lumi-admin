@@ -1586,8 +1586,18 @@
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(발주기준)</span></label>
-                    <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0">
+                    <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(이 개수 미만이면 발주 필요)</span></label>
+                    <div style="display:flex;gap:.5rem;align-items:stretch">
+                        <input type="number" class="form-input" id="newItemSafety" min="0" step="1" placeholder="0" style="flex:1">
+                        <select class="form-select" id="newItemUnit" style="width:40%;flex-shrink:0" title="이 품목을 세는 단위 (예: 바늘=박스, 필러=낱개)">
+                            <option value="개">개(낱개)</option>
+                            <option value="박스">박스</option>
+                            <option value="병">병</option>
+                            <option value="팩">팩</option>
+                            <option value="ea">ea</option>
+                        </select>
+                    </div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:.25rem">단위 = 이 품목을 세는 기준. 재고·입고·실사·발주가 모두 이 단위로 계산됩니다. <b>예) 바늘=박스, 필러=낱개</b></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">유통기한 <span style="font-size:.7rem;color:var(--text-muted)">(선택)</span></label>
@@ -1750,8 +1760,18 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">안전재고</label>
-                    <input type="number" class="form-input" id="editItemSafety" min="0" step="1">
+                    <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(이 개수 미만이면 발주 필요)</span></label>
+                    <div style="display:flex;gap:.5rem;align-items:stretch">
+                        <input type="number" class="form-input" id="editItemSafety" min="0" step="1" style="flex:1">
+                        <select class="form-select" id="editItemUnit" style="width:40%;flex-shrink:0" title="이 품목을 세는 단위 (예: 바늘=박스, 필러=낱개)">
+                            <option value="개">개(낱개)</option>
+                            <option value="박스">박스</option>
+                            <option value="병">병</option>
+                            <option value="팩">팩</option>
+                            <option value="ea">ea</option>
+                        </select>
+                    </div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:.25rem">단위 = 이 품목을 세는 기준 (예: 바늘=박스, 필러=낱개). 재고·입고·실사·발주가 이 단위로 계산됩니다.</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">1개 용량 <span style="font-size:.7rem;color:var(--text-muted)">(ml/cc · 주사제 등 액상만 · 믹스 용량 계산용)</span></label>
@@ -15223,7 +15243,7 @@
                     <table style="width:100%;border-collapse:collapse;font-size:.82rem;min-width:640px">
                         <thead><tr style="background:#f9fafb;color:#374151;font-size:.75rem">
                             <th style="padding:.45rem .55rem;text-align:left">품목명</th>
-                            <th style="padding:.45rem .55rem;text-align:left">카테고리</th>
+                            <th style="padding:.45rem .55rem;text-align:left">담당파트</th>
                             <th style="padding:.45rem .55rem;text-align:right">재고</th>
                             <th style="padding:.45rem .55rem;text-align:right">단가</th>
                             <th style="padding:.45rem .55rem;text-align:right">가치</th>
@@ -15270,7 +15290,7 @@
                 if(pa!==0) return pa;
                 return String(a.name||'').localeCompare(String(b.name||''),'ko');
             });
-            const rows=[['상위품목','품목명','카테고리','재고수량','단위','단가(원)','가치(원)','보관장소','유통기한']];
+            const rows=[['상위품목','품목명','담당파트','재고수량','단위','단가(원)','가치(원)','보관장소','유통기한']];
             items.forEach(i=>{
                 const up=_overviewItemUnitPrice(i);
                 const stock=Number(i.currentStock)||0;
@@ -15299,7 +15319,7 @@
                 return String(a.name||'').localeCompare(String(b.name||''),'ko');
             });
             if(!items.length){ alert('재고 품목이 없습니다.'); return; }
-            const header=['상위품목','품목명','카테고리','타입','현재고','단위','안전재고','발주필요','낱개단가(원)','재고가치(원)','보관장소','유통기한','1개용량(ml)','거래처','구매링크','최근입고','단종'];
+            const header=['상위품목','품목명','담당파트','타입','현재고','단위','안전재고','발주필요','낱개단가(원)','재고가치(원)','보관장소','유통기한','1개용량(ml)','거래처','구매링크','최근입고','단종'];
             const aoa=[header];
             items.forEach(i=>{
                 const up=(typeof _overviewItemUnitPrice==='function')?_overviewItemUnitPrice(i):(Number(i.unitPrice)||0);
@@ -15492,7 +15512,7 @@
                 parentName:(document.getElementById('newItemParent')?.value||'').trim(),
                 type:document.getElementById('newItemType').value,
                 category:document.getElementById('newItemCategory').value,
-                unit:'개',
+                unit:(document.getElementById('newItemUnit')?.value)||'개',
                 locations:locations, // 다중 장소
                 currentStock:totalStock, // 총 재고
                 safetyStock:parseFloat(document.getElementById('newItemSafety').value)||0,
@@ -16000,6 +16020,9 @@
             if(parentInp) parentInp.value=item.parentName||'';
             document.getElementById('editItemCategory').value=item.category||'common';
             document.getElementById('editItemSafety').value=item.safetyStock||0;
+            // 단위 선택 로드 (목록에 없는 단위면 옵션 추가해 보존)
+            const _unitSel=document.getElementById('editItemUnit');
+            if(_unitSel){ const _u=item.unit||'개'; if(![..._unitSel.options].some(o=>o.value===_u)){ const o=document.createElement('option'); o.value=_u; o.textContent=_u; _unitSel.appendChild(o); } _unitSel.value=_u; }
             document.getElementById('editItemExpiry').value=item.expiryDate||'';
             document.getElementById('editItemPurchaseLink').value=item.purchaseLink||'';
             // 담당자 / 연락 방식 / 단종
@@ -16163,6 +16186,7 @@
                 locations:locations, // 다중 장소
                 currentStock:totalStock, // 총 재고
                 safetyStock:parseFloat(document.getElementById('editItemSafety').value)||0,
+                unit:(document.getElementById('editItemUnit')?.value)||'개',
                 expiryDate:document.getElementById('editItemExpiry').value||null,
                 purchasePrice:totalPrice,
                 purchaseQty:totalQty,
