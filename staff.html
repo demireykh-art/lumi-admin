@@ -1550,11 +1550,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(카테고리 · 신규로 입력 가능 · 예: 마취크림)</span></label>
-                    <div style="display:flex;gap:.4rem">
-                        <input type="text" class="form-input" id="newItemParent" list="parentItemDatalist" placeholder="예: 마취크림" style="flex:1">
-                        <select id="newItemParentPick" onchange="_pickParent('newItemParent',this)" style="width:42%;flex-shrink:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--r-sm);font-size:.85rem;background:#fff"><option value="">기존 상위품목 선택 ▾</option></select>
-                    </div>
-                    <datalist id="parentItemDatalist"></datalist>
+                    <select id="newItemParent" class="form-select" onchange="_onParentSelect(this)"><option value="">(상위품목 없음)</option><option value="__new__">➕ 새 상위품목 직접 입력…</option></select>
                 </div>
                 <div style="display:flex;gap:.5rem">
                     <div class="form-group" style="flex:1">
@@ -1712,10 +1708,7 @@
                 <input type="hidden" id="editItemId">
                 <div class="form-group">
                     <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(선택 · 하위 품목 그룹핑용 · 신규 입력 가능)</span></label>
-                    <div style="display:flex;gap:.4rem">
-                        <input type="text" class="form-input" id="editItemParent" list="parentItemDatalist" placeholder="상위 품목명" style="flex:1">
-                        <select id="editItemParentPick" onchange="_pickParent('editItemParent',this)" style="width:42%;flex-shrink:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--r-sm);font-size:.85rem;background:#fff"><option value="">기존 상위품목 선택 ▾</option></select>
-                    </div>
+                    <select id="editItemParent" class="form-select" onchange="_onParentSelect(this)"><option value="">(상위품목 없음)</option><option value="__new__">➕ 새 상위품목 직접 입력…</option></select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">품목명</label>
@@ -15410,14 +15403,28 @@
             if(!v) return;
             const match=(invItems||[]).find(i=>String(i.name||'').trim()===v);
             if(match && match.parentName){
-                parentInp.value=String(match.parentName).trim();
+                _setParentSelect('newItemParent', String(match.parentName).trim());
             }
         }
 
-        // 상위품목 드롭다운(select) 선택 → 텍스트 입력칸에 채우기
-        function _pickParent(inputId, sel){
-            if(sel && sel.value){ const inp=document.getElementById(inputId); if(inp) inp.value=sel.value; }
-            if(sel) sel.selectedIndex=0;
+        // 상위품목 드롭다운: 값을 옵션에 없으면 추가하고 선택
+        function _setParentSelect(selId, val){
+            const sel=document.getElementById(selId); if(!sel) return;
+            val=String(val||'').trim();
+            if(val && ![...sel.options].some(o=>o.value===val)){
+                const opt=document.createElement('option'); opt.value=val; opt.textContent=val;
+                const newOpt=sel.querySelector('option[value="__new__"]');
+                if(newOpt) sel.insertBefore(opt, newOpt); else sel.appendChild(opt);
+            }
+            sel.value=val;
+        }
+        // '➕ 직접 입력' 선택 시 새 이름 입력받아 옵션 추가
+        function _onParentSelect(sel){
+            if(!sel) return;
+            if(sel.value==='__new__'){
+                const name=(prompt('새 상위품목 이름:')||'').trim();
+                if(name) _setParentSelect(sel.id, name); else sel.value='';
+            }
         }
         function _refreshParentItemDatalist(){
             // 상위 품목(카테고리): 기존 parentName 값만 (기존 item.name 은 포함 X)
@@ -15428,10 +15435,11 @@
             if(dlParent){
                 dlParent.innerHTML=parents.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
             }
-            // iOS 등에서 datalist 드롭다운이 안 보이므로, 실제 select 드롭다운도 함께 채움
-            ['newItemParentPick','editItemParentPick'].forEach(id=>{
+            // 상위품목 단일 드롭다운: (없음) + 기존 목록 + 직접 입력. 현재 선택값은 보존.
+            const _parentOpts='<option value="">(상위품목 없음)</option>'+parents.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n.replace(/</g,'&lt;')}</option>`).join('')+'<option value="__new__">➕ 새 상위품목 직접 입력…</option>';
+            ['newItemParent','editItemParent'].forEach(id=>{
                 const sel=document.getElementById(id);
-                if(sel) sel.innerHTML='<option value="">기존 상위품목 선택 ▾</option>'+parents.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n.replace(/</g,'&lt;')}</option>`).join('');
+                if(sel){ const cur=sel.value; sel.innerHTML=_parentOpts; if([...sel.options].some(o=>o.value===cur)) sel.value=cur; }
             });
             // 품목명(하위): 기존 item.name 후보로 등록 → 자동완성 목록
             const dlName=document.getElementById('itemNameDatalist');
@@ -16065,8 +16073,7 @@
             document.getElementById('editItemId').value=itemId;
             document.getElementById('editItemName').value=item.name||'';
             const volEl=document.getElementById('editItemVolumeMl'); if(volEl) volEl.value=(Number(item.volumeMl)>0?item.volumeMl:'');
-            const parentInp=document.getElementById('editItemParent');
-            if(parentInp) parentInp.value=item.parentName||'';
+            _setParentSelect('editItemParent', item.parentName||'');
             document.getElementById('editItemCategory').value=item.category||'common';
             document.getElementById('editItemSafety').value=item.safetyStock||0;
             // 단위 선택 로드 (목록에 없는 단위면 옵션 추가해 보존)
