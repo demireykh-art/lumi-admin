@@ -1563,7 +1563,7 @@
                         </select>
                     </div>
                     <div class="form-group" style="flex:1">
-                        <label class="form-label">카테고리</label>
+                        <label class="form-label">담당파트</label>
                         <select class="form-select" id="newItemCategory">
                             <option value="nursing">간호</option>
                             <option value="skin">피부</option>
@@ -1698,46 +1698,12 @@
             <div class="modal-body">
                 <input type="hidden" id="editItemId">
                 <div class="form-group">
-                    <label class="form-label">품목명</label>
-                    <input type="text" class="form-input" id="editItemName" placeholder="예: 리도카인 20ml">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">1개 용량 <span style="font-size:.7rem;color:var(--text-muted)">(ml/cc · 주사제 등 액상만 · 믹스 용량 계산용)</span></label>
-                    <input type="number" class="form-input" id="editItemVolumeMl" step="0.1" placeholder="예: 20 (1병=20ml)">
-                </div>
-                <div class="form-group">
                     <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(선택 · 하위 품목 그룹핑용)</span></label>
                     <input type="text" class="form-input" id="editItemParent" list="parentItemDatalist" placeholder="상위 품목명">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">카테고리</label>
-                    <select class="form-select" id="editItemCategory">
-                        <option value="nursing">간호</option>
-                        <option value="skin">피부</option>
-                        <option value="desk">데스크</option>
-                        <option value="common">공통</option>
-                    </select>
-                </div>
-                
-                <!-- 장소별 재고 입력 -->
-                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:var(--r-sm);margin-bottom:.5rem">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-                        <label class="form-label" style="margin:0;font-weight:600">📍 보관 장소별 재고</label>
-                        <button type="button" class="view-btn" onclick="addEditLocationRow()">+ 장소 추가</button>
-                    </div>
-                    <div id="editLocationsList"></div>
-                    <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:var(--r-sm);text-align:center">
-                        총 재고: <strong id="editTotalStockDisplay">0</strong>개
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">안전재고</label>
-                    <input type="number" class="form-input" id="editItemSafety" min="0" step="1">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">유통기한</label>
-                    <input type="date" class="form-input" id="editItemExpiry">
+                    <label class="form-label">품목명</label>
+                    <input type="text" class="form-input" id="editItemName" placeholder="예: 리도카인 20ml">
                 </div>
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:var(--r-sm);margin-top:.5rem">
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보 수정</div>
@@ -1756,6 +1722,40 @@
                         </div>
                     </div>
                     <div id="editItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:var(--r-sm);font-size:.85rem;font-weight:600;color:var(--primary)">낱개당 단가: -</div>
+                </div>
+                <div class="form-group" style="margin-top:.5rem">
+                    <label class="form-label">유통기한</label>
+                    <input type="date" class="form-input" id="editItemExpiry">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">담당파트</label>
+                    <select class="form-select" id="editItemCategory">
+                        <option value="nursing">간호</option>
+                        <option value="skin">피부</option>
+                        <option value="desk">데스크</option>
+                        <option value="common">공통</option>
+                    </select>
+                </div>
+
+                <!-- 장소별 재고 입력 -->
+                <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:var(--r-sm);margin-bottom:.5rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                        <label class="form-label" style="margin:0;font-weight:600">📍 보관 장소별 재고</label>
+                        <button type="button" class="view-btn" onclick="addEditLocationRow()">+ 장소 추가</button>
+                    </div>
+                    <div id="editLocationsList"></div>
+                    <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:var(--r-sm);text-align:center">
+                        총 재고: <strong id="editTotalStockDisplay">0</strong>개
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">안전재고</label>
+                    <input type="number" class="form-input" id="editItemSafety" min="0" step="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">1개 용량 <span style="font-size:.7rem;color:var(--text-muted)">(ml/cc · 주사제 등 액상만 · 믹스 용량 계산용)</span></label>
+                    <input type="number" class="form-input" id="editItemVolumeMl" step="0.1" placeholder="예: 20 (1병=20ml)">
                 </div>
                 <!-- 담당자 / 연락 / 링크 -->
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:var(--r-sm);margin-top:.75rem">
