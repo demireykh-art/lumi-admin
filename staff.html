@@ -1550,7 +1550,10 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(카테고리 · 신규로 입력 가능 · 예: 마취크림)</span></label>
-                    <input type="text" class="form-input" id="newItemParent" list="parentItemDatalist" placeholder="예: 마취크림">
+                    <div style="display:flex;gap:.4rem">
+                        <input type="text" class="form-input" id="newItemParent" list="parentItemDatalist" placeholder="예: 마취크림" style="flex:1">
+                        <select id="newItemParentPick" onchange="_pickParent('newItemParent',this)" style="width:42%;flex-shrink:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--r-sm);font-size:.85rem;background:#fff"><option value="">기존 상위품목 선택 ▾</option></select>
+                    </div>
                     <datalist id="parentItemDatalist"></datalist>
                 </div>
                 <div style="display:flex;gap:.5rem">
@@ -1708,8 +1711,11 @@
             <div class="modal-body">
                 <input type="hidden" id="editItemId">
                 <div class="form-group">
-                    <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(선택 · 하위 품목 그룹핑용)</span></label>
-                    <input type="text" class="form-input" id="editItemParent" list="parentItemDatalist" placeholder="상위 품목명">
+                    <label class="form-label">상위 품목 <span style="font-size:.7rem;color:var(--text-muted)">(선택 · 하위 품목 그룹핑용 · 신규 입력 가능)</span></label>
+                    <div style="display:flex;gap:.4rem">
+                        <input type="text" class="form-input" id="editItemParent" list="parentItemDatalist" placeholder="상위 품목명" style="flex:1">
+                        <select id="editItemParentPick" onchange="_pickParent('editItemParent',this)" style="width:42%;flex-shrink:0;padding:.5rem;border:1px solid var(--border);border-radius:var(--r-sm);font-size:.85rem;background:#fff"><option value="">기존 상위품목 선택 ▾</option></select>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">품목명</label>
@@ -1730,8 +1736,27 @@
                             <label class="form-label" style="font-size:.75rem">박스당 낱개</label>
                             <input type="number" class="form-input" id="editItemPerBox" min="1" value="1" oninput="calcEditItemUnit()">
                         </div>
+                        <div class="form-group" style="flex:1">
+                            <label class="form-label" style="font-size:.75rem">1개 용량 <span style="color:var(--text-muted)">(ml/cc)</span></label>
+                            <input type="number" class="form-input" id="editItemVolumeMl" step="0.1" placeholder="예:20">
+                        </div>
                     </div>
                     <div id="editItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:var(--r-sm);font-size:.85rem;font-weight:600;color:var(--primary)">낱개당 단가: -</div>
+                    <div style="font-size:.68rem;color:var(--text-muted);margin-top:.2rem">1개 용량 = 주사제 등 액상 1병/1개의 ml·cc (믹스 용량 계산용, 액상 아니면 비워두세요)</div>
+                </div>
+                <div class="form-group" style="margin-top:.5rem">
+                    <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(이 개수 미만이면 발주 필요)</span></label>
+                    <div style="display:flex;gap:.5rem;align-items:stretch">
+                        <input type="number" class="form-input" id="editItemSafety" min="0" step="1" style="flex:1">
+                        <select class="form-select" id="editItemUnit" style="width:40%;flex-shrink:0" title="이 품목을 세는 단위 (예: 바늘=박스, 필러=낱개)">
+                            <option value="개">개(낱개)</option>
+                            <option value="박스">박스</option>
+                            <option value="병">병</option>
+                            <option value="팩">팩</option>
+                            <option value="ea">ea</option>
+                        </select>
+                    </div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:.25rem">단위 = 이 품목을 세는 기준 (예: 바늘=박스, 필러=낱개). 재고·입고·실사·발주가 이 단위로 계산됩니다.</div>
                 </div>
                 <div class="form-group" style="margin-top:.5rem">
                     <label class="form-label">유통기한</label>
@@ -1757,25 +1782,6 @@
                     <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:var(--r-sm);text-align:center">
                         총 재고: <strong id="editTotalStockDisplay">0</strong>개
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(이 개수 미만이면 발주 필요)</span></label>
-                    <div style="display:flex;gap:.5rem;align-items:stretch">
-                        <input type="number" class="form-input" id="editItemSafety" min="0" step="1" style="flex:1">
-                        <select class="form-select" id="editItemUnit" style="width:40%;flex-shrink:0" title="이 품목을 세는 단위 (예: 바늘=박스, 필러=낱개)">
-                            <option value="개">개(낱개)</option>
-                            <option value="박스">박스</option>
-                            <option value="병">병</option>
-                            <option value="팩">팩</option>
-                            <option value="ea">ea</option>
-                        </select>
-                    </div>
-                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:.25rem">단위 = 이 품목을 세는 기준 (예: 바늘=박스, 필러=낱개). 재고·입고·실사·발주가 이 단위로 계산됩니다.</div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">1개 용량 <span style="font-size:.7rem;color:var(--text-muted)">(ml/cc · 주사제 등 액상만 · 믹스 용량 계산용)</span></label>
-                    <input type="number" class="form-input" id="editItemVolumeMl" step="0.1" placeholder="예: 20 (1병=20ml)">
                 </div>
                 <!-- 담당자 / 연락 / 링크 -->
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:var(--r-sm);margin-top:.75rem">
@@ -15408,18 +15414,25 @@
             }
         }
 
+        // 상위품목 드롭다운(select) 선택 → 텍스트 입력칸에 채우기
+        function _pickParent(inputId, sel){
+            if(sel && sel.value){ const inp=document.getElementById(inputId); if(inp) inp.value=sel.value; }
+            if(sel) sel.selectedIndex=0;
+        }
         function _refreshParentItemDatalist(){
             // 상위 품목(카테고리): 기존 parentName 값만 (기존 item.name 은 포함 X)
+            const parentSet=new Set();
+            (invItems||[]).forEach(i=>{ const p=String(i.parentName||'').trim(); if(p) parentSet.add(p); });
+            const parents=Array.from(parentSet).sort((a,b)=>a.localeCompare(b,'ko'));
             const dlParent=document.getElementById('parentItemDatalist');
             if(dlParent){
-                const parentSet=new Set();
-                (invItems||[]).forEach(i=>{
-                    const p=String(i.parentName||'').trim();
-                    if(p) parentSet.add(p);
-                });
-                dlParent.innerHTML=Array.from(parentSet).sort((a,b)=>a.localeCompare(b,'ko'))
-                    .map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+                dlParent.innerHTML=parents.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('');
             }
+            // iOS 등에서 datalist 드롭다운이 안 보이므로, 실제 select 드롭다운도 함께 채움
+            ['newItemParentPick','editItemParentPick'].forEach(id=>{
+                const sel=document.getElementById(id);
+                if(sel) sel.innerHTML='<option value="">기존 상위품목 선택 ▾</option>'+parents.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n.replace(/</g,'&lt;')}</option>`).join('');
+            });
             // 품목명(하위): 기존 item.name 후보로 등록 → 자동완성 목록
             const dlName=document.getElementById('itemNameDatalist');
             if(dlName){
