@@ -86,7 +86,8 @@ function annualLeaveStatus(employeeId){
 function annualLeaveBadge(employeeId){
     const s=annualLeaveStatus(employeeId);
     const over=s.used>s.total;
-    return `<span title="총 ${s.total} · 사용 ${s.used} · 잔여 ${Math.max(0,s.total-s.used)}" style="font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${s.total}-${s.used}</span>`;
+    const rem=Math.max(0,s.total-s.used);
+    return `<span title="총 ${s.total} · 사용 ${s.used} · 잔여 ${rem}" style="font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${s.total}-${s.used} · 잔여 ${rem}</span>`;
 }
 
 // 특정 날짜의 승인 상태 반환 (dateStatuses 우선, 없으면 전체 status)

@@ -4742,7 +4742,7 @@
             document.getElementById('leaveUsed').textContent=totalUsed;
             document.getElementById('leaveRemain').textContent=remain;
             const _nm=document.getElementById('leaveStatusNM');
-            if(_nm){ _nm.textContent='연차 '+total+'-'+totalUsed; _nm.style.background=(totalUsed>total)?'#fee2e2':'#e0e7ff'; _nm.style.color=(totalUsed>total)?'#991b1b':'#3730a3'; }
+            if(_nm){ _nm.textContent='연차 '+total+'-'+totalUsed+' · 잔여 '+remain; _nm.style.background=(totalUsed>total)?'#fee2e2':'#e0e7ff'; _nm.style.color=(totalUsed>total)?'#991b1b':'#3730a3'; }
 
             // 상세 연차 정보
             const detail=getLeaveDetail(currentUser.joinDate);
@@ -13188,7 +13188,8 @@
         function _annualStatusBadge(empId){
             const s=_annualStatusOf(empId);
             const over=s.used>s.total;
-            return `<span title="총 ${s.total} · 사용 ${s.used} · 잔여 ${Math.max(0,s.total-s.used)}" style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:8px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${s.total}-${s.used}</span>`;
+            const rem=Math.max(0,s.total-s.used);
+            return `<span title="총 ${s.total} · 사용 ${s.used} · 잔여 ${rem}" style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:8px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${s.total}-${s.used} · 잔여 ${rem}</span>`;
         }
         function _staffLeaveCard(r, showActions){
             const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
