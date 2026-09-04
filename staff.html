@@ -13191,6 +13191,33 @@
             const rem=Math.max(0,s.total-s.used);
             return `<span title="총 ${s.total} · 사용 ${s.used} · 잔여 ${rem}" style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:8px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${s.total}-${s.used} · 잔여 ${rem}</span>`;
         }
+        // 이 신청까지의 누적 사용일수(날짜순) — 오프 제외, 반차 0.5, 관리자 수동사용(usedLeave) 기준점 포함
+        function _annualSeqThrough(empId, reqId){
+            const emp=(_staffAdminEmployees||[]).find(e=>e.id===empId);
+            const base=(emp&&emp.usedLeave)||0;
+            const items=(_staffAdminLeaves||[]).filter(r=>r.employeeId===empId&&(r.status==='approved'||r.status==='pending')&&r.type!=='오프');
+            const keyOf=(r)=>{ const d=(r.dates||[]).slice().sort(); return (d[0]||'9999')+'#'+(r.id||''); };
+            items.sort((a,b)=>keyOf(a).localeCompare(keyOf(b)));
+            let cum=base;
+            for(const r of items){
+                cum += (r.type&&r.type.includes('반차'))?0.5:(r.dates?.length||1);
+                if(r.id===reqId) return cum;
+            }
+            return cum;
+        }
+        // 신청 카드용 연차 순번 배지 (날짜순 누적) — 취소 시 자동 재정렬
+        function _annualSeqBadge(r){
+            const emp=(_staffAdminEmployees||[]).find(e=>e.id===r.employeeId);
+            const total=(emp&&emp.annualLeave)||calculateLegalAnnualLeave(emp&&emp.joinDate);
+            if(r.type==='오프'){
+                return `<div style="margin-bottom:.15rem"><span style="font-size:.66rem;font-weight:600;padding:1px 7px;border-radius:8px;background:#f3f4f6;color:#6b7280">오프 · 연차 미차감</span></div>`;
+            }
+            if(r.status!=='approved'&&r.status!=='pending') return ''; // 반려·취소는 순번 미표시
+            const through=_annualSeqThrough(r.employeeId, r.id);
+            const rem=Math.max(0,total-through);
+            const over=through>total;
+            return `<div style="margin-bottom:.15rem"><span title="연차 총 ${total} · 이 신청까지 누적 ${through} · 잔여 ${rem}" style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:8px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${total}-${through} · 잔여 ${rem}</span></div>`;
+        }
         function _staffLeaveCard(r, showActions){
             const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
             const name=emp?.name||r.employeeName||r.employeeId||'?';
@@ -13236,7 +13263,7 @@
                     <div style="font-weight:700;font-size:.9rem">${_esc(name)} · <span style="color:#6b7280;font-weight:500">${_esc(r.type||'연차')}</span></div>
                     ${statusBadge}
                 </div>
-                <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.15rem">${_annualStatusBadge(r.employeeId)}</div>
+                ${_annualSeqBadge(r)}
                 <div style="font-size:.78rem;color:#374151">${_esc(dateLabel)}</div>
                 ${r.reason?`<div style="font-size:.72rem;color:#6b7280;margin-top:.2rem;white-space:pre-wrap">${_esc(r.reason)}</div>`:''}
                 ${actionsHtml}
