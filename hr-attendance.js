@@ -89,6 +89,29 @@ function annualLeaveBadge(employeeId){
     const rem=Math.max(0,s.total-s.used);
     return `<span title="총 ${s.total} · 사용 ${s.used} · 잔여 ${rem}" style="font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${s.total}-${s.used} · 잔여 ${rem}</span>`;
 }
+// 해당 날짜까지의 누적 사용일수(날짜순) — 오프 제외, 반차 0.5, 관리자 수동사용 기준점 포함
+function annualLeaveSeqThrough(employeeId, uptoDate){
+    const emp=employees.find(e=>e.id===employeeId);
+    let cum=(emp&&emp.usedLeave)||0;
+    leaveRequests.filter(r=>r.employeeId===employeeId&&r.type!=='오프').forEach(r=>{
+        const w=(r.type&&r.type.includes('반차'))?0.5:1;
+        (r.dates||[]).forEach(d=>{
+            const st=getLeaveDateStatus(r,d);
+            if((st==='approved'||st==='pending') && d<=uptoDate) cum+=w;
+        });
+    });
+    return cum;
+}
+// 신청(날짜) 행용 연차 순번 배지 (날짜순 누적) — 취소 시 자동 재정렬
+function annualLeaveSeqBadge(r, date){
+    const emp=employees.find(e=>e.id===r.employeeId);
+    const total=(emp&&emp.annualLeave)||calculateLegalAnnualLeave(emp&&emp.joinDate);
+    if(r.type==='오프') return `<span style="font-size:.7rem;font-weight:600;padding:1px 7px;border-radius:8px;margin-left:6px;background:#f3f4f6;color:#6b7280">오프·미차감</span>`;
+    const through=annualLeaveSeqThrough(r.employeeId, date);
+    const rem=Math.max(0,total-through);
+    const over=through>total;
+    return `<span title="연차 총 ${total} · 이 날짜까지 누적 ${through} · 잔여 ${rem}" style="font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${total}-${through} · 잔여 ${rem}</span>`;
+}
 
 // 특정 날짜의 승인 상태 반환 (dateStatuses 우선, 없으면 전체 status)
 function getLeaveDateStatus(request, date){
@@ -1422,7 +1445,7 @@ function renderPendingLeaves(){
 
         return `<tr style="${isGolden?'background:#fff9f0':''}">
             <td>${createdAt}</td>
-            <td><strong>${emp?.name || r.employeeId}</strong>${annualLeaveBadge(r.employeeId)}</td>
+            <td><strong>${emp?.name || r.employeeId}</strong>${annualLeaveSeqBadge(r, date)}</td>
             <td><span class="badge badge-blue">${r.type || '연차'}</span></td>
             <td>${date}${multiHint} ${isGolden?'<span class="badge badge-gold">황금연휴</span>':''}</td>
             <td style="font-size:.85rem">${r.reason || '-'}</td>
@@ -1472,7 +1495,7 @@ function renderApprovedLeaves(){
         const dateEsc = date.replace(/'/g,"\\'");
 
         return `<tr>
-            <td><strong>${emp?.name || r.employeeId}</strong>${annualLeaveBadge(r.employeeId)}</td>
+            <td><strong>${emp?.name || r.employeeId}</strong>${annualLeaveSeqBadge(r, date)}</td>
             <td><span class="badge badge-blue">${r.type || '연차'}</span></td>
             <td>${date}${multiHint}</td>
             <td style="font-size:.85rem">${r.reason || '-'}</td>
