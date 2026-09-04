@@ -24,7 +24,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
+    <!-- FCM(messaging) SDK 는 관리자 푸시 사용 시에만 지연 로드 (인앱 브라우저 로그인 영향 방지) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -12543,12 +12543,24 @@
                 _fcmVapidKey=v; alert('VAPID 키가 저장되었습니다.'); _renderStaffAdminBody();
             }catch(e){ alert('저장 실패: '+(e?.message||e)); }
         }
+        // FCM(messaging) SDK 지연 로드 (관리자 푸시 사용 시에만)
+        function _ensureMessagingSdk(){
+            return new Promise((resolve,reject)=>{
+                if(window.firebase && typeof firebase.messaging==='function'){ resolve(); return; }
+                const s=document.createElement('script');
+                s.src='https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js';
+                s.onload=()=>resolve();
+                s.onerror=()=>reject(new Error('messaging SDK 로드 실패'));
+                document.head.appendChild(s);
+            });
+        }
         async function enableAdminPush(){
             if(!isAdminHigh){ alert('대표원장(adminHigh) 계정만 사용합니다.'); return; }
             if(!_fcmVapidKey){ alert('먼저 아래에 VAPID 키를 저장해주세요.\n(Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서)'); return; }
-            if(typeof firebase.messaging!=='function'){ alert('이 브라우저/환경은 웹 푸시를 지원하지 않습니다.'); return; }
             if(!('serviceWorker' in navigator) || !('Notification' in window)){ alert('이 브라우저는 푸시를 지원하지 않습니다. (iOS는 홈화면에 추가한 앱에서만 가능)'); return; }
             try{
+                try{ await _ensureMessagingSdk(); }catch(e){ alert('푸시 SDK 로드 실패: '+(e?.message||e)); return; }
+                if(typeof firebase.messaging!=='function'){ alert('이 브라우저/환경은 웹 푸시를 지원하지 않습니다.'); return; }
                 const perm=await Notification.requestPermission();
                 if(perm!=='granted'){ alert('알림 권한이 허용되지 않았습니다.'); return; }
                 const reg=await navigator.serviceWorker.register('/firebase-messaging-sw.js');
