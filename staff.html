@@ -3699,18 +3699,17 @@
         }
 
         // 화이트리스트 조회 → {role:'shared'|'employee'|null}
+        // 조회 실패 시 throw(호출부에서 재시도) — null 은 '조회 성공 + 명단에 없음(권한없음)'만 의미
         async function resolveRole(email){
             const e=String(email||'').toLowerCase();
-            try{
-                const [staffDoc,empDoc]=await Promise.all([
-                    db.collection('settings').doc('staff').get(),
-                    db.collection('settings').doc('employees').get(),
-                ]);
-                const inList=(doc)=>doc.exists&&Array.isArray(doc.data().emails)
-                    && doc.data().emails.map(x=>String(x).toLowerCase()).includes(e);
-                if(inList(staffDoc)) return 'shared';
-                if(inList(empDoc)) return 'employee';
-            }catch(err){console.warn('화이트리스트 조회 실패:',err);}
+            const [staffDoc,empDoc]=await Promise.all([
+                db.collection('settings').doc('staff').get(),
+                db.collection('settings').doc('employees').get(),
+            ]);
+            const inList=(doc)=>doc.exists&&Array.isArray(doc.data().emails)
+                && doc.data().emails.map(x=>String(x).toLowerCase()).includes(e);
+            if(inList(staffDoc)) return 'shared';
+            if(inList(empDoc)) return 'employee';
             return null;
         }
 
@@ -3750,6 +3749,8 @@
 
             const email=toAuthEmail(inputId);
             try{
+                // 영속성 설정을 로그인 직전에 확정 (setPersistence 경합으로 첫 로그인 실패 방지)
+                try{ await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(_){}
                 await auth.signInWithEmailAndPassword(email,pw);
                 // 후속 처리(화이트리스트, currentUser 세팅, showApp)는 onAuthStateChanged가 담당
             }catch(e){
@@ -3973,9 +3974,18 @@
                 const email=(user.email||'').toLowerCase();
                 // 인증 토큰이 Firestore에 붙은 뒤 조회하도록 보장 (로그인 첫 시도 실패·데이터 공백 방지)
                 try{ await user.getIdToken(); }catch(_){}
-                let role=await resolveRole(email);
-                // 첫 조회가 토큰 전파 지연 등으로 실패(null)하면 잠시 후 1회 재시도
-                if(!role){ await new Promise(r=>setTimeout(r,700)); role=await resolveRole(email); }
+                // 화이트리스트 조회 — 콜드 스타트 토큰 전파 지연 대비 백오프 재시도(최대 5회)
+                let role=null, readOk=false;
+                for(let i=0;i<5 && !readOk;i++){
+                    if(i>0) await new Promise(r=>setTimeout(r, 400+i*400));
+                    try{ role=await resolveRole(email); readOk=true; }
+                    catch(err){ console.warn('화이트리스트 조회 재시도',i,err); }
+                }
+                if(!readOk){
+                    if(errEl) errEl.textContent='네트워크가 불안정합니다. 다시 시도해주세요.';
+                    try{await auth.signOut();}catch(_){}
+                    return;
+                }
                 if(!role){
                     if(errEl) errEl.textContent='접근 권한이 없는 계정입니다.';
                     try{await auth.signOut();}catch(_){}
