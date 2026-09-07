@@ -264,6 +264,24 @@
         .month-select{display:flex;align-items:center;gap:.5rem}
         .month-select select{padding:.4rem .6rem;border:1px solid var(--border);border-radius:var(--r-sm);font-size:.85rem;background:#fff;font-family:inherit}
         
+        /* 권한 스위치 — 버튼 하나로 상태와 동작을 같이 말하면 "켜진 건가 켜라는 건가"
+           가 된다. 상태는 왼쪽 글로, 켜고 끄기는 오른쪽 스위치로 나눈다. */
+        .perm-row{display:flex;align-items:center;gap:.6rem;padding:.6rem .75rem;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fafafa}
+        .perm-row.on{border-color:#86efac;background:#f0fdf4}
+        .perm-main{flex:1;min-width:0}
+        .perm-email{font-size:.85rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+            word-break:break-all;color:var(--text)}
+        .perm-kind{font-size:.68rem;color:#888;margin-left:.3rem}
+        .perm-state{display:block;font-size:.72rem;margin-top:.15rem;color:#6b7280}
+        .perm-row.on .perm-state{color:#166534;font-weight:600}
+        .perm-sw{flex-shrink:0;position:relative;width:52px;height:30px;padding:0;border-radius:15px;
+            border:1px solid #d1d5db;background:#e5e7eb;cursor:pointer;transition:background .15s,border-color .15s}
+        .perm-sw.on{background:#16a34a;border-color:#15803d}
+        .perm-sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+            background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .15s}
+        .perm-sw.on::after{left:25px}
+        .perm-sw:disabled{opacity:.5;cursor:default}
         .gps-status{font-size:.8rem;padding:.5rem;text-align:center;margin-bottom:1rem;border-radius:var(--r-sm)}
         .gps-status.ok{background:rgba(90,122,90,.1);color:var(--green)}
         .gps-status.error{background:rgba(168,90,90,.1);color:var(--red)}
@@ -2262,8 +2280,9 @@
                 <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
                     <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">💵 매출 결산 권한</div>
                     <div style="font-size:.8rem;color:#666;margin-bottom:.6rem">
-                        어느 계정에서 <b>💵 매출 결산</b>을 쓸지 고릅니다. 켠 계정은 매출 입력과
-                        월별·일별 매출현황을 관리자와 똑같이 봅니다. 끈 계정에는 홈에 타일조차 안 보입니다.<br>
+                        어느 계정에서 <b>💵 매출 결산</b>을 쓸지 <b>오른쪽 스위치로 켜고 끕니다.</b>
+                        켠 계정은 매출 입력과 월별·일별 매출현황을 관리자와 똑같이 봅니다.
+                        끈 계정에는 홈에 타일조차 안 보입니다.<br>
                         데스크 전용 계정을 따로 만들려면 위 <b>+ 새 공용 계정 추가</b>로
                         <code>desk@lumiclinic.co.kr</code> 같은 계정을 만든 뒤 여기서 켜세요.<br>
                         ※ 관리자 계정(<code>bizAdmins</code>·<code>adminHigh</code>)은 목록과 무관하게 항상 됩니다.
@@ -3700,17 +3719,21 @@
                 const rows=rowsData.map(({email,kind})=>{
                     const on=onEmails.indexOf(email)>=0;
                     const safe=email.replace(/'/g,"\\'");
-                    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;'
-                        +'padding:.5rem .75rem;border:1px solid '+(on?'#bbf7d0':'var(--border)')+';'
-                        +'border-radius:var(--r-sm);background:'+(on?'#f0fdf4':'#fafafa')+';flex-wrap:wrap">'
-                        +'<span style="flex:1;min-width:170px;word-break:break-all">'
-                        +'<code style="font-size:.85rem">'+_esc(email)+'</code>'
-                        +'<span style="font-size:.68rem;color:#888;margin-left:.35rem">'+kind+'</span></span>'
-                        +'<button onclick="toggleDailySalesPerm(\''+safe+'\','+(on?'false':'true')+')" '
-                        +'style="flex-shrink:0;border:1px solid '+(on?'#166534':'#d1d5db')+';'
-                        +'background:'+(on?'#166534':'#fff')+';color:'+(on?'#fff':'#6b7280')+';'
-                        +'font-size:.78rem;font-weight:600;padding:.35rem .7rem;border-radius:var(--r-pill);cursor:pointer">'
-                        +(on?'💵 매출 켜짐':'매출 꺼짐')+'</button>'
+                    // 상태는 왼쪽 글, 켜고 끄기는 오른쪽 스위치. 한 덩어리로 합치지 않는다.
+                    const state=on
+                        ? '💵 매출 결산 켜짐 — 매출 입력·월별 현황을 봅니다'
+                        : '매출 결산 꺼짐 — 홈에 💵 타일이 안 보입니다';
+                    return '<div class="perm-row'+(on?' on':'')+'">'
+                        +'<span class="perm-main">'
+                        +'<span class="perm-email">'+_esc(email)+'</span>'
+                        +'<span class="perm-kind">'+kind+'</span>'
+                        +'<span class="perm-state">'+state+'</span>'
+                        +'</span>'
+                        +'<button type="button" role="switch" aria-checked="'+(on?'true':'false')+'" '
+                        +'title="'+(on?'누르면 끕니다':'누르면 켭니다')+'" '
+                        +'aria-label="'+_esc(email)+' 매출 결산 '+(on?'끄기':'켜기')+'" '
+                        +'class="perm-sw'+(on?' on':'')+'" '
+                        +'onclick="toggleDailySalesPerm(\''+safe+'\','+(on?'false':'true')+')"></button>'
                         +'</div>';
                 }).join('');
                 box.innerHTML=rows+'<div style="text-align:center;margin-top:.5rem">'+addBtn+'</div>';
