@@ -759,7 +759,7 @@
                         <button type="button" class="home-row" id="topHomeDailySalesBtn" style="display:none" onclick="showTop('dailySales')">
                             <span class="home-row-icon">💵</span>
                             <span class="home-row-body">
-                                <span class="home-row-title">매출 결산 <span class="home-row-tag">관리자 전용</span></span>
+                                <span class="home-row-title">매출 결산 <span class="home-row-tag">관리자 · 지정 계정</span></span>
                                 <span class="home-row-desc">마감결산표 사진 업로드 · 일별/월별 매출·객단가</span>
                             </span>
                             <span class="home-row-arrow">›</span>
@@ -2260,6 +2260,20 @@
                 </div>
 
                 <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
+                    <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">💵 매출 결산 권한</div>
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.6rem">
+                        어느 계정에서 <b>💵 매출 결산</b>을 쓸지 고릅니다. 켠 계정은 매출 입력과
+                        월별·일별 매출현황을 관리자와 똑같이 봅니다. 끈 계정에는 홈에 타일조차 안 보입니다.<br>
+                        데스크 전용 계정을 따로 만들려면 위 <b>+ 새 공용 계정 추가</b>로
+                        <code>desk@lumiclinic.co.kr</code> 같은 계정을 만든 뒤 여기서 켜세요.<br>
+                        ※ 관리자 계정(<code>bizAdmins</code>·<code>adminHigh</code>)은 목록과 무관하게 항상 됩니다.
+                    </div>
+                    <div id="dailySalesPermList" style="display:flex;flex-direction:column;gap:.4rem">
+                        <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                    </div>
+                </div>
+
+                <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
                     <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">🌳 상담 트리 관리</div>
                     <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
                         노션 스타일 텍스트 붙여넣기·시각 편집·백업 복원을 지원합니다.
@@ -2821,20 +2835,29 @@
         // ===== 경영관리자(bizAdmins) 판별 & ⚙ 버튼 노출 =====
         let isBizAdmin=false;
         let isAdminHigh=false; // 대표원장급 (settings/adminHigh.emails)
+        // 💵 매출 결산 허용 계정 (settings/dailySales.emails)
+        //  공용계정은 여러 개다 — staff@ 는 재고를 모든 직원이 같이 쓰고, 데스크는
+        //  따로 쓴다. 그래서 "공용계정이면 보여준다" 로는 가를 수 없고, 관리자가
+        //  계정을 하나씩 골라야 한다. 개인 계정에도 똑같이 줄 수 있게 이메일 목록으로 둔다.
+        let canDailySales=false;
         async function refreshBizAdminStatus(email){
             const e=String(email||'').toLowerCase();
             try{
-                const [bizDoc, highDoc]=await Promise.all([
+                const [bizDoc, highDoc, dsDoc]=await Promise.all([
                     db.collection('settings').doc('bizAdmins').get(),
-                    db.collection('settings').doc('adminHigh').get()
+                    db.collection('settings').doc('adminHigh').get(),
+                    db.collection('settings').doc('dailySales').get()
                 ]);
                 const bizList=(bizDoc.exists&&Array.isArray(bizDoc.data().emails))
                     ? bizDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
                 const highList=(highDoc.exists&&Array.isArray(highDoc.data().emails))
                     ? highDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
+                const dsList=(dsDoc.exists&&Array.isArray(dsDoc.data().emails))
+                    ? dsDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
                 isBizAdmin=!!e && bizList.includes(e);
                 isAdminHigh=!!e && highList.includes(e);
-            }catch(_){isBizAdmin=false; isAdminHigh=false;}
+                canDailySales=!!e && dsList.includes(e);
+            }catch(_){isBizAdmin=false; isAdminHigh=false; canDailySales=false;}
             const btn=document.getElementById('btnAdminSettings');
             if(btn) btn.style.display=isBizAdmin?'':'none';
             const staffBtn=document.getElementById('topHomeStaffAdminBtn');
@@ -2842,10 +2865,10 @@
             // 홈페이지 관리자 타일: 관리자 계정(bizAdmin/adminHigh)에게만 노출
             const siteAdminBtn=document.getElementById('topHomeSiteAdminBtn');
             if(siteAdminBtn) siteAdminBtn.style.display=(isBizAdmin||isAdminHigh)?'flex':'none';
-            // 💵 매출 결산: 마감정산은 코디(공용계정)가 하므로 직원에게도 보인다.
-            //    직원에게는 입력 화면만, 월 누계·직원별·담당의별 집계는 관리자에게만.
+            // 💵 매출 결산: 관리자 + 관리자가 지정한 계정(데스크 등)에만 보인다.
+            //    재고용 공용계정(staff@)에서는 매출이 아예 안 보여야 한다.
             const dsBtn=document.getElementById('topHomeDailySalesBtn');
-            if(dsBtn) dsBtn.style.display='flex';
+            if(dsBtn) dsBtn.style.display=(isBizAdmin||isAdminHigh||canDailySales)?'flex':'none';
             if(typeof _homeSyncSections==='function') _homeSyncSections();
         }
 
@@ -2853,6 +2876,7 @@
             if(!isBizAdmin){alert('경영관리자 권한이 필요합니다.');return;}
             document.getElementById('adminSettingsModal').classList.add('active');
             loadSharedStaffAccountsStaff();
+            loadDailySalesPerms();
         }
 
         // ── 차팅 역할(chartRole) 관리 (bizAdmin 전용) ──
@@ -3640,6 +3664,87 @@
             }catch(e){
                 container.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+e.message+'</div>';
             }
+        }
+
+        // ── 💵 매출 결산 권한 (settings/dailySales.emails) ─────────────────
+        //  공용계정이 여러 개라 "공용이면 보여준다" 로는 가를 수 없다. staff@ 는
+        //  재고를 모든 직원이 같이 쓰는 계정이라 매출이 보이면 안 되고, 데스크
+        //  계정은 매출을 써야 한다. 그래서 계정을 하나씩 켠다.
+        //  목록에는 공용 계정 전부 + 이미 권한을 준 계정(개인계정 포함)을 함께 올린다.
+        async function loadDailySalesPerms(){
+            const box=document.getElementById('dailySalesPermList');
+            if(!box) return;
+            box.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            try{
+                const [staffDoc,dsDoc]=await Promise.all([
+                    db.collection('settings').doc('staff').get(),
+                    db.collection('settings').doc('dailySales').get()
+                ]);
+                const list=(doc)=>(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[])
+                    .map(e=>String(e).trim().toLowerCase()).filter(Boolean);
+                const sharedEmails=list(staffDoc);
+                const onEmails=list(dsDoc);
+                const shared=new Set(sharedEmails);
+                // 공용 계정 먼저, 그 밖에 권한을 준 계정을 뒤에
+                const rowsData=sharedEmails.map(e=>({email:e,kind:'공용'}))
+                    .concat(onEmails.filter(e=>!shared.has(e)).map(e=>({email:e,kind:'개인'})));
+                const addBtn='<button onclick="addDailySalesPerm()" style="background:#166534;color:#fff;border:none;'
+                    +'font-size:.85rem;padding:.5rem 1rem;font-weight:600;border-radius:var(--r-sm);cursor:pointer">'
+                    +'+ 다른 계정에 매출 권한 주기</button>';
+                if(!rowsData.length){
+                    box.innerHTML='<div style="color:#888;font-size:.85rem;padding:.5rem 0;text-align:center">'
+                        +'등록된 계정이 없습니다.</div>'
+                        +'<div style="text-align:center;margin-top:.5rem">'+addBtn+'</div>';
+                    return;
+                }
+                const rows=rowsData.map(({email,kind})=>{
+                    const on=onEmails.indexOf(email)>=0;
+                    const safe=email.replace(/'/g,"\\'");
+                    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;'
+                        +'padding:.5rem .75rem;border:1px solid '+(on?'#bbf7d0':'var(--border)')+';'
+                        +'border-radius:var(--r-sm);background:'+(on?'#f0fdf4':'#fafafa')+';flex-wrap:wrap">'
+                        +'<span style="flex:1;min-width:170px;word-break:break-all">'
+                        +'<code style="font-size:.85rem">'+_esc(email)+'</code>'
+                        +'<span style="font-size:.68rem;color:#888;margin-left:.35rem">'+kind+'</span></span>'
+                        +'<button onclick="toggleDailySalesPerm(\''+safe+'\','+(on?'false':'true')+')" '
+                        +'style="flex-shrink:0;border:1px solid '+(on?'#166534':'#d1d5db')+';'
+                        +'background:'+(on?'#166534':'#fff')+';color:'+(on?'#fff':'#6b7280')+';'
+                        +'font-size:.78rem;font-weight:600;padding:.35rem .7rem;border-radius:var(--r-pill);cursor:pointer">'
+                        +(on?'💵 매출 켜짐':'매출 꺼짐')+'</button>'
+                        +'</div>';
+                }).join('');
+                box.innerHTML=rows+'<div style="text-align:center;margin-top:.5rem">'+addBtn+'</div>';
+            }catch(e){
+                box.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+_esc(e&&e.message||String(e))+'</div>';
+            }
+        }
+
+        async function toggleDailySalesPerm(email,on){
+            const e=String(email||'').trim().toLowerCase();
+            if(!e) return;
+            try{
+                const doc=await db.collection('settings').doc('dailySales').get();
+                const cur=(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[])
+                    .map(x=>String(x).trim().toLowerCase()).filter(Boolean);
+                const next=on ? (cur.indexOf(e)>=0?cur:cur.concat([e]))
+                              : cur.filter(x=>x!==e);
+                await db.collection('settings').doc('dailySales').set({emails:next},{merge:true});
+                // 지금 로그인한 계정을 바꿨으면 화면도 바로 맞춘다
+                if(currentUser&&String(currentUser.email||'').toLowerCase()===e){
+                    await refreshBizAdminStatus(e);
+                }
+                await loadDailySalesPerms();
+            }catch(err){
+                alert('변경 실패: '+((err&&err.message)||err));
+            }
+        }
+
+        async function addDailySalesPerm(){
+            const email=prompt('매출 결산을 쓸 계정 이메일:\n\n공용 계정이 아니어도 됩니다(개인 직원 계정 가능).');
+            if(!email) return;
+            const e=String(email).trim().toLowerCase();
+            if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ alert('올바른 이메일 형식이 아닙니다.'); return; }
+            await toggleDailySalesPerm(e,true);
         }
 
         async function addSharedStaffAccountStaff(){
@@ -17221,7 +17326,7 @@
         let _dsMonth=null;        // 보고 있는 월 'YYYY-MM'
         let _dsCache={};          // {ym:{date:doc}} — 월 단위 캐시
         let _dsDocs={};           // 현재 월 문서
-        let _dsView='month';      // month | day | upload | staff(직원 마감 화면)
+        let _dsView='month';      // month | day | upload
         let _dsSelDate=null;      // 상세로 열어둔 날짜
         let _dsDraft=null;        // 업로드·수정 중인 초안
         let _dsBusy=false;        // OCR/저장 진행 중 (중복 실행 방지)
@@ -17442,30 +17547,20 @@
         }
 
         // ── 진입 · 데이터 로드 ──────────────────────────────────────────
-        // 관리자만 매출 집계를 본다. 직원은 입력·수정만.
-        function _dsCanSeeSales(){ return !!(isBizAdmin||isAdminHigh); }
+        //  매출 결산을 쓸 수 있는 계정 — 관리자(bizAdmins·adminHigh)와,
+        //  관리자가 ⚙ 관리자 설정에서 지정한 계정(데스크 공용계정 등).
+        //  들어올 수 있으면 월 누계·직원별·담당의별까지 관리자와 똑같이 본다.
+        //  재고를 모든 직원이 같이 쓰는 staff@ 공용계정에는 타일부터 안 보인다.
+        function _dsCanSeeSales(){ return !!(isBizAdmin||isAdminHigh||canDailySales); }
 
         async function _initDailySales(){
+            if(!_dsCanSeeSales()){ _dsRender(); return; }
             if(!_dsMonth) _dsMonth=_todayYmd().slice(0,7);
             _dsBindPaste();
-            if(_dsView!=='upload'){ _dsView=_dsCanSeeSales()?'month':'staff'; }
+            if(_dsView!=='upload') _dsView='month';
             _dsRender();
             await _dsLoadMonth(_dsMonth);
-            // 직원 화면은 최근 7일을 보여주므로 달이 바뀐 직후엔 지난달도 필요하다
-            if(!_dsCanSeeSales()&&Number(_todayYmd().slice(8,10))<=7){
-                await _dsLoadMonth(_dsPrevYm(_dsMonth));
-            }
             _dsRender();
-        }
-        function _dsPrevYm(ym){
-            let [y,m]=ym.split('-').map(Number);
-            m--; if(m<1){m=12;y--;}
-            return y+'-'+String(m).padStart(2,'0');
-        }
-        // 캐시에 올라온 모든 달을 훑어 그 날짜의 문서를 찾는다 (직원 화면용)
-        function _dsDocOf(ymd){
-            const m=_dsCache[ymd.slice(0,7)];
-            return (m&&m[ymd])||null;
         }
 
         async function _dsLoadMonth(ym, force){
@@ -17491,78 +17586,31 @@
         function _dsRender(){
             const el=document.getElementById('dsBody');
             if(!el) return;
-            const home=_dsCanSeeSales()?'month':'staff';
+            const title=document.getElementById('dsTitle');
+            const upBtn=document.getElementById('dsUploadBtn');
+            // 허용되지 않은 계정 — 타일을 감췄어도 경로가 남을 수 있으니 여기서도 막는다
+            if(!_dsCanSeeSales()){
+                if(title) title.textContent='💵 매출 결산';
+                if(upBtn) upBtn.style.display='none';
+                el.innerHTML='<div style="padding:1.2rem;text-align:center;background:var(--bg);'
+                    +'border:1px dashed var(--border);border-radius:var(--r-sm);color:var(--text-muted);'
+                    +'font-size:.85rem;line-height:1.6">이 계정에는 매출 결산 권한이 없습니다.<br>'
+                    +'⚙ 관리자 설정 &gt; 💵 매출 결산 권한 에서 켤 수 있습니다.</div>';
+                return;
+            }
+            const home='month';
             // 초안·선택일이 없는데 그 화면에 있으면(새로고침·이탈 후 복귀) 첫 화면으로 돌린다
             if(_dsView==='upload'&&!_dsDraft) _dsView=home;
             if(_dsView==='day'&&!_dsSelDate) _dsView=home;
-            // 매출 집계는 관리자만 — 직원이 월/일 화면으로 새는 경로를 여기서 막는다
-            if(!_dsCanSeeSales()&&(_dsView==='month'||_dsView==='day')) _dsView='staff';
-            const title=document.getElementById('dsTitle');
-            const upBtn=document.getElementById('dsUploadBtn');
-            if(upBtn) upBtn.style.display=(_dsView==='upload'||_dsView==='staff')?'none':'';
+            if(upBtn) upBtn.style.display=(_dsView==='upload')?'none':'';
             const err=_dsLoadErr
                 ? `<div style="padding:.6rem .7rem;margin-bottom:.6rem;background:#fef2f2;border:1px solid #fecaca;
                     border-radius:var(--r-sm);font-size:.78rem;color:#b91c1c">⚠ ${_esc(_dsLoadErr)}</div>`
                 : '';
             if(_dsView==='upload'){ if(title) title.textContent='💵 결산 입력'; el.innerHTML=err+_dsUploadHtml(); return; }
-            if(_dsView==='staff'){ if(title) title.textContent='💵 마감 결산'; el.innerHTML=err+_dsStaffHtml(); return; }
             if(_dsView==='day'){ if(title) title.textContent='💵 일별 상세'; el.innerHTML=err+_dsDayHtml(); return; }
             if(title) title.textContent='💵 매출 결산';
             el.innerHTML=err+_dsMonthHtml();
-        }
-
-        // ── 직원 화면 (마감정산 담당자용) ────────────────────────────────
-        //  코디가 매일 하는 일은 "오늘 마감 올리기" 하나다. 그래서 최근 며칠의
-        //  입력 여부만 보여주고, 매출 집계(월 누계·직원별·담당의별)는 숨긴다.
-        //  숫자를 아예 안 보여주면 자기가 뭘 저장했는지 확인할 수 없으므로
-        //  본인이 넣은 그 날의 수납 합계만 한 줄로 남긴다.
-        function _dsStaffHtml(){
-            const today=_todayYmd();
-            let h='<div style="font-weight:700;font-size:.9rem;margin-bottom:.5rem">🌙 오늘 마감 결산</div>';
-
-            const todayDoc=_dsDocOf(today);
-            if(todayDoc){
-                const k=_dsMetrics(todayDoc);
-                h+=`<div style="padding:.8rem .9rem;background:#dcfce7;border-radius:var(--r)">
-                    <div style="font-size:.8rem;font-weight:700;color:#166534">✅ 오늘(${today}) 마감 결산 저장 완료</div>
-                    <div style="font-size:.68rem;color:#166534;opacity:.85;margin-top:.3rem">💳 받은 돈 (수납)</div>
-                    <div style="font-size:1.3rem;font-weight:700;color:#166534;letter-spacing:-.5px;margin:.05rem 0 .1rem">${_dsWon(k.received)}</div>
-                    <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}${k.refund?` · 환불 −${_dsWon(k.refund)}`:''}</div>
-                    ${k.totalSales?`<div style="font-size:.72rem;color:#166534;opacity:.85">🩺 진료 매출(발생) ${_dsWon(k.totalSales)}</div>`:''}
-                    <div style="font-size:.68rem;color:#166534;opacity:.8;margin-top:.15rem">입력: ${_esc((todayDoc.meta&&todayDoc.meta.byName)||'-')}</div>
-                </div>
-                <button class="btn btn-secondary" style="margin-top:.5rem" onclick="dsEditDay('${today}')">✏️ 오늘 결산 고치기</button>`;
-            }else{
-                h+=`<div style="padding:.9rem;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r);
-                    font-size:.82rem;color:#92400e">아직 오늘(${today}) 마감 결산이 올라가지 않았습니다.</div>
-                <button class="btn btn-primary" style="margin-top:.5rem" onclick="dsOpenUpload('${today}')">🖥️ 오늘 마감 화면 올리기</button>`;
-            }
-
-            // 최근 7일 — 빠뜨린 날을 바로 알아채고 그 자리에서 채울 수 있게
-            h+='<div style="font-weight:700;font-size:.85rem;margin:1rem 0 .4rem">최근 7일</div>';
-            h+='<div style="display:flex;flex-direction:column;gap:.3rem">';
-            for(let i=0;i<7;i++){
-                const ymd=_dsShiftDate(today,-i);
-                const doc=_dsDocOf(ymd);
-                const done=!!doc;
-                h+=`<button type="button" onclick="${done?`dsEditDay('${ymd}')`:`dsOpenUpload('${ymd}')`}"
-                    style="display:flex;align-items:center;gap:.5rem;width:100%;text-align:left;font-family:inherit;
-                    padding:.55rem .7rem;border:1px solid ${done?'#bbf7d0':'var(--border)'};
-                    background:${done?'#f0fdf4':'var(--bg-card)'};border-radius:var(--r-sm);cursor:pointer">
-                    <span style="flex:1;min-width:0">
-                        <span style="font-size:.82rem;font-weight:600">${ymd} (${_dsDow(ymd)})</span>
-                        ${i===0?'<span style="font-size:.68rem;color:var(--text-muted);margin-left:.3rem">오늘</span>':''}
-                    </span>
-                    <span style="font-size:.75rem;font-weight:600;color:${done?'#166534':'var(--text-muted)'};white-space:nowrap">
-                        ${done?'✅ 저장됨':'미입력'}</span>
-                    <span style="color:var(--text-muted)">›</span>
-                </button>`;
-            }
-            h+='</div>';
-            h+='<div class="view-note">마감 화면을 캡처해 올리면 숫자를 읽어 기록합니다. '
-              +'저장 전에 큰 숫자가 화면과 맞는지 한 번만 봐주세요. '
-              +'월별·직원별 매출 집계는 원장님 계정에서 보입니다.</div>';
-            return h;
         }
 
         // ── 월 뷰 ───────────────────────────────────────────────────────
@@ -18437,7 +18485,7 @@
         function dsCancelUpload(){
             if(_dsBusy){ alert('사진을 읽는 중입니다. 잠시만 기다려주세요.'); return; }
             _dsDraft=null;
-            _dsView=_dsCanSeeSales()?(_dsSelDate?'day':'month'):'staff';
+            _dsView=_dsSelDate?'day':'month';
             _dsRender();
         }
 
@@ -18616,7 +18664,7 @@
                 const ym=d.date.slice(0,7);
                 delete _dsCache[ym];
                 _dsMonth=ym; _dsSelDate=d.date; _dsDraft=null;
-                _dsView=_dsCanSeeSales()?'day':'staff';
+                _dsView='day';
                 await _dsLoadMonth(ym,true);
                 _dsRender();
                 // 무엇을 저장했는지만 적는다. 매출집계 표를 안 올린 날 "총매출 0원" 이
@@ -18645,7 +18693,7 @@
                 const ym=ymd.slice(0,7);
                 delete _dsCache[ym];
                 await _dsLoadMonth(ym,true);
-                _dsView=_dsCanSeeSales()?'month':'staff'; _dsRender();
+                _dsView='month'; _dsRender();
             }catch(e){ alert('삭제 실패: '+(e&&e.message||e)); }
         }
 
