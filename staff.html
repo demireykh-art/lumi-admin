@@ -2692,7 +2692,7 @@
         }
         
         // ===== 근태 v2.0 — Firebase 동적 설정 (기본값) =====
-        let CLINIC_LAT=37.5037435, CLINIC_LNG=127.0892416, CLINIC_RADIUS=100;
+        let CLINIC_LAT=37.5037435, CLINIC_LNG=127.0892416, CLINIC_RADIUS=150; // 기본 반경(설정 settings/attendance.radius 로 덮어쓰기 가능)
         let ATT_LATE_H=9, ATT_LATE_M=10; // 지각 기준 09:10
 
         // 요일별 정규 퇴근시간 (0=일~6=토) — admin에서 설정 가능
@@ -2816,27 +2816,68 @@
             }
             status.className='gps-status loading';
             status.textContent='📍 위치 확인 중...';
-            
-            navigator.geolocation.getCurrentPosition(
-                pos=>{
-                    userLocation={lat:pos.coords.latitude,lng:pos.coords.longitude};
-                    const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
-                    if(dist<=CLINIC_RADIUS){
-                        status.className='gps-status ok';
-                        status.textContent=`✅ 클리닉 범위 내 (${Math.round(dist)}m)`;
-                    }else{
-                        status.className='gps-status error';
-                        status.textContent=`⚠️ 클리닉에서 ${Math.round(dist)}m 떨어짐 (${CLINIC_RADIUS}m 이내 필요)`;
-                    }
-                },
-                err=>{
+
+            _getFreshPosition(10000).then(loc=>{
+                userLocation={lat:loc.lat,lng:loc.lng,accuracy:loc.accuracy};
+                const dist=getDistance(loc.lat,loc.lng,CLINIC_LAT,CLINIC_LNG);
+                const acc=Math.round(loc.accuracy||0);
+                if(dist-acc<=CLINIC_RADIUS){
+                    status.className='gps-status ok';
+                    status.textContent=`✅ 클리닉 범위 내 (약 ${Math.round(dist)}m · 오차 ±${acc}m)`;
+                }else{
                     status.className='gps-status error';
-                    status.textContent='⚠️ 위치 권한을 허용해주세요';
-                },
-                {enableHighAccuracy:true,timeout:10000}
-            );
+                    status.textContent=`⚠️ 클리닉에서 약 ${Math.round(dist)}m (오차 ±${acc}m) · ${CLINIC_RADIUS}m 이내 필요`;
+                }
+            }).catch(()=>{
+                status.className='gps-status error';
+                status.textContent='⚠️ 위치를 확인할 수 없습니다 — 위치 권한을 허용해주세요';
+            });
         }
-        
+
+        // 여러 샘플 중 정확도(오차)가 가장 좋은 위치를 수집 (실내 GPS 튐 완화)
+        //   - 정확도 30m 이하이거나 4개 샘플이면 조기 종료, 아니면 timeout 까지 최적값 유지
+        function _getFreshPosition(timeoutMs){
+            return new Promise((resolve,reject)=>{
+                if(!navigator.geolocation){ reject(new Error('geo 미지원')); return; }
+                let best=null, done=false, count=0, id=null;
+                const finish=()=>{
+                    if(done) return; done=true;
+                    if(id!=null){ try{navigator.geolocation.clearWatch(id);}catch(_){ } }
+                    best?resolve(best):reject(new Error('timeout'));
+                };
+                try{
+                    id=navigator.geolocation.watchPosition(
+                        pos=>{
+                            const c=pos.coords;
+                            const cand={lat:c.latitude,lng:c.longitude,accuracy:(typeof c.accuracy==='number'?c.accuracy:9999)};
+                            if(!best||cand.accuracy<best.accuracy) best=cand;
+                            count++;
+                            if(best.accuracy<=30||count>=4) finish();
+                        },
+                        err=>{ if(!best){ done=true; if(id!=null){try{navigator.geolocation.clearWatch(id);}catch(_){ }} reject(err); } },
+                        {enableHighAccuracy:true, timeout:timeoutMs, maximumAge:0}
+                    );
+                }catch(e){ reject(e); return; }
+                setTimeout(finish, timeoutMs);
+            });
+        }
+
+        // 출퇴근 시 클리닉 반경 검증 — 누를 때 새로 측정 + 정확도 오차 감안
+        //   실제 위치가 반경 안에 있을 가능성이 있으면(=거리-오차 ≤ 반경) 허용
+        async function _ensureWithinClinic(){
+            if(currentUser?.locationExempt) return {ok:true};
+            const _st=document.getElementById('gpsStatus');
+            if(_st){ _st.style.display=''; _st.className='gps-status loading'; _st.textContent='📍 위치 확인 중... (잠시만요)'; }
+            let loc=null;
+            try{ loc=await _getFreshPosition(9000); }catch(_){ loc=userLocation||null; }
+            if(!loc){ return {ok:false, reason:'위치를 확인할 수 없습니다.\n위치 권한을 허용하고 잠시 후 다시 시도해주세요.'}; }
+            userLocation={lat:loc.lat,lng:loc.lng,accuracy:loc.accuracy};
+            const dist=getDistance(loc.lat,loc.lng,CLINIC_LAT,CLINIC_LNG);
+            const acc=loc.accuracy||0;
+            if(dist-acc<=CLINIC_RADIUS) return {ok:true, loc};
+            return {ok:false, reason:`클리닉 범위 밖입니다.\n(약 ${Math.round(dist)}m · GPS 오차 ±${Math.round(acc)}m)\n${CLINIC_RADIUS}m 이내에서 다시 시도해주세요.`};
+        }
+
         function getDistance(lat1,lng1,lat2,lng2){
             const R=6371000;
             const dLat=(lat2-lat1)*Math.PI/180;
@@ -5228,16 +5269,8 @@
             }
             
             if(!currentUser?.locationExempt){
-                if(!userLocation){
-                    alert('위치를 확인할 수 없습니다. 위치 권한을 허용해주세요.');
-                    checkLocation();
-                    return;
-                }
-                const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
-                if(dist>CLINIC_RADIUS){
-                    alert(`클리닉 범위 밖입니다. (현재 ${Math.round(dist)}m)\n${CLINIC_RADIUS}m 이내에서 출근해주세요.`);
-                    return;
-                }
+                const chk=await _ensureWithinClinic();
+                if(!chk.ok){ alert(chk.reason); checkLocation(); return; }
             }
 
             if(!confirm('출근하시겠습니까?')) return;
@@ -5308,16 +5341,8 @@
             }
             
             if(!currentUser?.locationExempt){
-                if(!userLocation){
-                    alert('위치를 확인할 수 없습니다.');
-                    checkLocation();
-                    return;
-                }
-                const dist=getDistance(userLocation.lat,userLocation.lng,CLINIC_LAT,CLINIC_LNG);
-                if(dist>CLINIC_RADIUS){
-                    alert(`클리닉 범위 밖입니다. (현재 ${Math.round(dist)}m)`);
-                    return;
-                }
+                const chk=await _ensureWithinClinic();
+                if(!chk.ok){ alert(chk.reason); checkLocation(); return; }
             }
 
             if(!confirm('퇴근하시겠습니까?')) return;
