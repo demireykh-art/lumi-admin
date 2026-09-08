@@ -2335,6 +2335,23 @@
                         바우처 관리 열기 →
                     </button>
                 </div>
+
+                <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
+                    <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">📍 클리닉 위치(출퇴근 GPS) 설정</div>
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
+                        출퇴근 위치 판정 기준입니다. <b>클리닉 건물 중앙에서</b> 아래 <b>[현재 위치로 설정]</b>을 누른 뒤 <b>[저장]</b>하세요.
+                    </div>
+                    <div id="locSettingsInfo" style="font-size:.8rem;color:#374151;margin-bottom:.4rem">-</div>
+                    <label style="font-size:.8rem;color:#374151;display:block;margin-bottom:.5rem">허용 반경(m)
+                        <input id="locRadiusInput" type="number" min="30" step="10" style="width:90px;padding:.35rem;border:1px solid #d1d5db;border-radius:var(--r-sm);margin-left:.4rem">
+                    </label>
+                    <input type="hidden" id="locLatInput"><input type="hidden" id="locLngInput">
+                    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+                        <button onclick="_locUseCurrent()" style="flex:1;min-width:150px;background:#0369a1;color:#fff;border:none;padding:.6rem;border-radius:var(--r-sm);font-weight:600;font-size:.85rem;cursor:pointer">📍 현재 위치로 설정</button>
+                        <button onclick="_locSave()" style="flex:1;min-width:120px;background:#166534;color:#fff;border:none;padding:.6rem;border-radius:var(--r-sm);font-weight:600;font-size:.85rem;cursor:pointer">저장</button>
+                    </div>
+                    <div id="locSettingsMsg" style="font-size:.78rem;color:#166534;margin-top:.4rem"></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('adminSettingsModal')" style="flex:1">닫기</button>
@@ -2937,6 +2954,43 @@
             document.getElementById('adminSettingsModal').classList.add('active');
             loadSharedStaffAccountsStaff();
             loadDailySalesPerms();
+            _locSettingsInit();
+        }
+        // ── 📍 클리닉 위치(GPS) 설정 ──
+        function _locSettingsInit(){
+            const info=document.getElementById('locSettingsInfo');
+            const r=document.getElementById('locRadiusInput'); if(r) r.value=CLINIC_RADIUS;
+            const la=document.getElementById('locLatInput'); if(la) la.value=CLINIC_LAT;
+            const ln=document.getElementById('locLngInput'); if(ln) ln.value=CLINIC_LNG;
+            const msg=document.getElementById('locSettingsMsg'); if(msg) msg.textContent='';
+            if(info) info.textContent=`현재 기준: 위도 ${Number(CLINIC_LAT).toFixed(6)}, 경도 ${Number(CLINIC_LNG).toFixed(6)} · 반경 ${CLINIC_RADIUS}m`;
+        }
+        async function _locUseCurrent(){
+            const info=document.getElementById('locSettingsInfo');
+            const msg=document.getElementById('locSettingsMsg');
+            if(msg){ msg.style.color='#6b7280'; msg.textContent='📍 위치 측정 중... (건물 중앙에서 측정하세요)'; }
+            try{
+                const loc=await _getFreshPosition(10000);
+                document.getElementById('locLatInput').value=loc.lat;
+                document.getElementById('locLngInput').value=loc.lng;
+                if(info) info.textContent=`새 위치: 위도 ${loc.lat.toFixed(6)}, 경도 ${loc.lng.toFixed(6)} (GPS 오차 ±${Math.round(loc.accuracy||0)}m)`;
+                if(msg){ msg.style.color='#166534'; msg.textContent='측정됨 — [저장]을 눌러 반영하세요.'; }
+            }catch(e){ if(msg){ msg.style.color='#b91c1c'; msg.textContent='위치 측정 실패 — 위치 권한을 허용하고 다시 시도해주세요.'; } }
+        }
+        async function _locSave(){
+            const lat=parseFloat(document.getElementById('locLatInput').value);
+            const lng=parseFloat(document.getElementById('locLngInput').value);
+            const radius=parseInt(document.getElementById('locRadiusInput').value)||CLINIC_RADIUS;
+            const msg=document.getElementById('locSettingsMsg');
+            if(isNaN(lat)||isNaN(lng)){ if(msg){ msg.style.color='#b91c1c'; msg.textContent='먼저 [현재 위치로 설정]으로 좌표를 잡아주세요.'; } return; }
+            if(radius<30){ if(msg){ msg.style.color='#b91c1c'; msg.textContent='허용 반경은 30m 이상으로 설정하세요.'; } return; }
+            try{
+                await db.collection('settings').doc('attendance').set({ lat, lng, radius, updatedAt:firebase.firestore.FieldValue.serverTimestamp() },{merge:true});
+                CLINIC_LAT=lat; CLINIC_LNG=lng; CLINIC_RADIUS=radius; // 즉시 반영
+                if(msg){ msg.style.color='#166534'; msg.textContent=`✅ 저장 완료 — 위도 ${lat.toFixed(6)}, 경도 ${lng.toFixed(6)} · 반경 ${radius}m`; }
+                _locSettingsInit();
+                checkLocation();
+            }catch(e){ if(msg){ msg.style.color='#b91c1c'; msg.textContent='저장 실패: '+(e?.message||e); } }
         }
 
         // ── 차팅 역할(chartRole) 관리 (bizAdmin 전용) ──
