@@ -51,37 +51,59 @@ function renderEmployees(){
     }).join('')||'<tr><td colspan="10" class="text-center">등록된 직원 없음</td></tr>';
 }
 
-// 직원의 사용 연차 계산 (per-date 상태 반영)
-function getUsedLeave(employeeId){
-    const year=new Date().getFullYear().toString();
-    let sum=0;
-    leaveRequests
-        .filter(r=>r.employeeId===employeeId)
-        .forEach(r=>{
-            if(r.type==='오프') return;   // 오프는 연차 차감 안 함
-            const isHalfDay=r.type?.includes('반차');
-            (r.dates||[])
-                .filter(d=>d.startsWith(year))
-                .forEach(date=>{
-                    if(getLeaveDateStatus(r,date)==='approved'){
-                        sum+=isHalfDay?0.5:1;
-                    }
-                });
+// ── 입사일 주기 연차 계산 (관리자앱) — 통합앱 _annualCycle 과 동일 규칙 ──
+//   모든 기준 = 입사일. 주기=[입사기념일, 다음기념일). 1년미만 T=11, 1년이상 T=min(15+floor((k-1)/2),25).
+//   주기별 (이월+사용)−T 초과분(끌어쓰기)을 다음 주기로 이월. days:[{dt,w}] 승인+대기, 오프 제외, 반차 0.5.
+//   반환: {T, carryIn:이월+수동사용, cycleStart, cycleIndex, earnedUnder1yr:발생분(1년미만만)}
+function _hrAnnualCycle(joinDate, days, manualUsed){
+    const manual=Number(manualUsed)||0;
+    if(!joinDate){ return {T:15, carryIn:manual, cycleStart:'0000-01-01', cycleIndex:0, earnedUnder1yr:null}; }
+    const jd=new Date(joinDate), now=new Date();
+    const anchor=(k)=> new Date(jd.getFullYear()+k, jd.getMonth(), jd.getDate());
+    let K=0; while(anchor(K+1)<=now) K++;
+    const Tof=(k)=> k===0 ? 11 : Math.min(15+Math.floor((k-1)/2), 25);
+    const ymd=(d)=> d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    let carry=0;
+    for(let k=0;k<K;k++){
+        const s=ymd(anchor(k)), e=ymd(anchor(k+1));
+        let used=0; (days||[]).forEach(x=>{ if(x.dt>=s && x.dt<e) used+=x.w; });
+        carry=Math.max(0, carry+used-Tof(k));
+    }
+    let earned=null;
+    if(K===0){ const months=Math.floor(Math.floor((now-jd)/86400000)/30); earned=Math.min(Math.max(0,months),11); }
+    return {T:Tof(K), carryIn:carry+manual, cycleStart:ymd(anchor(K)), cycleIndex:K, earnedUnder1yr:earned};
+}
+// 직원의 연차 차감대상 날짜들 (승인+대기, 오프 제외, per-date 상태 반영, 반차 0.5)
+function _hrLeaveDays(employeeId){
+    const days=[];
+    leaveRequests.filter(r=>r.employeeId===employeeId&&r.type!=='오프').forEach(r=>{
+        const w=(r.type&&r.type.includes('반차'))?0.5:1;
+        (r.dates||[]).forEach(d=>{
+            const st=getLeaveDateStatus(r,d);
+            if(st==='approved'||st==='pending') days.push({dt:String(d), w});
         });
-    return sum;
+    });
+    return days;
+}
+// 직원의 사용 연차 계산 (입사일 주기 기준: 이월 초과분 + 현재 주기 사용, per-date 상태 반영)
+function getUsedLeave(employeeId){
+    const emp=employees.find(e=>e.id===employeeId);
+    const days=_hrLeaveDays(employeeId);
+    const cyc=_hrAnnualCycle(emp&&emp.joinDate, days, emp&&emp.usedLeave);
+    let used=cyc.carryIn;
+    days.forEach(x=>{ if(x.dt>=cyc.cycleStart) used+=x.w; });
+    return Math.round(used*10)/10;
 }
 
-// 연차 현황 {총, 사용} — 승인+대기 기준, 오프 제외, 반차 0.5, 관리자 수동사용(usedLeave) 포함 (통합앱과 동일 기준)
+// 연차 현황 {총, 사용} — 입사일 주기 기준(리셋+이월), 오프 제외, 반차 0.5, 관리자 수동사용(usedLeave) 포함 (통합앱과 동일 기준)
 function annualLeaveStatus(employeeId){
     const emp=employees.find(e=>e.id===employeeId);
-    const total=(emp&&emp.annualLeave)||calculateLegalAnnualLeave(emp&&emp.joinDate);
-    let used=(emp&&emp.usedLeave)||0;
-    leaveRequests.filter(r=>r.employeeId===employeeId).forEach(r=>{
-        if(r.type==='오프') return;
-        if(r.status!=='approved'&&r.status!=='pending') return;
-        used += (r.type&&r.type.includes('반차'))?0.5:(r.dates?.length||1);
-    });
-    return {total, used};
+    const days=_hrLeaveDays(employeeId);
+    const cyc=_hrAnnualCycle(emp&&emp.joinDate, days, emp&&emp.usedLeave);
+    const total=(emp&&emp.annualLeave)||cyc.T;
+    let used=cyc.carryIn;
+    days.forEach(x=>{ if(x.dt>=cyc.cycleStart) used+=x.w; });
+    return {total, used:Math.round(used*10)/10};
 }
 function annualLeaveBadge(employeeId){
     const s=annualLeaveStatus(employeeId);
@@ -89,17 +111,14 @@ function annualLeaveBadge(employeeId){
     const rem=Math.max(0,s.total-s.used);
     return `<span title="총 ${s.total} · 사용 ${s.used} · 잔여 ${rem}" style="font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${s.total}-${s.used} · 잔여 ${rem}</span>`;
 }
-// 해당 날짜까지의 누적 사용일수(날짜순) — 오프 제외, 반차 0.5, 관리자 수동사용 기준점 포함
+// 해당 날짜까지의 누적 사용일수(날짜순) — 입사일 주기 기준(이월 초과분+수동사용을 기준점으로, 현재 주기 날짜만 누적)
 function annualLeaveSeqThrough(employeeId, uptoDate){
     const emp=employees.find(e=>e.id===employeeId);
-    let cum=(emp&&emp.usedLeave)||0;
-    leaveRequests.filter(r=>r.employeeId===employeeId&&r.type!=='오프').forEach(r=>{
-        const w=(r.type&&r.type.includes('반차'))?0.5:1;
-        (r.dates||[]).forEach(d=>{
-            const st=getLeaveDateStatus(r,d);
-            if((st==='approved'||st==='pending') && d<=uptoDate) cum+=w;
-        });
-    });
+    const days=_hrLeaveDays(employeeId);
+    const cyc=_hrAnnualCycle(emp&&emp.joinDate, days, emp&&emp.usedLeave);
+    const cs=cyc.cycleStart;
+    let cum=cyc.carryIn;
+    days.forEach(x=>{ if(x.dt>=cs && x.dt<=uptoDate) cum+=x.w; });
     return cum;
 }
 // 신청(날짜) 행용 연차 순번 배지 (날짜순 누적) — 취소 시 자동 재정렬

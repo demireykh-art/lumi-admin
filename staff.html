@@ -571,6 +571,7 @@
                     <span id="leaveCalcInfo">-</span><br>
                     ※ 현재 주기 예상 연차까지 미리 신청 가능합니다.<br>
                     ※ 중도퇴사 시 초과 사용분은 급여에서 정산됩니다.
+                    <div id="leaveUnder1yrNote" style="display:none;margin-top:.4rem;padding:.5rem .6rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;font-size:.8rem;line-height:1.5"></div>
                 </div>
                 
                 <!-- 팀 연차 캘린더 -->
@@ -4963,16 +4964,12 @@
         function renderLeave(){
             // 승인 + 대기중 모두 사용 예정으로 카운트
             const myRequests=leaveRequests.filter(r=>r.status==='approved'||r.status==='pending');
-            const usedDays=myRequests.reduce((sum,r)=>{
-                if(r.type==='오프')return sum;              // 오프는 연차 차감 안 함
-                if(r.type?.includes('반차'))return sum+0.5;
-                return sum+(r.dates?.length||1);
-            },0);
-            
-            // 연차: 개별 설정값 있으면 사용, 없으면 입사일 기준 예상 총 연차
-            const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
-            const adminUsed=currentUser.usedLeave||0;
-            const totalUsed=usedDays+adminUsed;
+            // 입사일 주기 기준(리셋+이월): 오프 제외 요청으로 현재 주기 부여/이월/사용 계산
+            const _entries=myRequests.filter(r=>r.type!=='오프');
+            const cyc=_annualCycle(currentUser.joinDate, _entries, currentUser.usedLeave);
+            // 연차: 개별 설정값 있으면 사용, 없으면 입사일 주기 기준 예상 총 연차
+            const total=currentUser.annualLeave||cyc.T;
+            const totalUsed=Math.round((cyc.carryIn + _cycleUsedDays(_entries, cyc.cycleStart))*10)/10;
             const rawRemain=Math.round((total-totalUsed)*10)/10; // 초과 시 음수
             const over=rawRemain<0;                               // 부여 연차 초과(끌어쓴 상태)
             const remain=Math.max(0,rawRemain);
@@ -4992,7 +4989,21 @@
             // 상세 연차 정보
             const detail=getLeaveDetail(currentUser.joinDate);
             document.getElementById('leaveCalcInfo').textContent=detail.info;
-            
+
+            // 1년 미만 명시: 발생분(월 1개)과 퇴사 시 일할 차감 안내
+            const _u1=document.getElementById('leaveUnder1yrNote');
+            if(_u1){
+                if(cyc.cycleIndex===0 && currentUser.joinDate){
+                    const earned=cyc.earnedUnder1yr==null?0:cyc.earnedUnder1yr;
+                    _u1.style.display='block';
+                    _u1.innerHTML='📌 <b>1년 미만 안내</b><br>'
+                        +'연차는 원칙적으로 <b>만 1개월 개근 시 1개씩 발생</b>합니다(현재 발생분 <b>'+earned+'개</b> / 예상 총 11개).<br>'
+                        +'예상분을 미리 당겨쓸 수 있으나, <b>1년 미만으로 퇴사할 경우 발생분(월 1개)을 초과해 사용한 연차는 급여에서 일할(日割) 차감</b>됩니다.';
+                }else{
+                    _u1.style.display='none';
+                }
+            }
+
             // 팀 연차 현황 렌더링
             renderTeamLeave();
             
@@ -6295,17 +6306,13 @@
                 }
             }
 
-            // 잔여 연차 확인 (오프는 차감 제외)
-            const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
+            // 잔여 연차 확인 (오프는 차감 제외) — 입사일 주기 기준(리셋+이월)
             const myRequests=leaveRequests.filter(r=>r.status==='approved'||r.status==='pending');
-            const usedDays=myRequests.reduce((sum,r)=>{
-                if(r.type==='오프')return sum;              // 오프는 연차 차감 안 함
-                if(r.type?.includes('반차'))return sum+0.5;
-                return sum+(r.dates?.length||1);
-            },0);
-            const adminUsed=currentUser.usedLeave||0;
-            const totalUsed=usedDays+adminUsed;
-            
+            const _entries=myRequests.filter(r=>r.type!=='오프');
+            const cyc=_annualCycle(currentUser.joinDate, _entries, currentUser.usedLeave);
+            const total=currentUser.annualLeave||cyc.T;
+            const totalUsed=Math.round((cyc.carryIn + _cycleUsedDays(_entries, cyc.cycleStart))*10)/10;
+
             const requestDays=(type==='오프')?0:(type.includes('반차')?0.5:selectedLeaveDates.length);
             const afterUse=totalUsed+requestDays;
             const remain=total-totalUsed;
@@ -13414,18 +13421,40 @@
                 hb.innerHTML=h;
             }
         }
-        // 직원 연차 현황 {총, 사용} — 오프 제외, 반차 0.5, 관리자 수동 사용(usedLeave) 포함 (개인 탭과 동일 기준)
+        // ── 입사일 주기 연차 계산 (모든 기준 = 입사일) ──
+        //   반환: { T:현재주기 부여, carryIn:이월 초과분+수동사용, cycleStart:'YYYY-MM-DD', earnedUnder1yr:발생분(1년미만만), cycleIndex }
+        //   entries: 그 직원의 연차 차감대상(오프 제외, 승인+대기) 요청들
+        //   규칙: 1년미만 T=11, 1년이상 T=min(15+floor((k-1)/2),25). 주기=[입사기념일, 다음기념일). 주기별 (이월+사용)−T 초과분을 다음 주기로 이월.
+        function _annualCycle(joinDate, entries, manualUsed){
+            const manual=Number(manualUsed)||0;
+            if(!joinDate){ return { T:15, carryIn:manual, cycleStart:'0000-01-01', earnedUnder1yr:null, cycleIndex:0 }; }
+            const jd=new Date(joinDate), now=new Date();
+            const anchor=(k)=> new Date(jd.getFullYear()+k, jd.getMonth(), jd.getDate());
+            let K=0; while(anchor(K+1)<=now) K++;
+            const Tof=(k)=> k===0 ? 11 : Math.min(15+Math.floor((k-1)/2), 25);
+            const ymd=(d)=> d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+            const days=[]; (entries||[]).forEach(r=>{ const half=!!(r.type&&r.type.includes('반차')); (r.dates||[]).forEach(dt=>days.push({dt:String(dt), w:half?0.5:1})); });
+            let carry=0;
+            for(let k=0;k<K;k++){
+                const s=ymd(anchor(k)), e=ymd(anchor(k+1));
+                let used=0; days.forEach(x=>{ if(x.dt>=s && x.dt<e) used+=x.w; });
+                carry=Math.max(0, carry+used-Tof(k));
+            }
+            let earned=null;
+            if(K===0){ const months=Math.floor(Math.floor((now-jd)/86400000)/30); earned=Math.min(Math.max(0,months),11); }
+            return { T:Tof(K), carryIn:carry+manual, cycleStart:ymd(anchor(K)), earnedUnder1yr:earned, cycleIndex:K };
+        }
+        // 현재 주기 사용일 합 (cycleStart 이후 날짜만, 반차 0.5)
+        function _cycleUsedDays(entries, cycleStart){
+            let cur=0; (entries||[]).forEach(r=>{ const half=!!(r.type&&r.type.includes('반차')); (r.dates||[]).forEach(dt=>{ if(String(dt)>=cycleStart) cur+=(half?0.5:1); }); }); return cur;
+        }
+        // 직원 연차 현황 {총, 사용} — 입사일 주기 기준(리셋+이월), 오프 제외, 반차 0.5, 수동사용 포함
         function _annualStatusOf(empId){
             const emp=(_staffAdminEmployees||[]).find(e=>e.id===empId);
-            const total=(emp&&emp.annualLeave)||calculateLegalAnnualLeave(emp&&emp.joinDate);
-            let used=(emp&&emp.usedLeave)||0;
-            (_staffAdminLeaves||[]).forEach(r=>{
-                if(r.employeeId!==empId) return;
-                if(r.status!=='approved'&&r.status!=='pending') return;
-                if(r.type==='오프') return;
-                used += (r.type&&r.type.includes('반차'))?0.5:(r.dates?.length||1);
-            });
-            return {total, used};
+            const entries=(_staffAdminLeaves||[]).filter(r=>r.employeeId===empId&&(r.status==='approved'||r.status==='pending')&&r.type!=='오프');
+            const cyc=_annualCycle(emp&&emp.joinDate, entries, emp&&emp.usedLeave);
+            const total=(emp&&emp.annualLeave)||cyc.T;
+            return { total, used: cyc.carryIn + _cycleUsedDays(entries, cyc.cycleStart) };
         }
         function _annualStatusBadge(empId){
             const s=_annualStatusOf(empId);
@@ -13433,16 +13462,19 @@
             const rem=Math.max(0,s.total-s.used);
             return `<span title="총 ${s.total} · 사용 ${s.used} · 잔여 ${rem}" style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:8px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${s.total}-${s.used} · 잔여 ${rem}</span>`;
         }
-        // 이 신청까지의 누적 사용일수(날짜순) — 오프 제외, 반차 0.5, 관리자 수동사용(usedLeave) 기준점 포함
+        // 이 신청까지의 누적 사용일수 — 입사일 주기 기준(이월 초과분+수동사용을 기준점으로, 현재 주기 날짜만 날짜순 누적)
         function _annualSeqThrough(empId, reqId){
             const emp=(_staffAdminEmployees||[]).find(e=>e.id===empId);
-            const base=(emp&&emp.usedLeave)||0;
-            const items=(_staffAdminLeaves||[]).filter(r=>r.employeeId===empId&&(r.status==='approved'||r.status==='pending')&&r.type!=='오프');
-            const keyOf=(r)=>{ const d=(r.dates||[]).slice().sort(); return (d[0]||'9999')+'#'+(r.id||''); };
-            items.sort((a,b)=>keyOf(a).localeCompare(keyOf(b)));
-            let cum=base;
-            for(const r of items){
-                cum += (r.type&&r.type.includes('반차'))?0.5:(r.dates?.length||1);
+            const entries=(_staffAdminLeaves||[]).filter(r=>r.employeeId===empId&&(r.status==='approved'||r.status==='pending')&&r.type!=='오프');
+            const cyc=_annualCycle(emp&&emp.joinDate, entries, emp&&emp.usedLeave);
+            const cs=cyc.cycleStart;
+            const cur=entries.filter(r=>(r.dates||[]).some(d=>String(d)>=cs));
+            const keyOf=(r)=>{ const d=(r.dates||[]).slice().sort(); return (d.find(x=>String(x)>=cs)||d[0]||'9999')+'#'+(r.id||''); };
+            cur.sort((a,b)=>keyOf(a).localeCompare(keyOf(b)));
+            let cum=cyc.carryIn;
+            for(const r of cur){
+                const half=!!(r.type&&r.type.includes('반차'));
+                cum += half?0.5:(r.dates||[]).filter(d=>String(d)>=cs).length;
                 if(r.id===reqId) return cum;
             }
             return cum;
