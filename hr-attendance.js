@@ -108,9 +108,12 @@ function annualLeaveSeqBadge(r, date){
     const total=(emp&&emp.annualLeave)||calculateLegalAnnualLeave(emp&&emp.joinDate);
     if(r.type==='오프') return `<span style="font-size:.7rem;font-weight:600;padding:1px 7px;border-radius:8px;margin-left:6px;background:#f3f4f6;color:#6b7280">오프·미차감</span>`;
     const through=annualLeaveSeqThrough(r.employeeId, date);
-    const rem=Math.max(0,total-through);
-    const over=through>total;
-    return `<span title="연차 총 ${total} · 이 날짜까지 누적 ${through} · 잔여 ${rem}" style="font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${total}-${through} · 잔여 ${rem}</span>`;
+    if(through>total){
+        const overN=Math.round((through-total)*10)/10; // 부여 연차 초과분 (다음 연차에서 차감)
+        return `<span title="부여 연차 ${total} 초과 · 누적 ${through} · 다음 연차에서 차감" style="font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:#fee2e2;color:#991b1b">연차 초과 -${overN}</span>`;
+    }
+    const rem=total-through;
+    return `<span title="연차 총 ${total} · 이 날짜까지 누적 ${through} · 잔여 ${rem}" style="font-size:.7rem;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:6px;background:#e0e7ff;color:#3730a3">연차 ${total}-${through} · 잔여 ${rem}</span>`;
 }
 
 // 특정 날짜의 승인 상태 반환 (dateStatuses 우선, 없으면 전체 status)
