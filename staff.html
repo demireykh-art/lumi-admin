@@ -4973,13 +4973,21 @@
             const total=currentUser.annualLeave||calculateLegalAnnualLeave(currentUser.joinDate);
             const adminUsed=currentUser.usedLeave||0;
             const totalUsed=usedDays+adminUsed;
-            const remain=Math.max(0,total-totalUsed);
-            
+            const rawRemain=Math.round((total-totalUsed)*10)/10; // 초과 시 음수
+            const over=rawRemain<0;                               // 부여 연차 초과(끌어쓴 상태)
+            const remain=Math.max(0,rawRemain);
+
             document.getElementById('leaveTotal').textContent=total;
             document.getElementById('leaveUsed').textContent=totalUsed;
-            document.getElementById('leaveRemain').textContent=remain;
+            const _rEl=document.getElementById('leaveRemain');
+            if(_rEl){ _rEl.textContent=over?('-'+Math.abs(rawRemain)):remain; _rEl.style.color=over?'#dc2626':''; }
             const _nm=document.getElementById('leaveStatusNM');
-            if(_nm){ _nm.textContent='연차 '+total+'-'+totalUsed+' · 잔여 '+remain; _nm.style.background=(totalUsed>total)?'#fee2e2':'#e0e7ff'; _nm.style.color=(totalUsed>total)?'#991b1b':'#3730a3'; }
+            if(_nm){
+                _nm.textContent=over ? ('연차 '+total+'-'+totalUsed+' · 초과 -'+Math.abs(rawRemain))
+                                     : ('연차 '+total+'-'+totalUsed+' · 잔여 '+remain);
+                _nm.style.background=over?'#fee2e2':'#e0e7ff';
+                _nm.style.color=over?'#991b1b':'#3730a3';
+            }
 
             // 상세 연차 정보
             const detail=getLeaveDetail(currentUser.joinDate);
@@ -6302,9 +6310,10 @@
             const afterUse=totalUsed+requestDays;
             const remain=total-totalUsed;
             
+            // 잔여 초과(끌어쓰기): 병가·경조사 등으로 부득이 초과 사용하는 경우 허용 — 확인 후 진행
             if(requestDays>remain){
-                alert(`잔여 연차가 부족합니다.\n\n총 연차: ${total}일\n사용(예정): ${totalUsed}일\n잔여: ${remain}일\n신청: ${requestDays}일\n\n※ 중도퇴사 시 초과 사용분은 급여에서 정산됩니다.`);
-                return;
+                const overAfter=Math.round((afterUse-total)*10)/10; // 신청 후 초과 일수
+                if(!confirm(`잔여 연차를 초과합니다.\n\n총 연차 ${total}일 · 사용(예정) ${totalUsed}일 · 신청 ${requestDays}일\n→ 신청 후 ${overAfter}일 초과\n\n초과분은 -1, -2 … 로 표시되고 다음 연차가 생기면 그 회차에서 차감됩니다.\n(중도퇴사 시 초과 사용분은 급여에서 정산)\n\n계속 신청할까요?`)) return;
             }
             
             try{
@@ -13447,9 +13456,13 @@
             }
             if(r.status!=='approved'&&r.status!=='pending') return ''; // 반려·취소는 순번 미표시
             const through=_annualSeqThrough(r.employeeId, r.id);
-            const rem=Math.max(0,total-through);
-            const over=through>total;
-            return `<div style="margin-bottom:.15rem"><span title="연차 총 ${total} · 이 신청까지 누적 ${through} · 잔여 ${rem}" style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:8px;${over?'background:#fee2e2;color:#991b1b':'background:#e0e7ff;color:#3730a3'}">연차 ${total}-${through} · 잔여 ${rem}</span></div>`;
+            if(through>total){
+                // 부여 연차 초과분 — -1, -2 … 로 표시 (다음 연차에서 차감)
+                const overN=Math.round((through-total)*10)/10;
+                return `<div style="margin-bottom:.15rem"><span title="부여 연차 ${total} 초과 · 누적 ${through} · 다음 연차에서 차감" style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:8px;background:#fee2e2;color:#991b1b">연차 초과 -${overN}</span></div>`;
+            }
+            const rem=total-through;
+            return `<div style="margin-bottom:.15rem"><span title="연차 총 ${total} · 이 신청까지 누적 ${through} · 잔여 ${rem}" style="font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:8px;background:#e0e7ff;color:#3730a3">연차 ${total}-${through} · 잔여 ${rem}</span></div>`;
         }
         function _staffLeaveCard(r, showActions){
             const emp=_staffAdminEmployees.find(x=>x.id===r.employeeId);
