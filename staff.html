@@ -17547,6 +17547,10 @@
             // 환불금액은 수납금액 합계에서 이미 빠진 값이다. 금액이 크면 "왜 이렇게
             // 적지?" 가 되므로 합계 옆에 같이 적어 준다.
             const refund=_dsN(((d.payment&&d.payment.notes)||{}).noteRefund);
+            // 미수납 본부금 — 원장·지인·직원 등 보험진료 본인부담금을 안 받은 금액.
+            // 표에는 현금으로 잡혀 있지만 실제로 들어오지 않았다. OCR 로 알 수 없어
+            // 사람이 직접 넣는다(표 밖의 조정값이라 검산에는 끼우지 않는다).
+            const uncollected=_dsN(((d.adjust)||{}).uncollectedCopay);
             // ── 보험 / 비보험 분해 ──
             // 시술별 표가 있으면 그 표의 '보험진료' 행을 쓴다. 원장님이 말하는
             // "보험진료 매출·객단가" 가 바로 이 행이고, 건수까지 같이 들어 있어
@@ -17598,10 +17602,14 @@
                 nonInsBasis:nonInsCnt>0?'건':(nonInsPt>0?'명':null),
                 nonInsDenom:nonInsCnt>0?nonInsCnt:nonInsPt,
                 procRows, procTotal,
-                cash:_dsN(pr('cashSum').sum), card:_dsN(pr('card').sum),
+                // 현금·수납 합계는 미수납 본부금을 뺀 "실제로 들어온 돈". 월 누계·달력도
+                // 이 값을 쓰므로 자동으로 순액이 된다. 표 원본은 …Gross 로 같이 남긴다.
+                cash:_dsN(pr('cashSum').sum)-uncollected, cashGross:_dsN(pr('cashSum').sum),
+                card:_dsN(pr('card').sum),
                 easy:_dsN(pr('easySum').sum), etc:_dsN(pr('etc').sum),
                 unclassified:_dsN(pr('unclassified').sum),
-                received:_dsN(pr('total').sum), refund,
+                received:_dsN(pr('total').sum)-uncollected, receivedGross:_dsN(pr('total').sum),
+                uncollected, refund,
                 taxAmt:_dsN(pr('total').taxAmt), vat:_dsN(pr('total').vat),
                 taxGross:_dsN(pr('total').taxGross), nonTaxAmt:_dsN(pr('total').nonTaxAmt),
                 staff, doctor, staffTotal:sTot, doctorTotal:dTot, base
@@ -17768,7 +17776,8 @@
             // 월 누계
             const acc={count:0,totalSales:0,insurance:0,nonIns:0,
                        patientTotal:0,insPt:0,nonInsPt:0,insCnt:0,nonInsCnt:0,
-                       received:0,cash:0,card:0,easy:0,etc:0,taxAmt:0,vat:0,nonTaxAmt:0,filled:0};
+                       received:0,cash:0,card:0,easy:0,etc:0,taxAmt:0,vat:0,nonTaxAmt:0,
+                       uncollected:0,filled:0};
             const staffAcc={}, doctorAcc={}, procAcc={}, byDay={};
             for(let d=1;d<=days;d++){
                 const ymd=`${ym}-${String(d).padStart(2,'0')}`;
@@ -17777,7 +17786,8 @@
                 const k=_dsMetrics(doc);
                 byDay[ymd]=k; acc.filled++;
                 ['count','totalSales','insurance','nonIns','patientTotal','insPt','nonInsPt',
-                 'insCnt','nonInsCnt','received','cash','card','easy','etc','taxAmt','vat','nonTaxAmt']
+                 'insCnt','nonInsCnt','received','cash','card','easy','etc','taxAmt','vat',
+                 'nonTaxAmt','uncollected']
                     .forEach(f=>{ acc[f]+=_dsN(k[f]); });
                 [[k.staff,staffAcc],[k.doctor,doctorAcc],[k.procRows,procAcc]].forEach(([src,into])=>{
                     Object.entries(src||{}).forEach(([name,r])=>{
@@ -17801,7 +17811,9 @@
                 ['객단가',
                  acc.patientTotal>0?_dsWon(Math.round(acc.totalSales/acc.patientTotal)):_dsWon(_dsAvg(acc.totalSales,acc.count)),
                  acc.patientTotal>0?`환자 기준 · 오더 기준 ${_dsWon(_dsAvg(acc.totalSales,acc.count))}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
-                ['💳 받은 돈 (수납)',_dsWon(acc.received),`현금 ${_dsShort(acc.cash)}원 · 카드 ${_dsShort(acc.card)}원`,'#166534','#dcfce7'],
+                ['💳 받은 돈 (수납)',_dsWon(acc.received),
+                 `현금 ${_dsShort(acc.cash)}원 · 카드 ${_dsShort(acc.card)}원`
+                 +(acc.uncollected?` · 미수납 본부금 −${_dsShort(acc.uncollected)}원`:''),'#166534','#dcfce7'],
                 [acc.insCnt>0?'보험진료':'보험(급여)',_dsWon(acc.insurance),
                  _dsDenomSub(acc.insurance,acc.insCnt,acc.insPt),'#92400e','#fef3c7'],
                 [acc.insCnt>0?'비보험 진료':'비보험(비급여)',_dsWon(acc.nonIns),
@@ -17987,9 +17999,16 @@
             h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">💳 수납 — 오늘 실제로 들어온 돈</div>';
             h+=_dsCards([
                 ['💳 받은 돈 (수납)',_dsWon(k.received),
-                 `현금 ${_dsShort(k.cash)}원 · 카드 ${_dsShort(k.card)}원`+(k.refund?` · 환불 −${_dsShort(k.refund)}원`:''),'#166534','#dcfce7'],
+                 `현금 ${_dsShort(k.cash)}원 · 카드 ${_dsShort(k.card)}원`
+                 +(k.refund?` · 환불 −${_dsShort(k.refund)}원`:'')
+                 +(k.uncollected?` · 미수납 본부금 −${_dsShort(k.uncollected)}원`:''),'#166534','#dcfce7'],
                 ['과세 수납금액',_dsWon(k.taxAmt),`부가세 ${_dsWon(k.vat)} · 비과세 ${_dsWon(k.nonTaxAmt)}`,'#0f766e','#ccfbf1'],
             ]);
+            if(k.uncollected){
+                h+='<div style="font-size:.68rem;color:var(--text-muted);margin-top:.3rem;line-height:1.5">'
+                  +`※ 표의 수납금액 합계 ${_dsWon(k.receivedGross)} 에서 <b>미수납 본부금 ${_dsWon(k.uncollected)}</b> 을 뺀 금액입니다 `
+                  +'— 원장·지인·직원 등 보험진료 본인부담금을 받지 않은 몫.</div>';
+            }
             h+=_dsPayBarHtml(k);
 
             // 원본 표 그대로 — 숫자를 대조하고 싶을 때만 펼친다
@@ -18170,6 +18189,7 @@
             _dsDraft=JSON.parse(JSON.stringify({
                 date:ymd,
                 payment:pay,
+                adjust:{uncollectedCopay:_dsN((doc.adjust||{}).uncollectedCopay)},
                 staff:doc.staff||{}, staffTotal:doc.staffTotal||null,
                 doctor:doc.doctor||{}, doctorTotal:doc.doctorTotal||null,
                 procedure:doc.procedure||{},
@@ -18188,7 +18208,8 @@
             _dsView='upload'; _dsRender();
         }
         function _dsNewDraft(ymd){
-            return {date:ymd, payment:{rows:{},notes:{}}, staff:{}, staffTotal:null,
+            return {date:ymd, payment:{rows:{},notes:{}}, adjust:{uncollectedCopay:0},
+                    staff:{}, staffTotal:null,
                     doctor:{}, doctorTotal:null, procedure:{}, procedureTotal:null,
                     patients:{types:{}},
                     shots:{payment:null,staff:null,doctor:null,procedure:null,patients:null},
@@ -18408,6 +18429,7 @@
                     <div style="font-size:.72rem;color:#166534">현금 ${_dsWon(k.cash)} · 카드 ${_dsWon(k.card)}${k.etc?' · 기타 '+_dsWon(k.etc):''}${k.easy?' · 간편결제 '+_dsWon(k.easy):''}</div>
                     <div style="font-size:.72rem;color:#166534;opacity:.8">과세 수납 ${_dsWon(k.taxAmt)} · 부가세 ${_dsWon(k.vat)}</div>
                     ${k.refund?`<div style="font-size:.72rem;color:#b45309;margin-top:.15rem">↩ 환불 ${_dsWon(k.refund)} 이 빠진 금액입니다</div>`:''}
+                    ${_dsUncollectedHtml(k)}
                 </div>`;
             }
             if(hasSales){
@@ -18439,6 +18461,36 @@
                   +'화면을 한 장 더 올리면 받은 돈까지 함께 기록됩니다.</div>';
             }
             return h;
+        }
+
+        // 미수납 본부금 입력칸 — 표에서 읽을 수 없는 값이라 사람이 넣는다.
+        //  검산이 통과하면 표는 접혀서 안 보이므로, 매일 손대야 하는 이 칸만은
+        //  받은 돈 카드 안에 항상 펼쳐 둔다.
+        function _dsUncollectedHtml(k){
+            const v=_dsN(k.uncollected);
+            return `<div style="margin-top:.45rem;padding-top:.45rem;border-top:1px dashed #86efac">
+                <label style="display:flex;align-items:center;gap:.35rem;font-size:.72rem;color:#166534;font-weight:600">
+                    <span style="white-space:nowrap">※ 미수납 본부금</span>
+                    <input type="text" inputmode="numeric" value="${v.toLocaleString('ko-KR')}"
+                        onchange="dsEditUncollected(this)"
+                        style="width:96px;padding:.2rem .35rem;font-size:.75rem;text-align:right;
+                        border:1px solid #86efac;border-radius:4px;font-family:inherit;background:#fff">
+                    <span>원</span>
+                </label>
+                <div style="font-size:.68rem;color:#166534;opacity:.85;margin-top:.2rem;line-height:1.5">
+                    원장·지인·직원 등 <b>보험진료 본인부담금을 받지 않은 금액</b>.
+                    표에는 현금으로 잡혀 있지만 실제로 들어오지 않아 받은 돈에서 뺍니다.
+                    ${v?`<br>표의 수납금액 합계 ${_dsWon(k.receivedGross)} − ${_dsWon(v)} = <b>${_dsWon(k.received)}</b>`
+                       :'<br>해당 없는 날은 0 으로 두세요.'}
+                </div>
+            </div>`;
+        }
+
+        function dsEditUncollected(el){
+            const v=Math.round(Number(String(el.value).replace(/[^\d-]/g,''))||0);
+            if(!_dsDraft.adjust) _dsDraft.adjust={};
+            _dsDraft.adjust.uncollectedCopay=v;
+            _dsRender();
         }
 
         function _dsUploadHtml(){
@@ -18793,6 +18845,7 @@
                 const payload={
                     date:d.date, ym:d.date.slice(0,7),
                     payment:{rows:payRows,notes},
+                    adjust:{uncollectedCopay:_dsN((d.adjust||{}).uncollectedCopay)},
                     staff:clean(d.staff), staffTotal:d.staffTotal?clean({t:d.staffTotal}).t:null,
                     doctor:clean(d.doctor), doctorTotal:d.doctorTotal?clean({t:d.doctorTotal}).t:null,
                     procedure:clean(d.procedure,DS_PROC_COL),
