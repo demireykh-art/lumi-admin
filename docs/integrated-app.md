@@ -147,6 +147,14 @@ GPS 는 출퇴근을 클리닉 범위 안에서 찍었는지 보려고만 쓴다
     어긋난 표만 자동으로 펼친다(`_dsWarnScopes`). 정상일 때 코디가 할 일은 [저장] 뿐.
   - 수납 구분표 한 장만 올려도 저장된다 — 화면에도 그렇게 적혀 있다.
     총매출·건수는 담당의 → 담당직원 → 시술별 순으로 있는 표에서 읽는다.
+  - **※ 미수납 본부금** — 원장·지인·직원 등 보험진료 본인부담금을 받지 않은 금액.
+    표에는 현금으로 잡혀 있지만 실제로 들어오지 않았다. OCR 로는 알 수 없어
+    **사람이 직접 넣는 유일한 칸**이라 받은 돈 카드 안에 항상 펼쳐 둔다
+    (검산이 통과하면 표는 접혀서 안 보이므로 표 안에 두면 매일 펼쳐야 한다).
+    `dsEditUncollected` → `draft.adjust.uncollectedCopay`, 콤마 자동.
+    **표 밖의 조정값이므로 검산에는 끼우지 않는다** — 표 자체의 산식은 그대로 맞다.
+    `_dsMetrics` 가 `received`·`cash` 에서 빼서 내보내므로 일별·월 누계·달력이
+    전부 순액이 된다(표 원본은 `receivedGross`·`cashGross` 로 함께 남긴다).
   - **없는 표를 "0원" 이라고 말하지 않는다.** 매출집계 표가 안 들어온 날
     `총매출 0원` 을 띄우면 잘못 저장된 것처럼 보인다. 검수 화면·저장 알림·일별
     상세·달력 모두 "그 표가 없었다"고 적고, 0원 카드를 늘어놓지 않는다
@@ -187,6 +195,7 @@ GPS 는 출퇴근을 클리닉 범위 안에서 찍었는지 보려고만 쓴다
 **데이터**: `dailySales/{YYYY-MM-DD}`
 ```
 { date, ym,
+  adjust: { uncollectedCopay },   // 미수납 본부금(수동 입력) — received·cash 에서 뺀다
   payment: { rows: {cash|cashReceipt|bank|bankReceipt|cashSum|etc|card|
                     easy|easyReceipt|easySum|unclassified|total:
                       {copay,prepaidTax,prepaidFree,nonTaxAmt,taxGross,taxAmt,vat,sum}},
