@@ -410,6 +410,72 @@
             .inv-item-meta{font-size:.85rem;gap:1.2rem}
             .inv-stock-input{width:90px;font-size:1.05rem;padding:.5rem}
         }
+        /* ══ ✨ 파인샷(루닛 산출기) 탭 ══════════════════════
+           부위 칩 → 핀치 두께 → 계수 → 루닛. 상단 요약바는 스크롤에 붙어
+           입력하는 동안에도 오늘 처방 루닛이 계속 보이게 한다. */
+        #tab-fineshot{font-variant-numeric:tabular-nums}
+        .fs-sticky{position:sticky;top:0;z-index:20;margin:calc(var(--pad)*-1) calc(var(--pad)*-1) var(--pad);
+            padding:.7rem var(--card-pad);background:#22252a;color:#e8e6e1;
+            display:flex;align-items:baseline;gap:.5rem;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+        .fs-sticky .fs-s-num{font-size:1.7rem;font-weight:800;letter-spacing:-.04em;color:#fff;line-height:1}
+        .fs-sticky .fs-s-unit{font-size:.8rem;font-weight:600;color:#d9bc78}
+        .fs-sticky .fs-s-meta{margin-left:auto;font-size:.72rem;color:#9a9da3;text-align:right;line-height:1.35}
+        .fs-hint{font-size:.75rem;color:var(--text-muted);line-height:1.5;margin:-.4rem 0 .8rem}
+        .fs-chips{display:flex;flex-wrap:wrap;gap:.4rem}
+        .fs-chip{font-family:inherit;font-size:.85rem;padding:.5rem .75rem;border-radius:var(--r-pill);cursor:pointer;
+            background:transparent;border:1px solid var(--border);color:var(--text)}
+        .fs-chip[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:#fff;font-weight:600}
+        .fs-chip.fs-addon[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
+        .fs-site{border:1px solid var(--border);border-radius:var(--r-sm);padding:.7rem .75rem;margin-top:.6rem;background:var(--bg)}
+        .fs-site-head{display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem}
+        .fs-site-name{font-size:.9rem;font-weight:700}
+        .fs-site-base{font-size:.7rem;color:var(--text-muted)}
+        .fs-site-lunit{margin-left:auto;font-size:.88rem;font-weight:700;color:var(--primary)}
+        .fs-row{display:flex;flex-wrap:wrap;gap:.6rem;align-items:flex-end}
+        .fs-field{display:flex;flex-direction:column;gap:.25rem}
+        .fs-field label{font-size:.7rem;color:var(--text-muted)}
+        .fs-input{font-family:inherit;font-size:.95rem;width:100px;padding:.5rem .6rem;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text)}
+        .fs-tbadge{font-size:.7rem;font-weight:700;padding:.45rem .6rem;border-radius:var(--r-sm);
+            background:var(--text);color:#fff;white-space:nowrap}
+        .fs-tbadge.fs-empty{background:transparent;color:var(--text-muted);border:1px dashed var(--border);font-weight:500}
+        .fs-seg{display:flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;flex-wrap:wrap}
+        .fs-seg button{flex:1 1 auto;font-family:inherit;font-size:.8rem;padding:.55rem .5rem;border:0;background:#fff;
+            color:var(--text);cursor:pointer;border-right:1px solid var(--border)}
+        .fs-seg button:last-child{border-right:0}
+        .fs-seg button[aria-pressed="true"]{background:var(--text);color:#fff;font-weight:600}
+        .fs-seg-desc{font-size:.72rem;color:var(--text-muted);margin-top:.5rem;line-height:1.5}
+        .fs-meas{display:grid;grid-template-columns:auto repeat(4,1fr);gap:.4rem;align-items:center}
+        .fs-meas .fs-lbl{color:var(--text-muted);font-size:.7rem;text-align:center}
+        .fs-meas input{width:100%;font-family:inherit;font-size:.85rem;padding:.45rem .3rem;text-align:center;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text)}
+        .fs-panel{background:#22252a;color:#e8e6e1;border-radius:var(--r);padding:1.1rem var(--card-pad);margin-bottom:var(--pad)}
+        .fs-panel .fs-cap{font-size:.7rem;color:#9a9da3;margin-bottom:.15rem}
+        .fs-readout{display:flex;align-items:baseline;gap:.5rem}
+        .fs-readout .fs-num{font-size:3rem;font-weight:800;line-height:1;letter-spacing:-.04em;color:#fff}
+        .fs-readout .fs-unit{font-size:1rem;font-weight:600;color:#d9bc78}
+        .fs-code{font-size:.72rem;color:#9a9da3;margin:.3rem 0 .8rem;min-height:1rem}
+        .fs-scale{height:34px;width:100%;display:block;margin-bottom:.9rem}
+        .fs-kv{display:flex;justify-content:space-between;gap:.6rem;padding:.5rem 0;border-top:1px solid #3a3e45;font-size:.85rem}
+        .fs-kv .fs-k{color:#9a9da3;font-size:.8rem}
+        .fs-kv .fs-v{font-weight:600;text-align:right}
+        .fs-kv .fs-v.fs-brass{color:#d9bc78}
+        .fs-flag{margin-top:.8rem;padding:.65rem .7rem;border-radius:var(--r-sm);background:rgba(184,145,60,.14);
+            border-left:2px solid #b8913c;font-size:.78rem;line-height:1.55;color:#ede6d4}
+        .fs-flag.fs-warn{background:rgba(165,86,60,.18);border-left-color:#a5563c;color:#f2ddd6}
+        .fs-empty-state{font-size:.82rem;color:#9a9da3;line-height:1.6;padding:.3rem 0}
+        .fs-acts{display:flex;gap:.5rem;margin-top:.9rem;flex-wrap:wrap}
+        .fs-acts button{flex:1;font-family:inherit;font-size:.8rem;font-weight:600;padding:.65rem .5rem;
+            border-radius:var(--r-sm);cursor:pointer;border:1px solid #3a3e45;background:transparent;color:#e8e6e1}
+        .fs-acts button.fs-primary{background:#b8913c;border-color:#b8913c;color:#1c1a14}
+        .fs-dev{margin-top:.9rem;border-top:1px solid #3a3e45;padding-top:.7rem}
+        .fs-dev summary{font-size:.72rem;color:#9a9da3;cursor:pointer;list-style:none}
+        .fs-dev summary::-webkit-details-marker{display:none}
+        .fs-dev summary::before{content:"▸ ";color:#b8913c}
+        .fs-dev[open] summary::before{content:"▾ "}
+        .fs-devbox{margin-top:.5rem;font-size:.78rem;color:#c9ccd1;line-height:1.7}
+        .fs-devbox .fs-note{color:#d9bc78;font-size:.7rem;display:block;margin-top:.4rem}
+        .fs-foot{font-size:.7rem;color:var(--text-muted);line-height:1.6;padding:0 .2rem var(--pad)}
     </style>
 </head>
 <body>
@@ -1350,6 +1416,103 @@
                     <div id="staffWishlistHistory" style="font-size:.85rem;color:var(--text-muted);text-align:center;padding:1rem">요청 내역을 불러오는 중...</div>
                 </div>
             </div>
+
+            <!-- ✨ 파인샷 탭 (루닛 산출기) -->
+            <div class="tab-content" id="tab-fineshot">
+                <!-- 입력하는 동안 계속 보이는 요약바 -->
+                <div class="fs-sticky">
+                    <span class="fs-s-num" id="fsStickyLunit">0</span>
+                    <span class="fs-s-unit">루닛</span>
+                    <span class="fs-s-meta" id="fsStickyMeta">부위·핀치 두께 입력</span>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📍 시술 부위</div>
+                    <p class="fs-hint">주 부위는 핀치 두께를 재서 계수를 적용합니다. 부유방·겨뒷살은 선택하면 1루닛씩 더해집니다.</p>
+                    <div class="fs-chips" id="fsSiteChips"></div>
+                    <div id="fsSiteDetails"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">💪 탄력</div>
+                    <p class="fs-hint">팔을 90도로 든 상태에서 처짐 정도를 봅니다. 시술 전체에 한 번 적용됩니다.</p>
+                    <div class="fs-seg" id="fsElasSeg">
+                        <button type="button" data-v="0" aria-pressed="true">E0 양호</button>
+                        <button type="button" data-v="1" aria-pressed="false">E1 경도 처짐</button>
+                        <button type="button" data-v="2" aria-pressed="false">E2 처짐 주도</button>
+                    </div>
+                    <p class="fs-seg-desc" id="fsElasDesc">처짐이 거의 없습니다. 가산 없음.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">🔥 열감 반응</div>
+                    <p class="fs-hint">좌우 차이는 출력 조절의 핵심 변수입니다. 다음 시술에서 그대로 참고합니다.</p>
+                    <div class="fs-seg" id="fsHeatSeg">
+                        <button type="button" data-v="even" aria-pressed="true">좌우 동일</button>
+                        <button type="button" data-v="left" aria-pressed="false">좌측 예민</button>
+                        <button type="button" data-v="right" aria-pressed="false">우측 예민</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">⏳ 열감 내성 · 오늘 진행량</div>
+                    <p class="fs-hint">권장 루닛을 1회에 다 전달할 필요는 없습니다. 열감을 견디기 어려우면 남은 만큼 다음 회차로 넘깁니다.</p>
+                    <div class="fs-seg" id="fsTolSeg">
+                        <button type="button" data-v="good" aria-pressed="false">잘 견딤</button>
+                        <button type="button" data-v="normal" aria-pressed="true">보통</button>
+                        <button type="button" data-v="low" aria-pressed="false">못 견딤</button>
+                    </div>
+                    <p class="fs-seg-desc" id="fsTolDesc">열감 반응을 보며 진행하고, 필요 시 잔여를 이월합니다.</p>
+                    <div class="fs-row" style="margin-top:.8rem">
+                        <div class="fs-field">
+                            <label for="fsDoneIn">오늘 실제 진행 루닛</label>
+                            <input type="number" class="fs-input" step="0.5" min="0" id="fsDoneIn" inputmode="decimal" placeholder="권장 그대로">
+                        </div>
+                        <div class="fs-field">
+                            <label for="fsWIn">L HP 출력 (W)</label>
+                            <input type="number" class="fs-input" step="5" min="100" max="200" id="fsWIn" inputmode="numeric" value="170">
+                        </div>
+                    </div>
+                    <p class="fs-seg-desc">루닛은 비워두면 권장 전량. 출력은 실제 세팅값을 적으세요.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">📏 측정 기록</div>
+                    <p class="fs-hint">산출에는 쓰이지 않지만 다음 방문 비교의 기준이 됩니다. 측정 지점을 네임펜으로 표시해 두세요.</p>
+                    <div class="fs-meas">
+                        <span></span>
+                        <span class="fs-lbl">겨드랑이<br>아래</span><span class="fs-lbl">중간</span><span class="fs-lbl">팔꿈치<br>위</span><span class="fs-lbl">지름</span>
+                        <span class="fs-lbl">좌</span>
+                        <input type="number" step="0.1" inputmode="decimal" id="fsL1" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsL2" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsL3" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsLD" placeholder="cm">
+                        <span class="fs-lbl">우</span>
+                        <input type="number" step="0.1" inputmode="decimal" id="fsR1" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsR2" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsR3" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsRD" placeholder="cm">
+                    </div>
+                </div>
+
+                <div class="fs-panel">
+                    <p class="fs-cap">오늘 처방</p>
+                    <div class="fs-readout"><span class="fs-num" id="fsOutLunit">0</span><span class="fs-unit">루닛</span></div>
+                    <p class="fs-code" id="fsOutCode"></p>
+                    <svg class="fs-scale" id="fsScale" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true"></svg>
+                    <div id="fsOutBody"><p class="fs-empty-state">부위를 선택하고 핀치 두께를 입력하면 루닛이 산출됩니다.</p></div>
+                    <div id="fsOutFlags"></div>
+                    <div class="fs-acts">
+                        <button type="button" class="fs-primary" id="fsBtnCopy">차트용 기록 복사</button>
+                        <button type="button" id="fsBtnReset">초기화</button>
+                    </div>
+                    <details class="fs-dev">
+                        <summary>장비 세팅값 (내부용)</summary>
+                        <div class="fs-devbox" id="fsDevBox">부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span></div>
+                    </details>
+                </div>
+
+                <p class="fs-foot">
+                    1루닛 = 100샷 = 조사 5분. 절반은 L HP continuous, 절반은 s HP 샷으로 전달합니다.<br>
+                    총 루닛 = Σ(주 부위 기본루닛 × T계수) + 추가 부위 + 단단살 보정 + 탄력 가산.<br>
+                    체어타임 = 조사시간 + 부대 15분, 파인주 병합 시 +10분.<br>
+                    1루닛 ≒ 32kJ (L HP 170W 2.5분 + s HP 50샷 × 128J). 에너지는 내부 기록용입니다.
+                </p>
+            </div>
         </div>
         <!-- 하단 네비게이션 (공용/재고 전용 계정은 자동 숨김 · 개인 근태 계정은 유지) -->
         <nav class="bottom-nav" id="mainBottomNav">
@@ -1362,6 +1525,7 @@
             <div class="nav-item" data-tab="receiving"><div class="nav-icon">📥</div>입고</div>
             <div class="nav-item" data-tab="order"><div class="nav-icon">📊</div>발주분석</div>
             <div class="nav-item" data-tab="wishlist"><div class="nav-icon">🛍️</div>비품요청</div>
+            <div class="nav-item" data-tab="fineshot"><div class="nav-icon">✨</div>파인샷</div>
             <div class="nav-item" data-tab="info"><div class="nav-icon">👤</div>내정보</div>
         </nav>
     </div>
@@ -2608,8 +2772,10 @@
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="leave" style="width:16px;height:16px" checked>🏖 연차</label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="inventory" style="width:16px;height:16px">📦 재고</label>
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="info" style="width:16px;height:16px" checked>👤 내정보</label>
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="fineshot" style="width:16px;height:16px">✨ 파인샷</label>
                     </div>
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.5rem">※ 재고는 통합앱(공용계정)에서 관리하므로 개인 계정은 기본 미노출입니다. 필요한 직원만 체크하세요.</div>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem">※ ✨ 파인샷(루닛 산출기)만 체크하면 그 계정은 로그인 시 파인샷 화면만 보게 됩니다. (내정보는 항상 노출)</div>
                     <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;font-size:.9rem;margin-top:.9rem;padding-top:.9rem;border-top:1px dashed var(--border)">
                         <input type="checkbox" id="seEmpIsTest" style="width:16px;height:16px;margin-top:.15rem">
                         <span>🧪 <b>테스트 계정</b>
@@ -4124,7 +4290,12 @@
         
         // ═══ 탭 표시 유틸리티 ═══
         function displayTabs(visibleList){
-            const allTabs=['attendance','meal','ot','leave','incentive','inventory','receiving','info','wishlist'];
+            const allTabs=['attendance','meal','ot','leave','incentive','inventory','receiving','order','info','wishlist','fineshot'];
+            // 발주분석은 별도 체크박스가 없다. 재고를 쓰는 계정에만 재고와 묶어서 노출한다.
+            // (전에는 목록에서 빠져 있어 파인샷 전용 같은 제한 계정에도 남아 있었다)
+            if(visibleList.indexOf('inventory')>=0 && visibleList.indexOf('order')<0){
+                visibleList=visibleList.concat(['order']);
+            }
             // 1) 모든 탭 숨기기
             allTabs.forEach(tab=>{
                 const nav=document.querySelector(`.nav-item[data-tab="${tab}"]`);
@@ -4147,6 +4318,8 @@
             const defTab=document.getElementById('tab-'+defaultTab);
             if(defNav)defNav.classList.add('active');
             if(defTab)defTab.classList.add('active');
+            // 파인샷 전용 계정처럼 첫 탭이 파인샷이면 클릭 없이 바로 구성한다
+            if(defaultTab==='fineshot'&&typeof initFineshotTab==='function') initFineshotTab();
         }
         
         async function logout(){
@@ -7424,8 +7597,31 @@
             const cutoff=Date.now()-30*24*60*60*1000;
             return (invItems||[]).filter(i=>_getInvLastUsedTs(i)<cutoff).length;
         }
+        // ✨ 파인샷 전용 계정 판별
+        //   visibleTabs 가 파인샷(+항상 노출되는 내정보)뿐이면 이 계정은 파인샷만 쓰는 계정이다.
+        //   → 로고/← 홈 을 눌러도 공용 홈 대신 파인샷 화면으로 되돌린다.
+        function isFineshotOnlyAccount(){
+            const tabs=(currentUser&&currentUser.visibleTabs)||[];
+            if(!tabs.length) return false;
+            return tabs.indexOf('fineshot')>=0 && tabs.every(t=>t==='fineshot'||t==='info');
+        }
+        // 파인샷 탭으로 이동 (홈 대체 진입점)
+        function openFineshotTab(){
+            document.querySelectorAll('.tab-content').forEach(t=>{
+                t.classList.remove('active');
+                t.style.display='none';
+            });
+            const el=document.getElementById('tab-fineshot');
+            if(el){ el.style.display=''; el.classList.add('active'); }
+            document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+            const nav=document.querySelector('.nav-item[data-tab="fineshot"]');
+            if(nav) nav.classList.add('active');
+            if(typeof initFineshotTab==='function') initFineshotTab();
+        }
         // ===== 최상위 홈 (로고 클릭) =====
         function showTopHome(){
+            // 파인샷 전용 계정은 공용 홈 대신 파인샷 화면으로
+            if(isFineshotOnlyAccount()){ openFineshotTab(); return; }
             // 모든 tab-content 숨김 후 tab-tophome 만 노출
             document.querySelectorAll('.tab-content').forEach(t=>{
                 t.classList.remove('active');
@@ -18897,13 +19093,334 @@
             }catch(e){ alert('삭제 실패: '+(e&&e.message||e)); }
         }
 
+        // ==================================================================
+        //  ✨ 파인샷 (루닛 산출기)
+        //    부위별 핀치 두께 → T계수 → 루닛. 탄력·단단살·열감 내성까지 반영해
+        //    오늘 진행량/이월량·파인주·체어타임·장비 세팅값을 함께 뽑는다.
+        //    저장하는 값은 없다(로컬 계산 전용). 결과는 차트용 텍스트로 복사.
+        //    노출 제어: employees.visibleTabs 에 'fineshot' 이 있는 계정만.
+        // ==================================================================
+        (function(){
+            /* main : 핀치 두께로 T계수를 곱하는 주 부위
+               addon: 선택 시 고정 루닛만 더하는 추가 부위 */
+            const SITES=[
+                {id:'jaw',    name:'턱선·이중턱', base:2, type:'main'},
+                {id:'armB',   name:'팔뚝 후면',   base:2, type:'main'},
+                {id:'arm360', name:'팔뚝 360도',  base:3, type:'main'},
+                {id:'love',   name:'러브핸들',    base:2, type:'main'},
+                {id:'abd',    name:'복부',        base:4, type:'main'},
+                {id:'thigh',  name:'허벅지 내측', base:3, type:'main'},
+                {id:'knee',   name:'무릎 내측',   base:1, type:'main'},
+                {id:'acc',    name:'부유방',      base:1, type:'addon'},
+                {id:'axil',   name:'겨뒷살',      base:1, type:'addon'}
+            ];
+            const T_MULT=[1.0,1.5,2.0,2.5];
+            const ELAS_ADD=[0,0.5,1];
+            const ELAS_DESC=[
+                '처짐이 거의 없습니다. 가산 없음.',
+                '늘어짐이 보이나 경계는 유지됩니다. +0.5루닛.',
+                '지방보다 처짐이 주 고민입니다. +1루닛.'
+            ];
+            /* 단단살 보정 : 지방이 뭉친 단단살은 에너지를 더, 섬유화된 조직은 덜 */
+            const DENS={
+                none:{add:0,    label:'보통'},
+                fat: {add:+0.5, label:'지방 단단살'},
+                fib: {add:-0.5, label:'섬유 단단살'}
+            };
+            const TOL_DESC={
+                good:'권장 루닛을 1회에 진행합니다.',
+                normal:'열감 반응을 보며 진행하고, 필요 시 잔여를 이월합니다.',
+                low:'분할 진행을 먼저 안내하세요. 상담 단계에서 회차 계획을 잡는 편이 만족도가 높습니다.'
+            };
+            const SHOT_J=160*0.8;        // s HP 샷모드 160W × 0.8초 = 128J/샷
+            const SHOTS_PER_LUNIT=100;   // 1루닛 = 100샷
+
+            const st={sites:{}, elas:0, heat:'even', tol:'normal', done:null, watt:170};
+            let _built=false;
+
+            const $=id=>document.getElementById(id);
+            function tFromPinch(cm){
+                if(cm===null||isNaN(cm)||cm<=0) return null;
+                if(cm<1.5) return 0;
+                if(cm<2.5) return 1;
+                if(cm<=4.0) return 2;
+                return 3;
+            }
+
+            // ── 계산 ─────────────────────────────
+            function compute(){
+                const rows=[]; let sub=0, densAdj=0, injection=0, pending=false;
+                SITES.forEach(s=>{
+                    const cur=st.sites[s.id]; if(!cur) return;
+                    if(s.type==='addon'){
+                        sub+=s.base;
+                        rows.push({id:s.id,name:s.name,addon:true,lunit:s.base});
+                        return;
+                    }
+                    if(cur.t===null){ rows.push({id:s.id,name:s.name,lunit:null}); pending=true; return; }
+                    const l=s.base*T_MULT[cur.t];
+                    sub+=l;
+                    densAdj+=DENS[cur.dens].add;
+                    let cc=0;                                     // 파인주 : 루닛 1당 2cc 기준
+                    if(cur.t===3||cur.dens==='fat') cc=l*2;
+                    else if(cur.t===2) cc=l;
+                    injection+=cc;
+                    rows.push({id:s.id,name:s.name,base:s.base,t:cur.t,dens:cur.dens,lunit:l,cc});
+                });
+                const elasAdd=ELAS_ADD[st.elas];
+                const total=Math.round((sub+densAdj+elasAdd)*10)/10;
+                const session=(st.done===null||isNaN(st.done))?total:Math.min(st.done,total);
+                const carry=Math.round((total-session)*10)/10;
+                const ratio=total>0?session/total:0;
+                const cc=Math.round(injection*ratio*2)/2;
+                const scan=Math.round(session*5*10)/10;                    // 1루닛 = 5분
+                const chair=Math.round((scan+15+(cc>0?10:0))*10)/10;
+                const slot=Math.ceil(chair/15)*15;
+                const cont=Math.round(session*2.5*2)/2;                    // 절반은 continuous
+                const shots=Math.round(session*(SHOTS_PER_LUNIT/2)/25)*25; // 절반은 샷
+                const W=(!st.watt||isNaN(st.watt))?170:st.watt;
+                const kj=Math.round((W*cont*60+SHOT_J*shots)/100)/10;
+                let tier='라이트';
+                if(cc>0&&session>=6) tier='딥플러스';
+                else if(session>=5) tier='딥';
+                else if(session>=3.5) tier='스탠다드';
+                return {rows,sub,densAdj,elasAdd,total,session,carry,cc,scan,chair,slot,tier,cont,shots,W,kj,pending};
+            }
+
+            function kv(k,v){ return `<div class="fs-kv"><span class="fs-k">${k}</span><span class="fs-v">${v}</span></div>`; }
+
+            function drawScale(v,total){
+                const svg=$('fsScale'); if(!svg) return;
+                const W=300, max=Math.max(6,Math.ceil(Math.max(v,total||0)));
+                let out='';
+                for(let i=0;i<=max;i++){
+                    const x=(i/max)*(W-2)+1, h=14, on=i<=v;
+                    out+=`<line x1="${x}" y1="${22-h}" x2="${x}" y2="22" stroke="${on?'#d9bc78':'#3a3e45'}" stroke-width="1.4"/>`;
+                    out+=`<text x="${x}" y="33" fill="${on?'#9a9da3':'#4c5158'}" font-size="7.5" text-anchor="middle">${i}</text>`;
+                }
+                const px=(v/max)*(W-2)+1;
+                if(v>0) out+=`<polygon points="${px-4},0 ${px+4},0 ${px},7" fill="#b8913c"/>`;
+                svg.innerHTML=out;
+            }
+
+            // ── 렌더 ─────────────────────────────
+            function render(){
+                const chipWrap=$('fsSiteChips'); if(!chipWrap) return;
+                chipWrap.querySelectorAll('.fs-chip').forEach(b=>{
+                    b.setAttribute('aria-pressed', String(!!st.sites[b.dataset.id]));
+                });
+
+                const det=$('fsSiteDetails'); det.innerHTML='';
+                SITES.forEach(s=>{
+                    const cur=st.sites[s.id]; if(!cur||s.type==='addon') return;
+                    const t=cur.t, lunit=(t===null)?null:s.base*T_MULT[t];
+                    const box=document.createElement('div');
+                    box.className='fs-site';
+                    box.innerHTML=`
+                        <div class="fs-site-head">
+                            <span class="fs-site-name">${s.name}</span>
+                            <span class="fs-site-base">기본 ${s.base}루닛</span>
+                            <span class="fs-site-lunit">${lunit===null?'—':(Math.round((lunit+DENS[cur.dens].add)*10)/10)+'루닛'}</span>
+                        </div>
+                        <div class="fs-row">
+                            <div class="fs-field">
+                                <label for="fsP_${s.id}">핀치 두께 (cm)</label>
+                                <input type="number" class="fs-input" step="0.1" min="0" inputmode="decimal"
+                                    id="fsP_${s.id}" value="${cur.pinch==null?'':cur.pinch}" placeholder="예 3.2">
+                            </div>
+                            <span class="fs-tbadge ${t===null?'fs-empty':''}">${t===null?'두께 미입력':'T'+t+' · ×'+T_MULT[t].toFixed(1)}</span>
+                        </div>
+                        <div class="fs-seg" id="fsD_${s.id}" style="margin-top:.6rem">
+                            <button type="button" data-d="none" aria-pressed="${cur.dens==='none'}">보통</button>
+                            <button type="button" data-d="fat"  aria-pressed="${cur.dens==='fat'}">지방 +0.5</button>
+                            <button type="button" data-d="fib"  aria-pressed="${cur.dens==='fib'}">섬유 −0.5</button>
+                        </div>`;
+                    det.appendChild(box);
+
+                    const pi=box.querySelector('#fsP_'+s.id);
+                    pi.oninput=()=>{
+                        const v=parseFloat(pi.value);
+                        cur.pinch=isNaN(v)?null:v;
+                        cur.t=tFromPinch(cur.pinch);
+                        render();
+                        // 재렌더로 사라진 포커스·커서 복구
+                        const again=$('fsP_'+s.id);
+                        if(again){ again.focus(); const n=again.value.length; try{ again.setSelectionRange(n,n); }catch(_){} }
+                    };
+                    box.querySelectorAll('#fsD_'+s.id+' button').forEach(b=>{
+                        b.onclick=()=>{ cur.dens=b.dataset.d; render(); };
+                    });
+                });
+
+                const r=compute();
+                const ready=r.rows.length>0&&!r.pending;
+
+                $('fsOutLunit').textContent=ready?r.session:'0';
+                $('fsStickyLunit').textContent=ready?r.session:'0';
+                $('fsStickyMeta').textContent=ready
+                    ? `${r.tier} · 조사 ${r.scan}분 · 슬롯 ${r.slot}분`+(r.carry>0?` · 잔여 ${r.carry}`:'')
+                    : '부위·핀치 두께 입력';
+                $('fsOutCode').textContent=ready
+                    ? r.rows.filter(x=>!x.addon).map(x=>'T'+x.t+(x.dens!=='none'?'·'+(x.dens==='fat'?'지방':'섬유'):'')).join(' / ')+' · E'+st.elas
+                    : '';
+                drawScale(ready?r.session:0, ready?r.total:0);
+
+                const body=$('fsOutBody');
+                if(!ready){
+                    body.innerHTML='<p class="fs-empty-state">부위를 선택하고 핀치 두께를 입력하면 루닛이 산출됩니다.</p>';
+                }else{
+                    let h='';
+                    r.rows.forEach(x=>{
+                        if(x.addon){ h+=kv(x.name+' <span style="color:#787c82">추가</span>','+'+x.lunit+'루닛'); return; }
+                        h+=kv(x.name+' <span style="color:#787c82">'+x.base+'×'+T_MULT[x.t].toFixed(1)+'</span>', x.lunit+'루닛');
+                    });
+                    if(r.densAdj!==0) h+=kv('단단살 보정',(r.densAdj>0?'+':'')+r.densAdj+'루닛');
+                    if(r.elasAdd)     h+=kv('탄력 가산 E'+st.elas,'+'+r.elasAdd+'루닛');
+                    h+=kv('권장 합계', r.total+'루닛');
+                    if(r.carry>0) h+=kv('오늘 진행','<span class="fs-brass">'+r.session+'루닛</span>');
+                    if(r.cc>0)    h+=kv('파인주','<span class="fs-brass">'+r.cc+'cc</span>');
+                    h+=kv('조사 시간', r.scan+'분');
+                    h+=kv('체어타임', r.chair+'분');
+                    h+=kv('예약 슬롯','<span class="fs-brass">'+r.slot+'분</span>');
+                    h+=kv('프로그램','<span class="fs-brass">'+r.tier+'</span>');
+                    body.innerHTML=h;
+                }
+
+                let f='';
+                if(ready&&r.carry>0)
+                    f+=`<div class="fs-flag fs-warn"><b>잔여 ${r.carry}루닛 이월.</b> 권장 ${r.total}루닛 중 오늘 ${r.session}루닛을 진행했습니다. 다음 회차 예약을 오늘 자리에서 잡아주세요.</div>`;
+                if(ready&&st.tol==='low'&&r.carry===0&&r.total>=5)
+                    f+=`<div class="fs-flag fs-warn">열감을 견디기 어려운 분입니다. 권장 ${r.total}루닛을 <b>2회로 나누는 안</b>을 먼저 제안하세요.</div>`;
+                if(ready&&r.cc>0)
+                    f+=`<div class="fs-flag">지방량 또는 조직 밀도가 높아 <b>파인주 ${r.cc}cc</b> 병합을 권장합니다.</div>`;
+                if(ready&&st.elas===2&&r.rows.filter(x=>!x.addon).every(x=>x.t<=1))
+                    f+=`<div class="fs-flag">지방보다 처짐이 주 고민입니다. 지방 감소 접근은 효과가 제한적이니 <b>탄력 위주</b>로 설명하세요.</div>`;
+                $('fsOutFlags').innerHTML=f;
+
+                const heatLbl={even:'좌우 동일',left:'좌측 예민',right:'우측 예민'}[st.heat];
+                $('fsDevBox').innerHTML=ready
+                    ? `치료시간 ${r.scan}분<br><b>*continous L HP ${r.cont}' , s HP ${r.shots}s</b><br>L HP ${r.W}W · 총 <b>${r.kj}kJ</b> (${r.session}루닛)<br>열감: ${heatLbl}<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span>`
+                    : `부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span>`;
+            }
+
+            // ── 차트 기록 ─────────────────────────
+            function circumText(a,b,c){
+                return [a,b,c].map(id=>($(id).value||'').trim()).filter(Boolean).join('·');
+            }
+            function buildChart(){
+                const r=compute();
+                const d=new Date(), p=n=>String(n).padStart(2,'0');
+                const today=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+                const heat={even:'좌우 동일',left:'좌측 예민',right:'우측 예민'}[st.heat];
+                const L=circumText('fsL1','fsL2','fsL3'), R=circumText('fsR1','fsR2','fsR3');
+                const LD=($('fsLD').value||'').trim(), RD=($('fsRD').value||'').trim();
+                const parts=r.rows.map(x=>{
+                    if(x.addon) return x.name;
+                    const cur=st.sites[x.id];
+                    return `${x.name}(핀치 ${cur.pinch}cm/T${x.t}${x.dens!=='none'?'·'+DENS[x.dens].label:''})`;
+                });
+                const lines=[
+                    '[파인샷] '+today,
+                    '부위: '+parts.join(' + '),
+                    `탄력: E${st.elas} / 열감: ${heat}`,
+                    `-${r.total}루닛 권장`
+                ];
+                if(r.carry>0){ lines.push(`-오늘 ${r.session}루닛 진행`); lines.push(`-잔여 ${r.carry}루닛 다음 회차`); }
+                if(r.cc>0) lines.push(`-파인주 ${r.cc}cc 권장`);
+                lines.push('',
+                    `치료시간 ${r.scan}분/*continous L HP ${r.cont}' , s HP ${r.shots}s`,
+                    `L HP ${r.W}W / 총 ${r.kj}kJ (${r.session}루닛)`,
+                    '', '둘레',
+                    `- 전 : 좌 ${L||'      '} / 우 ${R||'      '}`,
+                    '- 후 : 좌        / 우        ',
+                    '지름',
+                    `- 전 : 좌 ${LD||'      '} / 우 ${RD||'      '}`,
+                    '- 후 : 좌        / 우        ',
+                    '----');
+                return lines.join('\n');
+            }
+            async function copyChart(){
+                const r=compute();
+                if(!r.rows.length||r.pending){ alert('핀치 두께를 먼저 입력하세요.'); return; }
+                const text=buildChart();
+                const btn=$('fsBtnCopy');
+                try{
+                    await navigator.clipboard.writeText(text);
+                    btn.textContent='복사했습니다';
+                    setTimeout(()=>{ btn.textContent='차트용 기록 복사'; },1600);
+                }catch(_){
+                    // 클립보드 권한이 없는 인앱 브라우저 대비 — 직접 선택해 복사
+                    prompt('아래 내용을 길게 눌러 복사하세요', text);
+                }
+            }
+            function resetAll(){
+                st.sites={}; st.elas=0; st.heat='even'; st.tol='normal'; st.done=null; st.watt=170;
+                ['fsL1','fsL2','fsL3','fsLD','fsR1','fsR2','fsR3','fsRD','fsDoneIn'].forEach(i=>{ const el=$(i); if(el) el.value=''; });
+                $('fsWIn').value='170';
+                setSeg('fsElasSeg','0'); setSeg('fsHeatSeg','even'); setSeg('fsTolSeg','normal');
+                $('fsElasDesc').textContent=ELAS_DESC[0];
+                $('fsTolDesc').textContent=TOL_DESC.normal;
+                render();
+            }
+            function setSeg(segId,val){
+                document.querySelectorAll('#'+segId+' button').forEach(b=>{
+                    b.setAttribute('aria-pressed', String(b.dataset.v===val));
+                });
+            }
+            function bindSeg(segId,key,after){
+                document.querySelectorAll('#'+segId+' button').forEach(b=>{
+                    b.onclick=()=>{
+                        st[key]=(key==='elas')?Number(b.dataset.v):b.dataset.v;
+                        setSeg(segId,b.dataset.v);
+                        if(after) after();
+                        render();
+                    };
+                });
+            }
+
+            // ── 초기화 (탭 최초 진입 시 1회) ────────
+            window.initFineshotTab=function(){
+                if(_built) return;
+                const chipWrap=$('fsSiteChips'); if(!chipWrap) return;
+                _built=true;
+                SITES.forEach(s=>{
+                    const b=document.createElement('button');
+                    b.type='button';
+                    b.className='fs-chip'+(s.type==='addon'?' fs-addon':'');
+                    b.setAttribute('aria-pressed','false');
+                    b.dataset.id=s.id;
+                    b.textContent=s.name+(s.type==='addon'?' +'+s.base:' ('+s.base+')');
+                    b.onclick=()=>{
+                        if(st.sites[s.id]) delete st.sites[s.id];
+                        else st.sites[s.id]={pinch:null,t:null,dens:'none'};
+                        render();
+                    };
+                    chipWrap.appendChild(b);
+                });
+                bindSeg('fsElasSeg','elas',()=>{ $('fsElasDesc').textContent=ELAS_DESC[st.elas]; });
+                bindSeg('fsHeatSeg','heat');
+                bindSeg('fsTolSeg','tol',()=>{ $('fsTolDesc').textContent=TOL_DESC[st.tol]; });
+                $('fsDoneIn').oninput=e=>{ const v=parseFloat(e.target.value); st.done=isNaN(v)?null:v; render(); };
+                $('fsWIn').oninput=e=>{ const v=parseFloat(e.target.value); st.watt=isNaN(v)?170:v; render(); };
+                $('fsBtnCopy').onclick=copyChart;
+                $('fsBtnReset').onclick=resetAll;
+                render();
+            };
+        })();
+
         // Tab Navigation
         document.querySelectorAll('.nav-item').forEach(item=>{
             item.addEventListener('click',function(){
                 document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
                 this.classList.add('active');
-                document.getElementById('tab-'+this.dataset.tab).classList.add('active');
+                const _tc=document.getElementById('tab-'+this.dataset.tab);
+                // 홈(showTopHome/showTop)이 걸어둔 인라인 display:none 을 풀어야 다시 보인다
+                if(_tc){ _tc.style.display=''; _tc.classList.add('active'); }
+                // 파인샷 탭 최초 진입 시 산출기 구성
+                if(this.dataset.tab==='fineshot'&&typeof initFineshotTab==='function'){
+                    initFineshotTab();
+                }
                 // 재고 탭 진입 시 데이터 로드
                 if(this.dataset.tab==='inventory'&&!invItems.length){
                     initInventoryTab();
