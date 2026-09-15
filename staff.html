@@ -17986,6 +17986,13 @@
                 nonInsBasis:nonInsCnt>0?'건':(nonInsPt>0?'명':null),
                 nonInsDenom:nonInsCnt>0?nonInsCnt:nonInsPt,
                 procRows, procTotal,
+                // 마감금액 — 그 날 원장님께 드릴 실물 현금.
+                //  손에 잡히는 돈만 센다: 현금 + 현금(현금영수증). 통장·통장(현금영수증)은
+                //  계좌로 들어온 돈이라 뺀다. 여기서 미수납 본부금을 또 뺀다 — 표에는
+                //  현금으로 적혀 있지만 실제로 받지 않은 돈이라 봉투에 없다.
+                handoverGross:_dsN(pr('cash').sum)+_dsN(pr('cashReceipt').sum),
+                handover:_dsN(pr('cash').sum)+_dsN(pr('cashReceipt').sum)-uncollected,
+                cashOnly:_dsN(pr('cash').sum), cashReceipt:_dsN(pr('cashReceipt').sum),
                 // 현금·수납 합계는 미수납 본부금을 뺀 "실제로 들어온 돈". 월 누계·달력도
                 // 이 값을 쓰므로 자동으로 순액이 된다. 표 원본은 …Gross 로 같이 남긴다.
                 cash:_dsN(pr('cashSum').sum)-uncollected, cashGross:_dsN(pr('cashSum').sum),
@@ -18382,6 +18389,9 @@
             // ② 수납 (현금흐름)
             h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .4rem">💳 수납 — 오늘 실제로 들어온 돈</div>';
             h+=_dsCards([
+                ['💵 마감금액 (원장님께 드릴 현금)',_dsWon(k.handover),
+                 `현금 ${_dsShort(k.cashOnly)}원 + 현금영수증 ${_dsShort(k.cashReceipt)}원`
+                 +(k.uncollected?` − 본부금 ${_dsShort(k.uncollected)}원`:''),'#92400e','#fffbeb'],
                 ['💳 받은 돈 (수납)',_dsWon(k.received),
                  `현금 ${_dsShort(k.cash)}원 · 카드 ${_dsShort(k.card)}원`
                  +(k.refund?` · 환불 −${_dsShort(k.refund)}원`:'')
@@ -18806,6 +18816,7 @@
             const hasSales=!!(k.totalSales||k.count);
             if(!hasPay&&!hasSales) return '';
             let h='<div style="display:flex;flex-direction:column;gap:.45rem;margin-top:.7rem">';
+            if(hasPay) h+=_dsHandoverHtml(k);
             if(hasPay){
                 h+=`<div style="padding:.7rem .8rem;background:#dcfce7;border-radius:var(--r-sm)">
                     <div style="font-size:.72rem;color:#166534;font-weight:600">💳 받은 돈 (수납) <span style="font-weight:400;opacity:.75">— 오늘 실제로 들어온 금액</span></div>
@@ -18845,6 +18856,23 @@
                   +'화면을 한 장 더 올리면 받은 돈까지 함께 기록됩니다.</div>';
             }
             return h;
+        }
+
+        // 마감금액 — 코디가 봉투에 넣어 원장님께 드리는 실물 현금.
+        //  마감의 마지막 동작이라 화면 맨 위에 크게 둔다. 계산 과정을 그대로 적어
+        //  봉투 속 돈과 한 줄씩 맞춰볼 수 있게 한다.
+        function _dsHandoverHtml(k){
+            const u=_dsN(k.uncollected);
+            return `<div style="padding:.75rem .85rem;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r-sm)">
+                <div style="font-size:.72rem;color:#92400e;font-weight:600">💵 마감금액 <span style="font-weight:400;opacity:.8">— 원장님께 드릴 현금</span></div>
+                <div style="font-size:1.6rem;font-weight:700;color:#92400e;letter-spacing:-.5px;margin:.1rem 0">${_dsWon(k.handover)}</div>
+                <div style="font-size:.7rem;color:#92400e;opacity:.9;line-height:1.6">
+                    현금 ${_dsWon(k.cashOnly)} + 현금(현금영수증) ${_dsWon(k.cashReceipt)}
+                    = ${_dsWon(k.handoverGross)}${u?`<br>− 미수납 본부금 ${_dsWon(u)} = <b>${_dsWon(k.handover)}</b>`:''}
+                </div>
+                <div style="font-size:.66rem;color:#92400e;opacity:.7;margin-top:.2rem">
+                    통장·통장(현금영수증)은 계좌로 들어와 봉투에 없으므로 빼고 셉니다.</div>
+            </div>`;
         }
 
         // 미수납 본부금 입력칸 — 표에서 읽을 수 없는 값이라 사람이 넣는다.
