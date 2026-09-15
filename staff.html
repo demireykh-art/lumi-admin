@@ -1556,6 +1556,23 @@
                         <p class="fs-seg-desc">루닛은 비워두면 권장 전량. 출력은 실제 세팅값을 적으세요.</p>
                     </div>
 
+                    <div class="fs-panel">
+                        <p class="fs-cap">오늘 처방</p>
+                        <div class="fs-readout"><span class="fs-num" id="fsOutLunit">0</span><span class="fs-unit">루닛</span></div>
+                        <p class="fs-code" id="fsOutCode"></p>
+                        <svg class="fs-scale" id="fsScale" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true"></svg>
+                        <div id="fsOutBody"><p class="fs-empty-state">부위를 선택하고 핀치 두께를 입력하면 루닛이 산출됩니다.</p></div>
+                        <div id="fsOutFlags"></div>
+                        <div class="fs-acts">
+                            <button type="button" class="fs-primary" id="fsBtnCopy">차트용 기록 복사</button>
+                            <button type="button" id="fsBtnReset">초기화</button>
+                        </div>
+                        <details class="fs-dev">
+                            <summary>장비 세팅값 (내부용)</summary>
+                            <div class="fs-devbox" id="fsDevBox">부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span></div>
+                        </details>
+                    </div>
+
                     <div class="card">
                         <div class="card-title">📏 측정 기록</div>
                         <p class="fs-hint">산출에는 쓰이지 않지만 다음 방문 비교의 기준이 됩니다. 측정 지점을 네임펜으로 표시해 두세요.</p>
@@ -1583,23 +1600,6 @@
                         <div class="fs-btns">
                             <button type="button" class="fs-b-dark" id="fsBtnCopyMeas">📏 측정 수치 복사</button>
                         </div>
-                    </div>
-
-                    <div class="fs-panel">
-                        <p class="fs-cap">오늘 처방</p>
-                        <div class="fs-readout"><span class="fs-num" id="fsOutLunit">0</span><span class="fs-unit">루닛</span></div>
-                        <p class="fs-code" id="fsOutCode"></p>
-                        <svg class="fs-scale" id="fsScale" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true"></svg>
-                        <div id="fsOutBody"><p class="fs-empty-state">부위를 선택하고 핀치 두께를 입력하면 루닛이 산출됩니다.</p></div>
-                        <div id="fsOutFlags"></div>
-                        <div class="fs-acts">
-                            <button type="button" class="fs-primary" id="fsBtnCopy">차트용 기록 복사</button>
-                            <button type="button" id="fsBtnReset">초기화</button>
-                        </div>
-                        <details class="fs-dev">
-                            <summary>장비 세팅값 (내부용)</summary>
-                            <div class="fs-devbox" id="fsDevBox">부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span></div>
-                        </details>
                     </div>
 
                     <p class="fs-foot">
