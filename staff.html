@@ -510,6 +510,10 @@
         .fs-meas2 .fs-rowlbl{font-size:.8rem;color:var(--text-secondary)}
         .fs-meas2 input{width:100%;font-family:inherit;font-size:.9rem;padding:.5rem .4rem;text-align:center;
             border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text)}
+        .fs-meas-head{font-size:.78rem;font-weight:700;color:var(--text-secondary);margin:.7rem 0 .35rem}
+        .fs-meas-head:first-of-type{margin-top:0}
+        .fs-meas-diff{margin-top:.6rem;font-size:.76rem;color:var(--text-secondary);line-height:1.6}
+        .fs-meas-diff b{color:var(--green)}
         .fs-stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--pad);margin-bottom:var(--pad)}
         .fs-table{width:100%;border-collapse:collapse;font-size:.82rem}
         .fs-table th,.fs-table td{padding:.45rem .3rem;border-bottom:1px solid var(--border);text-align:right}
@@ -1555,6 +1559,7 @@
                     <div class="card">
                         <div class="card-title">📏 측정 기록</div>
                         <p class="fs-hint">산출에는 쓰이지 않지만 다음 방문 비교의 기준이 됩니다. 측정 지점을 네임펜으로 표시해 두세요.</p>
+                        <div class="fs-meas-head">시술 전</div>
                         <div class="fs-meas2">
                             <span></span><span class="fs-lbl">좌</span><span class="fs-lbl">우</span>
                             <span class="fs-rowlbl">팔뚝둘레</span>
@@ -1564,6 +1569,17 @@
                             <input type="text" inputmode="decimal" id="fsDiaL" placeholder="cm">
                             <input type="text" inputmode="decimal" id="fsDiaR" placeholder="cm">
                         </div>
+                        <div class="fs-meas-head">시술 후</div>
+                        <div class="fs-meas2">
+                            <span></span><span class="fs-lbl">좌</span><span class="fs-lbl">우</span>
+                            <span class="fs-rowlbl">팔뚝둘레</span>
+                            <input type="text" inputmode="decimal" id="fsArmL2" placeholder="cm">
+                            <input type="text" inputmode="decimal" id="fsArmR2" placeholder="cm">
+                            <span class="fs-rowlbl">지름</span>
+                            <input type="text" inputmode="decimal" id="fsDiaL2" placeholder="cm">
+                            <input type="text" inputmode="decimal" id="fsDiaR2" placeholder="cm">
+                        </div>
+                        <div id="fsMeasDiff" class="fs-meas-diff"></div>
                         <div class="fs-btns">
                             <button type="button" class="fs-b-dark" id="fsBtnCopyMeas">📏 측정 수치 복사</button>
                         </div>
@@ -19240,10 +19256,16 @@
             const SHOT_J=160*0.8;        // s HP 샷모드 160W × 0.8초 = 128J/샷
             const SHOTS_PER_LUNIT=100;   // 1루닛 = 100샷
             const AUTOSAVE_MS=1200;
+            // 측정 기록 — 시술 전(armL…) / 시술 후(armL2…) 팔뚝둘레·지름 좌우
+            const MEAS_KEYS=['armL','armR','diaL','diaR','armL2','armR2','diaL2','diaR2'];
+            const MEAS_INPUT={armL:'fsArmL',armR:'fsArmR',diaL:'fsDiaL',diaR:'fsDiaR',
+                              armL2:'fsArmL2',armR2:'fsArmR2',diaL2:'fsDiaL2',diaR2:'fsDiaR2'};
 
             function blankState(){
                 return {chartNo:'', name:'', sites:{}, elas:0, heat:'even', tol:'normal',
-                        done:null, watt:170, meas:{armL:'',armR:'',diaL:'',diaR:''}};
+                        done:null, watt:170,
+                        // 전(시술 전) / 후(시술 후) 각각 팔뚝둘레·지름 좌우
+                        meas:{armL:'',armR:'',diaL:'',diaR:'', armL2:'',armR2:'',diaL2:'',diaR2:''}};
             }
             let st=blankState();
             let _built=false;
@@ -19488,17 +19510,33 @@
                     '----');
                 return lines.join('\n');
             }
+            // 시술 전·후가 모두 있으면 줄어든 값을 바로 보여준다 (기록·상담용)
+            function renderMeasDiff(){
+                const box=$('fsMeasDiff'); if(!box) return;
+                const m=st.meas;
+                const one=(label,a,b)=>{
+                    const x=numOf(a), y=numOf(b);
+                    if(x==null||y==null) return '';
+                    const d=Math.round((x-y)*10)/10;
+                    if(!d) return `${label} 변화 없음`;
+                    return d>0 ? `${label} <b>−${d}cm</b>` : `${label} +${Math.abs(d)}cm`;
+                };
+                const parts=[one('팔뚝둘레 좌',m.armL,m.armL2), one('우',m.armR,m.armR2),
+                             one('지름 좌',m.diaL,m.diaL2),     one('우',m.diaR,m.diaR2)].filter(Boolean);
+                box.innerHTML=parts.length?('시술 전후 차이 — '+parts.join(' · ')):'';
+            }
             function buildMeas(){
                 const m=st.meas, blank='      ';
                 const lines=['[파인샷 측정] '+todayYmd()];
                 const who=patientLine(); if(who) lines.push(who);
+                const pad=v=>(v||blank);
                 lines.push(
                     '팔뚝둘레',
-                    `- 전 : 좌 ${m.armL||blank} / 우 ${m.armR||blank}`,
-                    '- 후 : 좌        / 우        ',
+                    `- 전 : 좌 ${pad(m.armL)} / 우 ${pad(m.armR)}`,
+                    `- 후 : 좌 ${pad(m.armL2)} / 우 ${pad(m.armR2)}`,
                     '지름',
-                    `- 전 : 좌 ${m.diaL||blank} / 우 ${m.diaR||blank}`,
-                    '- 후 : 좌        / 우        ',
+                    `- 전 : 좌 ${pad(m.diaL)} / 우 ${pad(m.diaR)}`,
+                    `- 후 : 좌 ${pad(m.diaL2)} / 우 ${pad(m.diaR2)}`,
                     '----');
                 return lines.join('\n');
             }
@@ -19525,11 +19563,11 @@
                     const c=st.sites[id];
                     sites[id]={pinch:(c.pinch==null?'':String(c.pinch)), t:(c.t==null?null:c.t), dens:c.dens||'none'};
                 });
+                const m={};
+                MEAS_KEYS.forEach(k=>{ m[k]=st.meas[k]||''; });
                 return {chartNo:(st.chartNo||'').trim(), name:(st.name||'').trim(), sites,
                         elas:st.elas, heat:st.heat, tol:st.tol,
-                        done:(st.done==null?null:st.done), watt:st.watt,
-                        meas:{armL:st.meas.armL||'',armR:st.meas.armR||'',
-                              diaL:st.meas.diaL||'',diaR:st.meas.diaR||''}};
+                        done:(st.done==null?null:st.done), watt:st.watt, meas:m};
             }
             function setState(d){
                 st=blankState();
@@ -19541,7 +19579,7 @@
                     st.done=(d.done==null||d.done==='')?null:Number(d.done);
                     st.watt=Number(d.watt)||170;
                     const m=d.meas||{};
-                    st.meas={armL:m.armL||'',armR:m.armR||'',diaL:m.diaL||'',diaR:m.diaR||''};
+                    MEAS_KEYS.forEach(k=>{ st.meas[k]=m[k]||''; });
                     const sites=d.sites||{};
                     SITES.forEach(s=>{
                         const c=sites[s.id]; if(!c) return;
@@ -19557,8 +19595,8 @@
                 $('fsName').value=st.name||'';
                 $('fsDoneIn').value=(st.done==null?'':st.done);
                 $('fsWIn').value=(st.watt==null?'':st.watt);
-                $('fsArmL').value=st.meas.armL||''; $('fsArmR').value=st.meas.armR||'';
-                $('fsDiaL').value=st.meas.diaL||''; $('fsDiaR').value=st.meas.diaR||'';
+                MEAS_KEYS.forEach(k=>{ const el=$(MEAS_INPUT[k]); if(el) el.value=st.meas[k]||''; });
+                renderMeasDiff();
                 setSeg('fsElasSeg', String(st.elas)); setSeg('fsHeatSeg', st.heat); setSeg('fsTolSeg', st.tol);
                 $('fsElasDesc').textContent=ELAS_DESC[st.elas];
                 $('fsTolDesc').textContent=TOL_DESC[st.tol];
@@ -19895,8 +19933,8 @@
 
                 $('fsDoneIn').oninput=e=>{ st.done=numOf(numGuard(e.target)); renderOut(); markDirty(); };
                 $('fsWIn').oninput=e=>{ const v=numOf(numGuard(e.target)); st.watt=(v==null?170:v); renderOut(); markDirty(); };
-                [['fsArmL','armL'],['fsArmR','armR'],['fsDiaL','diaL'],['fsDiaR','diaR']].forEach(([id,k])=>{
-                    $(id).oninput=e=>{ st.meas[k]=numGuard(e.target); markDirty(); };
+                MEAS_KEYS.forEach(k=>{
+                    $(MEAS_INPUT[k]).oninput=e=>{ st.meas[k]=numGuard(e.target); renderMeasDiff(); markDirty(); };
                 });
                 ['fsChartNo','fsName'].forEach(id=>{
                     const el=$(id), k=(id==='fsChartNo')?'chartNo':'name';
@@ -19921,8 +19959,7 @@
                     copyText(buildChart(), $('fsBtnCopy'));
                 };
                 $('fsBtnCopyMeas').onclick=()=>{
-                    const m=st.meas;
-                    if(!m.armL&&!m.armR&&!m.diaL&&!m.diaR){ alert('측정 수치를 먼저 입력하세요.'); return; }
+                    if(MEAS_KEYS.every(k=>!st.meas[k])){ alert('측정 수치를 먼저 입력하세요.'); return; }
                     copyText(buildMeas(), $('fsBtnCopyMeas'), '복사했습니다');
                 };
                 $('fsBtnReset').onclick=resetAll;

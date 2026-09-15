@@ -120,8 +120,12 @@ GPS 는 출퇴근을 클리닉 범위 안에서 찍었는지 보려고만 쓴다
 
 **복사 2개**
 - `차트용 기록 복사` — 차트번호/이름 · 부위 · 탄력/열감 · 루닛 · 파인주 · 장비 세팅값
-- `📏 측정 수치 복사` — 팔뚝둘레(좌/우) · 지름(좌/우). 측정 기록은 부위 3곳을 없애고
-  **팔뚝둘레 · 지름 2줄**로 줄였다. 차트에 따로 붙일 일이 많아 복사 버튼을 나눴다.
+- `📏 측정 수치 복사` — 팔뚝둘레(좌/우) · 지름(좌/우)를 **시술 전 / 시술 후** 각각.
+  측정 기록은 부위 3곳(겨드랑이 아래·중간·팔꿈치 위)을 없애고 **팔뚝둘레 · 지름 2줄**로
+  줄였다. 차트에 따로 붙일 일이 많아 복사 버튼을 나눴다.
+- 전·후가 모두 채워지면 카드 아래에 줄어든 값(`팔뚝둘레 좌 −0.8cm …`)을 바로 보여준다.
+  저장 필드는 `meas{armL,armR,diaL,diaR, armL2,armR2,diaL2,diaR2}` (`2` = 시술 후).
+  시술 후 칸이 없던 기존 문서도 그대로 열린다(빈 값).
 
 **📊 통계** (탭 안 `✨ 산출기 / 📊 통계` 전환)
 - 기간: 이번 달 · 지난 달 · 최근 3개월 · 올해. `fineshotVisits` 를 `date` 범위로 읽어
@@ -149,7 +153,7 @@ GPS 는 출퇴근을 클리닉 범위 안에서 찍었는지 보려고만 쓴다
 ```
 fineshotRecords/{key}   key = 차트번호(없으면 이름). 고객별 현재 입력값(자동 저장)
   chartNo, name, sites{id:{pinch,t,dens}}, elas, heat, tol, done, watt,
-  meas{armL,armR,diaL,diaR}, updatedAt, updatedBy
+  meas{armL,armR,diaL,diaR, armL2,armR2,diaL2,diaR2}, updatedAt, updatedBy
 fineshotVisits/{auto}   💾 기록 저장 스냅샷 (통계 집계 대상)
   key, chartNo, name, date(YYYY-MM-DD), ts, by,
   sites[{id,name,addon,base,t,dens,pinch,lunit}], siteIds[],
