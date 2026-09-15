@@ -1557,6 +1557,23 @@
                         <p class="fs-seg-desc">루닛은 비워두면 권장 전량. 출력은 실제 세팅값을 적으세요.</p>
                     </div>
 
+                    <div class="fs-panel">
+                        <p class="fs-cap">오늘 처방</p>
+                        <div class="fs-readout"><span class="fs-num" id="fsOutLunit">0</span><span class="fs-unit">루닛</span></div>
+                        <p class="fs-code" id="fsOutCode"></p>
+                        <svg class="fs-scale" id="fsScale" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true"></svg>
+                        <div id="fsOutBody"><p class="fs-empty-state">부위를 선택하고 핀치 두께를 입력하면 루닛이 산출됩니다.</p></div>
+                        <div id="fsOutFlags"></div>
+                        <div class="fs-acts">
+                            <button type="button" class="fs-primary" id="fsBtnCopy">차트용 기록 복사</button>
+                            <button type="button" id="fsBtnReset">초기화</button>
+                        </div>
+                        <details class="fs-dev">
+                            <summary>장비 세팅값 (내부용)</summary>
+                            <div class="fs-devbox" id="fsDevBox">부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span></div>
+                        </details>
+                    </div>
+
                     <div class="card">
                         <div class="card-title">📏 측정 기록</div>
                         <p class="fs-hint">산출에는 쓰이지 않지만 다음 방문 비교의 기준이 됩니다. 측정 지점을 네임펜으로 표시해 두세요.</p>
@@ -1584,23 +1601,6 @@
                         <div class="fs-btns">
                             <button type="button" class="fs-b-dark" id="fsBtnCopyMeas">📏 측정 수치 복사</button>
                         </div>
-                    </div>
-
-                    <div class="fs-panel">
-                        <p class="fs-cap">오늘 처방</p>
-                        <div class="fs-readout"><span class="fs-num" id="fsOutLunit">0</span><span class="fs-unit">루닛</span></div>
-                        <p class="fs-code" id="fsOutCode"></p>
-                        <svg class="fs-scale" id="fsScale" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true"></svg>
-                        <div id="fsOutBody"><p class="fs-empty-state">부위를 선택하고 핀치 두께를 입력하면 루닛이 산출됩니다.</p></div>
-                        <div id="fsOutFlags"></div>
-                        <div class="fs-acts">
-                            <button type="button" class="fs-primary" id="fsBtnCopy">차트용 기록 복사</button>
-                            <button type="button" id="fsBtnReset">초기화</button>
-                        </div>
-                        <details class="fs-dev">
-                            <summary>장비 세팅값 (내부용)</summary>
-                            <div class="fs-devbox" id="fsDevBox">부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span></div>
-                        </details>
                     </div>
 
                     <p class="fs-foot">
@@ -2889,7 +2889,7 @@
                         <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.9rem"><input type="checkbox" class="seEmpTab" data-tab="fineshot" style="width:16px;height:16px">✨ 파인샷</label>
                     </div>
                     <div style="font-size:.72rem;color:var(--text-muted);margin-top:.5rem">※ 재고는 통합앱(공용계정)에서 관리하므로 개인 계정은 기본 미노출입니다. 필요한 직원만 체크하세요.</div>
-                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem">※ ✨ 파인샷(루닛 산출기)만 체크하면 그 계정은 로그인 시 파인샷 화면만 보게 됩니다. (내정보는 항상 노출)</div>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem">※ ✨ 파인샷(루닛 산출기)만 체크하면 그 계정은 <b>파인샷 화면만</b> 보게 됩니다 — 상담 기록 전용이라 내정보(급여·명세서)도 나오지 않습니다. 다른 탭과 같이 체크하면 내정보는 자동으로 붙습니다.</div>
                     <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;font-size:.9rem;margin-top:.9rem;padding-top:.9rem;border-top:1px dashed var(--border)">
                         <input type="checkbox" id="seEmpIsTest" style="width:16px;height:16px;margin-top:.15rem">
                         <span>🧪 <b>테스트 계정</b>
@@ -4385,6 +4385,11 @@
                 await loadReceivingLocations(); // 앱 시작 시 장소 목록 미리 로드
                 // 최상위 홈(재고·수가표·홈페이지 3개 큰 버튼)부터 시작
                 showTopHome();
+            }else if(isFineshotSoloAccount()){
+                // 파인샷 전용 계정 → 탭이 하나뿐이라 하단 네비게이션을 숨긴다
+                const nav=document.getElementById('mainBottomNav');
+                if(nav) nav.style.display='none';
+                document.body.classList.add('nav-hidden');
             }else{
                 const nav=document.getElementById('mainBottomNav');
                 if(nav) nav.style.display='';
@@ -7741,6 +7746,11 @@
         // ✨ 파인샷 전용 계정 판별
         //   visibleTabs 가 파인샷(+항상 노출되는 내정보)뿐이면 이 계정은 파인샷만 쓰는 계정이다.
         //   → 로고/← 홈 을 눌러도 공용 홈 대신 파인샷 화면으로 되돌린다.
+        // 파인샷 탭 하나만 가진 계정 (내정보조차 없는 상담 기록 전용)
+        function isFineshotSoloAccount(){
+            const tabs=(currentUser&&currentUser.visibleTabs)||[];
+            return tabs.length===1 && tabs[0]==='fineshot';
+        }
         function isFineshotOnlyAccount(){
             const tabs=(currentUser&&currentUser.visibleTabs)||[];
             if(!tabs.length) return false;
@@ -13498,7 +13508,10 @@
             const usedLeave=parseInt(g('seEmpUsedLeave').value)||0;
             const selectedTabs=[];
             document.querySelectorAll('.seEmpTab:checked').forEach(cb=>selectedTabs.push(cb.getAttribute('data-tab')));
-            if(!selectedTabs.includes('info')) selectedTabs.push('info'); // 내정보는 항상 노출
+            // 내정보(급여·명세서)는 근태를 쓰는 계정에 항상 붙인다.
+            // 다만 ✨ 파인샷만 체크한 계정은 상담 기록 전용이라 내정보가 필요 없다.
+            const _onlyFineshot=selectedTabs.length===1 && selectedTabs[0]==='fineshot';
+            if(!_onlyFineshot && !selectedTabs.includes('info')) selectedTabs.push('info');
             // 기본 세트(재고 미포함)와 동일하면 null(=기본값 사용), 아니면 선택 목록을 그대로 저장
             const _isDefaultTabs=selectedTabs.length===SE_DEFAULT_TABS.length && SE_DEFAULT_TABS.every(t=>selectedTabs.includes(t));
             const visibleTabsValue=_isDefaultTabs?null:selectedTabs;
