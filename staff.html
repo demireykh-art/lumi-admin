@@ -17963,13 +17963,21 @@
             const insPt=ptTotal-nonInsPt;
             const orders=_dsN(base.count);
             const total=_dsN(base.totalSales);
+            // 환불은 두 종류이고 서로 쪽이 다르다. 절대 섞지 않는다.
+            //  · 환불오더(매출집계 표)  = 취소된 오더의 매출액 → 발생매출에서 뺀다
+            //  · ※환불금액(수납 표)     = 그 날 통장에서 나간 돈 → 수납에서 뺀다
+            //    (수납금액 합계가 이미 순액이라 여기서 또 빼면 이중 차감)
+            // 총매출(total)은 표 그대로 남긴다 — 검산·객단가·직원별 랭킹이 이 값을 쓴다.
+            const refundSales=_dsN(base.refundOrder);
+            const netSales=total-refundSales;
             return {
                 has:!!doc,
                 count:orders,                       // 오더 건수 (담당의별/직원별 표)
                 patientTotal:ptTotal,               // 내원 환자 수 (보험유형별 그래프)
                 ptTypes, insPt, nonInsPt,
-                totalSales:total,
-                refundOrder:_dsN(base.refundOrder),
+                totalSales:total,                   // 표 그대로(총매출액)
+                refundSales, netSales,              // 순매출 = 총매출 − 환불오더
+                refundOrder:refundSales,            // (옛 이름 유지)
                 avg:_dsAvg(total,orders),                                   // 오더 객단가
                 avgPerPatient:ptTotal>0?Math.round(total/ptTotal):null,     // 환자 객단가
                 // 보험/비보험 — 객단가 분모는 시술별 건수(있으면) > 환자 명수 순
@@ -18165,10 +18173,10 @@
             const days=new Date(y,m,0).getDate();
             const first=new Date(y,m-1,1).getDay();
             // 월 누계
-            const acc={count:0,totalSales:0,insurance:0,nonIns:0,
+            const acc={count:0,totalSales:0,refundSales:0,netSales:0,insurance:0,nonIns:0,
                        patientTotal:0,insPt:0,nonInsPt:0,insCnt:0,nonInsCnt:0,
                        received:0,cash:0,card:0,easy:0,etc:0,taxAmt:0,vat:0,nonTaxAmt:0,
-                       uncollected:0,filled:0};
+                       uncollected:0,handover:0,filled:0};
             const staffAcc={}, doctorAcc={}, procAcc={}, byDay={};
             for(let d=1;d<=days;d++){
                 const ymd=`${ym}-${String(d).padStart(2,'0')}`;
@@ -18176,9 +18184,10 @@
                 if(!doc) continue;
                 const k=_dsMetrics(doc);
                 byDay[ymd]=k; acc.filled++;
-                ['count','totalSales','insurance','nonIns','patientTotal','insPt','nonInsPt',
+                ['count','totalSales','refundSales','netSales','insurance','nonIns',
+                 'patientTotal','insPt','nonInsPt',
                  'insCnt','nonInsCnt','received','cash','card','easy','etc','taxAmt','vat',
-                 'nonTaxAmt','uncollected']
+                 'nonTaxAmt','uncollected','handover']
                     .forEach(f=>{ acc[f]+=_dsN(k[f]); });
                 [[k.staff,staffAcc],[k.doctor,doctorAcc],[k.procRows,procAcc]].forEach(([src,into])=>{
                     Object.entries(src||{}).forEach(([name,r])=>{
@@ -18187,7 +18196,7 @@
                     });
                 });
             }
-            const maxDay=Math.max(1,...Object.values(byDay).map(k=>k.totalSales));
+            const maxDay=Math.max(1,...Object.values(byDay).map(k=>k.netSales));
 
             let h=`<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.6rem">
                 <button class="view-btn" onclick="dsChangeMonth(-1)">‹</button>
@@ -18197,11 +18206,13 @@
             </div>`;
 
             h+=_dsCards([
-                ['🩺 진료 매출 (발생)',_dsWon(acc.totalSales),
-                 `오더 ${acc.count.toLocaleString()}건${acc.patientTotal?` · 내원 ${acc.patientTotal.toLocaleString()}명`:''}`,'#4338ca','#eef2ff'],
+                ['🩺 진료 매출 (발생)',_dsWon(acc.netSales),
+                 (acc.refundSales?`총매출 ${_dsShort(acc.totalSales)}원 − 환불 ${_dsShort(acc.refundSales)}원 · `:'')
+                 +`오더 ${acc.count.toLocaleString()}건${acc.patientTotal?` · 내원 ${acc.patientTotal.toLocaleString()}명`:''}`,'#4338ca','#eef2ff'],
                 ['객단가',
                  acc.patientTotal>0?_dsWon(Math.round(acc.totalSales/acc.patientTotal)):_dsWon(_dsAvg(acc.totalSales,acc.count)),
                  acc.patientTotal>0?`환자 기준 · 오더 기준 ${_dsWon(_dsAvg(acc.totalSales,acc.count))}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
+                ['💵 마감금액 누계',_dsWon(acc.handover),'원장님께 드린 현금 (현금+현금영수증−본부금)','#92400e','#fffbeb'],
                 ['💳 받은 돈 (수납)',_dsWon(acc.received),
                  `현금 ${_dsShort(acc.cash)}원 · 카드 ${_dsShort(acc.card)}원`
                  +(acc.uncollected?` · 미수납 본부금 −${_dsShort(acc.uncollected)}원`:''),'#166534','#dcfce7'],
@@ -18225,7 +18236,7 @@
             for(let d=1;d<=days;d++){
                 const ymd=`${ym}-${String(d).padStart(2,'0')}`;
                 const k=byDay[ymd];
-                const ratio=k?Math.min(1,k.totalSales/maxDay):0;
+                const ratio=k?Math.min(1,k.netSales/maxDay):0;
                 const bg=k?`rgba(154,139,122,${(0.10+ratio*0.55).toFixed(2)})`:'var(--bg)';
                 const isToday=ymd===today;
                 h+=`<button type="button" onclick="dsOpenDay('${ymd}')"
@@ -18235,7 +18246,7 @@
                     <span style="font-size:.66rem;color:${k?'#3f3a34':'var(--text-muted)'};font-weight:${isToday?'700':'500'}">${d}</span>
                     ${!k?'<span style="font-size:.6rem;color:#c9c4bd">–</span>'
                        :(k.totalSales||k.count
-                        ?`<span style="font-size:.7rem;font-weight:700;color:#3f3a34;line-height:1.15">${_dsShort(k.totalSales)}</span>
+                        ?`<span style="font-size:.7rem;font-weight:700;color:#3f3a34;line-height:1.15">${_dsShort(k.netSales)}</span>
                           <span style="font-size:.58rem;color:#6b6b6b">${k.count}건</span>`
                         // 수납 구분표만 올린 날 — 0원으로 적으면 매출이 없던 날로 읽힌다
                         :`<span style="font-size:.7rem;font-weight:700;color:#166534;line-height:1.15">${_dsShort(k.received)}</span>
@@ -18352,12 +18363,19 @@
             const daySales=!!(k.totalSales||k.count);
             if(daySales){
                 h+=_dsCards([
-                    ['🩺 진료 매출 (발생)',_dsWon(k.totalSales),
-                     `오더 ${k.count}건${k.patientTotal?` · 내원 ${k.patientTotal}명`:''}`,'#4338ca','#eef2ff'],
+                    ['🩺 진료 매출 (발생)',_dsWon(k.netSales),
+                     (k.refundSales?`총매출 ${_dsShort(k.totalSales)}원 − 환불 ${_dsShort(k.refundSales)}원 · `:'')
+                     +`오더 ${k.count}건${k.patientTotal?` · 내원 ${k.patientTotal}명`:''}`,'#4338ca','#eef2ff'],
                     ['객단가',
                      k.avgPerPatient!=null?_dsWon(k.avgPerPatient):_dsWon(k.avg),
-                     k.avgPerPatient!=null?`환자 기준 · 오더 기준 ${_dsWon(k.avg)}`:'오더 기준 (환자 수 미입력)','#4338ca','#eef2ff'],
+                     (k.avgPerPatient!=null?`환자 기준 · 오더 기준 ${_dsWon(k.avg)}`:'오더 기준 (환자 수 미입력)')
+                     +(k.refundSales?' · 총매출 기준':''),'#4338ca','#eef2ff'],
                 ]);
+                if(k.refundSales){
+                    h+='<div style="font-size:.66rem;color:var(--text-muted);margin-top:.3rem;line-height:1.5">'
+                      +`※ 객단가·아래 직원별·담당의별은 <b>총매출 ${_dsWon(k.totalSales)}</b> 기준입니다 — `
+                      +'환불오더가 누구 몫인지는 표가 알려주지 않아 개인별로는 빼지 않습니다.</div>';
+                }
 
                 // ① 진료 실적 (발생매출)
                 h+='<div style="font-weight:700;font-size:.85rem;margin:.9rem 0 .15rem">🩺 진료 실적 — 오늘 진료로 생긴 매출</div>'
@@ -18830,7 +18848,8 @@
             if(hasSales){
                 h+=`<div style="padding:.7rem .8rem;background:#eef2ff;border-radius:var(--r-sm)">
                     <div style="font-size:.72rem;color:#4338ca;font-weight:600">🩺 진료 매출 (발생) <span style="font-weight:400;opacity:.75">— 오늘 진료로 생긴 금액</span></div>
-                    <div style="font-size:1.25rem;font-weight:700;color:#4338ca;letter-spacing:-.5px;margin:.1rem 0">${_dsWon(k.totalSales)}</div>
+                    <div style="font-size:1.25rem;font-weight:700;color:#4338ca;letter-spacing:-.5px;margin:.1rem 0">${_dsWon(k.netSales)}</div>
+                    ${k.refundSales?`<div style="font-size:.72rem;color:#4338ca;opacity:.9">총매출 ${_dsWon(k.totalSales)} − 환불오더 ${_dsWon(k.refundSales)} = <b>${_dsWon(k.netSales)}</b></div>`:''}
                     <div style="font-size:.72rem;color:#4338ca">오더 ${k.count}건${k.patientTotal?` · 내원 ${k.patientTotal}명`:''}${k.insCnt?` · 보험진료 ${k.insCnt}건 ${_dsWon(k.insurance)}`:''}</div>
                 </div>`;
             }
