@@ -24,6 +24,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
     <!-- FCM(messaging) SDK 는 관리자 푸시 사용 시에만 지연 로드 (인앱 브라우저 로그인 영향 방지) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -2978,6 +2979,7 @@
         const db=firebase.firestore();
         const auth=firebase.auth();
         const functions=(typeof firebase.functions==='function')?firebase.app().functions('asia-northeast3'):null;
+        const storage=(typeof firebase.storage==='function')?firebase.storage():null;
         // 직원 편의: 브라우저 탭/창을 닫아도 로그인 유지 (LOCAL)
         // 보안: 미활동 12시간 후 자동 로그아웃 (autoLogoutMinutes로 admin이 조정 가능)
         auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
@@ -4852,6 +4854,15 @@
         //  · 아이폰/아이패드: blob 새 탭은 'Unknown 다운로드'로 깨지므로
         //    같은 탭에서 iOS 네이티브 PDF 뷰어로 렌더(뒤로가기로 앱 복귀)
         //  · 데스크톱/안드로이드: 새 탭으로 열고, 팝업 차단 시 다운로드
+        // 새 방식(Storage URL)과 옛 방식(문서 안 base64)을 모두 연다.
+        // 옛 기록은 그대로 두고 읽기만 지원하므로 지난 명세서도 계속 열린다.
+        function _openPayslipFile(p){
+            if(!p){ alert('명세서를 찾을 수 없습니다.'); return; }
+            if(p.downloadURL){ window.open(p.downloadURL,'_blank','noopener'); return; }
+            if(p.dataUrl){ _openPdfSmart(p.dataUrl, p.fileName||'급여명세서.pdf'); return; }
+            alert('파일을 찾을 수 없습니다. 관리자에게 문의해주세요.');
+        }
+
         function _openPdfSmart(dataUrl, fileName){
             const arr=(dataUrl||'').split(',');
             if(arr.length<2) throw new Error('PDF 데이터가 없습니다.');
@@ -4882,7 +4893,7 @@
             const myEmail=((auth&&auth.currentUser&&auth.currentUser.email)||(currentUser&&currentUser.email)||'').toLowerCase();
             if(!p||(p.authEmail||'').toLowerCase()!==myEmail){ alert('명세서를 열 수 없습니다.'); return; }
             try{
-                _openPdfSmart(p.dataUrl, p.fileName||'급여명세서.pdf');
+                _openPayslipFile(p);
             }catch(e){ alert('PDF 열기 실패: '+(e.message||e)); }
         }
         
@@ -14600,17 +14611,42 @@
             emp=list.find(e=>e.name&&e.name.replace(/\s/g,'')===nospace);
             return emp||null;
         }
+        // PDF 본문은 Storage 에 두고 Firestore 에는 열쇠(다운로드 URL)만 남긴다.
+        // 예전에는 base64 로 문서 안에 넣어서 (1) 문서 1MB 한도에 걸릴 수 있었고
+        // (2) 목록을 읽을 때마다 PDF 를 통째로 받아야 했다.
+        // 경로에 난수를 넣어 URL 을 모르면 파일을 짚어낼 수 없게 한다.
+        function _payslipStoragePath(authEmail, ym, fname){
+            const rnd=Math.random().toString(36).slice(2)+Date.now().toString(36);
+            const safe=String(fname||'payslip.pdf').replace(/[^\w.\-가-힣]/g,'_').slice(-60);
+            return `payslips/${String(authEmail||'unknown').toLowerCase()}/${ym}_${rnd}_${safe}`;
+        }
+
         async function _staffSavePayslipDoc(emp,fname,blob,ym,deliverAt){
-            const dataUrl=await _staffFileToDataUrl(blob);
+            if(!storage) throw new Error('Storage 를 사용할 수 없는 환경입니다. 새로고침 후 다시 시도해주세요.');
+            const authEmail=(emp.email||'').toLowerCase();
             const docId=`${ym}__${emp.id}`;
+            const path=_payslipStoragePath(authEmail, ym, fname);
+            const ref=storage.ref(path);
+            await ref.put(blob, {contentType:'application/pdf'});
+            const downloadURL=await ref.getDownloadURL();
+
+            // 같은 달에 다시 올리면 이전 파일이 고아로 남으므로 먼저 지운다
+            let prev=null;
+            try{ const d=await db.collection('payslips').doc(docId).get(); if(d.exists) prev=d.data(); }catch(_){}
+
             await db.collection('payslips').doc(docId).set({
                 ym, employeeId:emp.id, name:emp.name,
                 // 본인 인증용 로그인 이메일 — 규칙이 이 값과 request.auth.token.email 비교
-                authEmail:(emp.email||'').toLowerCase(),
-                fileName:fname, dataUrl, size:blob.size, deliverAt,
+                authEmail,
+                fileName:fname, storagePath:path, downloadURL, size:blob.size, deliverAt,
+                dataUrl:firebase.firestore.FieldValue.delete(),   // 옛 방식 잔재 제거
                 uploadedAt:firebase.firestore.FieldValue.serverTimestamp(),
                 uploadedBy:(currentUser&&(currentUser.name||currentUser.id))||'admin'
             },{merge:true});
+
+            if(prev&&prev.storagePath&&prev.storagePath!==path){
+                try{ await storage.ref(prev.storagePath).delete(); }catch(_){}
+            }
         }
         function _staffPayslipResultHtml(matched,unmatched,noEmail,ym,deliverAt){
             let h='';
@@ -14743,12 +14779,19 @@
                 const doc=await db.collection('payslips').doc(docId).get();
                 if(!doc.exists){ alert('명세서를 찾을 수 없습니다.'); return; }
                 const d=doc.data();
-                _openPdfSmart(d.dataUrl, d.fileName||'급여명세서.pdf');
+                _openPayslipFile(d);
             }catch(e){ alert('열기 실패: '+(e.message||e)); }
         }
         async function _staffDeletePayslip(docId,name){
             if(!confirm(`${name||''} 급여명세서를 삭제하시겠습니까?`)) return;
-            try{ await db.collection('payslips').doc(docId).delete(); _staffRenderPayslipList(); }
+            try{
+                // 문서를 지우기 전에 Storage 파일부터 (문서를 잃으면 경로를 못 찾는다)
+                try{
+                    const d=await db.collection('payslips').doc(docId).get();
+                    const sp=d.exists&&d.data().storagePath;
+                    if(sp&&storage) await storage.ref(sp).delete();
+                }catch(_){}
+                await db.collection('payslips').doc(docId).delete(); _staffRenderPayslipList(); }
             catch(e){ alert('삭제 실패: '+(e.message||e)); }
         }
 
