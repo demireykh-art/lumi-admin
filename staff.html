@@ -2757,7 +2757,6 @@
         let incentiveItems=[];
         let incentiveRecords=[];
         let leaveRequests=[];
-        let payrollData=[];
         let salesDetail={};
         let revenueData={};
         let monthlyIncInput={};
@@ -4400,11 +4399,18 @@
         function isTestAccount(empId){ return testAccountIds.has(String(empId||'')); }
 
         // Data Loading - 단순 쿼리 사용 (인덱스 불필요)
+        //
+        // 출근 버튼이 제일 급하다. 예전에는 13개 조회를 Promise.all 로 전부 기다린
+        // 뒤에야 화면이 떠서, 데이터가 쌓일수록 출근을 바로 못 찍었다.
+        // 이제 출근 기록만 먼저 읽어 출퇴근 탭을 그리고, 나머지는 뒤이어 채운다.
         async function loadAllData(){
+            try{
+                await loadAttendance();
+                renderAttendance();          // 여기서 이미 출근 버튼이 눌린다
+            }catch(e){console.error('출근 기록 로드 오류:',e);}
             try{
                 await Promise.all([
                     loadTestAccounts(),
-                    loadAttendance(),
                     loadLunchOT(),
                     loadMealRecords(),
                     loadMealAttendance(),
@@ -4413,9 +4419,9 @@
                     loadIncentiveRecords(),
                     loadLeaveRequests(),
                     loadTeamLeave(),
-                    loadPayrollData(),
-                    loadSalesData(),
-                    loadPayslips()
+                    loadSalesData()
+                    // loadPayrollData: 삭제 — 전 직원 급여를 통째로 받아놓고 쓰지 않았다
+                    // loadPayslips: 내정보 탭을 열 때로 미룸 (PDF 본문이 문서에 들어 있어 무겁다)
                 ]);
                 renderAll();
             }catch(e){console.error('데이터 로드 오류:',e);}
@@ -4487,15 +4493,23 @@
             }catch(e){console.error('연차 로드 오류:',e);leaveRequests=[];}
         }
         
-        async function loadPayrollData(){
-            try{
-                const snapshot=await db.collection('payroll').get();
-                payrollData=snapshot.docs.map(d=>({id:d.id,...d.data()}));
-            }catch(e){console.error('급여 로드 오류:',e);payrollData=[];}
-        }
 
         // ═══ 급여명세서 (본인 것만) ═══
+        // PDF 본문이 dataUrl 로 문서 안에 들어 있어 한 건이 수백 KB~수 MB 다.
+        // 앱을 켤 때마다 전부 받으면 달이 쌓일수록 시작이 느려지므로,
+        // 내정보 탭을 처음 열 때 한 번만 읽는다.
         let myPayslips=[];
+        let _payslipsLoaded=false;
+
+        async function ensurePayslipsLoaded(){
+            if(_payslipsLoaded) return;
+            _payslipsLoaded=true;            // 연타로 중복 조회하지 않게 먼저 세운다
+            const el=document.getElementById('payslipList');
+            if(el) el.innerHTML='<div class="empty">불러오는 중…</div>';
+            try{ await loadPayslips(); }
+            catch(e){ _payslipsLoaded=false; console.error('급여명세서 로드 오류:',e); }
+            renderPayslips();
+        }
         async function loadPayslips(){
             myPayslips=[];
             // 공용/재고 전용 계정은 조회하지 않음
@@ -4522,7 +4536,10 @@
             const el=document.getElementById('payslipList');
             if(!el) return;
             if(!myPayslips||myPayslips.length===0){
-                el.innerHTML='<div class="empty">아직 전달된 급여명세서가 없습니다.</div>';
+                // 아직 안 읽었으면 "없음" 이 아니라 로딩 중이다
+                el.innerHTML=_payslipsLoaded
+                    ? '<div class="empty">아직 전달된 급여명세서가 없습니다.</div>'
+                    : '<div class="empty">불러오는 중…</div>';
                 return;
             }
             el.innerHTML=myPayslips.map(p=>{
@@ -18904,6 +18921,10 @@
                 document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
                 this.classList.add('active');
                 document.getElementById('tab-'+this.dataset.tab).classList.add('active');
+                // 내정보 탭 진입 시 급여명세서 로드 (시작 때 받지 않고 미뤄 둔 것)
+                if(this.dataset.tab==='info'){
+                    ensurePayslipsLoaded();
+                }
                 // 재고 탭 진입 시 데이터 로드
                 if(this.dataset.tab==='inventory'&&!invItems.length){
                     initInventoryTab();
