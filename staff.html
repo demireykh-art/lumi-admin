@@ -476,6 +476,46 @@
         .fs-devbox{margin-top:.5rem;font-size:.78rem;color:#c9ccd1;line-height:1.7}
         .fs-devbox .fs-note{color:#d9bc78;font-size:.7rem;display:block;margin-top:.4rem}
         .fs-foot{font-size:.7rem;color:var(--text-muted);line-height:1.6;padding:0 .2rem var(--pad)}
+        /* 고객(차트번호·이름) · 검색 · 통계 */
+        .fs-view-seg{display:flex;gap:.35rem;margin-bottom:var(--pad)}
+        .fs-view-seg button{flex:1;font-family:inherit;font-size:.82rem;font-weight:600;padding:.55rem;cursor:pointer;
+            border:1px solid var(--border);background:var(--bg-card);color:var(--text-muted);border-radius:var(--r-sm)}
+        .fs-view-seg button[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:#fff}
+        .fs-cust{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+        .fs-cust .fs-field{gap:.25rem}
+        .fs-text{font-family:inherit;font-size:.95rem;width:100%;padding:.5rem .6rem;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text)}
+        .fs-btns{display:flex;gap:.4rem;margin-top:.6rem;flex-wrap:wrap}
+        .fs-btns button{flex:1 1 auto;min-width:90px;font-family:inherit;font-size:.8rem;font-weight:600;
+            padding:.6rem .5rem;border-radius:var(--r-sm);cursor:pointer;border:1px solid var(--border);
+            background:var(--bg);color:var(--text)}
+        .fs-btns button.fs-b-dark{background:var(--text);border-color:var(--text);color:#fff}
+        .fs-state{font-size:.72rem;color:var(--text-muted);margin-top:.5rem;min-height:1rem}
+        .fs-state.fs-ok{color:var(--green)}
+        .fs-found{margin-top:.5rem;padding:.55rem .65rem;border-radius:var(--r-sm);
+            background:rgba(184,145,60,.12);border-left:2px solid var(--primary);font-size:.78rem;line-height:1.5}
+        .fs-found button{margin-left:.4rem;font-family:inherit;font-size:.74rem;font-weight:600;padding:.25rem .5rem;
+            border-radius:var(--r-sm);border:1px solid var(--primary);background:var(--primary);color:#fff;cursor:pointer}
+        .fs-list{margin-top:.5rem;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+        .fs-list-item{display:flex;align-items:center;gap:.5rem;width:100%;padding:.6rem .7rem;border:0;
+            border-bottom:1px solid var(--border);background:#fff;cursor:pointer;font-family:inherit;
+            font-size:.85rem;text-align:left;color:var(--text)}
+        .fs-list-item:last-child{border-bottom:0}
+        .fs-list-item:active{background:var(--bg)}
+        .fs-list-item .fs-li-no{font-weight:700;min-width:4.5rem}
+        .fs-list-item .fs-li-date{margin-left:auto;font-size:.72rem;color:var(--text-muted)}
+        .fs-list-empty{padding:.7rem;font-size:.8rem;color:var(--text-muted);text-align:center}
+        .fs-meas2{display:grid;grid-template-columns:auto 1fr 1fr;gap:.45rem;align-items:center}
+        .fs-meas2 .fs-lbl{color:var(--text-muted);font-size:.74rem;text-align:center}
+        .fs-meas2 .fs-rowlbl{font-size:.8rem;color:var(--text-secondary)}
+        .fs-meas2 input{width:100%;font-family:inherit;font-size:.9rem;padding:.5rem .4rem;text-align:center;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text)}
+        .fs-stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--pad);margin-bottom:var(--pad)}
+        .fs-table{width:100%;border-collapse:collapse;font-size:.82rem}
+        .fs-table th,.fs-table td{padding:.45rem .3rem;border-bottom:1px solid var(--border);text-align:right}
+        .fs-table th:first-child,.fs-table td:first-child{text-align:left}
+        .fs-table th{font-size:.72rem;color:var(--text-muted);font-weight:600}
+        .fs-table tbody tr:last-child td{border-bottom:0}
     </style>
 </head>
 <body>
@@ -1426,92 +1466,149 @@
                     <span class="fs-s-meta" id="fsStickyMeta">부위·핀치 두께 입력</span>
                 </div>
 
-                <div class="card">
-                    <div class="card-title">📍 시술 부위</div>
-                    <p class="fs-hint">주 부위는 핀치 두께를 재서 계수를 적용합니다. 부유방·겨뒷살은 선택하면 1루닛씩 더해집니다.</p>
-                    <div class="fs-chips" id="fsSiteChips"></div>
-                    <div id="fsSiteDetails"></div>
+                <div class="fs-view-seg" id="fsViewSeg">
+                    <button type="button" data-v="calc" aria-pressed="true">✨ 산출기</button>
+                    <button type="button" data-v="stats" aria-pressed="false">📊 통계</button>
                 </div>
 
-                <div class="card">
-                    <div class="card-title">💪 탄력</div>
-                    <p class="fs-hint">팔을 90도로 든 상태에서 처짐 정도를 봅니다. 시술 전체에 한 번 적용됩니다.</p>
-                    <div class="fs-seg" id="fsElasSeg">
-                        <button type="button" data-v="0" aria-pressed="true">E0 양호</button>
-                        <button type="button" data-v="1" aria-pressed="false">E1 경도 처짐</button>
-                        <button type="button" data-v="2" aria-pressed="false">E2 처짐 주도</button>
-                    </div>
-                    <p class="fs-seg-desc" id="fsElasDesc">처짐이 거의 없습니다. 가산 없음.</p>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">🔥 열감 반응</div>
-                    <p class="fs-hint">좌우 차이는 출력 조절의 핵심 변수입니다. 다음 시술에서 그대로 참고합니다.</p>
-                    <div class="fs-seg" id="fsHeatSeg">
-                        <button type="button" data-v="even" aria-pressed="true">좌우 동일</button>
-                        <button type="button" data-v="left" aria-pressed="false">좌측 예민</button>
-                        <button type="button" data-v="right" aria-pressed="false">우측 예민</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-title">⏳ 열감 내성 · 오늘 진행량</div>
-                    <p class="fs-hint">권장 루닛을 1회에 다 전달할 필요는 없습니다. 열감을 견디기 어려우면 남은 만큼 다음 회차로 넘깁니다.</p>
-                    <div class="fs-seg" id="fsTolSeg">
-                        <button type="button" data-v="good" aria-pressed="false">잘 견딤</button>
-                        <button type="button" data-v="normal" aria-pressed="true">보통</button>
-                        <button type="button" data-v="low" aria-pressed="false">못 견딤</button>
-                    </div>
-                    <p class="fs-seg-desc" id="fsTolDesc">열감 반응을 보며 진행하고, 필요 시 잔여를 이월합니다.</p>
-                    <div class="fs-row" style="margin-top:.8rem">
-                        <div class="fs-field">
-                            <label for="fsDoneIn">오늘 실제 진행 루닛</label>
-                            <input type="number" class="fs-input" step="0.5" min="0" id="fsDoneIn" inputmode="decimal" placeholder="권장 그대로">
+                <div id="fsCalcView">
+                    <div class="card">
+                        <div class="card-title">👤 고객</div>
+                        <div class="fs-cust">
+                            <div class="fs-field">
+                                <label for="fsChartNo">차트번호</label>
+                                <input type="text" class="fs-text" id="fsChartNo" placeholder="예 12345" autocomplete="off">
+                            </div>
+                            <div class="fs-field">
+                                <label for="fsName">이름</label>
+                                <input type="text" class="fs-text" id="fsName" placeholder="예 홍길동" autocomplete="off">
+                            </div>
                         </div>
-                        <div class="fs-field">
-                            <label for="fsWIn">L HP 출력 (W)</label>
-                            <input type="number" class="fs-input" step="5" min="100" max="200" id="fsWIn" inputmode="numeric" value="170">
+                        <div class="fs-btns">
+                            <button type="button" id="fsBtnFind">🔍 고객 찾기</button>
+                            <button type="button" id="fsBtnNew">+ 새 고객</button>
+                            <button type="button" class="fs-b-dark" id="fsBtnSave">💾 기록 저장</button>
+                        </div>
+                        <div id="fsSearchBox" style="display:none;margin-top:.6rem">
+                            <div style="display:flex;gap:.4rem">
+                                <input type="text" class="fs-text" id="fsSearchQ" placeholder="차트번호 또는 이름" autocomplete="off" style="flex:1">
+                                <button type="button" id="fsBtnSearch"
+                                    style="flex:0 0 auto;font-family:inherit;font-size:.8rem;font-weight:600;padding:.5rem .9rem;background:var(--text);color:#fff;border:1px solid var(--text);border-radius:var(--r-sm);cursor:pointer">검색</button>
+                            </div>
+                            <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">비워두고 검색하면 최근 고객이 나옵니다. 위 차트번호·이름 칸은 지금 보고 있는 고객입니다.</div>
+                        </div>
+                        <div id="fsFound"></div>
+                        <div id="fsSearchList"></div>
+                        <div class="fs-state" id="fsSaveState">차트번호(또는 이름)를 넣으면 입력하는 동안 자동 저장됩니다.</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">📍 시술 부위</div>
+                        <p class="fs-hint">주 부위는 핀치 두께를 재서 계수를 적용합니다. 부유방·겨뒷살은 선택하면 1루닛씩 더해집니다.</p>
+                        <div class="fs-chips" id="fsSiteChips"></div>
+                        <div id="fsSiteDetails"></div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">💪 탄력</div>
+                        <p class="fs-hint">팔을 90도로 든 상태에서 처짐 정도를 봅니다. 시술 전체에 한 번 적용됩니다.</p>
+                        <div class="fs-seg" id="fsElasSeg">
+                            <button type="button" data-v="0" aria-pressed="true">E0 양호</button>
+                            <button type="button" data-v="1" aria-pressed="false">E1 경도 처짐</button>
+                            <button type="button" data-v="2" aria-pressed="false">E2 처짐 주도</button>
+                        </div>
+                        <p class="fs-seg-desc" id="fsElasDesc">처짐이 거의 없습니다. 가산 없음.</p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">🔥 열감 반응</div>
+                        <p class="fs-hint">좌우 차이는 출력 조절의 핵심 변수입니다. 다음 시술에서 그대로 참고합니다.</p>
+                        <div class="fs-seg" id="fsHeatSeg">
+                            <button type="button" data-v="even" aria-pressed="true">좌우 동일</button>
+                            <button type="button" data-v="left" aria-pressed="false">좌측 예민</button>
+                            <button type="button" data-v="right" aria-pressed="false">우측 예민</button>
                         </div>
                     </div>
-                    <p class="fs-seg-desc">루닛은 비워두면 권장 전량. 출력은 실제 세팅값을 적으세요.</p>
+
+                    <div class="card">
+                        <div class="card-title">⏳ 열감 내성 · 오늘 진행량</div>
+                        <p class="fs-hint">권장 루닛을 1회에 다 전달할 필요는 없습니다. 열감을 견디기 어려우면 남은 만큼 다음 회차로 넘깁니다.</p>
+                        <div class="fs-seg" id="fsTolSeg">
+                            <button type="button" data-v="good" aria-pressed="false">잘 견딤</button>
+                            <button type="button" data-v="normal" aria-pressed="true">보통</button>
+                            <button type="button" data-v="low" aria-pressed="false">못 견딤</button>
+                        </div>
+                        <p class="fs-seg-desc" id="fsTolDesc">열감 반응을 보며 진행하고, 필요 시 잔여를 이월합니다.</p>
+                        <div class="fs-row" style="margin-top:.8rem">
+                            <div class="fs-field">
+                                <label for="fsDoneIn">오늘 실제 진행 루닛</label>
+                                <input type="text" class="fs-input" id="fsDoneIn" inputmode="decimal" placeholder="권장 그대로">
+                            </div>
+                            <div class="fs-field">
+                                <label for="fsWIn">L HP 출력 (W)</label>
+                                <input type="text" class="fs-input" id="fsWIn" inputmode="decimal" value="170">
+                            </div>
+                        </div>
+                        <p class="fs-seg-desc">루닛은 비워두면 권장 전량. 출력은 실제 세팅값을 적으세요.</p>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-title">📏 측정 기록</div>
+                        <p class="fs-hint">산출에는 쓰이지 않지만 다음 방문 비교의 기준이 됩니다. 측정 지점을 네임펜으로 표시해 두세요.</p>
+                        <div class="fs-meas2">
+                            <span></span><span class="fs-lbl">좌</span><span class="fs-lbl">우</span>
+                            <span class="fs-rowlbl">팔뚝둘레</span>
+                            <input type="text" inputmode="decimal" id="fsArmL" placeholder="cm">
+                            <input type="text" inputmode="decimal" id="fsArmR" placeholder="cm">
+                            <span class="fs-rowlbl">지름</span>
+                            <input type="text" inputmode="decimal" id="fsDiaL" placeholder="cm">
+                            <input type="text" inputmode="decimal" id="fsDiaR" placeholder="cm">
+                        </div>
+                        <div class="fs-btns">
+                            <button type="button" class="fs-b-dark" id="fsBtnCopyMeas">📏 측정 수치 복사</button>
+                        </div>
+                    </div>
+
+                    <div class="fs-panel">
+                        <p class="fs-cap">오늘 처방</p>
+                        <div class="fs-readout"><span class="fs-num" id="fsOutLunit">0</span><span class="fs-unit">루닛</span></div>
+                        <p class="fs-code" id="fsOutCode"></p>
+                        <svg class="fs-scale" id="fsScale" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true"></svg>
+                        <div id="fsOutBody"><p class="fs-empty-state">부위를 선택하고 핀치 두께를 입력하면 루닛이 산출됩니다.</p></div>
+                        <div id="fsOutFlags"></div>
+                        <div class="fs-acts">
+                            <button type="button" class="fs-primary" id="fsBtnCopy">차트용 기록 복사</button>
+                            <button type="button" id="fsBtnReset">초기화</button>
+                        </div>
+                        <details class="fs-dev">
+                            <summary>장비 세팅값 (내부용)</summary>
+                            <div class="fs-devbox" id="fsDevBox">부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span></div>
+                        </details>
+                    </div>
+
+                    <p class="fs-foot">
+                        1루닛 = 100샷 = 조사 5분. 절반은 L HP continuous, 절반은 s HP 샷으로 전달합니다.<br>
+                        총 루닛 = Σ(주 부위 기본루닛 × T계수) + 추가 부위 + 단단살 보정 + 탄력 가산.<br>
+                        체어타임 = 조사시간 + 부대 15분, 파인주 병합 시 +10분.<br>
+                        1루닛 ≒ 32kJ (L HP 170W 2.5분 + s HP 50샷 × 128J). 에너지는 내부 기록용입니다.
+                    </p>
                 </div>
 
-                <div class="card">
-                    <div class="card-title">📏 측정 기록</div>
-                    <p class="fs-hint">산출에는 쓰이지 않지만 다음 방문 비교의 기준이 됩니다. 측정 지점을 네임펜으로 표시해 두세요.</p>
-                    <div class="fs-meas">
-                        <span></span>
-                        <span class="fs-lbl">겨드랑이<br>아래</span><span class="fs-lbl">중간</span><span class="fs-lbl">팔꿈치<br>위</span><span class="fs-lbl">지름</span>
-                        <span class="fs-lbl">좌</span>
-                        <input type="number" step="0.1" inputmode="decimal" id="fsL1" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsL2" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsL3" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsLD" placeholder="cm">
-                        <span class="fs-lbl">우</span>
-                        <input type="number" step="0.1" inputmode="decimal" id="fsR1" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsR2" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsR3" placeholder="cm"><input type="number" step="0.1" inputmode="decimal" id="fsRD" placeholder="cm">
+                <div id="fsStatsView" style="display:none">
+                    <div class="card">
+                        <div class="card-title">📊 기간</div>
+                        <div class="fs-seg" id="fsStatRange">
+                            <button type="button" data-v="m0" aria-pressed="true">이번 달</button>
+                            <button type="button" data-v="m1" aria-pressed="false">지난 달</button>
+                            <button type="button" data-v="m3" aria-pressed="false">최근 3개월</button>
+                            <button type="button" data-v="y0" aria-pressed="false">올해</button>
+                        </div>
+                        <p class="fs-seg-desc" id="fsStatRangeDesc">저장 버튼으로 남긴 기록만 집계됩니다.</p>
+                    </div>
+                    <div id="fsStatsBody">
+                        <div class="card"><p class="fs-hint" style="margin:0">불러오는 중…</p></div>
                     </div>
                 </div>
-
-                <div class="fs-panel">
-                    <p class="fs-cap">오늘 처방</p>
-                    <div class="fs-readout"><span class="fs-num" id="fsOutLunit">0</span><span class="fs-unit">루닛</span></div>
-                    <p class="fs-code" id="fsOutCode"></p>
-                    <svg class="fs-scale" id="fsScale" viewBox="0 0 300 34" preserveAspectRatio="none" aria-hidden="true"></svg>
-                    <div id="fsOutBody"><p class="fs-empty-state">부위를 선택하고 핀치 두께를 입력하면 루닛이 산출됩니다.</p></div>
-                    <div id="fsOutFlags"></div>
-                    <div class="fs-acts">
-                        <button type="button" class="fs-primary" id="fsBtnCopy">차트용 기록 복사</button>
-                        <button type="button" id="fsBtnReset">초기화</button>
-                    </div>
-                    <details class="fs-dev">
-                        <summary>장비 세팅값 (내부용)</summary>
-                        <div class="fs-devbox" id="fsDevBox">부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span></div>
-                    </details>
-                </div>
-
-                <p class="fs-foot">
-                    1루닛 = 100샷 = 조사 5분. 절반은 L HP continuous, 절반은 s HP 샷으로 전달합니다.<br>
-                    총 루닛 = Σ(주 부위 기본루닛 × T계수) + 추가 부위 + 단단살 보정 + 탄력 가산.<br>
-                    체어타임 = 조사시간 + 부대 15분, 파인주 병합 시 +10분.<br>
-                    1루닛 ≒ 32kJ (L HP 170W 2.5분 + s HP 50샷 × 128J). 에너지는 내부 기록용입니다.
-                </p>
             </div>
         </div>
         <!-- 하단 네비게이션 (공용/재고 전용 계정은 자동 숨김 · 개인 근태 계정은 유지) -->
@@ -7622,6 +7719,7 @@
         function showTopHome(){
             // 파인샷 전용 계정은 공용 홈 대신 파인샷 화면으로
             if(isFineshotOnlyAccount()){ openFineshotTab(); return; }
+            if(typeof fineshotFlush==='function') fineshotFlush();   // 파인샷 입력값 저장 후 이동
             // 모든 tab-content 숨김 후 tab-tophome 만 노출
             document.querySelectorAll('.tab-content').forEach(t=>{
                 t.classList.remove('active');
@@ -8443,6 +8541,7 @@
         let _feeSearchInit=''; // showTop 진입 시 세팅
         async function showTop(view, opts){
             opts=opts||{};
+            if(typeof fineshotFlush==='function') fineshotFlush();   // 파인샷 입력값 저장 후 이동
             document.querySelectorAll('.tab-content').forEach(t=>{
                 t.classList.remove('active');
                 t.style.display='none';
@@ -19097,8 +19196,13 @@
         //  ✨ 파인샷 (루닛 산출기)
         //    부위별 핀치 두께 → T계수 → 루닛. 탄력·단단살·열감 내성까지 반영해
         //    오늘 진행량/이월량·파인주·체어타임·장비 세팅값을 함께 뽑는다.
-        //    저장하는 값은 없다(로컬 계산 전용). 결과는 차트용 텍스트로 복사.
         //    노출 제어: employees.visibleTabs 에 'fineshot' 이 있는 계정만.
+        //
+        //    데이터 (Firestore)
+        //      fineshotRecords/{key}  고객별 현재 입력값(draft). 차트번호(없으면 이름)가 key.
+        //                             입력하는 동안 자동 저장 → 고객을 바꿔도 누락되지 않는다.
+        //      fineshotVisits/{auto}  💾 기록 저장 을 누른 시점의 스냅샷(회차 기록).
+        //                             부위·루닛·에너지(kJ)를 필드로 펴서 담는다 → 📊 통계 집계용.
         // ==================================================================
         (function(){
             /* main : 핀치 두께로 T계수를 곱하는 주 부위
@@ -19132,11 +19236,20 @@
                 normal:'열감 반응을 보며 진행하고, 필요 시 잔여를 이월합니다.',
                 low:'분할 진행을 먼저 안내하세요. 상담 단계에서 회차 계획을 잡는 편이 만족도가 높습니다.'
             };
+            const HEAT_LABEL={even:'좌우 동일',left:'좌측 예민',right:'우측 예민'};
             const SHOT_J=160*0.8;        // s HP 샷모드 160W × 0.8초 = 128J/샷
             const SHOTS_PER_LUNIT=100;   // 1루닛 = 100샷
+            const AUTOSAVE_MS=1200;
 
-            const st={sites:{}, elas:0, heat:'even', tol:'normal', done:null, watt:170};
+            function blankState(){
+                return {chartNo:'', name:'', sites:{}, elas:0, heat:'even', tol:'normal',
+                        done:null, watt:170, meas:{armL:'',armR:'',diaL:'',diaR:''}};
+            }
+            let st=blankState();
             let _built=false;
+            let _key=null;              // 자동저장 대상 문서 ID (차트번호 또는 이름)
+            let _keyIdent=null;         // 그 key 를 잡았을 때의 {chartNo,name}
+            let _dirty=false, _saveTimer=null, _savingP=null, _lastSavedAt=null;
 
             const $=id=>document.getElementById(id);
             function tFromPinch(cm){
@@ -19146,6 +19259,25 @@
                 if(cm<=4.0) return 2;
                 return 3;
             }
+            function numOf(v){ const n=parseFloat(v); return isNaN(n)?null:n; }
+            // 숫자 칸: 숫자와 소수점만 남긴다. 값이 바뀔 때만 손대서 커서가 튀지 않게.
+            function numGuard(el){
+                const before=el.value;
+                let cleaned=before.replace(/[^0-9.]/g,'');
+                const i=cleaned.indexOf('.');
+                if(i>=0) cleaned=cleaned.slice(0,i+1)+cleaned.slice(i+1).replace(/\./g,'');
+                if(cleaned!==before){
+                    const pos=Math.max(0,(el.selectionStart||0)-(before.length-cleaned.length));
+                    el.value=cleaned;
+                    try{ el.setSelectionRange(pos,pos); }catch(_){}
+                }
+                return cleaned;
+            }
+            function todayYmd(){
+                const d=new Date(), p=n=>String(n).padStart(2,'0');
+                return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+            }
+            function hhmm(d){ const p=n=>String(n).padStart(2,'0'); return p(d.getHours())+':'+p(d.getMinutes()); }
 
             // ── 계산 ─────────────────────────────
             function compute(){
@@ -19165,7 +19297,7 @@
                     if(cur.t===3||cur.dens==='fat') cc=l*2;
                     else if(cur.t===2) cc=l;
                     injection+=cc;
-                    rows.push({id:s.id,name:s.name,base:s.base,t:cur.t,dens:cur.dens,lunit:l,cc});
+                    rows.push({id:s.id,name:s.name,base:s.base,t:cur.t,dens:cur.dens,pinch:cur.pinch,lunit:l,cc});
                 });
                 const elasAdd=ELAS_ADD[st.elas];
                 const total=Math.round((sub+densAdj+elasAdd)*10)/10;
@@ -19188,6 +19320,7 @@
             }
 
             function kv(k,v){ return `<div class="fs-kv"><span class="fs-k">${k}</span><span class="fs-v">${v}</span></div>`; }
+            const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
             function drawScale(v,total){
                 const svg=$('fsScale'); if(!svg) return;
@@ -19203,32 +19336,30 @@
                 svg.innerHTML=out;
             }
 
-            // ── 렌더 ─────────────────────────────
-            function render(){
-                const chipWrap=$('fsSiteChips'); if(!chipWrap) return;
-                chipWrap.querySelectorAll('.fs-chip').forEach(b=>{
-                    b.setAttribute('aria-pressed', String(!!st.sites[b.dataset.id]));
-                });
-
-                const det=$('fsSiteDetails'); det.innerHTML='';
+            // ── 부위 카드 ────────────────────────
+            //  칩을 켜고 끌 때만 다시 그린다. 두께를 입력하는 중에는 배지·루닛 숫자만
+            //  갈아끼운다 — 입력칸을 새로 만들면 커서가 튀어 숫자가 밀린다.
+            function rebuildSiteBoxes(){
+                const det=$('fsSiteDetails'); if(!det) return;
+                det.innerHTML='';
                 SITES.forEach(s=>{
                     const cur=st.sites[s.id]; if(!cur||s.type==='addon') return;
-                    const t=cur.t, lunit=(t===null)?null:s.base*T_MULT[t];
                     const box=document.createElement('div');
                     box.className='fs-site';
+                    box.id='fsBox_'+s.id;
                     box.innerHTML=`
                         <div class="fs-site-head">
                             <span class="fs-site-name">${s.name}</span>
                             <span class="fs-site-base">기본 ${s.base}루닛</span>
-                            <span class="fs-site-lunit">${lunit===null?'—':(Math.round((lunit+DENS[cur.dens].add)*10)/10)+'루닛'}</span>
+                            <span class="fs-site-lunit" id="fsL_${s.id}">—</span>
                         </div>
                         <div class="fs-row">
                             <div class="fs-field">
                                 <label for="fsP_${s.id}">핀치 두께 (cm)</label>
-                                <input type="number" class="fs-input" step="0.1" min="0" inputmode="decimal"
-                                    id="fsP_${s.id}" value="${cur.pinch==null?'':cur.pinch}" placeholder="예 3.2">
+                                <input type="text" class="fs-input" inputmode="decimal" id="fsP_${s.id}"
+                                    value="${cur.pinch==null?'':cur.pinch}" placeholder="예 3.2" autocomplete="off">
                             </div>
-                            <span class="fs-tbadge ${t===null?'fs-empty':''}">${t===null?'두께 미입력':'T'+t+' · ×'+T_MULT[t].toFixed(1)}</span>
+                            <span class="fs-tbadge fs-empty" id="fsT_${s.id}">두께 미입력</span>
                         </div>
                         <div class="fs-seg" id="fsD_${s.id}" style="margin-top:.6rem">
                             <button type="button" data-d="none" aria-pressed="${cur.dens==='none'}">보통</button>
@@ -19239,17 +19370,44 @@
 
                     const pi=box.querySelector('#fsP_'+s.id);
                     pi.oninput=()=>{
-                        const v=parseFloat(pi.value);
-                        cur.pinch=isNaN(v)?null:v;
-                        cur.t=tFromPinch(cur.pinch);
-                        render();
-                        // 재렌더로 사라진 포커스·커서 복구
-                        const again=$('fsP_'+s.id);
-                        if(again){ again.focus(); const n=again.value.length; try{ again.setSelectionRange(n,n); }catch(_){} }
+                        cur.pinch=numGuard(pi);          // 입력칸은 건드리지 않는다(커서 유지)
+                        cur.t=tFromPinch(numOf(cur.pinch));
+                        syncSiteBox(s);
+                        renderOut();
+                        markDirty();
                     };
                     box.querySelectorAll('#fsD_'+s.id+' button').forEach(b=>{
-                        b.onclick=()=>{ cur.dens=b.dataset.d; render(); };
+                        b.onclick=()=>{
+                            cur.dens=b.dataset.d;
+                            box.querySelectorAll('#fsD_'+s.id+' button')
+                               .forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+                            syncSiteBox(s);
+                            renderOut();
+                            markDirty();
+                        };
                     });
+                    syncSiteBox(s);
+                });
+            }
+            function syncSiteBox(s){
+                const cur=st.sites[s.id]; if(!cur) return;
+                const t=cur.t;
+                const badge=$('fsT_'+s.id), lab=$('fsL_'+s.id);
+                if(badge){
+                    badge.textContent=(t===null)?'두께 미입력':('T'+t+' · ×'+T_MULT[t].toFixed(1));
+                    badge.classList.toggle('fs-empty', t===null);
+                }
+                if(lab){
+                    const lunit=(t===null)?null:s.base*T_MULT[t];
+                    lab.textContent=(lunit===null)?'—':(Math.round((lunit+DENS[cur.dens].add)*10)/10)+'루닛';
+                }
+            }
+
+            // ── 결과 렌더 ────────────────────────
+            function renderOut(){
+                const chipWrap=$('fsSiteChips'); if(!chipWrap) return;
+                chipWrap.querySelectorAll('.fs-chip').forEach(b=>{
+                    b.setAttribute('aria-pressed', String(!!st.sites[b.dataset.id]));
                 });
 
                 const r=compute();
@@ -19297,74 +19455,406 @@
                     f+=`<div class="fs-flag">지방보다 처짐이 주 고민입니다. 지방 감소 접근은 효과가 제한적이니 <b>탄력 위주</b>로 설명하세요.</div>`;
                 $('fsOutFlags').innerHTML=f;
 
-                const heatLbl={even:'좌우 동일',left:'좌측 예민',right:'우측 예민'}[st.heat];
                 $('fsDevBox').innerHTML=ready
-                    ? `치료시간 ${r.scan}분<br><b>*continous L HP ${r.cont}' , s HP ${r.shots}s</b><br>L HP ${r.W}W · 총 <b>${r.kj}kJ</b> (${r.session}루닛)<br>열감: ${heatLbl}<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span>`
+                    ? `치료시간 ${r.scan}분<br><b>*continous L HP ${r.cont}' , s HP ${r.shots}s</b><br>L HP ${r.W}W · 총 <b>${r.kj}kJ</b> (${r.session}루닛)<br>열감: ${HEAT_LABEL[st.heat]}<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span>`
                     : `부위를 선택하면 표시됩니다.<span class="fs-note">이 값은 장비 조작용입니다. 고객 안내·영수증·후기에는 루닛만 사용합니다.</span>`;
             }
+            function renderAll(){ rebuildSiteBoxes(); renderOut(); }
 
-            // ── 차트 기록 ─────────────────────────
-            function circumText(a,b,c){
-                return [a,b,c].map(id=>($(id).value||'').trim()).filter(Boolean).join('·');
+            // ── 차트 기록 복사 ────────────────────
+            //  ① 시술 기록(차트번호·이름 ~ 열감·루닛·장비값)  ② 측정 수치
+            function patientLine(){
+                const no=(st.chartNo||'').trim(), nm=(st.name||'').trim();
+                if(!no&&!nm) return '';
+                return (no?('차트 '+no):'')+(no&&nm?' / ':'')+nm;
             }
             function buildChart(){
                 const r=compute();
-                const d=new Date(), p=n=>String(n).padStart(2,'0');
-                const today=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
-                const heat={even:'좌우 동일',left:'좌측 예민',right:'우측 예민'}[st.heat];
-                const L=circumText('fsL1','fsL2','fsL3'), R=circumText('fsR1','fsR2','fsR3');
-                const LD=($('fsLD').value||'').trim(), RD=($('fsRD').value||'').trim();
                 const parts=r.rows.map(x=>{
                     if(x.addon) return x.name;
-                    const cur=st.sites[x.id];
-                    return `${x.name}(핀치 ${cur.pinch}cm/T${x.t}${x.dens!=='none'?'·'+DENS[x.dens].label:''})`;
+                    return `${x.name}(핀치 ${x.pinch}cm/T${x.t}${x.dens!=='none'?'·'+DENS[x.dens].label:''})`;
                 });
-                const lines=[
-                    '[파인샷] '+today,
+                const lines=['[파인샷] '+todayYmd()];
+                const who=patientLine(); if(who) lines.push(who);
+                lines.push(
                     '부위: '+parts.join(' + '),
-                    `탄력: E${st.elas} / 열감: ${heat}`,
-                    `-${r.total}루닛 권장`
-                ];
+                    `탄력: E${st.elas} / 열감: ${HEAT_LABEL[st.heat]}`,
+                    `-${r.total}루닛 권장`);
                 if(r.carry>0){ lines.push(`-오늘 ${r.session}루닛 진행`); lines.push(`-잔여 ${r.carry}루닛 다음 회차`); }
                 if(r.cc>0) lines.push(`-파인주 ${r.cc}cc 권장`);
                 lines.push('',
                     `치료시간 ${r.scan}분/*continous L HP ${r.cont}' , s HP ${r.shots}s`,
                     `L HP ${r.W}W / 총 ${r.kj}kJ (${r.session}루닛)`,
-                    '', '둘레',
-                    `- 전 : 좌 ${L||'      '} / 우 ${R||'      '}`,
+                    '----');
+                return lines.join('\n');
+            }
+            function buildMeas(){
+                const m=st.meas, blank='      ';
+                const lines=['[파인샷 측정] '+todayYmd()];
+                const who=patientLine(); if(who) lines.push(who);
+                lines.push(
+                    '팔뚝둘레',
+                    `- 전 : 좌 ${m.armL||blank} / 우 ${m.armR||blank}`,
                     '- 후 : 좌        / 우        ',
                     '지름',
-                    `- 전 : 좌 ${LD||'      '} / 우 ${RD||'      '}`,
+                    `- 전 : 좌 ${m.diaL||blank} / 우 ${m.diaR||blank}`,
                     '- 후 : 좌        / 우        ',
                     '----');
                 return lines.join('\n');
             }
-            async function copyChart(){
-                const r=compute();
-                if(!r.rows.length||r.pending){ alert('핀치 두께를 먼저 입력하세요.'); return; }
-                const text=buildChart();
-                const btn=$('fsBtnCopy');
+            async function copyText(text, btn, okLabel){
+                const orig=btn.textContent;
                 try{
                     await navigator.clipboard.writeText(text);
-                    btn.textContent='복사했습니다';
-                    setTimeout(()=>{ btn.textContent='차트용 기록 복사'; },1600);
+                    btn.textContent=okLabel||'복사했습니다';
+                    setTimeout(()=>{ btn.textContent=orig; },1600);
                 }catch(_){
                     // 클립보드 권한이 없는 인앱 브라우저 대비 — 직접 선택해 복사
                     prompt('아래 내용을 길게 눌러 복사하세요', text);
                 }
             }
-            function resetAll(){
-                st.sites={}; st.elas=0; st.heat='even'; st.tol='normal'; st.done=null; st.watt=170;
-                ['fsL1','fsL2','fsL3','fsLD','fsR1','fsR2','fsR3','fsRD','fsDoneIn'].forEach(i=>{ const el=$(i); if(el) el.value=''; });
-                $('fsWIn').value='170';
-                setSeg('fsElasSeg','0'); setSeg('fsHeatSeg','even'); setSeg('fsTolSeg','normal');
-                $('fsElasDesc').textContent=ELAS_DESC[0];
-                $('fsTolDesc').textContent=TOL_DESC.normal;
-                render();
+
+            // ── 저장 (자동저장 + 회차 기록) ────────
+            function docKey(){
+                const raw=((st.chartNo||'').trim()||(st.name||'').trim());
+                return raw ? raw.replace(/[\/\s]+/g,'_').slice(0,120) : null;
             }
+            function serialize(){
+                const sites={};
+                Object.keys(st.sites).forEach(id=>{
+                    const c=st.sites[id];
+                    sites[id]={pinch:(c.pinch==null?'':String(c.pinch)), t:(c.t==null?null:c.t), dens:c.dens||'none'};
+                });
+                return {chartNo:(st.chartNo||'').trim(), name:(st.name||'').trim(), sites,
+                        elas:st.elas, heat:st.heat, tol:st.tol,
+                        done:(st.done==null?null:st.done), watt:st.watt,
+                        meas:{armL:st.meas.armL||'',armR:st.meas.armR||'',
+                              diaL:st.meas.diaL||'',diaR:st.meas.diaR||''}};
+            }
+            function setState(d){
+                st=blankState();
+                if(d){
+                    st.chartNo=d.chartNo||''; st.name=d.name||'';
+                    st.elas=Number(d.elas)||0;
+                    st.heat=HEAT_LABEL[d.heat]?d.heat:'even';
+                    st.tol=TOL_DESC[d.tol]?d.tol:'normal';
+                    st.done=(d.done==null||d.done==='')?null:Number(d.done);
+                    st.watt=Number(d.watt)||170;
+                    const m=d.meas||{};
+                    st.meas={armL:m.armL||'',armR:m.armR||'',diaL:m.diaL||'',diaR:m.diaR||''};
+                    const sites=d.sites||{};
+                    SITES.forEach(s=>{
+                        const c=sites[s.id]; if(!c) return;
+                        const pinch=(c.pinch==null?'':String(c.pinch));
+                        st.sites[s.id]={pinch, t:(c.t==null?tFromPinch(numOf(pinch)):c.t), dens:c.dens||'none'};
+                    });
+                }
+                syncInputs();
+                renderAll();
+            }
+            function syncInputs(){
+                $('fsChartNo').value=st.chartNo||'';
+                $('fsName').value=st.name||'';
+                $('fsDoneIn').value=(st.done==null?'':st.done);
+                $('fsWIn').value=(st.watt==null?'':st.watt);
+                $('fsArmL').value=st.meas.armL||''; $('fsArmR').value=st.meas.armR||'';
+                $('fsDiaL').value=st.meas.diaL||''; $('fsDiaR').value=st.meas.diaR||'';
+                setSeg('fsElasSeg', String(st.elas)); setSeg('fsHeatSeg', st.heat); setSeg('fsTolSeg', st.tol);
+                $('fsElasDesc').textContent=ELAS_DESC[st.elas];
+                $('fsTolDesc').textContent=TOL_DESC[st.tol];
+            }
+            function saveState(msg, ok){
+                const el=$('fsSaveState'); if(!el) return;
+                el.textContent=msg;
+                el.classList.toggle('fs-ok', !!ok);
+            }
+            function markDirty(){
+                _dirty=true;
+                if(!_key){ return; }                  // 차트번호(또는 이름) 전에는 자동저장 안 함
+                clearTimeout(_saveTimer);
+                _saveTimer=setTimeout(()=>{ flush(); }, AUTOSAVE_MS);
+            }
+            // 현재 입력값을 fineshotRecords/{key} 에 즉시 기록. 고객 전환·화면 이탈 때도 부른다.
+            //  ident: 차트번호를 고쳐 다른 고객으로 넘어갈 때, 직전 문서에는 예전 이름/번호를 남긴다.
+            async function flush(ident){
+                clearTimeout(_saveTimer);
+                if(!_key||!_dirty) return;
+                const key=_key, payload=serialize();
+                if(ident){ payload.chartNo=ident.chartNo||''; payload.name=ident.name||''; }
+                _dirty=false;
+                _savingP=(async()=>{
+                    try{
+                        await db.collection('fineshotRecords').doc(key).set({
+                            ...payload,
+                            updatedAt:new Date().toISOString(),
+                            updatedBy:(currentUser&&(currentUser.name||currentUser.id))||''
+                        },{merge:true});
+                        _lastSavedAt=new Date();
+                        saveState(`자동 저장됨 · ${hhmm(_lastSavedAt)} (${key})`, true);
+                    }catch(e){
+                        _dirty=true;                  // 실패하면 다음 기회에 다시
+                        saveState('⚠️ 자동 저장 실패 — 네트워크 확인 후 💾 기록 저장을 눌러주세요.');
+                    }
+                })();
+                return _savingP;
+            }
+            // 차트번호/이름 칸을 벗어날 때 자동저장 키를 확정한다.
+            // (타이핑 도중 '1','12','123' 같은 문서가 생기지 않게 blur 에서만 잡는다)
+            async function commitKey(){
+                const next=docKey();
+                const ident={chartNo:(st.chartNo||'').trim(), name:(st.name||'').trim()};
+                if(next===_key){ _keyIdent=ident; if(_dirty) markDirty(); return; }
+                await flush(_keyIdent||undefined);     // 이전 고객은 예전 번호·이름 그대로 저장
+                _key=next; _keyIdent=ident;
+                if(!_key){ saveState('차트번호(또는 이름)를 넣으면 입력하는 동안 자동 저장됩니다.'); return; }
+                _dirty=true;
+                saveState(`자동 저장 대상: ${_key}`);
+                markDirty();
+                lookupExisting(_key);
+            }
+            // 같은 차트번호로 저장된 기록이 있으면 알려만 준다 (자동으로 덮어쓰지 않는다)
+            async function lookupExisting(key){
+                const box=$('fsFound'); if(!box) return;
+                box.innerHTML='';
+                try{
+                    const doc=await db.collection('fineshotRecords').doc(key).get();
+                    if(!doc.exists) return;
+                    const d=doc.data()||{};
+                    const when=(d.updatedAt||'').slice(0,16).replace('T',' ');
+                    box.innerHTML=`<div class="fs-found">저장된 기록이 있습니다 — <b>${esc(d.name||d.chartNo||key)}</b>`
+                        +(when?` · ${esc(when)}`:'')
+                        +` <button type="button" id="fsLoadFound">불러오기</button></div>`;
+                    $('fsLoadFound').onclick=()=>loadRecord(key);
+                }catch(_){}
+            }
+            async function loadRecord(key){
+                try{
+                    await flush();
+                    const doc=await db.collection('fineshotRecords').doc(key).get();
+                    if(!doc.exists){ alert('기록을 찾을 수 없습니다.'); return; }
+                    const d=doc.data()||{};
+                    _key=key; _dirty=false;
+                    _keyIdent={chartNo:d.chartNo||'', name:d.name||''};
+                    setState(d);
+                    $('fsFound').innerHTML=''; $('fsSearchList').innerHTML='';
+                    $('fsSearchBox').style.display='none';
+                    saveState(`불러왔습니다 · ${key}`, true);
+                }catch(e){ alert('불러오기 실패: '+(e&&e.message||e)); }
+            }
+            // 💾 기록 저장 — 오늘 회차를 fineshotVisits 에 스냅샷으로 남긴다(통계 집계 대상)
+            async function saveVisit(){
+                await commitKey();
+                if(!_key){ alert('차트번호 또는 이름을 먼저 입력하세요.'); return; }
+                const r=compute();
+                if(!r.rows.length){ alert('시술 부위를 먼저 선택하세요.'); return; }
+                if(r.pending && !confirm('핀치 두께가 비어 있는 부위가 있습니다. 그대로 저장할까요?')) return;
+                const btn=$('fsBtnSave'), orig=btn.textContent;
+                btn.disabled=true; btn.textContent='저장 중…';
+                try{
+                    await flush();
+                    const now=new Date();
+                    await db.collection('fineshotVisits').add({
+                        key:_key,
+                        chartNo:(st.chartNo||'').trim(),
+                        name:(st.name||'').trim(),
+                        date:todayYmd(),
+                        ts:now.toISOString(),
+                        by:(currentUser&&(currentUser.name||currentUser.id))||'',
+                        // 시술 내용 — 📊 통계의 '시술별' 집계용
+                        sites:r.rows.map(x=>({id:x.id,name:x.name,addon:!!x.addon,
+                            base:x.base==null?null:x.base, t:(x.t==null?null:x.t),
+                            dens:x.dens||null, pinch:(x.pinch==null?'':String(x.pinch)),
+                            lunit:(x.lunit==null?null:x.lunit)})),
+                        siteIds:r.rows.map(x=>x.id),
+                        elas:st.elas, heat:st.heat, tol:st.tol,
+                        total:r.total, session:r.session, carry:r.carry, injectionCc:r.cc,
+                        scanMin:r.scan, chairMin:r.chair, slotMin:r.slot, tier:r.tier,
+                        // 에너지 — 📊 통계의 '에너지별' 집계용
+                        watt:r.W, contMin:r.cont, shots:r.shots, kj:r.kj,
+                        meas:serialize().meas
+                    });
+                    btn.textContent='저장했습니다';
+                    saveState(`기록 저장됨 · ${hhmm(now)} (${_key})`, true);
+                    setTimeout(()=>{ btn.textContent=orig; btn.disabled=false; },1600);
+                }catch(e){
+                    btn.textContent=orig; btn.disabled=false;
+                    alert('저장 실패: '+(e&&e.message||e));
+                }
+            }
+            // 🔍 불러오기 — 차트번호/이름 앞글자로 찾고, 비어 있으면 최근 고객을 보여준다
+            async function search(){
+                const list=$('fsSearchList');
+                const q=(($('fsSearchQ').value)||'').trim();
+                list.innerHTML='<div class="fs-list"><div class="fs-list-empty">찾는 중…</div></div>';
+                const col=db.collection('fineshotRecords');
+                const found=new Map();
+                const add=snap=>snap.forEach(d=>{ if(!found.has(d.id)) found.set(d.id,d.data()||{}); });
+                try{
+                    const qs=[];
+                    if(q){
+                        // 차트번호·이름 둘 다 앞글자로 찾는다 (무엇을 넣었는지 묻지 않는다)
+                        qs.push(col.orderBy('chartNo').startAt(q).endAt(q+'\uf8ff').limit(15).get());
+                        qs.push(col.orderBy('name').startAt(q).endAt(q+'\uf8ff').limit(15).get());
+                    }else{
+                        qs.push(col.orderBy('updatedAt','desc').limit(15).get());
+                    }
+                    (await Promise.all(qs)).forEach(add);
+                }catch(e){
+                    list.innerHTML=`<div class="fs-list"><div class="fs-list-empty">검색 실패: ${esc(e&&e.message||e)}</div></div>`;
+                    return;
+                }
+                if(!found.size){
+                    list.innerHTML='<div class="fs-list"><div class="fs-list-empty">저장된 기록이 없습니다.</div></div>';
+                    return;
+                }
+                let h='<div class="fs-list">';
+                found.forEach((d,id)=>{
+                    const when=(d.updatedAt||'').slice(0,10);
+                    h+=`<button type="button" class="fs-list-item" data-key="${esc(id)}">`
+                      +`<span class="fs-li-no">${esc(d.chartNo||'—')}</span>`
+                      +`<span>${esc(d.name||'')}</span>`
+                      +`<span class="fs-li-date">${esc(when)}</span></button>`;
+                });
+                list.innerHTML=h+'</div>';
+                list.querySelectorAll('.fs-list-item').forEach(b=>{
+                    b.onclick=()=>loadRecord(b.dataset.key);
+                });
+            }
+            async function newPatient(){
+                await flush(_keyIdent||undefined);
+                _key=null; _keyIdent=null; _dirty=false;
+                setState(null);
+                $('fsFound').innerHTML=''; $('fsSearchList').innerHTML='';
+                $('fsSearchBox').style.display='none';
+                saveState('새 고객 — 차트번호(또는 이름)를 넣으면 자동 저장됩니다.');
+                $('fsChartNo').focus();
+            }
+            function resetAll(){
+                if(!confirm('현재 입력을 모두 지울까요? (저장된 기록은 남습니다)')) return;
+                const no=st.chartNo, nm=st.name;
+                setState({chartNo:no, name:nm});
+                _dirty=true; markDirty();
+            }
+
+            // ── 📊 통계 ──────────────────────────
+            let _statRange='m0', _statLoading=false;
+            function rangeOf(v){
+                const d=new Date(), y=d.getFullYear(), m=d.getMonth();
+                const p=n=>String(n).padStart(2,'0');
+                const ymd=x=>`${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;
+                if(v==='m1') return {from:ymd(new Date(y,m-1,1)), to:ymd(new Date(y,m,0)),  label:'지난 달'};
+                if(v==='m3') return {from:ymd(new Date(y,m-2,1)), to:ymd(new Date(y,m+1,0)),label:'최근 3개월'};
+                if(v==='y0') return {from:`${y}-01-01`,          to:`${y}-12-31`,          label:y+'년'};
+                return {from:ymd(new Date(y,m,1)), to:ymd(new Date(y,m+1,0)), label:'이번 달'};
+            }
+            async function loadStats(){
+                if(_statLoading) return;
+                _statLoading=true;
+                const box=$('fsStatsBody');
+                const R=rangeOf(_statRange);
+                $('fsStatRangeDesc').textContent=`${R.from} ~ ${R.to} · 💾 기록 저장을 누른 회차만 집계됩니다.`;
+                box.innerHTML='<div class="card"><p class="fs-hint" style="margin:0">불러오는 중…</p></div>';
+                let rows=[];
+                try{
+                    const snap=await db.collection('fineshotVisits')
+                        .orderBy('date').startAt(R.from).endAt(R.to).limit(1000).get();
+                    snap.forEach(d=>rows.push(d.data()||{}));
+                }catch(e){
+                    box.innerHTML=`<div class="card"><p class="fs-hint" style="margin:0">통계를 불러오지 못했습니다: ${esc(e&&e.message||e)}</p></div>`;
+                    _statLoading=false; return;
+                }
+                renderStats(rows, R);
+                _statLoading=false;
+            }
+            function renderStats(rows, R){
+                const box=$('fsStatsBody');
+                if(!rows.length){
+                    box.innerHTML='<div class="card"><p class="fs-hint" style="margin:0">이 기간에 저장된 기록이 없습니다.</p></div>';
+                    return;
+                }
+                const r1=n=>Math.round(n*10)/10;
+                const cnt=rows.length;
+                const lunit=rows.reduce((a,x)=>a+(Number(x.session)||0),0);
+                const kj=rows.reduce((a,x)=>a+(Number(x.kj)||0),0);
+                const cc=rows.reduce((a,x)=>a+(Number(x.injectionCc)||0),0);
+
+                // 시술(부위)별
+                const bySite=new Map();
+                rows.forEach(v=>(v.sites||[]).forEach(s=>{
+                    const k=s.name||s.id||'-';
+                    const o=bySite.get(k)||{n:0,l:0};
+                    o.n++; o.l+=Number(s.lunit)||0;
+                    bySite.set(k,o);
+                }));
+                // 프로그램별
+                const byTier=new Map();
+                rows.forEach(v=>{ const k=v.tier||'-'; byTier.set(k,(byTier.get(k)||0)+1); });
+                // 에너지 구간별 (kJ)
+                const BANDS=[[0,100],[100,200],[200,300],[300,400],[400,Infinity]];
+                const byBand=BANDS.map(([a,b])=>({label:(b===Infinity?`${a}kJ+`:`${a}~${b}kJ`),n:0,kj:0}));
+                rows.forEach(v=>{
+                    const e=Number(v.kj)||0;
+                    const i=BANDS.findIndex(([a,b])=>e>=a&&e<b);
+                    if(i>=0){ byBand[i].n++; byBand[i].kj+=e; }
+                });
+                // 월별 추이
+                const byMonth=new Map();
+                rows.forEach(v=>{
+                    const k=(v.date||'').slice(0,7)||'-';
+                    const o=byMonth.get(k)||{n:0,l:0,kj:0};
+                    o.n++; o.l+=Number(v.session)||0; o.kj+=Number(v.kj)||0;
+                    byMonth.set(k,o);
+                });
+
+                const table=(head,body)=>`<div style="overflow-x:auto"><table class="fs-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+                const siteRows=[...bySite.entries()].sort((a,b)=>b[1].n-a[1].n)
+                    .map(([k,o])=>`<tr><td>${esc(k)}</td><td>${o.n}건</td><td>${r1(o.l)}루닛</td></tr>`).join('');
+                const tierRows=[...byTier.entries()].sort((a,b)=>b[1]-a[1])
+                    .map(([k,n])=>`<tr><td>${esc(k)}</td><td>${n}건</td><td>${Math.round(n/cnt*100)}%</td></tr>`).join('');
+                const bandRows=byBand.filter(b=>b.n)
+                    .map(b=>`<tr><td>${esc(b.label)}</td><td>${b.n}건</td><td>${r1(b.kj)}kJ</td></tr>`).join('');
+                const monthRows=[...byMonth.entries()].sort((a,b)=>a[0].localeCompare(b[0]))
+                    .map(([k,o])=>`<tr><td>${esc(k)}</td><td>${o.n}건</td><td>${r1(o.l)}루닛</td><td>${r1(o.kj)}kJ</td></tr>`).join('');
+
+                box.innerHTML=`
+                    <div class="fs-stat-grid">
+                        <div class="stat-card"><div class="stat-value">${cnt}</div><div class="stat-label">시술 건수</div></div>
+                        <div class="stat-card"><div class="stat-value">${r1(lunit)}</div><div class="stat-label">총 루닛</div></div>
+                        <div class="stat-card"><div class="stat-value">${r1(kj)}</div><div class="stat-label">총 에너지 (kJ)</div></div>
+                        <div class="stat-card"><div class="stat-value">${r1(lunit/cnt)}</div><div class="stat-label">회차 평균 루닛</div></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">📍 시술 부위별</div>
+                        ${table('<th>부위</th><th>건수</th><th>루닛</th>', siteRows)}
+                    </div>
+                    <div class="card">
+                        <div class="card-title">⚡ 에너지 구간별</div>
+                        ${table('<th>구간</th><th>건수</th><th>합계</th>', bandRows)}
+                        <p class="fs-hint" style="margin:.6rem 0 0">회차당 평균 ${r1(kj/cnt)}kJ · 파인주 합계 ${r1(cc)}cc</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">🎚 프로그램별</div>
+                        ${table('<th>프로그램</th><th>건수</th><th>비중</th>', tierRows)}
+                    </div>
+                    <div class="card">
+                        <div class="card-title">📆 월별</div>
+                        ${table('<th>월</th><th>건수</th><th>루닛</th><th>에너지</th>', monthRows)}
+                    </div>`;
+            }
+            function showView(v){
+                const calc=v!=='stats';
+                $('fsCalcView').style.display=calc?'':'none';
+                $('fsStatsView').style.display=calc?'none':'';
+                document.querySelectorAll('#fsViewSeg button').forEach(b=>{
+                    b.setAttribute('aria-pressed', String((b.dataset.v==='stats')===!calc));
+                });
+                if(!calc){ flush(); loadStats(); }
+            }
+
+            // ── 세그먼트 유틸 ─────────────────────
             function setSeg(segId,val){
                 document.querySelectorAll('#'+segId+' button').forEach(b=>{
-                    b.setAttribute('aria-pressed', String(b.dataset.v===val));
+                    b.setAttribute('aria-pressed', String(b.dataset.v===String(val)));
                 });
             }
             function bindSeg(segId,key,after){
@@ -19373,7 +19863,8 @@
                         st[key]=(key==='elas')?Number(b.dataset.v):b.dataset.v;
                         setSeg(segId,b.dataset.v);
                         if(after) after();
-                        render();
+                        renderOut();
+                        markDirty();
                     };
                 });
             }
@@ -19392,20 +19883,65 @@
                     b.textContent=s.name+(s.type==='addon'?' +'+s.base:' ('+s.base+')');
                     b.onclick=()=>{
                         if(st.sites[s.id]) delete st.sites[s.id];
-                        else st.sites[s.id]={pinch:null,t:null,dens:'none'};
-                        render();
+                        else st.sites[s.id]={pinch:'',t:null,dens:'none'};
+                        renderAll();
+                        markDirty();
                     };
                     chipWrap.appendChild(b);
                 });
                 bindSeg('fsElasSeg','elas',()=>{ $('fsElasDesc').textContent=ELAS_DESC[st.elas]; });
                 bindSeg('fsHeatSeg','heat');
                 bindSeg('fsTolSeg','tol',()=>{ $('fsTolDesc').textContent=TOL_DESC[st.tol]; });
-                $('fsDoneIn').oninput=e=>{ const v=parseFloat(e.target.value); st.done=isNaN(v)?null:v; render(); };
-                $('fsWIn').oninput=e=>{ const v=parseFloat(e.target.value); st.watt=isNaN(v)?170:v; render(); };
-                $('fsBtnCopy').onclick=copyChart;
+
+                $('fsDoneIn').oninput=e=>{ st.done=numOf(numGuard(e.target)); renderOut(); markDirty(); };
+                $('fsWIn').oninput=e=>{ const v=numOf(numGuard(e.target)); st.watt=(v==null?170:v); renderOut(); markDirty(); };
+                [['fsArmL','armL'],['fsArmR','armR'],['fsDiaL','diaL'],['fsDiaR','diaR']].forEach(([id,k])=>{
+                    $(id).oninput=e=>{ st.meas[k]=numGuard(e.target); markDirty(); };
+                });
+                ['fsChartNo','fsName'].forEach(id=>{
+                    const el=$(id), k=(id==='fsChartNo')?'chartNo':'name';
+                    el.oninput=()=>{ st[k]=el.value; _dirty=true; };
+                    el.onblur=()=>{ commitKey(); };
+                });
+
+                $('fsBtnFind').onclick=()=>{
+                    const box=$('fsSearchBox');
+                    const open=box.style.display==='none';
+                    box.style.display=open?'':'none';
+                    if(open){ $('fsSearchQ').value=''; $('fsSearchQ').focus(); search(); }
+                    else{ $('fsSearchList').innerHTML=''; }
+                };
+                $('fsBtnSearch').onclick=search;
+                $('fsSearchQ').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); search(); } };
+                $('fsBtnNew').onclick=newPatient;
+                $('fsBtnSave').onclick=saveVisit;
+                $('fsBtnCopy').onclick=()=>{
+                    const r=compute();
+                    if(!r.rows.length||r.pending){ alert('핀치 두께를 먼저 입력하세요.'); return; }
+                    copyText(buildChart(), $('fsBtnCopy'));
+                };
+                $('fsBtnCopyMeas').onclick=()=>{
+                    const m=st.meas;
+                    if(!m.armL&&!m.armR&&!m.diaL&&!m.diaR){ alert('측정 수치를 먼저 입력하세요.'); return; }
+                    copyText(buildMeas(), $('fsBtnCopyMeas'), '복사했습니다');
+                };
                 $('fsBtnReset').onclick=resetAll;
-                render();
+                document.querySelectorAll('#fsViewSeg button').forEach(b=>{
+                    b.onclick=()=>showView(b.dataset.v);
+                });
+                document.querySelectorAll('#fsStatRange button').forEach(b=>{
+                    b.onclick=()=>{ _statRange=b.dataset.v; setSeg('fsStatRange',b.dataset.v); loadStats(); };
+                });
+
+                // 화면을 벗어나도 입력이 날아가지 않게 — 탭 전환·앱 이탈 시 즉시 저장
+                document.addEventListener('visibilitychange',()=>{ if(document.hidden) flush(); });
+                window.addEventListener('pagehide',()=>{ flush(); });
+
+                syncInputs();
+                renderAll();
             };
+            // 다른 탭·홈으로 나갈 때 호출 (하단 탭 네비게이션에서 사용)
+            window.fineshotFlush=function(){ try{ return flush(); }catch(_){ } };
         })();
 
         // Tab Navigation
@@ -19417,9 +19953,11 @@
                 const _tc=document.getElementById('tab-'+this.dataset.tab);
                 // 홈(showTopHome/showTop)이 걸어둔 인라인 display:none 을 풀어야 다시 보인다
                 if(_tc){ _tc.style.display=''; _tc.classList.add('active'); }
-                // 파인샷 탭 최초 진입 시 산출기 구성
-                if(this.dataset.tab==='fineshot'&&typeof initFineshotTab==='function'){
-                    initFineshotTab();
+                // 파인샷: 들어갈 땐 구성, 나갈 땐 입력값 즉시 저장(누락 방지)
+                if(this.dataset.tab==='fineshot'){
+                    if(typeof initFineshotTab==='function') initFineshotTab();
+                }else if(typeof fineshotFlush==='function'){
+                    fineshotFlush();
                 }
                 // 재고 탭 진입 시 데이터 로드
                 if(this.dataset.tab==='inventory'&&!invItems.length){

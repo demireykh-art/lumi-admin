@@ -98,6 +98,38 @@ GPS 는 출퇴근을 클리닉 범위 안에서 찍었는지 보려고만 쓴다
   고객 안내·영수증·후기에는 루닛만 쓴다.
 - 구현: `staff.html` 의 `#tab-fineshot` + `initFineshotTab()` IIFE (`fs-` 접두 클래스·ID).
   탭 최초 진입 시 1회 구성하고, 이후는 로컬 state 로만 다시 그린다.
+- **입력 중에는 입력칸을 다시 만들지 않는다.** 칩을 켜고 끌 때만 부위 카드를 새로 그리고
+  (`rebuildSiteBoxes`), 두께를 치는 동안에는 배지·루닛 숫자만 갈아끼운다(`syncSiteBox`).
+  전에는 글자마다 카드를 다시 그려 커서가 앞으로 튀고 숫자가 밀렸다. 숫자 칸은
+  `type=text` + `inputmode=decimal` + `numGuard()`(숫자·소수점만 통과) 로 받는다 —
+  `type=number` 는 "3." 처럼 치는 중간값을 빈 문자열로 돌려줘서 값이 튄다.
+
+**고객 · 저장 (차트번호/이름)**
+- 👤 고객 카드에 **차트번호·이름**. `🔍 고객 찾기` 는 **별도 검색창**을 연다
+  (차트번호·이름 앞글자 동시 검색, 비우면 최근 15명). 위 차트번호·이름 칸은
+  검색창이 아니라 **지금 보고 있는 고객**이다.
+- **자동 저장**: 차트번호(없으면 이름)가 문서 키가 되고, 입력이 멈추면 1.2초 뒤
+  `fineshotRecords/{key}` 에 현재 값 전체가 저장된다. 고객 전환·다른 탭 이동·홈·앱 이탈
+  (`visibilitychange`/`pagehide`) 시에도 즉시 flush 해서 수치가 날아가지 않는다.
+  키는 **차트번호·이름 칸에서 포커스가 빠질 때** 확정한다 — 타이핑 도중 `1`,`12`,`123`
+  같은 문서가 생기지 않게. 키가 바뀌면 직전 문서는 **예전 번호·이름 그대로** 저장한다.
+- **💾 기록 저장**: 그 시점 회차를 `fineshotVisits` 에 스냅샷으로 남긴다(통계 대상).
+- 같은 차트번호로 저장된 기록이 있으면 알려만 주고, 덮어쓰지 않는다
+  (`저장된 기록이 있습니다 [불러오기]`).
+- 차트번호만 바꿔 치면 앞 고객의 입력이 폼에 남는다. 다른 고객은 **`+ 새 고객`** 으로 시작한다.
+
+**복사 2개**
+- `차트용 기록 복사` — 차트번호/이름 · 부위 · 탄력/열감 · 루닛 · 파인주 · 장비 세팅값
+- `📏 측정 수치 복사` — 팔뚝둘레(좌/우) · 지름(좌/우). 측정 기록은 부위 3곳을 없애고
+  **팔뚝둘레 · 지름 2줄**로 줄였다. 차트에 따로 붙일 일이 많아 복사 버튼을 나눴다.
+
+**📊 통계** (탭 안 `✨ 산출기 / 📊 통계` 전환)
+- 기간: 이번 달 · 지난 달 · 최근 3개월 · 올해. `fineshotVisits` 를 `date` 범위로 읽어
+  클라이언트에서 집계한다(복합 색인 불필요).
+- 시술 건수 · 총 루닛 · **총 에너지(kJ)** · 회차 평균 루닛,
+  **시술 부위별**(건수·루닛) · **에너지 구간별**(100kJ 단위) · 프로그램별 · 월별 추이.
+- 그래서 회차 스냅샷에는 부위 배열(`sites`,`siteIds`)과 에너지(`watt`,`contMin`,`shots`,`kj`)를
+  펴서 담는다. 나중에 다른 축으로 집계하려면 여기에 필드를 더 넣는다.
 
 **노출 제어 — 파인샷만 보는 계정을 만들 수 있다.**
 - 기존 `employees.visibleTabs` 를 그대로 쓴다. 새 권한 필드를 만들지 않았다.
@@ -112,6 +144,20 @@ GPS 는 출퇴근을 클리닉 범위 안에서 찍었는지 보려고만 쓴다
   판정에서 빼 둔다 — 체크하면 항상 배열로 저장된다.
 - 곁가지로 고친 것: `displayTabs()` 의 목록에 `order`(발주분석)가 빠져 있어 제한 계정에도
   남아 있었다. 이제 재고를 쓰는 계정에만 재고와 묶어서 나온다.
+
+**Firestore**
+```
+fineshotRecords/{key}   key = 차트번호(없으면 이름). 고객별 현재 입력값(자동 저장)
+  chartNo, name, sites{id:{pinch,t,dens}}, elas, heat, tol, done, watt,
+  meas{armL,armR,diaL,diaR}, updatedAt, updatedBy
+fineshotVisits/{auto}   💾 기록 저장 스냅샷 (통계 집계 대상)
+  key, chartNo, name, date(YYYY-MM-DD), ts, by,
+  sites[{id,name,addon,base,t,dens,pinch,lunit}], siteIds[],
+  elas, heat, tol, total, session, carry, injectionCc,
+  scanMin, chairMin, slotMin, tier,
+  watt, contMin, shots, kj, meas{}
+```
+둘 다 `firestore.rules` 에 `signedIn()` 로 등록되어 있다.
 
 ### 👥 STAFF 관리 (대표원장 전용, `settings/adminHigh.emails`)
 - 홈 카드 `👥 STAFF` — adminHigh 계정만 노출, 대기 배지
