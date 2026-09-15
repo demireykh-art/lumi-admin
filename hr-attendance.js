@@ -719,8 +719,10 @@ function openEmployeeModal(id=null){
     document.getElementById('empIncRounding').value='0';
     document.getElementById('empIncJapan').checked=false;
     document.getElementById('empPersonalSalesSource').value='manual';
-    // 탭 체크박스 초기화
-    document.querySelectorAll('.empTab').forEach(cb=>cb.checked=true);
+    // 탭 체크박스 초기화 (✨ 파인샷은 선택 탭이라 기본 미체크)
+    document.querySelectorAll('.empTab').forEach(cb=>{
+        cb.checked=cb.getAttribute('data-tab')!=='fineshot';
+    });
     { const t=document.getElementById('empIsTest'); if(t) t.checked=false; }
     
     if(id){
@@ -900,14 +902,18 @@ async function saveEmployee(){
     
     // 탭 선택 수집
     const selectedTabs=[];
-    const allTabs=document.querySelectorAll('.empTab');
     document.querySelectorAll('.empTab:checked').forEach(cb=>{
         selectedTabs.push(cb.getAttribute('data-tab'));
     });
-    
-    // 모든 탭이 체크되어 있으면 null (기본값, 모든 탭 표시)
+
+    // 기본 탭이 전부 체크되어 있으면 null (기본값, 기본 탭 모두 표시)
     // 일부만 체크되어 있으면 선택된 탭만 배열로 저장
-    const visibleTabsValue=selectedTabs.length===allTabs.length?null:selectedTabs;
+    // ✨ 파인샷은 기본 세트에 없는 선택 탭이라 '전부 체크 = 기본값' 판정에서 제외한다.
+    //    (체크하면 항상 배열로 저장되어 그 계정에만 파인샷 탭이 뜬다)
+    const baseTabs=Array.from(document.querySelectorAll('.empTab:not([data-tab="fineshot"])'));
+    const allBaseChecked=baseTabs.length>0&&baseTabs.every(cb=>cb.checked);
+    const fineshotOn=!!document.querySelector('.empTab[data-tab="fineshot"]:checked');
+    const visibleTabsValue=(allBaseChecked&&!fineshotOn)?null:selectedTabs;
     
     // isIncentiveTarget: 인센티브 탭이 포함되어 있는지 자동 판단
     const isIncentiveTarget=selectedTabs.includes('incentive');
