@@ -28,7 +28,8 @@
     <!-- FCM(messaging) SDK 는 관리자 푸시 사용 시에만 지연 로드 (인앱 브라우저 로그인 영향 방지) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Black Han Sans: 📣 SNS 탭 촬영 슬레이트의 제목용 굵은 서체 (실제 글립 사용 시에만 내려받음) -->
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root{--bg:#faf9f7;--bg-card:#fff;--primary:#9a8b7a;--primary-dark:#7a6b5a;--text:#2c2c2c;--text-secondary:#6b6b6b;--text-muted:#999;--border:#e8e4df;--green:#5a7a5a;--red:#a85a5a;--orange:#c4956a;--purple:#7a6a8a;
             /* ── 공통 디자인 토큰 ─────────────────────────────
@@ -521,6 +522,44 @@
         .fs-table th:first-child,.fs-table td:first-child{text-align:left}
         .fs-table th{font-size:.72rem;color:var(--text-muted);font-weight:600}
         .fs-table tbody tr:last-child td{border-bottom:0}
+
+        /* ── 📣 SNS · 촬영 슬레이트 ── */
+        .sns-stage{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);
+            padding:.5rem;margin-bottom:.6rem}
+        .sns-stage img{display:block;width:100%;border-radius:4px;background:#fff}
+        .sns-hint{font-size:.74rem;color:var(--text-muted);line-height:1.5;margin:.4rem .1rem 0}
+        .sns-row{display:flex;gap:.45rem;margin:.7rem 0 1rem}
+        .sns-row .btn{margin-bottom:0}
+        .sns-label{display:block;font-size:.76rem;color:var(--text-muted);margin:0 0 .35rem}
+        .sns-input{width:100%;font-family:inherit;font-size:.95rem;color:var(--text);background:#fff;
+            border:1px solid var(--border);border-radius:var(--r-sm);padding:.65rem .7rem}
+        .sns-input:focus{outline:none;border-color:var(--primary)}
+        .sns-field{margin-bottom:1rem}
+        .sns-chips{display:flex;flex-wrap:wrap;gap:.35rem}
+        .sns-chip{display:flex;align-items:center;gap:.4rem;background:#fff;border:1px solid var(--border);
+            color:var(--text);border-radius:var(--r-pill);padding:.4rem .85rem .4rem .6rem;font-size:.82rem;
+            font-family:inherit;cursor:pointer;min-height:44px}
+        .sns-chip[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:#fff;font-weight:600}
+        .sns-chip .sns-no{font-weight:700;min-width:1.1rem;text-align:center;color:var(--text-muted);font-size:.8rem}
+        .sns-chip[aria-pressed="true"] .sns-no{color:#fff}
+        .sns-manage{margin-top:1rem;border-top:1px solid var(--border);padding-top:.8rem}
+        .sns-manage>summary{cursor:pointer;font-size:.82rem;color:var(--text-secondary);list-style:none}
+        .sns-manage>summary::-webkit-details-marker{display:none}
+        .sns-manage>summary::before{content:"+ "}
+        .sns-manage[open]>summary::before{content:"− "}
+        .sns-edit-row{display:flex;gap:.3rem;align-items:center;margin-top:.45rem}
+        .sns-edit-row input{flex:1;min-width:0;font-family:inherit;font-size:.82rem;padding:.45rem .5rem;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text)}
+        .sns-edit-row input.sns-narrow{flex:0 0 2.6rem;text-align:center}
+        .sns-edit-row input.sns-suffix{flex:0 0 5.2rem;color:var(--text-muted);background:var(--bg)}
+        .sns-del{flex:0 0 auto;background:#fff;border:1px solid var(--border);color:var(--red);
+            border-radius:var(--r-sm);padding:.45rem .55rem;font-size:.75rem;font-family:inherit;cursor:pointer;
+            min-height:44px}
+        .sns-edit-row input{min-height:44px}
+        .sns-addbtn{width:100%;margin-top:.5rem;background:var(--bg);border:1px solid var(--border);color:var(--text);
+            border-radius:var(--r-sm);padding:.7rem;font-size:.82rem;font-family:inherit;cursor:pointer;min-height:44px}
+        .sns-status{font-size:.74rem;color:var(--text-muted);margin-bottom:.6rem}
+        .sns-status b{color:var(--green);font-weight:600}
     </style>
 </head>
 <body>
@@ -886,6 +925,14 @@
                             <span id="staffAdminPendingBadge" class="home-badge home-badge-amber" style="display:none">0</span>
                             <span class="home-row-arrow">›</span>
                         </button>
+                        <button type="button" class="home-row" id="topHomeSnsBtn" style="display:none" onclick="showTop('sns')">
+                            <span class="home-row-icon">📣</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">SNS <span class="home-row-tag">관리자 전용</span></span>
+                                <span class="home-row-desc">촬영 슬레이트 — 릴스 촬영 직전 슬레이트 사진 생성 · 시리즈 관리</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
+                        </button>
                         <button type="button" class="home-row" id="topHomeDailySalesBtn" style="display:none" onclick="showTop('dailySales')">
                             <span class="home-row-icon">💵</span>
                             <span class="home-row-body">
@@ -1215,6 +1262,54 @@
                         <button class="view-btn primary" id="dsUploadBtn" onclick="dsOpenUpload()">📷 업로드</button>
                     </div>
                     <div id="dsBody"><div class="empty">불러오는 중…</div></div>
+                </div>
+            </div>
+
+            <!-- === 📣 SNS (관리자 전용) · 촬영 슬레이트 ===
+                 릴스 촬영 직전에 슬레이트 이미지를 만들어 사진첩에 저장한다.
+                 사진첩에서 이 사진 "바로 다음 번호"가 그 영상이 되고, 맥의 편집
+                 파이프라인이 슬레이트를 읽어 파일명(내용_접미사)과 프리셋을 정한다.
+                 · 이미지 규격(1200x1600 / JPEG 0.94 / 레이아웃)은 편집 측 파싱 기준이므로 임의 변경 금지.
+                 · 2차: 영상 대장(slateLog) — 저장 시 촬영 기록 → 편집완료/업로드완료 상태 갱신. -->
+            <div class="tab-content" id="tab-sns">
+                <div class="card" style="margin-bottom:0">
+                    <div class="card-title view-head">
+                        <button class="view-btn" onclick="showTopHome()">← 홈</button>
+                        <span class="view-title">📣 SNS · 촬영 슬레이트</span>
+                    </div>
+                    <div class="sns-status" id="snsStatus">불러오는 중…</div>
+
+                    <div class="sns-stage">
+                        <img id="snsPreview" alt="슬레이트 미리보기">
+                    </div>
+                    <p class="sns-hint">이미지를 길게 눌러 사진에 저장한 뒤, 바로 이어서 영상을 찍으세요.
+                        사진 다음 번호가 그 영상이 됩니다.</p>
+
+                    <div class="sns-row">
+                        <button type="button" class="btn btn-primary" id="snsSaveBtn" style="flex:2" onclick="snsSaveImage()">사진으로 저장</button>
+                        <button type="button" class="btn btn-secondary" style="flex:1" onclick="snsClearContent()">내용 지우기</button>
+                    </div>
+
+                    <div class="sns-field">
+                        <label class="sns-label" for="snsContent">내용 한 줄</label>
+                        <input type="text" id="snsContent" class="sns-input" placeholder="아내 모임 전 시술"
+                            autocomplete="off" enterkeyhint="done">
+                    </div>
+
+                    <div class="sns-field">
+                        <label class="sns-label">시리즈</label>
+                        <div class="sns-chips" id="snsChips"></div>
+                        <div class="empty" id="snsNoSeries" style="display:none">시리즈가 없습니다. 아래 “시리즈 관리”에서 추가하세요.</div>
+                    </div>
+
+                    <details class="sns-manage" id="snsManage">
+                        <summary>시리즈 관리</summary>
+                        <div id="snsEditor"></div>
+                        <button type="button" class="sns-addbtn" onclick="snsAddSeries()">+ 시리즈 추가</button>
+                        <p class="sns-hint">접미사(<code>_top3</code> 등)는 영상 파일명 끝에 붙어 편집 프리셋을 결정합니다.
+                            영문 소문자·숫자만 쓰고, <b>한 번 만들면 수정할 수 없습니다</b>(기존 영상 파일명과 어긋남).
+                            번호·이름은 언제든 바꿀 수 있고, 체크를 끄면 칩 목록에서만 숨겨집니다.</p>
+                    </details>
                 </div>
             </div>
 
@@ -3227,6 +3322,9 @@
             //    재고용 공용계정(staff@)에서는 매출이 아예 안 보여야 한다.
             const dsBtn=document.getElementById('topHomeDailySalesBtn');
             if(dsBtn) dsBtn.style.display=(isBizAdmin||isAdminHigh||canDailySales)?'flex':'none';
+            // 📣 SNS(촬영 슬레이트): 관리자 계정에만 노출
+            const snsBtn=document.getElementById('topHomeSnsBtn');
+            if(snsBtn) snsBtn.style.display=(isBizAdmin||isAdminHigh)?'flex':'none';
             if(typeof _homeSyncSections==='function') _homeSyncSections();
         }
 
@@ -4463,6 +4561,9 @@
                 _staffAdminUnsubs.forEach(fn=>{ try{fn();}catch(_){}});
                 _staffAdminUnsubs=[];
             }
+            if(_snsUnsub){ try{_snsUnsub();}catch(_){}
+                _snsUnsub=null; }
+            _snsSeries=[]; _snsSel=null; _snsSeeded=false; _snsOffline=false; _snsSynced=false;
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -8589,12 +8690,481 @@
         function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
         function _uid(){ return Math.random().toString(36).slice(2,8); }
 
+        // ==================================================================
+        //  📣 SNS (관리자 전용) — 촬영 슬레이트
+        //  ------------------------------------------------------------------
+        //  릴스 파이프라인: 폰 촬영 → AirDrop → 맥(Claude Code) 자동 편집.
+        //  맥은 파일명 접미사(_top3, _interest …)로 편집 프리셋을 고르는데,
+        //  IMG_0059.MOV 만으로는 그 접미사를 알 수 없다. 그래서 촬영 "직전"에
+        //  이 슬레이트를 사진첩에 저장하고, 사진 바로 다음 번호를 그 영상으로 본다.
+        //
+        //  · 이미지 규격(1200×1600 · JPEG 0.94 · 레이아웃)은 편집 측이 읽어 파싱한다.
+        //    레이아웃을 바꾸면 자동화가 깨지므로 임의 수정 금지.
+        //  · 시리즈 접미사 목록은 이 탭과 맥의 CLAUDE.md 두 곳에 있다. 추가하면 맥 쪽도 갱신.
+        //  · 촬영 현장 통신이 약할 수 있어 시리즈 목록을 localStorage 에 캐시하고,
+        //    Firestore 가 안 되면 캐시로 동작한다. 이미지 생성은 전부 클라이언트.
+        //  · 2차: 영상 대장(snsSlateLog) — 저장 시 {촬영} 기록 → 편집완료/업로드완료 갱신.
+        // ==================================================================
+        const SNS_LS_SERIES='lumi_sns_series_v1';   // 오프라인 캐시
+        const SNS_LS_DRAFT='lumi_sns_draft_v1';     // 내용·선택 시리즈 유지(화면 이탈 후 복귀)
+        const SNS_DEFAULT_SERIES=[
+            {no:1,  name:'하지 말라',     suffix:'dont'},
+            {no:2,  name:'TOP 3',         suffix:'top3'},
+            {no:3,  name:'등급',          suffix:'tier'},
+            {no:4,  name:'~에 좋은',      suffix:'goodfor'},
+            {no:5,  name:'~하게 된 이유', suffix:'why'},
+            {no:6,  name:'반박',          suffix:'react'},
+            {no:7,  name:'설명',          suffix:'explain'},
+            {no:8,  name:'최근 유행',     suffix:'trend'},
+            {no:9,  name:'인기영상',      suffix:'popular'},
+            {no:10, name:'호기심',        suffix:'interest'},
+            {no:11, name:'뭐해야 돼',     suffix:'whatnow'}
+        ];
+        let _snsSeries=[];          // [{suffix,no,name,order,active}]
+        let _snsSel=null;           // 선택된 접미사
+        let _snsUnsub=null;         // Firestore 구독 해제
+        let _snsBound=false;        // 입력 이벤트 바인딩 1회
+        let _snsBlob=null;          // 마지막으로 그린 JPEG
+        let _snsDrawTimer=null;
+        let _snsFontsReady=false;
+        let _snsComposing=false;    // 한글 IME 조합 중 — 조합 끝난 뒤 다시 그린다
+        let _snsSeeded=false;       // 빈 컬렉션 초기 시드 1회
+        let _snsOffline=false;       // Firestore 접근 실패 → 캐시 모드
+        let _snsSynced=false;        // 스냅샷 1회 이상 수신
+
+        // 관리자 판별 — 앱의 기존 인가 체계(settings/bizAdmins · settings/adminHigh)를 그대로 쓴다.
+        function isSnsAdmin(){ return !!(isBizAdmin||isAdminHigh); }
+
+        function _snsSort(arr){
+            return (arr||[]).slice().sort((a,b)=>{
+                const oa=(a.order!=null?a.order:a.no)||999, ob=(b.order!=null?b.order:b.no)||999;
+                if(oa!==ob) return oa-ob;
+                return String(a.suffix).localeCompare(String(b.suffix));
+            });
+        }
+        function _snsNorm(suffix, v){
+            v=v||{};
+            return {
+                suffix:String(suffix),
+                no:Number(v.no)||0,
+                name:String(v.name||''),
+                order:(v.order==null?null:Number(v.order)),
+                active:(v.active===false?false:true)
+            };
+        }
+        function _snsActive(){ return _snsSeries.filter(x=>x.active!==false); }
+        function _snsCacheWrite(){
+            try{ localStorage.setItem(SNS_LS_SERIES, JSON.stringify(_snsSeries)); }catch(_){}
+        }
+        function _snsCacheRead(){
+            try{
+                const raw=localStorage.getItem(SNS_LS_SERIES);
+                if(raw){ const a=JSON.parse(raw); if(Array.isArray(a)&&a.length) return a.map(x=>_snsNorm(x.suffix,x)); }
+            }catch(_){}
+            return null;
+        }
+        function _snsDraftSave(){
+            try{
+                const el=document.getElementById('snsContent');
+                localStorage.setItem(SNS_LS_DRAFT, JSON.stringify({content:el?el.value:'', sel:_snsSel}));
+            }catch(_){}
+        }
+        function _snsDraftRead(){
+            try{ const raw=localStorage.getItem(SNS_LS_DRAFT); if(raw) return JSON.parse(raw); }catch(_){}
+            return null;
+        }
+        function _snsSetStatus(html){
+            const el=document.getElementById('snsStatus'); if(el) el.innerHTML=html;
+        }
+        function _snsStatusText(){
+            const n=_snsActive().length;
+            if(_snsSynced && !_snsOffline) return '<b>동기화됨</b> · 시리즈 '+n+'개 · 모든 기기에서 같은 목록';
+            if(_snsOffline) return '오프라인 · 이 기기 캐시로 동작 중 · 시리즈 '+n+'개';
+            return '이 기기 캐시로 표시 중 · 시리즈 '+n+'개 · 연결되면 자동 동기화';
+        }
+        function _snsFlash(msg){
+            _snsSetStatus(_esc(msg));
+            clearTimeout(_snsFlash._t);
+            _snsFlash._t=setTimeout(()=>_snsSetStatus(_snsStatusText()), 2400);
+        }
+
+        // ── 진입 ──
+        async function _initSns(){
+            if(!isSnsAdmin()) return;
+            _snsBindOnce();
+            // 1) 캐시 먼저 → 통신이 느려도 바로 그릴 수 있게
+            if(!_snsSeries.length){
+                const cached=_snsCacheRead();
+                _snsSeries=_snsSort(cached||SNS_DEFAULT_SERIES.map(x=>_snsNorm(x.suffix,x)));
+            }
+            // 2) 입력값·선택 복원
+            const d=_snsDraftRead();
+            if(d){
+                const el=document.getElementById('snsContent');
+                if(el && !el.value) el.value=String(d.content||'');
+                if(!_snsSel && d.sel) _snsSel=d.sel;
+            }
+            _snsEnsureSel();
+            _snsPaint();
+            await _snsLoadFonts();
+            _snsSubscribe();
+            _snsDrawSafe();
+        }
+        function _snsEnsureSel(){
+            const list=_snsActive();
+            if(_snsSel && !list.some(x=>x.suffix===_snsSel)) _snsSel=null;
+            if(!_snsSel && list.length) _snsSel=list[0].suffix;
+        }
+        function _snsBindOnce(){
+            if(_snsBound) return;
+            _snsBound=true;
+            const el=document.getElementById('snsContent');
+            if(!el) return;
+            el.addEventListener('compositionstart',()=>{ _snsComposing=true; });
+            el.addEventListener('compositionend',()=>{ _snsComposing=false; _snsDraftSave(); _snsSchedule(); });
+            el.addEventListener('input',()=>{
+                _snsDraftSave();
+                if(_snsComposing) return;   // IME 조합 중 리렌더는 글자를 깨뜨린다
+                _snsSchedule();
+            });
+            // 엔터로 폼 제출·줄바꿈이 생기지 않게 (탭 안에 form 은 없지만 키보드 '완료' 대비)
+            el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); el.blur(); } });
+        }
+        function _snsSchedule(){
+            clearTimeout(_snsDrawTimer);
+            _snsDrawTimer=setTimeout(_snsDrawSafe, 90);
+        }
+        // 고정 문구(푸터·플레이스홀더·숫자)용 기본 글립
+        const SNS_FONT_BASE='0123456789↓ 이 다음이 그 영상 내용을 입력하세요 시리즈 없음 _.:';
+        // Google Fonts 는 한글을 unicode-range 로 잘게 쪼개 배포한다. document.fonts.load 에
+        // "그릴 글자"를 함께 넘기지 않으면 그 글자가 든 조각을 안 받아 대체 서체로 그려진다.
+        // → 매번 그리기 직전에 실제 문자열로 로딩을 보장한다.
+        async function _snsEnsureGlyphs(text){
+            if(!(document.fonts && document.fonts.load)) return;
+            const t=SNS_FONT_BASE+' '+String(text||'');
+            try{
+                await Promise.all([
+                    document.fonts.load('400 150px "Black Han Sans"', t),
+                    document.fonts.load('700 44px "Noto Sans KR"', t),
+                    document.fonts.load('500 40px "Noto Sans KR"', t)
+                ]);
+            }catch(_){}
+        }
+        async function _snsLoadFonts(){
+            if(_snsFontsReady) return;
+            await _snsEnsureGlyphs('');
+            _snsFontsReady=true;
+        }
+        // 폰트 로딩을 기다린 뒤 그린다 (기다리지 않으면 매번 결과가 달라진다)
+        async function _snsDrawSafe(){
+            const el=document.getElementById('snsContent');
+            const cur=_snsSeries.filter(x=>x.suffix===_snsSel)[0]||null;
+            await _snsEnsureGlyphs([(el?el.value:''), (cur?cur.name:''), (cur?cur.suffix:''), (cur?cur.no:'')].join(' '));
+            _snsDraw();
+        }
+
+        // ── Firestore 실시간 동기화 (snsSeries/{suffix}) ──
+        function _snsSubscribe(){
+            if(_snsUnsub || typeof db==='undefined') return;
+            try{
+                _snsUnsub=db.collection('snsSeries').onSnapshot(snap=>{
+                    _snsOffline=false; _snsSynced=true;
+                    if(snap.empty){
+                        // 최초 1회만 기본 시리즈를 올린다 (관리자만 이 탭에 들어온다)
+                        if(!_snsSeeded){ _snsSeeded=true; _snsSeedDefaults(); }
+                        _snsSetStatus(_snsStatusText());
+                        return;
+                    }
+                    const out=[];
+                    snap.forEach(doc=>out.push(_snsNorm(doc.id, doc.data())));
+                    _snsSeries=_snsSort(out);
+                    _snsCacheWrite();
+                    _snsEnsureSel();
+                    _snsPaint();
+                    _snsDrawSafe();
+                }, err=>{
+                    console.warn('SNS 시리즈 구독 실패 — 캐시로 동작', err);
+                    _snsOffline=true;
+                    try{ _snsUnsub&&_snsUnsub(); }catch(_){}
+                    _snsUnsub=null;
+                    _snsPaint();
+                });
+            }catch(e){
+                _snsOffline=true;
+                _snsPaint();
+            }
+        }
+        async function _snsSeedDefaults(){
+            try{
+                const batch=db.batch();
+                SNS_DEFAULT_SERIES.forEach(x=>{
+                    batch.set(db.collection('snsSeries').doc(x.suffix),
+                        {no:x.no, name:x.name, order:x.no, active:true});
+                });
+                await batch.commit();
+            }catch(e){
+                console.warn('SNS 기본 시리즈 생성 실패', e);
+                _snsOffline=true; _snsPaint();
+            }
+        }
+        async function _snsSave(item){
+            _snsCacheWrite();
+            if(typeof db==='undefined' || _snsOffline) return;
+            try{
+                await db.collection('snsSeries').doc(item.suffix).set({
+                    no:item.no, name:item.name,
+                    order:(item.order==null?item.no:item.order),
+                    active:item.active!==false
+                });
+            }catch(e){ _snsFlash('저장하지 못했습니다. 통신 상태를 확인하세요.'); }
+        }
+        async function _snsDelete(suffix){
+            _snsCacheWrite();
+            if(typeof db==='undefined' || _snsOffline) return;
+            try{ await db.collection('snsSeries').doc(suffix).delete(); }
+            catch(e){ _snsFlash('삭제하지 못했습니다. 통신 상태를 확인하세요.'); }
+        }
+
+        // ── 칩 · 시리즈 관리 렌더 ──
+        function _snsPaint(){
+            _snsSetStatus(_snsStatusText());
+            const chips=document.getElementById('snsChips');
+            const none=document.getElementById('snsNoSeries');
+            if(!chips) return;
+            const list=_snsActive();
+            chips.innerHTML='';
+            if(none) none.style.display=list.length?'none':'';
+            list.forEach(sx=>{
+                const b=document.createElement('button');
+                b.type='button'; b.className='sns-chip';
+                b.setAttribute('aria-pressed', String(sx.suffix===_snsSel));
+                const n=document.createElement('span');
+                n.className='sns-no'; n.textContent=sx.no||'·';
+                const t=document.createElement('span'); t.textContent=sx.name;
+                b.appendChild(n); b.appendChild(t);
+                b.addEventListener('click',()=>{
+                    _snsSel=sx.suffix; _snsDraftSave(); _snsPaint(); _snsDrawSafe();
+                });
+                chips.appendChild(b);
+            });
+            _snsPaintEditor();
+        }
+        function _snsPaintEditor(){
+            const ed=document.getElementById('snsEditor');
+            if(!ed) return;
+            ed.innerHTML='';
+            _snsSeries.forEach(sx=>{
+                const row=document.createElement('div');
+                row.className='sns-edit-row';
+
+                const chk=document.createElement('input');
+                chk.type='checkbox'; chk.checked=sx.active!==false;
+                chk.title='칩 목록에 표시'; chk.style.cssText='flex:0 0 auto;width:20px;height:20px;min-height:20px';
+
+                const no=document.createElement('input');
+                no.type='text'; no.className='sns-narrow'; no.value=sx.no||'';
+                no.inputMode='numeric'; no.setAttribute('aria-label','번호');
+
+                const nm=document.createElement('input');
+                nm.type='text'; nm.value=sx.name; nm.setAttribute('aria-label','시리즈 이름');
+
+                const sf=document.createElement('input');
+                sf.type='text'; sf.className='sns-suffix'; sf.value='_'+sx.suffix;
+                sf.readOnly=true; sf.setAttribute('aria-label','접미사(수정 불가)');
+
+                const del=document.createElement('button');
+                del.type='button'; del.className='sns-del'; del.textContent='삭제';
+
+                function commit(){
+                    const n=parseInt(no.value,10);
+                    const next=Object.assign({}, sx, {
+                        no:isNaN(n)?0:n,
+                        name:nm.value.trim()||sx.name,
+                        active:chk.checked
+                    });
+                    next.order=next.no;
+                    if(next.no===sx.no && next.name===sx.name && next.active===(sx.active!==false)) return;
+                    _snsSeries=_snsSort(_snsSeries.map(x=>x.suffix===sx.suffix?next:x));
+                    _snsEnsureSel();
+                    _snsSave(next);
+                    _snsPaint(); _snsDrawSafe();
+                }
+                no.addEventListener('change',commit);
+                nm.addEventListener('change',commit);
+                chk.addEventListener('change',commit);
+                del.addEventListener('click',()=>{
+                    if(!confirm('“'+sx.name+'” 시리즈를 삭제할까요?\n\n이미 이 접미사로 저장된 영상이 있으면 목록에서만 숨기는 편(체크 해제)이 안전합니다.')) return;
+                    _snsSeries=_snsSeries.filter(x=>x.suffix!==sx.suffix);
+                    _snsEnsureSel();
+                    _snsDelete(sx.suffix);
+                    _snsPaint(); _snsDrawSafe();
+                });
+
+                row.appendChild(chk); row.appendChild(no); row.appendChild(nm);
+                row.appendChild(sf); row.appendChild(del);
+                ed.appendChild(row);
+            });
+        }
+        function snsAddSeries(){
+            if(!isSnsAdmin()) return;
+            let name=prompt('시리즈 이름 (예: 전후 비교)');
+            if(!name) return;
+            name=name.trim(); if(!name) return;
+            let suffix=prompt('접미사 — 영문 소문자·숫자, 한 번 만들면 수정 불가 (예: ba)');
+            if(!suffix) return;
+            suffix=suffix.trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+            if(!suffix){ _snsFlash('접미사는 영문 소문자·숫자로 입력하세요.'); return; }
+            if(_snsSeries.some(x=>x.suffix===suffix)){ _snsFlash('이미 있는 접미사입니다.'); return; }
+            const maxNo=_snsSeries.reduce((m,x)=>Math.max(m,x.no||0),0);
+            const item={suffix:suffix, no:maxNo+1, name:name, order:maxNo+1, active:true};
+            _snsSeries=_snsSort(_snsSeries.concat([item]));
+            _snsSel=suffix;
+            _snsSave(item);
+            _snsDraftSave(); _snsPaint(); _snsDrawSafe();
+            _snsFlash('“'+name+'” 추가됨');
+        }
+        function snsClearContent(){
+            const el=document.getElementById('snsContent');
+            if(el){ el.value=''; el.focus(); }
+            _snsDraftSave(); _snsDrawSafe();
+        }
+
+        // ── 슬레이트 이미지 (1200×1600 · JPEG 0.94) ──
+        //    ⚠️ 이 레이아웃은 맥 편집 측이 읽어 파싱한다. 임의로 바꾸지 말 것.
+        const SNS_W=1200, SNS_H=1600;
+        function _snsStamp(){
+            const d=new Date(), p=n=>n<10?('0'+n):(''+n);
+            return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+'  '+p(d.getHours())+':'+p(d.getMinutes());
+        }
+        function _snsWrap(ctx, text, maxW){
+            const words=String(text).split(/\s+/).filter(Boolean), lines=[];
+            let cur='';
+            for(let i=0;i<words.length;i++){
+                const t=cur?(cur+' '+words[i]):words[i];
+                if(ctx.measureText(t).width>maxW && cur){ lines.push(cur); cur=words[i]; }
+                else cur=t;
+            }
+            if(cur) lines.push(cur);
+            return lines;
+        }
+        function _snsDraw(){
+            const img=document.getElementById('snsPreview');
+            if(!img) return;
+            const cv=document.createElement('canvas');
+            cv.width=SNS_W; cv.height=SNS_H;
+            const ctx=cv.getContext('2d');
+            const cur=_snsSeries.filter(x=>x.suffix===_snsSel)[0]||null;
+            const el=document.getElementById('snsContent');
+            const body=(el?el.value:'').trim();
+
+            ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,SNS_W,SNS_H);
+
+            // 헤더 노란 띠 + 검은 구분선
+            const bandH=300;
+            ctx.fillStyle='#FFD400'; ctx.fillRect(0,0,SNS_W,bandH);
+            ctx.fillStyle='#000000'; ctx.fillRect(0,bandH,SNS_W,10);
+
+            // 번호 블록
+            ctx.fillStyle='#000000'; ctx.fillRect(56,62,176,176);
+            ctx.fillStyle='#FFD400';
+            ctx.font='400 116px "Black Han Sans", sans-serif';
+            ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText(cur&&cur.no?String(cur.no):'·',144,156);
+
+            // 시리즈 이름 (폭에 맞춰 축소)
+            ctx.fillStyle='#000000';
+            ctx.textAlign='left'; ctx.textBaseline='middle';
+            const nm=cur?cur.name:'시리즈 없음';
+            let nsize=96;
+            ctx.font='400 '+nsize+'px "Black Han Sans", sans-serif';
+            while(ctx.measureText(nm).width>SNS_W-320 && nsize>44){
+                nsize-=4; ctx.font='400 '+nsize+'px "Black Han Sans", sans-serif';
+            }
+            ctx.fillText(nm,268,150);
+
+            // 접미사
+            ctx.font='700 44px "Noto Sans KR", sans-serif';
+            ctx.fillStyle='#3A3A3A';
+            ctx.fillText(cur?('_'+cur.suffix):'_',60,372);
+
+            // 본문 (최대 4줄, 150 → 60px 자동 축소)
+            const txt=body||'내용을 입력하세요';
+            ctx.fillStyle=body?'#000000':'#B8B8B8';
+            let size=150, lines;
+            const maxW=SNS_W-120;
+            do{
+                ctx.font='400 '+size+'px "Black Han Sans", sans-serif';
+                lines=_snsWrap(ctx,txt,maxW);
+                if(lines.length<=4) break;
+                size-=8;
+            }while(size>60);
+            const lh=size*1.22;
+            const startY=470+(760-lines.length*lh)/2+lh/2;
+            ctx.textAlign='left'; ctx.textBaseline='middle';
+            for(let i=0;i<lines.length;i++) ctx.fillText(lines[i],60,startY+i*lh);
+
+            // 푸터
+            const fy=SNS_H-190;
+            ctx.fillStyle='#000000'; ctx.fillRect(0,fy,SNS_W,190);
+            ctx.fillStyle='#FFFFFF';
+            ctx.font='400 74px "Black Han Sans", sans-serif';
+            ctx.textAlign='left'; ctx.textBaseline='middle';
+            ctx.fillText('↓ 이 다음이 그 영상',60,fy+95);
+            ctx.fillStyle='#9A9A9A';
+            ctx.font='500 40px "Noto Sans KR", sans-serif';
+            ctx.textAlign='right';
+            ctx.fillText(_snsStamp(),SNS_W-60,fy+99);
+
+            // iOS: data URL 이어야 이미지를 길게 눌러 "사진에 추가" 가 뜬다
+            img.src=cv.toDataURL('image/jpeg',0.94);
+            cv.toBlob(b=>{ _snsBlob=b; },'image/jpeg',0.94);
+        }
+
+        function _snsFilename(){
+            const cur=_snsSeries.filter(x=>x.suffix===_snsSel)[0];
+            const el=document.getElementById('snsContent');
+            const body=((el?el.value:'').trim().replace(/\s+/g,''))||'슬레이트';
+            return body+'_'+(cur?cur.suffix:'none')+'.jpg';
+        }
+        // 저장: 공유 시트(사진에 저장) → 실패하면 다운로드 → 그래도 안 되면 길게 누르기 안내.
+        // 저장 후에도 입력은 지우지 않는다 (같은 주제로 여러 번 찍는다).
+        async function snsSaveImage(){
+            const name=_snsFilename();
+            try{
+                if(_snsBlob && navigator.canShare){
+                    const file=new File([_snsBlob], name, {type:'image/jpeg'});
+                    if(navigator.canShare({files:[file]})){
+                        await navigator.share({files:[file]});
+                        _snsFlash('저장했습니다. 이어서 영상을 찍으세요.');
+                        return;
+                    }
+                }
+            }catch(e){
+                if(e && (e.name==='AbortError')) return;   // 사용자가 공유 시트를 닫음
+            }
+            try{
+                const img=document.getElementById('snsPreview');
+                const href=(_snsBlob?URL.createObjectURL(_snsBlob):(img?img.src:''));
+                if(!href) throw new Error('no image');
+                const a=document.createElement('a');
+                a.href=href; a.download=name;
+                document.body.appendChild(a); a.click(); a.remove();
+                if(_snsBlob) setTimeout(()=>{ try{URL.revokeObjectURL(href);}catch(_){} },4000);
+                _snsFlash('저장했습니다. 사진첩에 없으면 미리보기를 길게 눌러 저장하세요.');
+            }catch(e){
+                _snsFlash('미리보기 이미지를 길게 눌러 “사진에 추가”를 눌러주세요.');
+            }
+        }
+
         // ---- 통합 라우터 ----
         // origin: null|'consult' — feeschedule 에 진입한 출발지
         let _feeOrigin=null;
         let _feeSearchInit=''; // showTop 진입 시 세팅
         async function showTop(view, opts){
             opts=opts||{};
+            // 📣 SNS 는 관리자 전용 — 홈 타일을 숨기는 것만으로는 부족해 라우터에서도 막는다.
+            //    (데이터 자체는 firestore.rules 의 snsSeries 규칙이 서버에서 차단한다)
+            if(view==='sns' && !isSnsAdmin()){ alert('관리자 전용 메뉴입니다.'); showTopHome(); return; }
             if(typeof fineshotFlush==='function') fineshotFlush();   // 파인샷 입력값 저장 후 이동
             document.querySelectorAll('.tab-content').forEach(t=>{
                 t.classList.remove('active');
@@ -8644,6 +9214,8 @@
                 _initStaffAdmin();
             }else if(view==='dailySales'){
                 await _initDailySales();
+            }else if(view==='sns'){
+                await _initSns();
             }else if(view==='rating'){
                 await loadProductRatings();
                 renderProductRatings();

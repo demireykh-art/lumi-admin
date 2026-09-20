@@ -28,3 +28,17 @@
   `firestore.rules`에서 컬렉션별 화이트리스트로 제어합니다. 새 컬렉션을 쓰면 규칙에 추가해야 합니다.
 - 통합앱(`staff.html`)은 큰 단일 HTML 파일이며, 대부분의 로직이 인라인 `<script>`에 들어 있습니다
   (일부만 `supplies-catalog.js` 등 외부 파일). 탭 추가 등은 이 인라인 스크립트에 함께 작성합니다.
+
+## 📣 SNS 탭 (관리자 전용) — 촬영 슬레이트
+
+- 위치: 통합앱 홈 → `관리` 섹션 → **SNS** (`tab-sns`, `showTop('sns')`).
+  노출 조건은 `isSnsAdmin()` = `settings/bizAdmins` 또는 `settings/adminHigh` 이메일.
+  통합앱은 정적 파일이라 화면 숨김만으로는 못 막는다. 실제 차단은
+  `firestore.rules` 의 `snsSeries` 규칙(`isSnsAdmin()`)이 한다.
+- 데이터: `snsSeries/{suffix}` — `{no, name, order, active}`. 문서ID가 **파일명 접미사**다.
+  오프라인 대비로 `localStorage(lumi_sns_series_v1)` 에 캐시한다.
+- 슬레이트 이미지(1200×1600 · JPEG 0.94 · 레이아웃)는 **맥 편집 파이프라인이 읽어 파싱**한다.
+  규격을 바꾸면 자동화가 깨지므로 임의 변경 금지.
+- ⚠️ 접미사 목록은 이 탭과 **맥의 `CLAUDE.md` 두 곳**에 존재한다. 시리즈를 추가하면
+  맥 쪽 규칙 파일도 같이 갱신해야 한다.
+- 2차 예정: 영상 대장(`snsSlateLog`) — 저장 시 `촬영` 기록 → 편집완료/업로드완료 상태 갱신, 밀린 것 필터.
