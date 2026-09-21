@@ -32,13 +32,20 @@
 ## 📣 SNS 탭 (관리자 전용) — 촬영 슬레이트
 
 - 위치: 통합앱 홈 → `관리` 섹션 → **SNS** (`tab-sns`, `showTop('sns')`).
-  노출 조건은 `isSnsAdmin()` = `settings/bizAdmins` 또는 `settings/adminHigh` 이메일.
+  서브탭 2개 — 🎬 촬영 슬레이트 / 📋 영상 대장.
+- 노출 조건은 `isSnsAdmin()` = `settings/bizAdmins` ∪ `settings/adminHigh` ∪ `settings/snsAccess`.
+  `snsAccess` 는 ⚙ 관리자 설정 → **📣 SNS 탭 권한** 에서 계정별 스위치로 켜고 끈다
+  (💵 매출 결산 권한과 같은 방식).
   통합앱은 정적 파일이라 화면 숨김만으로는 못 막는다. 실제 차단은
-  `firestore.rules` 의 `snsSeries` 규칙(`isSnsAdmin()`)이 한다.
-- 데이터: `snsSeries/{suffix}` — `{no, name, order, active}`. 문서ID가 **파일명 접미사**다.
-  오프라인 대비로 `localStorage(lumi_sns_series_v1)` 에 캐시한다.
+  `firestore.rules` 의 `snsSeries`·`snsSlateLog` 규칙(`isSnsAdmin()`)이 한다.
+- 데이터
+  - `snsSeries/{suffix}` — `{no, name, order, active}`. 문서ID가 **파일명 접미사**다.
+    오프라인 대비로 `localStorage(lumi_sns_series_v1)` 에 캐시한다.
+  - `snsSlateLog/{autoId}` — 영상 대장. `{ymd, createdAt, seriesSuffix, seriesNo, seriesName,
+    content, status, filename, byName}`. 슬레이트를 저장하면 `촬영` 으로 한 건 쌓이고
+    (같은 시리즈·내용을 10분 안에 다시 저장하면 새 줄 대신 갱신), 편집완료·업로드완료·보류로
+    상태를 올린다. "밀린 것" = 상태가 `촬영` 에서 멈춘 것.
 - 슬레이트 이미지(1200×1600 · JPEG 0.94 · 레이아웃)는 **맥 편집 파이프라인이 읽어 파싱**한다.
   규격을 바꾸면 자동화가 깨지므로 임의 변경 금지.
 - ⚠️ 접미사 목록은 이 탭과 **맥의 `CLAUDE.md` 두 곳**에 존재한다. 시리즈를 추가하면
   맥 쪽 규칙 파일도 같이 갱신해야 한다.
-- 2차 예정: 영상 대장(`snsSlateLog`) — 저장 시 `촬영` 기록 → 편집완료/업로드완료 상태 갱신, 밀린 것 필터.
