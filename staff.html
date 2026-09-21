@@ -560,6 +560,29 @@
             border-radius:var(--r-sm);padding:.7rem;font-size:.82rem;font-family:inherit;cursor:pointer;min-height:44px}
         .sns-status{font-size:.74rem;color:var(--text-muted);margin-bottom:.6rem}
         .sns-status b{color:var(--green);font-weight:600}
+        .sns-subtabs{display:flex;gap:.2rem;margin:0 0 .8rem;border-bottom:1px solid var(--border)}
+        .sns-subtab{background:none;border:0;border-bottom:2px solid transparent;padding:.55rem .7rem;
+            font-family:inherit;font-size:.82rem;font-weight:500;color:var(--text-muted);cursor:pointer;
+            white-space:nowrap;min-height:44px}
+        .sns-subtab.on{color:var(--text);font-weight:700;border-bottom-color:var(--text)}
+        .sns-badge{display:inline-block;background:var(--orange);color:#fff;font-size:.65rem;font-weight:700;
+            padding:1px 6px;border-radius:var(--r-pill);margin-left:.2rem}
+        .sns-log-row{border:1px solid var(--border);border-radius:var(--r-sm);padding:.6rem .7rem;margin-bottom:.45rem;
+            background:#fff}
+        .sns-log-row.done{background:var(--bg);border-color:#e5e7eb}
+        .sns-log-top{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+        .sns-log-no{font-weight:700;font-size:.75rem;background:var(--text);color:#fff;border-radius:var(--r-sm);
+            padding:.1rem .4rem;flex:0 0 auto}
+        .sns-log-suffix{font-size:.72rem;color:var(--text-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+        .sns-log-date{margin-left:auto;font-size:.7rem;color:var(--text-muted);flex:0 0 auto}
+        .sns-log-content{font-size:.92rem;font-weight:600;margin:.3rem 0 .45rem;word-break:break-all}
+        .sns-log-ctrl{display:flex;gap:.3rem;align-items:center}
+        .sns-log-ctrl select,.sns-log-ctrl input{font-family:inherit;font-size:.78rem;padding:.4rem .45rem;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text);min-height:36px}
+        .sns-log-ctrl select{flex:0 0 6.6rem}
+        .sns-log-ctrl input{flex:1;min-width:0}
+        .sns-log-del{flex:0 0 auto;background:#fff;border:1px solid var(--border);color:var(--red);
+            border-radius:var(--r-sm);padding:.4rem .5rem;font-size:.72rem;font-family:inherit;cursor:pointer;min-height:36px}
     </style>
 </head>
 <body>
@@ -928,8 +951,8 @@
                         <button type="button" class="home-row" id="topHomeSnsBtn" style="display:none" onclick="showTop('sns')">
                             <span class="home-row-icon">📣</span>
                             <span class="home-row-body">
-                                <span class="home-row-title">SNS <span class="home-row-tag">관리자 전용</span></span>
-                                <span class="home-row-desc">촬영 슬레이트 — 릴스 촬영 직전 슬레이트 사진 생성 · 시리즈 관리</span>
+                                <span class="home-row-title">SNS <span class="home-row-tag">관리자 · 지정 계정</span></span>
+                                <span class="home-row-desc">촬영 슬레이트 · 영상 대장 — 촬영 직전 슬레이트 사진 생성, 편집·업로드 진행 추적</span>
                             </span>
                             <span class="home-row-arrow">›</span>
                         </button>
@@ -1270,13 +1293,19 @@
                  사진첩에서 이 사진 "바로 다음 번호"가 그 영상이 되고, 맥의 편집
                  파이프라인이 슬레이트를 읽어 파일명(내용_접미사)과 프리셋을 정한다.
                  · 이미지 규격(1200x1600 / JPEG 0.94 / 레이아웃)은 편집 측 파싱 기준이므로 임의 변경 금지.
-                 · 2차: 영상 대장(slateLog) — 저장 시 촬영 기록 → 편집완료/업로드완료 상태 갱신. -->
+                 · 영상 대장(snsSlateLog): 저장할 때 한 건 기록 → 편집완료/업로드완료 상태 갱신. -->
             <div class="tab-content" id="tab-sns">
                 <div class="card" style="margin-bottom:0">
                     <div class="card-title view-head">
                         <button class="view-btn" onclick="showTopHome()">← 홈</button>
-                        <span class="view-title">📣 SNS · 촬영 슬레이트</span>
+                        <span class="view-title">📣 SNS</span>
                     </div>
+                    <div class="sns-subtabs">
+                        <button type="button" id="snsSubtab-slate" class="sns-subtab on" onclick="snsSetView('slate')">🎬 촬영 슬레이트</button>
+                        <button type="button" id="snsSubtab-log" class="sns-subtab" onclick="snsSetView('log')">📋 영상 대장 <span id="snsLogBadge" class="sns-badge" style="display:none">0</span></button>
+                    </div>
+
+                    <div id="snsViewSlate">
                     <div class="sns-status" id="snsStatus">불러오는 중…</div>
 
                     <div class="sns-stage">
@@ -1310,6 +1339,17 @@
                             영문 소문자·숫자만 쓰고, <b>한 번 만들면 수정할 수 없습니다</b>(기존 영상 파일명과 어긋남).
                             번호·이름은 언제든 바꿀 수 있고, 체크를 끄면 칩 목록에서만 숨겨집니다.</p>
                     </details>
+                    </div><!-- /snsViewSlate -->
+
+                    <!-- ── 📋 영상 대장 ──
+                         슬레이트를 저장할 때 한 건씩 쌓인다(촬영). 편집·업로드가 끝나면
+                         상태를 올리고, 편집 후 확정된 파일명을 적어 둔다.
+                         "밀린 것" = 상태가 촬영에서 멈춘 것. -->
+                    <div id="snsViewLog" style="display:none">
+                        <div class="sns-status" id="snsLogStatus">불러오는 중…</div>
+                        <div class="sns-chips" id="snsLogFilters" style="margin-bottom:.7rem"></div>
+                        <div id="snsLogList"></div>
+                    </div>
                 </div>
             </div>
 
@@ -2667,6 +2707,22 @@
                 </div>
 
                 <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
+                    <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">📣 SNS 탭 권한</div>
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.6rem">
+                        어느 계정에서 <b>📣 SNS</b>(촬영 슬레이트 · 영상 대장)를 쓸지
+                        <b>오른쪽 스위치로 켜고 끕니다.</b>
+                        켠 계정은 홈에 📣 타일이 생기고 시리즈·영상 대장을 관리자와 똑같이 봅니다.
+                        끈 계정에는 타일이 안 보이고, 데이터도 서버에서 막힙니다.<br>
+                        촬영 담당자에게 전용 계정을 주려면 위 <b>+ 새 공용 계정 추가</b>로
+                        <code>sns@lumiclinic.co.kr</code> 같은 계정을 만든 뒤 여기서 켜세요.<br>
+                        ※ 관리자 계정(<code>bizAdmins</code>·<code>adminHigh</code>)은 목록과 무관하게 항상 됩니다.
+                    </div>
+                    <div id="snsPermList" style="display:flex;flex-direction:column;gap:.4rem">
+                        <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                    </div>
+                </div>
+
+                <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
                     <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">🌳 상담 트리 관리</div>
                     <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
                         노션 스타일 텍스트 붙여넣기·시각 편집·백업 복원을 지원합니다.
@@ -3293,13 +3349,16 @@
         //  따로 쓴다. 그래서 "공용계정이면 보여준다" 로는 가를 수 없고, 관리자가
         //  계정을 하나씩 골라야 한다. 개인 계정에도 똑같이 줄 수 있게 이메일 목록으로 둔다.
         let canDailySales=false;
+        // 📣 SNS 탭 허용 계정 (settings/snsAccess.emails) — ⚙ 관리자 설정에서 스위치로 켠다
+        let canSns=false;
         async function refreshBizAdminStatus(email){
             const e=String(email||'').toLowerCase();
             try{
-                const [bizDoc, highDoc, dsDoc]=await Promise.all([
+                const [bizDoc, highDoc, dsDoc, snsDoc]=await Promise.all([
                     db.collection('settings').doc('bizAdmins').get(),
                     db.collection('settings').doc('adminHigh').get(),
-                    db.collection('settings').doc('dailySales').get()
+                    db.collection('settings').doc('dailySales').get(),
+                    db.collection('settings').doc('snsAccess').get()
                 ]);
                 const bizList=(bizDoc.exists&&Array.isArray(bizDoc.data().emails))
                     ? bizDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
@@ -3307,10 +3366,13 @@
                     ? highDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
                 const dsList=(dsDoc.exists&&Array.isArray(dsDoc.data().emails))
                     ? dsDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
+                const snsList=(snsDoc.exists&&Array.isArray(snsDoc.data().emails))
+                    ? snsDoc.data().emails.map(x=>String(x).toLowerCase()) : [];
                 isBizAdmin=!!e && bizList.includes(e);
                 isAdminHigh=!!e && highList.includes(e);
                 canDailySales=!!e && dsList.includes(e);
-            }catch(_){isBizAdmin=false; isAdminHigh=false; canDailySales=false;}
+                canSns=!!e && snsList.includes(e);
+            }catch(_){isBizAdmin=false; isAdminHigh=false; canDailySales=false; canSns=false;}
             const btn=document.getElementById('btnAdminSettings');
             if(btn) btn.style.display=isBizAdmin?'':'none';
             const staffBtn=document.getElementById('topHomeStaffAdminBtn');
@@ -3322,9 +3384,9 @@
             //    재고용 공용계정(staff@)에서는 매출이 아예 안 보여야 한다.
             const dsBtn=document.getElementById('topHomeDailySalesBtn');
             if(dsBtn) dsBtn.style.display=(isBizAdmin||isAdminHigh||canDailySales)?'flex':'none';
-            // 📣 SNS(촬영 슬레이트): 관리자 계정에만 노출
+            // 📣 SNS(촬영 슬레이트·영상 대장): 관리자 + ⚙ 관리자 설정에서 켠 계정
             const snsBtn=document.getElementById('topHomeSnsBtn');
-            if(snsBtn) snsBtn.style.display=(isBizAdmin||isAdminHigh)?'flex':'none';
+            if(snsBtn) snsBtn.style.display=isSnsAdmin()?'flex':'none';
             if(typeof _homeSyncSections==='function') _homeSyncSections();
         }
 
@@ -3333,6 +3395,7 @@
             document.getElementById('adminSettingsModal').classList.add('active');
             loadSharedStaffAccountsStaff();
             loadDailySalesPerms();
+            loadSnsPerms();
             _locSettingsInit();
         }
         // ── 📍 클리닉 위치(GPS) 설정 ──
@@ -4244,6 +4307,86 @@
             await toggleDailySalesPerm(e,true);
         }
 
+        // ── 📣 SNS 탭 권한 (settings/snsAccess.emails) ─────────────────────
+        //  관리자(bizAdmins·adminHigh)는 항상 쓸 수 있고, 그 밖의 계정은 여기서 하나씩 켠다.
+        //  화면 노출과 firestore.rules(snsSeries·snsSlateLog) 가 같은 목록을 본다.
+        async function loadSnsPerms(){
+            const box=document.getElementById('snsPermList');
+            if(!box) return;
+            box.innerHTML='<div style="color:#888;font-size:.85rem">로딩 중...</div>';
+            try{
+                const [staffDoc,snsDoc]=await Promise.all([
+                    db.collection('settings').doc('staff').get(),
+                    db.collection('settings').doc('snsAccess').get()
+                ]);
+                const list=(doc)=>(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[])
+                    .map(e=>String(e).trim().toLowerCase()).filter(Boolean);
+                const sharedEmails=list(staffDoc);
+                const onEmails=list(snsDoc);
+                const shared=new Set(sharedEmails);
+                const rowsData=sharedEmails.map(e=>({email:e,kind:'공용'}))
+                    .concat(onEmails.filter(e=>!shared.has(e)).map(e=>({email:e,kind:'개인'})));
+                const addBtn='<button onclick="addSnsPerm()" style="background:#166534;color:#fff;border:none;'
+                    +'font-size:.85rem;padding:.5rem 1rem;font-weight:600;border-radius:var(--r-sm);cursor:pointer">'
+                    +'+ 다른 계정에 SNS 권한 주기</button>';
+                if(!rowsData.length){
+                    box.innerHTML='<div style="color:#888;font-size:.85rem;padding:.5rem 0;text-align:center">'
+                        +'등록된 계정이 없습니다.</div>'
+                        +'<div style="text-align:center;margin-top:.5rem">'+addBtn+'</div>';
+                    return;
+                }
+                const rows=rowsData.map(({email,kind})=>{
+                    const on=onEmails.indexOf(email)>=0;
+                    const safe=email.replace(/'/g,"\\'");
+                    const state=on
+                        ? '📣 SNS 켜짐 — 촬영 슬레이트·영상 대장을 씁니다'
+                        : 'SNS 꺼짐 — 홈에 📣 타일이 안 보입니다';
+                    return '<div class="perm-row'+(on?' on':'')+'">'
+                        +'<span class="perm-main">'
+                        +'<span class="perm-email">'+_esc(email)+'</span>'
+                        +'<span class="perm-kind">'+kind+'</span>'
+                        +'<span class="perm-state">'+state+'</span>'
+                        +'</span>'
+                        +'<button type="button" role="switch" aria-checked="'+(on?'true':'false')+'" '
+                        +'title="'+(on?'누르면 끕니다':'누르면 켭니다')+'" '
+                        +'aria-label="'+_esc(email)+' SNS 탭 '+(on?'끄기':'켜기')+'" '
+                        +'class="perm-sw'+(on?' on':'')+'" '
+                        +'onclick="toggleSnsPerm(\''+safe+'\','+(on?'false':'true')+')"></button>'
+                        +'</div>';
+                }).join('');
+                box.innerHTML=rows+'<div style="text-align:center;margin-top:.5rem">'+addBtn+'</div>';
+            }catch(e){
+                box.innerHTML='<div style="color:var(--red);font-size:.85rem">로드 실패: '+_esc(e&&e.message||String(e))+'</div>';
+            }
+        }
+
+        async function toggleSnsPerm(email,on){
+            const e=String(email||'').trim().toLowerCase();
+            if(!e) return;
+            try{
+                const doc=await db.collection('settings').doc('snsAccess').get();
+                const cur=(doc.exists&&Array.isArray(doc.data().emails)?doc.data().emails:[])
+                    .map(x=>String(x).trim().toLowerCase()).filter(Boolean);
+                const next=on ? (cur.indexOf(e)>=0?cur:cur.concat([e]))
+                              : cur.filter(x=>x!==e);
+                await db.collection('settings').doc('snsAccess').set({emails:next},{merge:true});
+                if(currentUser&&String(currentUser.email||'').toLowerCase()===e){
+                    await refreshBizAdminStatus(e);
+                }
+                await loadSnsPerms();
+            }catch(err){
+                alert('변경 실패: '+((err&&err.message)||err));
+            }
+        }
+
+        async function addSnsPerm(){
+            const email=prompt('SNS 탭(촬영 슬레이트)을 쓸 계정 이메일:\n\n공용 계정이 아니어도 됩니다(개인 직원 계정 가능).');
+            if(!email) return;
+            const e=String(email).trim().toLowerCase();
+            if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ alert('올바른 이메일 형식이 아닙니다.'); return; }
+            await toggleSnsPerm(e,true);
+        }
+
         async function addSharedStaffAccountStaff(){
             if(!functions){alert('Cloud Functions 모듈이 로드되지 않았습니다. 새로고침 후 다시 시도하세요.');return;}
             const email=prompt('추가할 공용 계정 이메일:\n\n예: nurse@lumiclinic.co.kr / desk@lumiclinic.co.kr / skin@lumiclinic.co.kr');
@@ -4563,7 +4706,10 @@
             }
             if(_snsUnsub){ try{_snsUnsub();}catch(_){}
                 _snsUnsub=null; }
+            if(_snsLogUnsub){ try{_snsLogUnsub();}catch(_){}
+                _snsLogUnsub=null; }
             _snsSeries=[]; _snsSel=null; _snsSeeded=false; _snsOffline=false; _snsSynced=false;
+            _snsLog=[]; _snsLogLastId=null; _snsLogLastKey=''; _snsLogLastAt=0; _snsView='slate';
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -8732,8 +8878,9 @@
         let _snsOffline=false;       // Firestore 접근 실패 → 캐시 모드
         let _snsSynced=false;        // 스냅샷 1회 이상 수신
 
-        // 관리자 판별 — 앱의 기존 인가 체계(settings/bizAdmins · settings/adminHigh)를 그대로 쓴다.
-        function isSnsAdmin(){ return !!(isBizAdmin||isAdminHigh); }
+        // SNS 탭 사용 권한 — 관리자(bizAdmins·adminHigh) + ⚙ 관리자 설정에서 켠 계정(snsAccess).
+        // firestore.rules 도 같은 세 목록을 보므로 화면과 데이터 권한이 어긋나지 않는다.
+        function isSnsAdmin(){ return !!(isBizAdmin||isAdminHigh||canSns); }
 
         function _snsSort(arr){
             return (arr||[]).slice().sort((a,b)=>{
@@ -8808,6 +8955,8 @@
             _snsPaint();
             await _snsLoadFonts();
             _snsSubscribe();
+            _snsLogSubscribe();
+            snsSetView(_snsView);
             _snsDrawSafe();
         }
         function _snsEnsureSel(){
@@ -9135,6 +9284,7 @@
                     const file=new File([_snsBlob], name, {type:'image/jpeg'});
                     if(navigator.canShare({files:[file]})){
                         await navigator.share({files:[file]});
+                        _snsLogAdd();
                         _snsFlash('저장했습니다. 이어서 영상을 찍으세요.');
                         return;
                     }
@@ -9150,10 +9300,217 @@
                 a.href=href; a.download=name;
                 document.body.appendChild(a); a.click(); a.remove();
                 if(_snsBlob) setTimeout(()=>{ try{URL.revokeObjectURL(href);}catch(_){} },4000);
+                _snsLogAdd();
                 _snsFlash('저장했습니다. 사진첩에 없으면 미리보기를 길게 눌러 저장하세요.');
             }catch(e){
                 _snsFlash('미리보기 이미지를 길게 눌러 “사진에 추가”를 눌러주세요.');
             }
+        }
+
+        // ==================================================================
+        //  📋 영상 대장 (snsSlateLog) — 촬영한 슬레이트의 진행 상태 추적
+        //  슬레이트를 저장하면 한 건 쌓인다(상태=촬영). 편집·업로드가 끝나면
+        //  상태를 올리고, 편집 측에서 확정된 파일명을 적어 둔다.
+        //  "밀린 것" = 상태가 촬영에서 멈춘 것.
+        // ==================================================================
+        const SNS_LOG_STATUSES=['촬영','편집완료','업로드완료','보류'];
+        const SNS_LOG_LIMIT=300;
+        let _snsView='slate';         // 'slate' | 'log'
+        let _snsLog=[];               // [{id,...}]
+        let _snsLogUnsub=null;
+        let _snsLogFilter='all';      // 'all' | 'pending' | 상태값
+        let _snsLogLastId=null;       // 직전에 기록한 문서 (같은 슬레이트 재저장 시 갱신)
+        let _snsLogLastKey='';
+        let _snsLogLastAt=0;
+
+        function snsSetView(v){
+            _snsView=(v==='log')?'log':'slate';
+            const slate=document.getElementById('snsViewSlate');
+            const log=document.getElementById('snsViewLog');
+            if(slate) slate.style.display=(_snsView==='slate')?'':'none';
+            if(log) log.style.display=(_snsView==='log')?'':'none';
+            const bs=document.getElementById('snsSubtab-slate');
+            const bl=document.getElementById('snsSubtab-log');
+            if(bs) bs.classList.toggle('on',_snsView==='slate');
+            if(bl) bl.classList.toggle('on',_snsView==='log');
+            if(_snsView==='log'){ _snsLogSubscribe(); _snsLogRender(); }
+        }
+
+        function _snsLogSubscribe(){
+            if(_snsLogUnsub || typeof db==='undefined') return;
+            try{
+                _snsLogUnsub=db.collection('snsSlateLog')
+                    .orderBy('createdAt','desc').limit(SNS_LOG_LIMIT)
+                    .onSnapshot(snap=>{
+                        const out=[];
+                        snap.forEach(doc=>{
+                            const v=doc.data()||{};
+                            out.push({
+                                id:doc.id,
+                                ymd:String(v.ymd||''),
+                                createdAt:(v.createdAt&&v.createdAt.toDate)?v.createdAt.toDate():null,
+                                seriesSuffix:String(v.seriesSuffix||''),
+                                seriesName:String(v.seriesName||''),
+                                seriesNo:Number(v.seriesNo)||0,
+                                content:String(v.content||''),
+                                status:(SNS_LOG_STATUSES.indexOf(v.status)>=0?v.status:'촬영'),
+                                filename:String(v.filename||''),
+                                byName:String(v.byName||'')
+                            });
+                        });
+                        _snsLog=out;
+                        _snsLogRender();
+                        _snsLogBadge();
+                    }, err=>{
+                        console.warn('영상 대장 구독 실패', err);
+                        try{ _snsLogUnsub&&_snsLogUnsub(); }catch(_){}
+                        _snsLogUnsub=null;
+                        const st=document.getElementById('snsLogStatus');
+                        if(st) st.textContent='대장을 불러오지 못했습니다. 통신 상태를 확인하세요.';
+                    });
+            }catch(e){ console.warn('영상 대장 구독 예외', e); }
+        }
+        function _snsLogBadge(){
+            const b=document.getElementById('snsLogBadge');
+            if(!b) return;
+            const n=_snsLog.filter(x=>x.status==='촬영').length;
+            b.textContent=n;
+            b.style.display=n?'':'none';
+        }
+        // 슬레이트 저장 시 기록. 같은 시리즈·내용을 10분 안에 다시 저장하면
+        // (같은 컷을 여러 번 찍는 경우) 새 줄을 만들지 않고 시각만 갱신한다.
+        async function _snsLogAdd(){
+            if(typeof db==='undefined') return;
+            const cur=_snsSeries.filter(x=>x.suffix===_snsSel)[0]||null;
+            const el=document.getElementById('snsContent');
+            const content=(el?el.value:'').trim();
+            if(!content && !cur) return;
+            const key=(cur?cur.suffix:'')+'|'+content;
+            const now=Date.now();
+            const payload={
+                ymd:_todayYmd(),
+                createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+                seriesSuffix:cur?cur.suffix:'',
+                seriesName:cur?cur.name:'',
+                seriesNo:cur?(cur.no||0):0,
+                content:content,
+                byName:(currentUser&&(currentUser.name||currentUser.email))||''
+            };
+            try{
+                if(_snsLogLastId && key===_snsLogLastKey && (now-_snsLogLastAt)<10*60*1000){
+                    await db.collection('snsSlateLog').doc(_snsLogLastId).set(payload,{merge:true});
+                }else{
+                    payload.status='촬영';
+                    payload.filename='';
+                    const ref=await db.collection('snsSlateLog').add(payload);
+                    _snsLogLastId=ref.id;
+                }
+                _snsLogLastKey=key; _snsLogLastAt=now;
+            }catch(e){ console.warn('영상 대장 기록 실패', e); }
+        }
+        function snsLogSetFilter(f){
+            _snsLogFilter=f;
+            _snsLogRender();
+        }
+        function _snsLogFiltered(){
+            if(_snsLogFilter==='all') return _snsLog;
+            if(_snsLogFilter==='pending') return _snsLog.filter(x=>x.status==='촬영');
+            return _snsLog.filter(x=>x.status===_snsLogFilter);
+        }
+        function _snsLogRender(){
+            const box=document.getElementById('snsLogList');
+            const st=document.getElementById('snsLogStatus');
+            const fl=document.getElementById('snsLogFilters');
+            if(!box) return;
+            if(fl){
+                const defs=[['pending','밀린 것'],['all','전체'],['편집완료','편집완료'],['업로드완료','업로드완료'],['보류','보류']];
+                fl.innerHTML='';
+                defs.forEach(([k,label])=>{
+                    const n=(k==='all')?_snsLog.length
+                        :(k==='pending')?_snsLog.filter(x=>x.status==='촬영').length
+                        :_snsLog.filter(x=>x.status===k).length;
+                    const b=document.createElement('button');
+                    b.type='button'; b.className='sns-chip';
+                    b.setAttribute('aria-pressed', String(_snsLogFilter===k));
+                    const c=document.createElement('span'); c.className='sns-no'; c.textContent=n;
+                    const t=document.createElement('span'); t.textContent=label;
+                    b.appendChild(c); b.appendChild(t);
+                    b.addEventListener('click',()=>snsLogSetFilter(k));
+                    fl.appendChild(b);
+                });
+            }
+            const rows=_snsLogFiltered();
+            if(st){
+                const pend=_snsLog.filter(x=>x.status==='촬영').length;
+                st.innerHTML=_snsLog.length
+                    ? ('기록 '+_snsLog.length+'건 · 밀린 것 <b>'+pend+'건</b>')
+                    : '아직 기록이 없습니다. 슬레이트를 저장하면 여기에 쌓입니다.';
+            }
+            box.innerHTML='';
+            if(!rows.length){
+                const e=document.createElement('div');
+                e.className='empty';
+                e.textContent=_snsLog.length?'이 조건에 해당하는 기록이 없습니다.':'슬레이트를 저장하면 촬영 기록이 자동으로 쌓입니다.';
+                box.appendChild(e);
+                return;
+            }
+            rows.forEach(r=>{
+                const row=document.createElement('div');
+                row.className='sns-log-row'+((r.status==='업로드완료')?' done':'');
+
+                const top=document.createElement('div');
+                top.className='sns-log-top';
+                const no=document.createElement('span');
+                no.className='sns-log-no'; no.textContent=(r.seriesNo||'·')+' '+(r.seriesName||'-');
+                const sfx=document.createElement('span');
+                sfx.className='sns-log-suffix'; sfx.textContent=r.seriesSuffix?('_'+r.seriesSuffix):'';
+                const dt=document.createElement('span');
+                dt.className='sns-log-date';
+                dt.textContent=r.createdAt?_snsLogWhen(r.createdAt):(r.ymd||'');
+                top.appendChild(no); top.appendChild(sfx); top.appendChild(dt);
+
+                const ct=document.createElement('div');
+                ct.className='sns-log-content'; ct.textContent=r.content||'(내용 없음)';
+
+                const ctrl=document.createElement('div');
+                ctrl.className='sns-log-ctrl';
+                const sel=document.createElement('select');
+                sel.setAttribute('aria-label','상태');
+                SNS_LOG_STATUSES.forEach(v=>{
+                    const o=document.createElement('option');
+                    o.value=v; o.textContent=v; if(v===r.status) o.selected=true;
+                    sel.appendChild(o);
+                });
+                sel.addEventListener('change',()=>_snsLogUpdate(r.id,{status:sel.value}));
+                const fn=document.createElement('input');
+                fn.type='text'; fn.value=r.filename; fn.placeholder='확정된 파일명 (예: 아내모임전시술_dont.MOV)';
+                fn.setAttribute('aria-label','파일명');
+                fn.addEventListener('change',()=>_snsLogUpdate(r.id,{filename:fn.value.trim()}));
+                const del=document.createElement('button');
+                del.type='button'; del.className='sns-log-del'; del.textContent='삭제';
+                del.addEventListener('click',()=>{
+                    if(!confirm('이 기록을 지울까요?\n\n'+(r.content||'(내용 없음)'))) return;
+                    _snsLogDelete(r.id);
+                });
+                ctrl.appendChild(sel); ctrl.appendChild(fn); ctrl.appendChild(del);
+
+                row.appendChild(top); row.appendChild(ct); row.appendChild(ctrl);
+                box.appendChild(row);
+            });
+        }
+        function _snsLogWhen(d){
+            const p=n=>n<10?('0'+n):(''+n);
+            return String(d.getFullYear()).slice(2)+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+        }
+        async function _snsLogUpdate(id, patch){
+            if(typeof db==='undefined') return;
+            try{ await db.collection('snsSlateLog').doc(id).set(patch,{merge:true}); }
+            catch(e){ alert('변경하지 못했습니다: '+((e&&e.message)||e)); }
+        }
+        async function _snsLogDelete(id){
+            if(typeof db==='undefined') return;
+            try{ await db.collection('snsSlateLog').doc(id).delete(); }
+            catch(e){ alert('삭제하지 못했습니다: '+((e&&e.message)||e)); }
         }
 
         // ---- 통합 라우터 ----
@@ -9164,7 +9521,7 @@
             opts=opts||{};
             // 📣 SNS 는 관리자 전용 — 홈 타일을 숨기는 것만으로는 부족해 라우터에서도 막는다.
             //    (데이터 자체는 firestore.rules 의 snsSeries 규칙이 서버에서 차단한다)
-            if(view==='sns' && !isSnsAdmin()){ alert('관리자 전용 메뉴입니다.'); showTopHome(); return; }
+            if(view==='sns' && !isSnsAdmin()){ alert('SNS 탭 권한이 없는 계정입니다.'); showTopHome(); return; }
             if(typeof fineshotFlush==='function') fineshotFlush();   // 파인샷 입력값 저장 후 이동
             document.querySelectorAll('.tab-content').forEach(t=>{
                 t.classList.remove('active');

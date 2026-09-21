@@ -13,17 +13,17 @@ service cloud.firestore {
         && (request.auth.token.email in get(/databases/$(database)/documents/settings/bizAdmins).data.emails);
     }
 
-    // 📣 SNS(촬영 슬레이트) 관리자 — bizAdmins 또는 adminHigh 화이트리스트
+    // 📣 SNS(촬영 슬레이트·영상 대장) 사용 권한
+    //    bizAdmins · adminHigh(관리자) + snsAccess(⚙ 관리자 설정에서 스위치로 켠 계정).
     //    통합앱은 정적 파일이라 화면 숨김만으로는 막히지 않는다. 데이터는 여기서 막는다.
-    //    ⚠️ 두 목록에는 로그인 이메일을 "소문자"로 넣어야 한다(토큰 이메일과 그대로 비교).
+    //    ⚠️ 세 목록 모두 로그인 이메일을 "소문자"로 넣어야 한다(토큰 이메일과 그대로 비교).
+    function inSettingsList(docId) {
+      return exists(/databases/$(database)/documents/settings/$(docId))
+        && (request.auth.token.email in get(/databases/$(database)/documents/settings/$(docId)).data.emails);
+    }
     function isSnsAdmin() {
       return signedIn()
-        && (
-          (exists(/databases/$(database)/documents/settings/bizAdmins)
-            && (request.auth.token.email in get(/databases/$(database)/documents/settings/bizAdmins).data.emails))
-          || (exists(/databases/$(database)/documents/settings/adminHigh)
-            && (request.auth.token.email in get(/databases/$(database)/documents/settings/adminHigh).data.emails))
-        );
+        && (inSettingsList('bizAdmins') || inSettingsList('adminHigh') || inSettingsList('snsAccess'));
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -156,10 +156,12 @@ service cloud.firestore {
     match /config/{id}                          { allow read, write: if signedIn(); }
     match /admins/{id}                          { allow read, write: if signedIn(); }
 
-    // ── 📣 SNS · 촬영 슬레이트 (관리자 전용) ──
-    //    snsSeries/{suffix}: 시리즈 목록(번호·이름·정렬·활성). 문서ID = 파일명 접미사.
-    //    2차(영상 대장)에서 snsSlateLog 를 추가할 때도 같은 isSnsAdmin() 으로 잠근다.
+    // ── 📣 SNS · 촬영 슬레이트 (관리자 + settings/snsAccess 로 켠 계정) ──
+    //    snsSeries/{suffix}  : 시리즈 목록(번호·이름·정렬·활성). 문서ID = 파일명 접미사.
+    //    snsSlateLog/{autoId}: 영상 대장. 슬레이트를 저장할 때 촬영 기록이 쌓이고
+    //                          편집완료·업로드완료로 상태를 올린다.
     match /snsSeries/{id}                       { allow read, write: if isSnsAdmin(); }
+    match /snsSlateLog/{id}                     { allow read, write: if isSnsAdmin(); }
 
     // ── 고객 채팅 (카카오·네이버) ──
     match /chatThreads/{id}                     { allow read, write: if signedIn(); }
