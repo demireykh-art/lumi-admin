@@ -583,6 +583,91 @@
         .sns-log-ctrl input{flex:1;min-width:0}
         .sns-log-del{flex:0 0 auto;background:#fff;border:1px solid var(--border);color:var(--red);
             border-radius:var(--r-sm);padding:.4rem .5rem;font-size:.72rem;font-family:inherit;cursor:pointer;min-height:36px}
+
+        /* ══════ 💵 수가표2 (홈페이지 공개 가격 편집) ══════
+           지시서 Section 3: 스프레드시트형 표. 셀 클릭 → 인라인 편집, Tab/Enter 이동.
+           내부 메모 열은 회색 배경으로 비공개 구분. needsReview 있는 행은 노란색. */
+        .fee2-wrap{padding:0;overflow:visible}
+        .fee2-toolbar{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;padding:.55rem var(--card-pad);
+            background:var(--bg-card);border-bottom:1px solid var(--border);
+            position:sticky;top:calc(-1 * var(--pad));z-index:20;
+            margin:calc(-1 * var(--pad)) calc(-1 * var(--card-pad)) 0}
+        .fee2-toolbar button{font-size:.75rem;padding:.35rem .6rem;border:1px solid var(--border);
+            border-radius:var(--r-sm);background:var(--bg-card);cursor:pointer;white-space:nowrap;font-family:inherit;color:var(--text)}
+        .fee2-toolbar button:hover{background:var(--bg-page)}
+        .fee2-toolbar .fee2-title{font-weight:600;font-size:.9rem;margin-right:.3rem;flex-shrink:0}
+        .fee2-toolbar select,.fee2-toolbar input[type=text]{font-size:.75rem;padding:.3rem .45rem;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-card);font-family:inherit}
+        .fee2-toolbar .fee2-search{flex:1 1 120px;min-width:100px}
+        .fee2-toolbar label{font-size:.72rem;color:var(--text-secondary);display:inline-flex;align-items:center;gap:.2rem;cursor:pointer}
+        .fee2-toolbar .fee2-publish{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
+        .fee2-toolbar .fee2-publish:hover{filter:brightness(.9)}
+        .fee2-badge{display:inline-block;padding:.05rem .35rem;border-radius:var(--r-pill);font-size:.65rem;font-weight:600;letter-spacing:-.5px;background:var(--bg-page);color:var(--text-secondary)}
+        .fee2-badge.dirty{background:#f59e0b;color:#fff}
+        .fee2-badge.review{background:#ef4444;color:#fff}
+
+        .fee2-status{padding:.4rem .8rem;background:var(--bg-page);border-radius:var(--r-sm);
+            font-size:.72rem;color:var(--text-secondary);margin:.4rem var(--card-pad) 0}
+        .fee2-status.dirty{background:#fef3c7;color:#92400e}
+        .fee2-empty{padding:2rem;text-align:center;color:var(--text-muted);font-size:.85rem}
+
+        .fee2-scroll{overflow-x:auto;overflow-y:visible;max-width:100%;margin:.5rem 0 0;
+            border-top:1px solid var(--border)}
+        .fee2-table{border-collapse:collapse;font-size:.72rem;background:var(--bg-card);
+            white-space:nowrap;font-variant-numeric:tabular-nums;min-width:100%}
+        .fee2-table th{position:sticky;top:0;z-index:5;background:#2c2c2c;color:#fff;
+            padding:.4rem .5rem;text-align:left;font-weight:500;
+            border-right:1px solid rgba(255,255,255,.15);white-space:nowrap;font-size:.7rem}
+        .fee2-table th:last-child{border-right:0}
+        .fee2-table td{padding:.3rem .5rem;border-bottom:1px solid var(--border);
+            border-right:1px solid var(--border);vertical-align:middle;line-height:1.4;max-width:16rem;
+            overflow:hidden;text-overflow:ellipsis}
+        .fee2-table td:last-child{border-right:0}
+        .fee2-table tr:hover td{background:rgba(154,139,122,.06)}
+        .fee2-table tr.review-row td{background:#fef3c7}
+        .fee2-table tr.review-row:hover td{background:#fde68a}
+        .fee2-table tr.archived td{background:#f3f4f6;color:#9ca3af;text-decoration:line-through}
+        .fee2-table td.col-internal{background:rgba(0,0,0,.045)}
+        .fee2-table tr.review-row td.col-internal{background:rgba(180,120,0,.15)}
+        .fee2-table td.col-num{text-align:right;font-variant-numeric:tabular-nums}
+        .fee2-table td.col-check{text-align:center}
+        .fee2-table td.col-discount{color:var(--red);text-align:right}
+        .fee2-table td.col-price{font-weight:500}
+        .fee2-table td[data-editable]{cursor:cell;user-select:none}
+        .fee2-table td[data-editable]:hover{outline:1px solid var(--primary);outline-offset:-1px}
+        .fee2-table td.cell-dirty{background:#fef9c3!important;outline:1.5px solid #f59e0b;outline-offset:-2px;font-weight:600}
+        .fee2-cell-input{width:100%;font:inherit;padding:.15rem .2rem;border:1.5px solid var(--primary);
+            border-radius:3px;background:#fffbe6;outline:none;box-sizing:border-box}
+        .fee2-cell-input:focus{border-color:var(--primary-dark)}
+        .fee2-row-actions{display:flex;gap:.15rem;justify-content:center}
+        .fee2-row-actions button{padding:.05rem .3rem;font-size:.7rem;border:1px solid var(--border);
+            border-radius:3px;background:var(--bg);cursor:pointer;line-height:1.3;font-family:inherit;color:var(--text)}
+        .fee2-row-actions button:hover{background:var(--warm,#f0eae0)}
+        .fee2-cat-head td{background:var(--bg-page)!important;font-weight:600;font-size:.75rem;padding:.5rem;color:var(--primary-dark)}
+
+        /* 게시 다이얼로그 */
+        .fee2-publish-dialog{max-height:70vh;overflow-y:auto;padding:.5rem}
+        .fee2-publish-dialog h4{font-size:.85rem;margin:.75rem 0 .3rem;font-weight:600}
+        .fee2-publish-dialog ul{list-style:none;padding-left:0;font-size:.72rem;color:var(--text-secondary);
+            max-height:15rem;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-page)}
+        .fee2-publish-dialog li{padding:.25rem .5rem;border-bottom:1px solid var(--border)}
+        .fee2-publish-dialog li:last-child{border-bottom:0}
+        .fee2-publish-dialog .fee2-block{color:var(--red);font-weight:600;background:#fee2e2;
+            padding:.6rem;border-radius:var(--r-sm);margin:.5rem 0}
+
+        /* 변경 이력 */
+        .fee2-audit-list{max-height:60vh;overflow-y:auto;font-size:.72rem}
+        .fee2-audit-list .audit-entry{padding:.35rem .5rem;border-bottom:1px solid var(--border);
+            display:grid;grid-template-columns:auto 1fr auto;gap:.4rem;align-items:baseline}
+        .fee2-audit-list .audit-time{color:var(--text-muted);font-size:.65rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+        .fee2-audit-list .audit-msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .fee2-audit-list .audit-user{color:var(--primary);font-size:.65rem;white-space:nowrap}
+
+        @media(max-width:640px){
+            .fee2-toolbar{gap:.3rem;padding:.45rem .5rem}
+            .fee2-toolbar select,.fee2-toolbar input[type=text]{font-size:.7rem}
+            .fee2-toolbar .fee2-title{font-size:.85rem}
+        }
     </style>
 </head>
 <body>
@@ -852,7 +937,15 @@
                             <span class="home-row-icon">💊</span>
                             <span class="home-row-body">
                                 <span class="home-row-title">시술 수가표</span>
-                                <span class="home-row-desc">카테고리별 정가·옵션 목록</span>
+                                <span class="home-row-desc">카테고리별 정가·옵션 목록 (내부 운영)</span>
+                            </span>
+                            <span class="home-row-arrow">›</span>
+                        </button>
+                        <button type="button" class="home-row" id="topHomeFee2Btn" style="display:none" onclick="showTop('feeschedule2')">
+                            <span class="home-row-icon">💵</span>
+                            <span class="home-row-body">
+                                <span class="home-row-title">수가표2 <span class="home-row-tag">공개</span></span>
+                                <span class="home-row-desc">홈페이지 <code>price.html</code>·<code>event.html</code> 편집 · 게시</span>
                             </span>
                             <span class="home-row-arrow">›</span>
                         </button>
@@ -986,6 +1079,66 @@
                         </div>
                     </div>
                     <div id="feeList" style="margin-top:.6rem;max-width:100%;overflow-x:hidden"></div>
+                </div>
+            </div>
+
+            <!-- === 💵 수가표2 (홈페이지 공개 가격 편집 · Firestore fee_items → price.html·event.html) === -->
+            <div class="tab-content" id="tab-feeschedule2">
+                <div class="card fee2-wrap" style="margin:calc(-1 * var(--pad)) 0 0;padding:0;overflow-x:clip">
+                    <div class="fee2-toolbar">
+                        <button onclick="showTopHome()" title="홈으로">←</button>
+                        <span class="fee2-title">💵 수가표2</span>
+                        <span class="fee2-badge" id="fee2CountBadge">–</span>
+                        <span class="fee2-badge dirty" id="fee2DirtyBadge" style="display:none">미저장 0</span>
+                        <select id="fee2FilterCat" onchange="renderFee2Table()" title="분류 필터">
+                            <option value="">전체 분류</option>
+                        </select>
+                        <label title="홈페이지에 노출되는 행만"><input type="checkbox" id="fee2FilterShowOnPrice" onchange="renderFee2Table()"> 홈</label>
+                        <label title="이벤트에 노출되는 행만"><input type="checkbox" id="fee2FilterShowOnEvent" onchange="renderFee2Table()"> 이벤트</label>
+                        <label title="확인 필요 표시 있는 행만"><input type="checkbox" id="fee2FilterReview" onchange="renderFee2Table()"> 확인필요</label>
+                        <label title="아카이브 행도 포함"><input type="checkbox" id="fee2FilterArchived" onchange="renderFee2Table()"> 아카이브</label>
+                        <input type="text" class="fee2-search" id="fee2Search" placeholder="시술명·옵션·ID 검색" oninput="renderFee2Table()">
+                        <button onclick="fee2AddRow()" title="새 시술 추가">+ 행</button>
+                        <button onclick="openFee2Audit()" title="변경 이력 보기">📜</button>
+                        <button onclick="fee2ExportXlsx()" title="현재 표를 xlsx로 내려받기 (백업)">📥 XLSX</button>
+                        <button class="fee2-publish" id="fee2PublishBtn" onclick="openFee2PublishDialog()" title="공개 스냅샷 게시 (price.html·event.html 갱신)" style="display:none">🚀 게시</button>
+                    </div>
+                    <div id="fee2Status" class="fee2-status">로딩 중...</div>
+                    <div class="fee2-scroll">
+                        <table class="fee2-table" id="fee2Table">
+                            <thead><tr>
+                                <th>ID</th><th>홈분류</th><th>내부분류</th><th>시술명</th><th>옵션</th>
+                                <th>정가</th><th>이벤트가</th><th>할인</th><th>조건</th>
+                                <th>시작</th><th>종료</th><th>홈</th><th>이벤트</th>
+                                <th>시술시간</th><th>공개설명</th><th class="col-internal">내부메모</th><th>확인필요</th><th></th>
+                            </tr></thead>
+                            <tbody id="fee2TableBody"><tr><td colspan="18" class="fee2-empty">로딩 중...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 게시 다이얼로그 -->
+                <div class="modal" id="fee2PublishModal">
+                    <div class="modal-content" style="max-width:600px">
+                        <div class="modal-header">
+                            <div class="modal-title">🚀 수가표2 게시</div>
+                            <button class="modal-close" onclick="closeModal('fee2PublishModal')">&times;</button>
+                        </div>
+                        <div class="modal-body fee2-publish-dialog" id="fee2PublishBody"></div>
+                    </div>
+                </div>
+
+                <!-- 변경 이력 다이얼로그 -->
+                <div class="modal" id="fee2AuditModal">
+                    <div class="modal-content" style="max-width:640px">
+                        <div class="modal-header">
+                            <div class="modal-title">📜 수가표2 변경 이력</div>
+                            <button class="modal-close" onclick="closeModal('fee2AuditModal')">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="fee2AuditList" class="fee2-audit-list">로딩 중...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2723,6 +2876,25 @@
                 </div>
 
                 <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
+                    <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">💵 수가표2 (홈페이지 공개 가격) 편집·게시 권한</div>
+                    <div style="font-size:.8rem;color:#666;margin-bottom:.6rem">
+                        홈페이지 공개 가격표(<code>price.html</code>·<code>event.html</code>)를 편집·게시할 계정을 지정합니다.<br>
+                        <b>편집자</b>는 셀 수정만 가능하고, <b>게시자</b>는 편집 + 실 배포까지 가능합니다.
+                        게시자는 자동으로 편집 권한도 포함됩니다.<br>
+                        ※ 관리자 계정(<code>bizAdmins</code>)만 이 권한을 부여할 수 있습니다.
+                        데이터는 <code>fee_access/main</code>에 저장되며 서버 규칙에서 강제됩니다.<br>
+                        ※ 확인 필요(<code>needsReview</code>)가 남은 노출 항목이 있으면 게시가 자동 차단됩니다.
+                    </div>
+                    <div id="fee2AccessList" style="display:flex;flex-direction:column;gap:.4rem;max-height:22rem;overflow-y:auto">
+                        <div style="color:#888;font-size:.85rem">로딩 중...</div>
+                    </div>
+                    <div style="display:flex;gap:.4rem;margin-top:.5rem">
+                        <input type="email" id="fee2AccessAddEmail" placeholder="이메일 추가" style="flex:1;padding:.4rem;font-size:.8rem;border:1px solid var(--border);border-radius:var(--r-sm);font-family:inherit">
+                        <button onclick="fee2AccessAddEmail()" style="padding:.4rem .8rem;background:var(--primary);color:#fff;border:0;border-radius:var(--r-sm);font-size:.8rem;cursor:pointer">+ 편집자 추가</button>
+                    </div>
+                </div>
+
+                <div style="border-top:1px solid #e5e7eb;margin:1rem 0;padding-top:.75rem">
                     <div style="font-weight:600;font-size:.95rem;margin-bottom:.35rem">🌳 상담 트리 관리</div>
                     <div style="font-size:.8rem;color:#666;margin-bottom:.5rem">
                         노션 스타일 텍스트 붙여넣기·시각 편집·백업 복원을 지원합니다.
@@ -3387,6 +3559,8 @@
             // 📣 SNS(촬영 슬레이트·영상 대장): 관리자 + ⚙ 관리자 설정에서 켠 계정
             const snsBtn=document.getElementById('topHomeSnsBtn');
             if(snsBtn) snsBtn.style.display=isSnsAdmin()?'flex':'none';
+            // 💵 수가표2(홈페이지 공개 가격): fee_access/main 화이트리스트
+            if(typeof _loadFeeAccess==='function') _loadFeeAccess(e).catch(_=>{});
             if(typeof _homeSyncSections==='function') _homeSyncSections();
         }
 
@@ -3396,6 +3570,7 @@
             loadSharedStaffAccountsStaff();
             loadDailySalesPerms();
             loadSnsPerms();
+            if(typeof loadFee2AccessList==='function') loadFee2AccessList();
             _locSettingsInit();
         }
         // ── 📍 클리닉 위치(GPS) 설정 ──
@@ -9573,6 +9748,8 @@
                 await _initDailySales();
             }else if(view==='sns'){
                 await _initSns();
+            }else if(view==='feeschedule2'){
+                if(typeof _initFee2Tab==='function') await _initFee2Tab();
             }else if(view==='rating'){
                 await loadProductRatings();
                 renderProductRatings();
@@ -21068,10 +21245,559 @@
                 }
             });
         });
-        
+
         // Init
         checkAuth();
     </script>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         💵 수가표2 모듈 (Section 13-3/4)
+         · 홈페이지 공개 가격표(price.html·event.html) 편집·게시 UI
+         · fee_items, fee_categories, fee_public, fee_access, fee_audit 다룸
+         · 게시(price.html·event.html 생성)는 Section 13-6의 Cloud Function 담당
+         ══════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function(){
+        'use strict';
+        // ─── 전역 상태 ─────────────────────────────────────
+        let canFeeEdit=false, canFeePublish=false;
+        let _feeAccessDoc={editors:[],publishers:[]};
+        let _fee2Items=[];       // fee_items 전체
+        let _fee2Cats=[];        // fee_categories order 순
+        let _fee2Public=null;    // 마지막 게시 스냅샷(diff용)
+        const _fee2Dirty=new Map();  // id -> {field:newVal}
+        let _fee2Db=null;
+        let _fee2Editing=null;   // {td,id,field,type,orig,inp}
+
+        function _db(){ return _fee2Db || (_fee2Db=firebase.firestore()); }
+        function _esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+        function _isoDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+        function _auditVal(v){ if(v==null) return null; if(v.toDate) return _isoDate(v.toDate()); if(v instanceof Date) return _isoDate(v); return v; }
+        function _dateShort(v){ if(!v) return ''; try{ const d=v.toDate?v.toDate():new Date(v); if(isNaN(d)) return String(v); return String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0'); }catch(_){ return String(v); } }
+
+        // ─── 권한 조회 (auth flow에서 호출) ────────────────
+        async function _loadFeeAccess(email){
+            try{
+                const doc=await _db().collection('fee_access').doc('main').get();
+                _feeAccessDoc=doc.exists?(doc.data()||{}):{};
+                _feeAccessDoc.editors=_feeAccessDoc.editors||[];
+                _feeAccessDoc.publishers=_feeAccessDoc.publishers||[];
+                const e=(email||'').toLowerCase();
+                canFeeEdit=!!e && (_feeAccessDoc.editors.includes(e) || _feeAccessDoc.publishers.includes(e));
+                canFeePublish=!!e && _feeAccessDoc.publishers.includes(e);
+            }catch(_){ canFeeEdit=false; canFeePublish=false; }
+            const btn=document.getElementById('topHomeFee2Btn');
+            if(btn) btn.style.display=canFeeEdit?'flex':'none';
+            const pubBtn=document.getElementById('fee2PublishBtn');
+            if(pubBtn) pubBtn.style.display=canFeePublish?'inline-block':'none';
+            if(typeof _homeSyncSections==='function') _homeSyncSections();
+        }
+        window._loadFeeAccess=_loadFeeAccess;
+
+        // ─── 데이터 로드 ───────────────────────────────────
+        async function _fee2LoadAll(){
+            const [itemsSnap, catsSnap, pubDoc] = await Promise.all([
+                _db().collection('fee_items').get(),
+                _db().collection('fee_categories').orderBy('order').get(),
+                _db().collection('fee_public').doc('current').get().catch(()=>null),
+            ]);
+            _fee2Items=itemsSnap.docs.map(d=>({...(d.data()||{}), _docId:d.id}));
+            _fee2Items.sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+            _fee2Cats=catsSnap.docs.map(d=>({id:d.id, ...(d.data()||{})}));
+            _fee2Public=(pubDoc && pubDoc.exists)?pubDoc.data():null;
+            const catSel=document.getElementById('fee2FilterCat');
+            if(catSel){
+                const cur=catSel.value;
+                catSel.innerHTML='<option value="">전체 분류</option>'+_fee2Cats.map(c=>`<option value="${c.id}">${_esc(c.label||c.id)}</option>`).join('');
+                catSel.value=cur;
+            }
+        }
+
+        // ─── 렌더링 ────────────────────────────────────────
+        function renderFee2Table(){
+            const body=document.getElementById('fee2TableBody');
+            if(!body) return;
+            const q=(document.getElementById('fee2Search')?.value||'').trim().toLowerCase();
+            const filterCat=document.getElementById('fee2FilterCat')?.value||'';
+            const filterShowP=document.getElementById('fee2FilterShowOnPrice')?.checked;
+            const filterShowE=document.getElementById('fee2FilterShowOnEvent')?.checked;
+            const filterRev=document.getElementById('fee2FilterReview')?.checked;
+            const includeArch=document.getElementById('fee2FilterArchived')?.checked;
+            const rows=_fee2Items.filter(it=>{
+                if(!includeArch && it.archived) return false;
+                if(filterCat && it.homeCategory!==filterCat) return false;
+                if(filterShowP && !it.showOnPrice) return false;
+                if(filterShowE && !it.showOnEvent) return false;
+                if(filterRev && !(it.needsReview||'').trim()) return false;
+                if(q){
+                    const hay=[it.name, it.option, it.publicDescription, it.internalMemo, it.id].join(' ').toLowerCase();
+                    if(!hay.includes(q)) return false;
+                }
+                return true;
+            });
+            const byCat=new Map();
+            for(const it of rows){ const k=it.homeCategory||'_'; if(!byCat.has(k)) byCat.set(k,[]); byCat.get(k).push(it); }
+            const catOrder=[..._fee2Cats.map(c=>c.id), ...new Set([...byCat.keys()].filter(k=>!_fee2Cats.some(c=>c.id===k)))];
+            let html='';
+            for(const catId of catOrder){
+                const arr=byCat.get(catId); if(!arr||!arr.length) continue;
+                const cat=_fee2Cats.find(c=>c.id===catId);
+                html+=`<tr class="fee2-cat-head"><td colspan="18">${_esc(cat?.label||catId)} (${arr.length})</td></tr>`;
+                for(const it of arr) html+=_fee2Row(it);
+            }
+            body.innerHTML=html || '<tr><td colspan="18" class="fee2-empty">일치하는 행이 없습니다.</td></tr>';
+            _updateBadges();
+        }
+        window.renderFee2Table=renderFee2Table;
+
+        function _fee2Row(it){
+            const dirty=_fee2Dirty.get(it.id)||{};
+            const cur=f=>(f in dirty)?dirty[f]:(it[f]??'');
+            const num=v=>(v==null||v==='')?'':Number(v).toLocaleString();
+            const pr=cur('priceRegular'), pe=cur('priceEvent');
+            const discount=(pr && pe && Number(pr)>0)?Math.round((1-Number(pe)/Number(pr))*100)+'%':'';
+            const showEd=canFeeEdit;
+            const attr=f=>showEd?`data-editable data-id="${it.id}" data-field="${f}"`:'';
+            const dcls=f=>(f in dirty)?' cell-dirty':'';
+            const catLbl=_fee2Cats.find(c=>c.id===cur('homeCategory'))?.label || cur('homeCategory');
+            const rowCls=(it.archived?'archived ':'') + ((it.needsReview||'').trim()?'review-row':'');
+            return `<tr class="${rowCls}" data-id="${it.id}">
+<td>${_esc(it.id)}</td>
+<td${dcls('homeCategory')?' class="cell-dirty"':''} ${attr('homeCategory')}>${_esc(catLbl)}</td>
+<td${dcls('internalCategory')?' class="cell-dirty"':''} ${attr('internalCategory')}>${_esc(cur('internalCategory'))}</td>
+<td${dcls('name')?' class="cell-dirty"':''} ${attr('name')}>${_esc(cur('name'))}</td>
+<td${dcls('option')?' class="cell-dirty"':''} ${attr('option')}>${_esc(cur('option'))}</td>
+<td class="col-num col-price${dcls('priceRegular')}" ${attr('priceRegular')} data-type="num">${num(pr)}</td>
+<td class="col-num col-price${dcls('priceEvent')}" ${attr('priceEvent')} data-type="num">${num(pe)}</td>
+<td class="col-num col-discount">${discount}</td>
+<td${dcls('eventCondition')?' class="cell-dirty"':''} ${attr('eventCondition')}>${_esc(cur('eventCondition'))}</td>
+<td${dcls('eventStart')?' class="cell-dirty"':''} ${attr('eventStart')} data-type="date">${_dateShort(cur('eventStart'))}</td>
+<td${dcls('eventEnd')?' class="cell-dirty"':''} ${attr('eventEnd')} data-type="date">${_dateShort(cur('eventEnd'))}</td>
+<td class="col-check">${_boolCell(it.id,'showOnPrice',cur('showOnPrice'),showEd)}</td>
+<td class="col-check">${_boolCell(it.id,'showOnEvent',cur('showOnEvent'),showEd)}</td>
+<td${dcls('duration')?' class="cell-dirty"':''} ${attr('duration')}>${_esc(cur('duration'))}</td>
+<td${dcls('publicDescription')?' class="cell-dirty"':''} ${attr('publicDescription')}>${_esc(cur('publicDescription'))}</td>
+<td class="col-internal${dcls('internalMemo')}" ${attr('internalMemo')}>${_esc(cur('internalMemo'))}</td>
+<td${dcls('needsReview')?' class="cell-dirty"':''} ${attr('needsReview')}>${_esc(cur('needsReview'))}</td>
+<td><div class="fee2-row-actions">${showEd?`<button onclick="fee2DupRow('${it.id}')" title="옵션 추가용 복제">⧉</button>`:''}${showEd?`<button onclick="fee2Archive('${it.id}')" title="${it.archived?'복원':'아카이브'}">${it.archived?'↺':'✕'}</button>`:''}</div></td>
+</tr>`;
+        }
+        function _boolCell(id, field, val, editable){
+            return `<input type="checkbox" ${val?'checked':''} ${editable?'':'disabled'} onchange="fee2ToggleBool('${id}','${field}',this.checked)">`;
+        }
+        function _updateBadges(){
+            const cnt=document.getElementById('fee2CountBadge');
+            if(cnt) cnt.textContent=_fee2Items.filter(x=>!x.archived).length+'개';
+            const dirty=document.getElementById('fee2DirtyBadge');
+            const dirtyCount=[..._fee2Dirty.values()].reduce((s,d)=>s+Object.keys(d).length,0);
+            if(dirty){ dirty.style.display=dirtyCount>0?'':'none'; dirty.textContent='미저장 '+dirtyCount+'셀'; }
+            const status=document.getElementById('fee2Status');
+            if(status){
+                const rev=_fee2Items.filter(x=>(x.showOnPrice||x.showOnEvent) && !x.archived && (x.needsReview||'').trim()).length;
+                const parts=[`전체 ${_fee2Items.length}개 · 활성 ${_fee2Items.filter(x=>!x.archived).length}개`];
+                if(rev>0) parts.push(`<span style="color:var(--red)">확인필요 ${rev}건 (게시 차단)</span>`);
+                if(dirtyCount>0) parts.push(`<span style="color:#92400e">미저장 ${dirtyCount}셀 — <button onclick="fee2SaveAll()" style="padding:.15rem .5rem;background:var(--primary);color:#fff;border:0;border-radius:4px;font-size:.7rem;cursor:pointer;font-family:inherit">💾 전체 저장</button> <button onclick="fee2DiscardAll()" style="padding:.15rem .5rem;background:#eee;color:#666;border:0;border-radius:4px;font-size:.7rem;cursor:pointer;font-family:inherit">취소</button></span>`);
+                if(_fee2Public?.publishedAt){ const pd=_fee2Public.publishedAt.toDate?_fee2Public.publishedAt.toDate():new Date(_fee2Public.publishedAt); parts.push(`마지막 게시: ${pd.toISOString().slice(0,16).replace('T',' ')}`); }
+                status.innerHTML=parts.join(' · ');
+                status.classList.toggle('dirty', dirtyCount>0);
+            }
+        }
+
+        // ─── 인라인 편집 ───────────────────────────────────
+        document.addEventListener('click', function(ev){
+            const td=ev.target.closest?.('#tab-feeschedule2 td[data-editable]'); if(!td) return;
+            _fee2StartEdit(td);
+        });
+        function _fee2StartEdit(td){
+            if(!canFeeEdit) return;
+            if(_fee2Editing && _fee2Editing.td===td) return;
+            if(_fee2Editing) _fee2CommitEdit();
+            const id=td.dataset.id, field=td.dataset.field, type=td.dataset.type||'text';
+            const it=_fee2Items.find(x=>x.id===id); if(!it) return;
+            const dirty=_fee2Dirty.get(id)||{};
+            const raw=(field in dirty)?dirty[field]:(it[field]??'');
+            let editVal='';
+            if(type==='date'){ editVal=raw?((raw.toDate?_isoDate(raw.toDate()):raw instanceof Date?_isoDate(raw):String(raw))):''; }
+            else if(type==='num'){ editVal=raw==null||raw===''?'':String(raw); }
+            else{ editVal=String(raw??''); }
+            const inp=document.createElement('input');
+            inp.className='fee2-cell-input';
+            inp.type=type==='date'?'date':'text';
+            inp.value=editVal;
+            td.textContent=''; td.appendChild(inp);
+            inp.focus(); inp.select();
+            _fee2Editing={td,id,field,type,orig:editVal,inp};
+            inp.addEventListener('blur', ()=>_fee2CommitEdit());
+            inp.addEventListener('keydown', _fee2EditKey);
+        }
+        function _fee2EditKey(e){
+            if(e.key==='Enter'||e.key==='Tab'){
+                e.preventDefault();
+                const dir=e.shiftKey?-1:1;
+                const mode=e.key==='Enter'?'row':'col';
+                _fee2CommitEdit();
+                _fee2MoveEdit(dir, mode);
+            }else if(e.key==='Escape'){
+                if(_fee2Editing){ _fee2Editing.inp.value=_fee2Editing.orig; _fee2Editing.canceled=true; _fee2CommitEdit(); }
+            }
+        }
+        function _fee2MoveEdit(dir, mode){
+            const table=document.getElementById('fee2Table'); if(!table) return;
+            const cells=[...table.querySelectorAll('td[data-editable]')];
+            const cur=cells.find(c=>c===document.activeElement?.closest('td')) || cells[cells.length-1];
+            if(!cur) return;
+            if(mode==='row'){
+                const row=cur.closest('tr');
+                const rowCells=[...row.querySelectorAll('td[data-editable]')];
+                const colIdx=rowCells.indexOf(cur);
+                let next=dir>0?row.nextElementSibling:row.previousElementSibling;
+                while(next && next.classList.contains('fee2-cat-head')) next=dir>0?next.nextElementSibling:next.previousElementSibling;
+                if(next){ const t=[...next.querySelectorAll('td[data-editable]')][colIdx]; if(t) _fee2StartEdit(t); }
+            }else{
+                const idx=cells.indexOf(cur);
+                const target=cells[idx+dir];
+                if(target) _fee2StartEdit(target);
+            }
+        }
+        function _fee2CommitEdit(){
+            if(!_fee2Editing) return;
+            const {id, field, type, canceled, inp}=_fee2Editing;
+            _fee2Editing=null;
+            if(canceled){ renderFee2Table(); return; }
+            let newVal=inp.value.trim();
+            if(type==='num'){
+                newVal=newVal.replace(/[,\s원]/g,'');
+                if(newVal===''){ newVal=null; }
+                else{ const n=Number(newVal); if(!isFinite(n)){ alert('숫자만 입력해주세요.'); renderFee2Table(); return; } newVal=n; }
+            }else if(type==='date'){
+                if(newVal===''){ newVal=null; }
+                else{ const d=new Date(newVal+'T00:00:00'); if(isNaN(d.getTime())){ alert('날짜 형식 오류'); renderFee2Table(); return; } newVal=d; }
+            }
+            const it=_fee2Items.find(x=>x.id===id);
+            const orig=it?(it[field]??''):'';
+            const origStr=(orig && orig.toDate)?_isoDate(orig.toDate()):(orig instanceof Date?_isoDate(orig):String(orig??''));
+            const newStr=(newVal && newVal.toDate)?_isoDate(newVal.toDate()):(newVal instanceof Date?_isoDate(newVal):String(newVal??''));
+            const d=_fee2Dirty.get(id)||{};
+            if(origStr===newStr){ delete d[field]; if(!Object.keys(d).length) _fee2Dirty.delete(id); else _fee2Dirty.set(id,d); }
+            else{ d[field]=newVal; _fee2Dirty.set(id,d); }
+            renderFee2Table();
+        }
+        // 체크박스: 즉시 dirty 처리
+        window.fee2ToggleBool=function(id, field, checked){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); renderFee2Table(); return; }
+            const it=_fee2Items.find(x=>x.id===id); if(!it) return;
+            const d=_fee2Dirty.get(id)||{};
+            if(!!it[field]===!!checked){ delete d[field]; if(!Object.keys(d).length) _fee2Dirty.delete(id); else _fee2Dirty.set(id,d); }
+            else{ d[field]=!!checked; _fee2Dirty.set(id,d); }
+            _updateBadges();
+        };
+        window.fee2DiscardAll=function(){
+            if(!_fee2Dirty.size) return;
+            if(!confirm('미저장 변경을 모두 취소하시겠습니까?')) return;
+            _fee2Dirty.clear();
+            renderFee2Table();
+        };
+
+        // ─── 저장 (batch + fee_audit) ─────────────────────
+        window.fee2SaveAll=async function(){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            if(!_fee2Dirty.size){ alert('저장할 변경이 없습니다.'); return; }
+            const uid=firebase.auth().currentUser?.uid||'';
+            const email=firebase.auth().currentUser?.email||'';
+            const now=firebase.firestore.FieldValue.serverTimestamp();
+            const db=_db();
+            const batch=db.batch();
+            const auditEntries=[];
+            for(const [id, dirty] of _fee2Dirty.entries()){
+                const it=_fee2Items.find(x=>x.id===id);
+                const patch={updatedAt:now, updatedBy:uid};
+                for(const f of Object.keys(dirty)){
+                    const nv=dirty[f];
+                    if(nv instanceof Date) patch[f]=firebase.firestore.Timestamp.fromDate(nv);
+                    else patch[f]=nv;
+                    auditEntries.push({itemId:id, field:f, before:_auditVal(it?it[f]:null), after:_auditVal(nv)});
+                }
+                batch.set(db.collection('fee_items').doc(id), patch, {merge:true});
+            }
+            try{
+                await batch.commit();
+                // audit: 400 단위 배치
+                for(let i=0;i<auditEntries.length;i+=400){
+                    const ab=db.batch();
+                    for(const a of auditEntries.slice(i,i+400)){
+                        ab.set(db.collection('fee_audit').doc(), {...a, uid, email, action:'update', at:now});
+                    }
+                    await ab.commit();
+                }
+                _fee2Dirty.clear();
+                await _fee2LoadAll();
+                renderFee2Table();
+                _flash('저장 완료: '+auditEntries.length+'개 셀 갱신');
+            }catch(e){
+                alert('저장 실패: '+(e.message||e));
+            }
+        };
+
+        // ─── 행 추가/복제/아카이브 ─────────────────────────
+        function _fee2NextId(){
+            const nums=_fee2Items.map(x=>{ const m=/^P(\d+)$/.exec(x.id||''); return m?Number(m[1]):0; });
+            return 'P'+String(Math.max(0,...nums)+1).padStart(3,'0');
+        }
+        window.fee2AddRow=async function(){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            const cat=document.getElementById('fee2FilterCat')?.value || _fee2Cats[0]?.id || 'botox';
+            const name=prompt('새 시술명을 입력하세요.\n(같은 시술의 옵션만 추가하시려면 기존 행의 ⧉ 복제 버튼을 사용하세요)');
+            if(!name||!name.trim()) return;
+            const nextId=_fee2NextId();
+            const uid=firebase.auth().currentUser?.uid||'';
+            const email=firebase.auth().currentUser?.email||'';
+            const now=firebase.firestore.FieldValue.serverTimestamp();
+            const doc={
+                id:nextId, homeCategory:cat, internalCategory:'', name:name.trim(), option:'1회',
+                priceRegular:null, priceEvent:null, eventCondition:'', eventStart:null, eventEnd:null,
+                showOnPrice:false, showOnEvent:false, duration:'', publicDescription:'', internalMemo:'',
+                needsReview:'', sortOrder:(Math.max(0,..._fee2Items.map(x=>x.sortOrder||0))+1),
+                archived:false, updatedAt:now, updatedBy:uid,
+            };
+            try{
+                await _db().collection('fee_items').doc(nextId).set(doc);
+                await _db().collection('fee_audit').add({itemId:nextId, field:'*', before:null, after:{name:doc.name, cat}, uid, email, action:'create', at:now});
+                await _fee2LoadAll();
+                renderFee2Table();
+                _flash('추가: '+nextId+' ('+doc.name+')');
+            }catch(e){ alert('실패: '+(e.message||e)); }
+        };
+        window.fee2DupRow=async function(id){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            const src=_fee2Items.find(x=>x.id===id); if(!src) return;
+            const nextId=_fee2NextId();
+            const uid=firebase.auth().currentUser?.uid||'';
+            const email=firebase.auth().currentUser?.email||'';
+            const now=firebase.firestore.FieldValue.serverTimestamp();
+            const doc={...src, id:nextId, option:(src.option||'')+' (복제)', sortOrder:(src.sortOrder||0)+0.5, updatedAt:now, updatedBy:uid};
+            delete doc._docId;
+            try{
+                await _db().collection('fee_items').doc(nextId).set(doc);
+                await _db().collection('fee_audit').add({itemId:nextId, field:'*', before:null, after:{from:id}, uid, email, action:'create', at:now});
+                await _fee2LoadAll();
+                renderFee2Table();
+                _flash('복제: '+id+' → '+nextId);
+            }catch(e){ alert('실패: '+(e.message||e)); }
+        };
+        window.fee2Archive=async function(id){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            const it=_fee2Items.find(x=>x.id===id); if(!it) return;
+            const next=!it.archived;
+            if(next && !confirm(id+' 를 아카이브(홈페이지·이벤트 노출 OFF)로 전환하시겠습니까?\n(복원 가능)')) return;
+            const uid=firebase.auth().currentUser?.uid||'';
+            const email=firebase.auth().currentUser?.email||'';
+            const now=firebase.firestore.FieldValue.serverTimestamp();
+            try{
+                await _db().collection('fee_items').doc(id).set({archived:next, showOnPrice:next?false:it.showOnPrice, showOnEvent:next?false:it.showOnEvent, updatedAt:now, updatedBy:uid}, {merge:true});
+                await _db().collection('fee_audit').add({itemId:id, field:'archived', before:!!it.archived, after:next, uid, email, action:next?'archive':'restore', at:now});
+                await _fee2LoadAll();
+                renderFee2Table();
+            }catch(e){ alert('실패: '+(e.message||e)); }
+        };
+
+        // ─── 게시 다이얼로그 ─────────────────────────────
+        window.openFee2PublishDialog=async function(){
+            if(!canFeePublish){ alert('게시 권한이 없습니다. (fee_access.publishers 등록 필요)'); return; }
+            if(_fee2Dirty.size){
+                if(confirm('미저장 변경이 있습니다.\n[확인] = 먼저 저장 후 게시 다이얼로그 열기\n[취소] = 저장 없이 다이얼로그만 열기')){
+                    await window.fee2SaveAll();
+                }
+            }
+            await _fee2LoadAll();
+            const box=document.getElementById('fee2PublishBody');
+            const visible=_fee2Items.filter(x=>!x.archived && (x.showOnPrice||x.showOnEvent));
+            const withReview=visible.filter(x=>(x.needsReview||'').trim());
+            const pub=_fee2Public;
+            const pubItems=(pub?.items)||[];
+            const pubById=new Map(pubItems.map(x=>[x.id,x]));
+            const added=visible.filter(x=>!pubById.has(x.id));
+            const removed=pubItems.filter(x=>!visible.some(y=>y.id===x.id));
+            const trackFields=['name','option','priceRegular','priceEvent','eventCondition','eventStart','eventEnd','showOnPrice','showOnEvent','publicDescription','homeCategory'];
+            const changed=[];
+            for(const x of visible){
+                const p=pubById.get(x.id); if(!p) continue;
+                const diff=[];
+                for(const f of trackFields){
+                    const bs=_auditVal(p[f]), as=_auditVal(x[f]);
+                    if(String(bs??'')!==String(as??'')) diff.push({f, b:bs, a:as});
+                }
+                if(diff.length) changed.push({item:x, diff});
+            }
+            let html='';
+            if(withReview.length){
+                html+=`<div class="fee2-block">❌ 확인 필요 ${withReview.length}건이 노출 대상 행에 남아있어 게시가 차단됩니다:</div><ul>` +
+                    withReview.map(x=>`<li><b>${_esc(x.id)}</b> ${_esc(x.name)}${x.option?' · '+_esc(x.option):''}<br><span style="color:#a94442">${_esc(x.needsReview)}</span></li>`).join('') + '</ul>';
+            }
+            if(added.length){ html+=`<h4>➕ 신규 (${added.length})</h4><ul>` + added.map(x=>`<li><b>${_esc(x.id)}</b> ${_esc(x.name)}${x.option?' · '+_esc(x.option):''}${x.priceRegular?' · '+Number(x.priceRegular).toLocaleString()+'원':''}</li>`).join('') + '</ul>'; }
+            if(removed.length){ html+=`<h4>➖ 노출 종료 (${removed.length})</h4><ul>` + removed.map(x=>`<li><b>${_esc(x.id)}</b> ${_esc(x.name)}</li>`).join('') + '</ul>'; }
+            if(changed.length){
+                html+=`<h4>🔄 변경 (${changed.length})</h4><ul>` +
+                    changed.map(c=>`<li><b>${_esc(c.item.id)}</b> ${_esc(c.item.name)}<br>` +
+                        c.diff.map(d=>`&nbsp;&nbsp;· ${d.f}: <s>${_esc(String(d.b??''))}</s> → <b>${_esc(String(d.a??''))}</b>`).join('<br>') + '</li>').join('') + '</ul>';
+            }
+            if(!added.length && !removed.length && !changed.length){ html+='<p style="color:#666;padding:1rem 0">공개 스냅샷 대비 변경사항이 없습니다.</p>'; }
+            html+=`<div style="margin-top:1rem;padding-top:.75rem;border-top:1px solid #e5e7eb;text-align:right">
+                <button onclick="closeModal('fee2PublishModal')" style="padding:.5rem 1rem;margin-right:.4rem;border:1px solid var(--border);background:#fff;border-radius:var(--r-sm);cursor:pointer;font-family:inherit">취소</button>
+                <button onclick="_fee2ExecPublish()" ${withReview.length?'disabled':''} style="padding:.5rem 1.2rem;background:${withReview.length?'#ccc':'var(--green)'};color:#fff;border:0;border-radius:var(--r-sm);font-weight:600;${withReview.length?'cursor:not-allowed':'cursor:pointer'};font-family:inherit">
+                    ${withReview.length?'❌ 게시 차단':'✅ 게시 실행'}
+                </button>
+            </div>`;
+            box.innerHTML=html;
+            document.getElementById('fee2PublishModal').classList.add('active');
+        };
+        window._fee2ExecPublish=async function(){
+            try{
+                const fn=firebase.functions().httpsCallable('publishFees');
+                const res=await fn({});
+                if(res.data?.ok){
+                    _flash('게시 완료: '+(res.data.count||'?')+'개 항목');
+                    closeModal('fee2PublishModal');
+                    await _fee2LoadAll();
+                    renderFee2Table();
+                }else{
+                    alert('게시 실패: '+(res.data?.error||'unknown'));
+                }
+            }catch(e){
+                const msg=String(e.message||e);
+                if(msg.includes('not-found') || String(e.code||'').includes('not-found') || msg.toLowerCase().includes('publishfees')){
+                    alert('⚠️ publishFees Cloud Function이 아직 배포되지 않았습니다.\n(Section 13-6에서 구현 예정)\n\n지금은 편집·저장만 가능합니다.\n실 배포는 함수 배포 후 자동 반영됩니다.');
+                }else{
+                    alert('게시 실패: '+msg);
+                }
+            }
+        };
+
+        // ─── 변경 이력 (fee_audit 최근 100건) ────────────
+        window.openFee2Audit=async function(){
+            const list=document.getElementById('fee2AuditList');
+            list.innerHTML='로딩 중...';
+            document.getElementById('fee2AuditModal').classList.add('active');
+            try{
+                const snap=await _db().collection('fee_audit').orderBy('at','desc').limit(100).get();
+                const rows=snap.docs.map(d=>d.data());
+                if(!rows.length){ list.innerHTML='<div style="padding:1rem;text-align:center;color:#999">변경 이력이 없습니다.</div>'; return; }
+                list.innerHTML=rows.map(r=>{
+                    const t=r.at?.toDate?r.at.toDate():new Date();
+                    const time=String(t.getMonth()+1).padStart(2,'0')+'/'+String(t.getDate()).padStart(2,'0')+' '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+                    let msg;
+                    if(r.action==='create') msg=`➕ <b>${_esc(r.itemId)}</b> 생성`;
+                    else if(r.action==='archive') msg=`📦 <b>${_esc(r.itemId)}</b> 아카이브`;
+                    else if(r.action==='restore') msg=`↺ <b>${_esc(r.itemId)}</b> 복원`;
+                    else if(r.action==='publish') msg=`🚀 <b>게시</b> ${r.after?'· '+_esc(JSON.stringify(r.after)).slice(0,60):''}`;
+                    else msg=`✏️ <b>${_esc(r.itemId)}</b>.${_esc(r.field||'')}: <s>${_esc(String(r.before??''))}</s> → <b>${_esc(String(r.after??''))}</b>`;
+                    return `<div class="audit-entry"><span class="audit-time">${time}</span><span class="audit-msg">${msg}</span><span class="audit-user">${_esc((r.email||'').split('@')[0])}</span></div>`;
+                }).join('');
+            }catch(e){ list.innerHTML='<div style="padding:1rem;color:var(--red)">로드 실패: '+_esc(e.message||e)+'</div>'; }
+        };
+
+        // ─── XLSX 내보내기 (백업·원내 공유용, 내부 메모 포함) ──
+        window.fee2ExportXlsx=function(){
+            if(!window.XLSX){ alert('XLSX 라이브러리 로드 안 됨'); return; }
+            const rows=_fee2Items.map(it=>({
+                'ID': it.id,
+                '홈페이지 분류': (_fee2Cats.find(c=>c.id===it.homeCategory)?.label) || it.homeCategory || '',
+                '내부 분류(원본)': it.internalCategory||'',
+                '시술명': it.name||'',
+                '옵션': it.option||'',
+                '정가(원)': it.priceRegular,
+                '이벤트가(원)': it.priceEvent,
+                '이벤트 조건': it.eventCondition||'',
+                '홈페이지 노출': it.showOnPrice?'Y':'N',
+                '이벤트 노출': it.showOnEvent?'Y':'N',
+                '시술시간': it.duration||'',
+                '공개 설명': it.publicDescription||'',
+                '내부 메모(비공개)': it.internalMemo||'',
+                '확인 필요': it.needsReview||'',
+                '아카이브': it.archived?'Y':'N',
+                'sortOrder': it.sortOrder||0,
+            }));
+            const ws=XLSX.utils.json_to_sheet(rows);
+            const wb=XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '수가표2');
+            const now=new Date();
+            const ymd=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
+            XLSX.writeFile(wb, `수가표2_백업_${ymd}.xlsx`);
+            _flash('엑셀 다운로드 완료');
+        };
+
+        // ─── fee_access 관리 UI (관리자 설정 모달) ──────
+        window.loadFee2AccessList=async function(){
+            const list=document.getElementById('fee2AccessList'); if(!list) return;
+            try{
+                const [empSnap, accDoc] = await Promise.all([
+                    _db().collection('employees').get().catch(()=>({docs:[]})),
+                    _db().collection('fee_access').doc('main').get(),
+                ]);
+                const acc=accDoc.exists?(accDoc.data()||{}):{};
+                const editors=new Set((acc.editors||[]).map(e=>String(e).toLowerCase()));
+                const publishers=new Set((acc.publishers||[]).map(e=>String(e).toLowerCase()));
+                const emails=new Set();
+                empSnap.docs.forEach(d=>{ const e=(d.data()?.email||'').toLowerCase(); if(e) emails.add(e); });
+                editors.forEach(e=>emails.add(e));
+                publishers.forEach(e=>emails.add(e));
+                const sorted=[...emails].sort();
+                if(!sorted.length){ list.innerHTML='<div style="color:#888;font-size:.85rem;padding:.5rem">등록된 계정이 없습니다. 아래에서 이메일로 추가하세요.</div>'; return; }
+                list.innerHTML=sorted.map(email=>{
+                    const isEd=editors.has(email);
+                    const isPub=publishers.has(email);
+                    return `<div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:var(--bg-page);border-radius:var(--r-sm)">
+                        <span style="flex:1;font-size:.78rem;font-family:monospace;overflow:hidden;text-overflow:ellipsis">${_esc(email)}</span>
+                        <label style="font-size:.72rem;display:inline-flex;align-items:center;gap:.15rem;cursor:pointer;white-space:nowrap">
+                            <input type="checkbox" ${isEd?'checked':''} onchange="_fee2ToggleAccess('${email}','editors',this.checked)"> 편집
+                        </label>
+                        <label style="font-size:.72rem;display:inline-flex;align-items:center;gap:.15rem;cursor:pointer;white-space:nowrap">
+                            <input type="checkbox" ${isPub?'checked':''} onchange="_fee2ToggleAccess('${email}','publishers',this.checked)"> 게시
+                        </label>
+                    </div>`;
+                }).join('');
+            }catch(e){ list.innerHTML='<div style="color:var(--red);font-size:.85rem;padding:.5rem">로드 실패: '+_esc(e.message||e)+'</div>'; }
+        };
+        window._fee2ToggleAccess=async function(email, field, checked){
+            try{
+                const ref=_db().collection('fee_access').doc('main');
+                const doc=await ref.get();
+                const data=doc.exists?(doc.data()||{}):{};
+                const arr=new Set((data[field]||[]).map(e=>String(e).toLowerCase()));
+                if(checked) arr.add(email.toLowerCase()); else arr.delete(email.toLowerCase());
+                await ref.set({[field]:[...arr], updatedAt:firebase.firestore.FieldValue.serverTimestamp(), updatedBy:firebase.auth().currentUser?.uid||''}, {merge:true});
+                _flash('권한 변경 완료 · '+email+' '+field+'='+checked);
+                loadFee2AccessList();
+            }catch(e){ alert('실패: '+(e.message||e)+'\n(bizAdmins 계정만 가능합니다)'); loadFee2AccessList(); }
+        };
+        window.fee2AccessAddEmail=function(){
+            const inp=document.getElementById('fee2AccessAddEmail'); if(!inp) return;
+            const email=(inp.value||'').trim().toLowerCase();
+            if(!email || !email.includes('@')){ alert('올바른 이메일을 입력해주세요.'); return; }
+            _fee2ToggleAccess(email, 'editors', true);
+            inp.value='';
+        };
+
+        function _flash(msg){
+            const status=document.getElementById('fee2Status');
+            if(status){ status.textContent=msg; status.classList.remove('dirty'); setTimeout(_updateBadges, 2500); }
+        }
+
+        // ─── 진입점 (showTop에서 호출됨) ─────────────────
+        window._initFee2Tab=async function(){
+            if(!canFeeEdit){
+                const s=document.getElementById('fee2Status');
+                if(s) s.textContent='편집 권한이 없습니다. 관리자에게 fee_access.editors 등록을 요청하세요.';
+                const body=document.getElementById('fee2TableBody');
+                if(body) body.innerHTML='<tr><td colspan="18" class="fee2-empty">권한 없음</td></tr>';
+                return;
+            }
+            const s=document.getElementById('fee2Status'); if(s) s.textContent='데이터 로드 중...';
+            try{ await _fee2LoadAll(); }catch(e){ if(s) s.textContent='로드 실패: '+(e.message||e); return; }
+            renderFee2Table();
+        };
+    })();
+    </script>
+
     <script src="supplies-catalog.js?v=20260725a"></script>
     <script src="version-check.js"></script>
 </body>
