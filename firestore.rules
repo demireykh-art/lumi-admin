@@ -1,6 +1,10 @@
 rules_version = '2';
 // 규칙 변경 시 main 푸시 → GitHub Actions(Deploy Firestore Rules)로 자동 배포됨.
 // (자동 배포 워크플로우 검증)
+//
+// 2026-09-21: 수가표2 관련 6개 컬렉션 추가 — fee-schedule/docs/SCHEMA.md 참고
+//   fee_items / fee_categories / fee_settings / fee_audit / fee_public / fee_access
+//
 service cloud.firestore {
   match /databases/{database}/documents {
     // 로그인한(직원) 사용자만 접근 — 비로그인/공개 접근 전면 차단
@@ -24,6 +28,26 @@ service cloud.firestore {
     function isSnsAdmin() {
       return signedIn()
         && (inSettingsList('bizAdmins') || inSettingsList('adminHigh') || inSettingsList('snsAccess'));
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  💵 수가표2 — 편집(editor) · 게시(publisher) 화이트리스트
+    //  · fee_access/main 문서의 editors / publishers 배열에 등록된 이메일만 허용
+    //  · publishers는 자동으로 editor 권한도 가짐
+    //  · fee_access 자체 write는 bizAdmins(isAdmin)만 — 권한 부여의 별도 방어선
+    // ══════════════════════════════════════════════════════════════════
+    function feeEditor() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/fee_access/main)
+        && (
+          (request.auth.token.email in get(/databases/$(database)/documents/fee_access/main).data.editors)
+          || (request.auth.token.email in get(/databases/$(database)/documents/fee_access/main).data.publishers)
+        );
+    }
+    function feePublisher() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/fee_access/main)
+        && (request.auth.token.email in get(/databases/$(database)/documents/fee_access/main).data.publishers);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -166,6 +190,56 @@ service cloud.firestore {
     // ── 고객 채팅 (카카오·네이버) ──
     match /chatThreads/{id}                     { allow read, write: if signedIn(); }
     match /chatThreads/{threadId}/messages/{m}  { allow read, write: if signedIn(); }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  💵 수가표2 (2026-09) — fee_items · fee_categories · fee_settings ·
+    //                       fee_audit · fee_public · fee_access
+    //  · admin.html "수가표2" 탭에서 편집자가 fee_items·fee_categories를 편집
+    //  · 게시자가 "게시" 버튼을 누르면 Cloud Function이 fee_public/current를
+    //    갱신하고 price.html·event.html 정적 HTML을 재생성 → Firebase Hosting 배포
+    //  · fee_public/current 만 비로그인 read (홈페이지 소비용)
+    //  · fee_items에 있는 internalMemo·internalCategory·needsReview·duration 은
+    //    게시 스냅샷에서 제외 → 문서 단위 보호를 필드 단위 보호로 대체
+    // ══════════════════════════════════════════════════════════════════
+
+    // 수가 원장(내부메모 포함) — editor 이상만 접근
+    match /fee_items/{id} {
+      allow read:  if feeEditor();
+      allow write: if feeEditor();
+    }
+
+    // 분류 정의(홈페이지 슬러그·pageLink) — editor 이상만
+    match /fee_categories/{id} {
+      allow read:  if feeEditor();
+      allow write: if feeEditor();
+    }
+
+    // 전역 설정(VAT 문구·이벤트 표시 방식) — editor 이상 read, publisher만 write
+    match /fee_settings/{id} {
+      allow read:  if feeEditor();
+      allow write: if feePublisher();
+    }
+
+    // 변경 이력 — append-only. update/delete 절대 불가
+    match /fee_audit/{id} {
+      allow read:          if feeEditor();
+      allow create:        if feeEditor();
+      allow update, delete: if false;
+    }
+
+    // 공개 스냅샷 — 비로그인 read (홈페이지), client write 전면 차단.
+    //   Cloud Function이 Admin SDK로만 갱신 (규칙 우회).
+    match /fee_public/{id} {
+      allow read:  if true;
+      allow write: if false;
+    }
+
+    // 편집자·게시자 화이트리스트 — signedIn read (본인 권한 확인용),
+    //   write는 bizAdmins(isAdmin)만 — 권한 부여 자체의 별도 방어선.
+    match /fee_access/{id} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
 
     // ── 레거시/호환 (기존 규칙 유지) ──
     match /patients/{id}                        { allow read, write: if signedIn(); }

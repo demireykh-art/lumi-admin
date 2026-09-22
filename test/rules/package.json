@@ -1,0 +1,15 @@
+{
+  "name": "lumi-fee-rules-test",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Firestore 보안 규칙 에뮬레이터 테스트 — 수가표2",
+  "scripts": {
+    "emulator": "firebase emulators:start --only firestore --project lumiclinic-c1a95-test",
+    "test": "node rules.test.mjs"
+  },
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.5.0"
+  }
+}
