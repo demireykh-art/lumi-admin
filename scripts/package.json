@@ -1,0 +1,15 @@
+{
+  "name": "lumi-fee-import",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "루미의원 수가표2 초기 데이터 import (1회용, admin SDK)",
+  "scripts": {
+    "dry-run": "node import-fees.mjs --xlsx=./master.xlsx --dry-run",
+    "import": "node import-fees.mjs --xlsx=./master.xlsx"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "xlsx": "^0.18.5"
+  }
+}
