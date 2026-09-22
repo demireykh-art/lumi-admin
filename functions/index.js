@@ -2282,3 +2282,704 @@ exports.ocrDailySales = onCall(
    }
   }
 );
+
+/* ══════════════════════════════════════════════════════════════════
+   💵 수가표2 게시 파이프라인 (Section 13-6)
+   ─────────────────────────────────────────────────────────────────
+   publishFees (HTTPS Callable):
+     · fee_access.publishers 로그인 계정만 호출 가능
+     · 노출 대상 항목의 needsReview 남으면 게시 차단
+     · fee_public/current 갱신 + price.html·event.html 생성 후
+       lumiclinic 저장소 main 에 커밋 (GitHub Contents API)
+     · fee_audit 에 action:'publish' 기록
+   regenerateFeePages (Scheduled 00:10 KST):
+     · 이벤트 만료(eventEnd < today) 자동 반영
+     · 실패 시 Cloud Scheduler 자동 재시도
+   비밀번호(GITHUB_PAT_LUMI_PUBLISH):
+     · firebase functions:secrets:set GITHUB_PAT_LUMI_PUBLISH
+     · repo 스코프의 fine-grained PAT (lumiclinic 저장소 Contents write)
+   ══════════════════════════════════════════════════════════════════ */
+const GITHUB_PAT_LUMI_PUBLISH = defineSecret('GITHUB_PAT_LUMI_PUBLISH');
+const GH_OWNER = 'demireykh-art';
+const GH_REPO  = 'lumiclinic';
+const GH_BRANCH = 'main';
+const HTML_DIR = 'lumiclinic'; // 파일 실제 경로 = <owner>/<repo>/lumiclinic/{price,event}.html
+
+// 공개 스냅샷에 포함할 필드 화이트리스트 (SCHEMA.md 참고)
+const FEE_PUBLIC_FIELDS = ['id','homeCategory','name','option','priceRegular','priceEvent',
+  'eventCondition','eventStart','eventEnd','showOnPrice','showOnEvent','publicDescription','sortOrder'];
+
+function _feeEsc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function _feeWon(n){
+  if (n == null || n === '') return '';
+  return Number(n).toLocaleString() + '원';
+}
+function _feeDateIso(v){
+  if (!v) return '';
+  var d = (v && typeof v.toDate === 'function') ? v.toDate() : new Date(v);
+  if (isNaN(d)) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+// ── GitHub API (Git Data API로 두 파일을 한 커밋에) ───────────────
+async function _ghFetch(url, opts){
+  opts = opts || {};
+  var pat = GITHUB_PAT_LUMI_PUBLISH.value();
+  if (!pat) throw new HttpsError('failed-precondition', 'GITHUB_PAT_LUMI_PUBLISH 시크릿이 설정되지 않았습니다.');
+  var res = await fetch('https://api.github.com' + url, {
+    method: opts.method || 'GET',
+    headers: Object.assign({
+      'Authorization': 'Bearer ' + pat,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'lumi-publish-fees',
+      'Content-Type': 'application/json',
+    }, opts.headers || {}),
+    body: opts.body || undefined,
+  });
+  if (!res.ok) {
+    var body = await res.text();
+    throw new Error('GitHub API ' + res.status + ' ' + url + ': ' + body.slice(0, 300));
+  }
+  return res.json();
+}
+
+async function _ghCommitTwoFiles(files, message){
+  // 1. main HEAD 조회
+  var ref = await _ghFetch('/repos/' + GH_OWNER + '/' + GH_REPO + '/git/refs/heads/' + GH_BRANCH);
+  var parentSha = ref.object.sha;
+  var parentCommit = await _ghFetch('/repos/' + GH_OWNER + '/' + GH_REPO + '/git/commits/' + parentSha);
+  var baseTree = parentCommit.tree.sha;
+  // 2. 각 파일 → blob
+  var blobs = [];
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    var blob = await _ghFetch('/repos/' + GH_OWNER + '/' + GH_REPO + '/git/blobs', {
+      method: 'POST',
+      body: JSON.stringify({
+        content: Buffer.from(f.content, 'utf-8').toString('base64'),
+        encoding: 'base64',
+      }),
+    });
+    blobs.push({ path: f.path, sha: blob.sha });
+  }
+  // 3. 새 tree
+  var newTree = await _ghFetch('/repos/' + GH_OWNER + '/' + GH_REPO + '/git/trees', {
+    method: 'POST',
+    body: JSON.stringify({
+      base_tree: baseTree,
+      tree: blobs.map(function(b){
+        return { path: b.path, mode: '100644', type: 'blob', sha: b.sha };
+      }),
+    }),
+  });
+  // 4. 새 commit
+  var newCommit = await _ghFetch('/repos/' + GH_OWNER + '/' + GH_REPO + '/git/commits', {
+    method: 'POST',
+    body: JSON.stringify({
+      message: message,
+      tree: newTree.sha,
+      parents: [parentSha],
+    }),
+  });
+  // 5. main 갱신
+  await _ghFetch('/repos/' + GH_OWNER + '/' + GH_REPO + '/git/refs/heads/' + GH_BRANCH, {
+    method: 'PATCH',
+    body: JSON.stringify({ sha: newCommit.sha, force: false }),
+  });
+  return newCommit.sha;
+}
+
+// ── 공개 스냅샷 (내부 필드 제거) ─────────────────────────────────
+function _buildPublicSnapshot(items, categories, settings, publishedAt){
+  var pubItems = items.map(function(it){
+    var out = {};
+    for (var i = 0; i < FEE_PUBLIC_FIELDS.length; i++) {
+      var f = FEE_PUBLIC_FIELDS[i];
+      var v = it[f];
+      // Timestamp → ISO string (JSON-safe)
+      if (v && typeof v.toDate === 'function') v = v.toDate().toISOString();
+      else if (v === undefined) v = null;
+      out[f] = v == null ? null : v;
+    }
+    return out;
+  });
+  var pubCats = (categories || []).map(function(c){
+    return {
+      id: c.id, label: c.label || '', labelEn: c.labelEn || '',
+      order: c.order || 0, pageLink: c.pageLink || '', note: c.note || '',
+    };
+  });
+  return {
+    settings: {
+      eventPriceDisplay: settings.eventPriceDisplay || 'event_only',
+      vatNotice: settings.vatNotice || '모든 가격은 부가세 10% 별도입니다.',
+      footerNotice: settings.footerNotice || '실제 비용은 진료 후 결정됩니다.',
+    },
+    categories: pubCats,
+    items: pubItems,
+    publishedAt: publishedAt,
+  };
+}
+
+// ── 게시 로직 (콜러블·스케줄러 공유) ─────────────────────────────
+async function _runFeePublish(callerUid, callerEmail, isScheduled){
+  var db = admin.firestore();
+  var now = admin.firestore.FieldValue.serverTimestamp();
+  var today = new Date(); today.setHours(0,0,0,0);
+
+  // 1. 데이터 로드
+  var [itemsSnap, catsSnap, settingsDoc] = await Promise.all([
+    db.collection('fee_items').get(),
+    db.collection('fee_categories').orderBy('order').get(),
+    db.collection('fee_settings').doc('main').get(),
+  ]);
+  var allItems = itemsSnap.docs.map(function(d){ return Object.assign({}, d.data(), { id: d.id }); });
+  var categories = catsSnap.docs.map(function(d){ return Object.assign({ id: d.id }, d.data()); });
+  var settings = settingsDoc.exists ? (settingsDoc.data() || {}) : {};
+
+  // 2. 노출 대상만 + 확인필요 차단 (스케줄러는 확인필요 있어도 진행 — 지난 게시본 유지 목적)
+  var visible = allItems.filter(function(it){ return !it.archived && (it.showOnPrice || it.showOnEvent); });
+  if (!isScheduled) {
+    var withReview = visible.filter(function(it){ return String(it.needsReview || '').trim(); });
+    if (withReview.length) {
+      return {
+        ok: false, error: 'needsReview',
+        details: withReview.map(function(it){
+          return { id: it.id, name: it.name, needsReview: it.needsReview };
+        }),
+      };
+    }
+  }
+
+  // 3. 이벤트 만료 처리: eventEnd 지난 항목은 showOnEvent 강제 false
+  visible = visible.map(function(it){
+    if (it.showOnEvent && it.eventEnd) {
+      var end = it.eventEnd.toDate ? it.eventEnd.toDate() : new Date(it.eventEnd);
+      if (!isNaN(end) && end < today) {
+        it = Object.assign({}, it, { showOnEvent: false });
+      }
+    }
+    return it;
+  });
+  // showOnPrice=false & showOnEvent=false로 남은 것 제거 (이벤트 만료로 둘 다 꺼진 경우)
+  visible = visible.filter(function(it){ return it.showOnPrice || it.showOnEvent; });
+
+  // 4. 공개 스냅샷 만들기 (publishedAt은 serverTs로 나중에 병합)
+  var publishedAt = new Date();
+  var snap = _buildPublicSnapshot(visible, categories, settings, publishedAt.toISOString());
+
+  // 5. fee_public/current 갱신
+  await db.collection('fee_public').doc('current').set(Object.assign({}, snap, {
+    publishedAt: now,
+    publishedBy: callerUid,
+    publisherEmail: callerEmail,
+  }));
+
+  // 6. HTML 생성 + GitHub 커밋
+  var priceHtml = _buildPriceHtml(snap);
+  var eventHtml = _buildEventHtml(snap);
+  var commitMsg = isScheduled
+    ? 'chore(fee-schedule): 매일 자동 재생성 ' + publishedAt.toISOString().slice(0,10) + ' (이벤트 만료 반영)'
+    : 'feat(fee-schedule): 수가표2 게시 by ' + callerEmail + ' (' + snap.items.length + '개 항목)';
+  var commitSha = null;
+  try {
+    commitSha = await _ghCommitTwoFiles([
+      { path: HTML_DIR + '/price.html', content: priceHtml },
+      { path: HTML_DIR + '/event.html', content: eventHtml },
+    ], commitMsg);
+  } catch (e) {
+    logger.error('GitHub commit failed', { error: e.message, isScheduled: isScheduled });
+    return { ok: false, error: 'github', details: e.message };
+  }
+
+  // 7. fee_audit 기록
+  await db.collection('fee_audit').add({
+    itemId: 'publish',
+    field: '*',
+    before: null,
+    after: {
+      itemCount: snap.items.length,
+      priceCount: snap.items.filter(function(it){ return it.showOnPrice; }).length,
+      eventCount: snap.items.filter(function(it){ return it.showOnEvent; }).length,
+      commitSha: commitSha,
+      isScheduled: !!isScheduled,
+    },
+    uid: callerUid,
+    email: callerEmail,
+    action: 'publish',
+    at: now,
+  });
+
+  return {
+    ok: true,
+    count: snap.items.length,
+    priceCount: snap.items.filter(function(it){ return it.showOnPrice; }).length,
+    eventCount: snap.items.filter(function(it){ return it.showOnEvent; }).length,
+    commitSha: commitSha,
+    publishedAt: publishedAt.toISOString(),
+  };
+}
+
+// ── HTTPS Callable ──────────────────────────────────────────────
+exports.publishFees = onCall(
+  {region: 'asia-northeast3', cors: true, secrets: [GITHUB_PAT_LUMI_PUBLISH], timeoutSeconds: 120},
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', '로그인이 필요합니다.');
+    var email = String(request.auth.token.email || '').toLowerCase();
+    if (!email) throw new HttpsError('permission-denied', '이메일이 확인되지 않습니다.');
+    // fee_access.publishers 확인
+    var acc = await admin.firestore().collection('fee_access').doc('main').get();
+    var pubs = (acc.exists && Array.isArray(acc.data().publishers))
+      ? acc.data().publishers.map(function(e){ return String(e).toLowerCase(); }) : [];
+    if (!pubs.includes(email)) {
+      throw new HttpsError('permission-denied', 'fee_access.publishers 에 등록된 계정만 게시할 수 있습니다.');
+    }
+    return await _runFeePublish(request.auth.uid, email, false);
+  }
+);
+
+// ── 매일 00:10 KST 자동 재생성 ──────────────────────────────────
+exports.regenerateFeePages = onSchedule(
+  {
+    schedule: '10 0 * * *',
+    timeZone: 'Asia/Seoul',
+    region: 'asia-northeast3',
+    secrets: [GITHUB_PAT_LUMI_PUBLISH],
+    retryCount: 3,
+    timeoutSeconds: 180,
+  },
+  async (event) => {
+    logger.info('regenerateFeePages triggered', { time: new Date().toISOString() });
+    var result = await _runFeePublish('scheduler', 'scheduler@system', true);
+    logger.info('regenerateFeePages result', result);
+    if (!result.ok) {
+      throw new Error('regenerateFeePages failed: ' + (result.error || 'unknown'));
+    }
+  }
+);
+
+// ══════════════════════════════════════════════════════════════════
+// price.html 템플릿 (원장 제공 UI 채택: Cormorant Garamond + 카테고리
+// sticky nav + 모바일 카드 전환 + JSON-LD OfferCatalog + @media print)
+// ══════════════════════════════════════════════════════════════════
+function _buildPriceHtml(snap){
+  var settings = snap.settings || {};
+  var publishedAt = snap.publishedAt ? new Date(snap.publishedAt) : new Date();
+  var publishedDateStr = publishedAt.toISOString().slice(0, 10);
+  var priceItems = (snap.items || []).filter(function(it){ return it.showOnPrice; });
+
+  // 카테고리별 그룹핑 + sortOrder 정렬
+  var byCat = new Map();
+  for (var i = 0; i < priceItems.length; i++) {
+    var it = priceItems[i];
+    var k = it.homeCategory;
+    if (!byCat.has(k)) byCat.set(k, []);
+    byCat.get(k).push(it);
+  }
+  byCat.forEach(function(arr){ arr.sort(function(a,b){ return (a.sortOrder||0) - (b.sortOrder||0); }); });
+
+  var cats = (snap.categories || []).filter(function(c){ return byCat.has(c.id); });
+
+  // 시술명별 그룹핑 (같은 name의 여러 옵션을 한 그룹으로)
+  function groupByName(arr){
+    var m = new Map();
+    for (var i = 0; i < arr.length; i++) {
+      var it = arr[i];
+      if (!m.has(it.name)) m.set(it.name, []);
+      m.get(it.name).push(it);
+    }
+    return Array.from(m.entries()).map(function(e){ return { name: e[0], opts: e[1] }; });
+  }
+
+  // JSON-LD
+  var jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'OfferCatalog',
+    'name': '더클리닉루미 시술 가격',
+    'url': 'https://lumiclinic.co.kr/price.html',
+    'provider': {
+      '@type': 'MedicalClinic',
+      'name': '더클리닉루미',
+      'url': 'https://lumiclinic.co.kr',
+      'address': {
+        '@type': 'PostalAddress',
+        'streetAddress': '백제고분로 204 5,6층',
+        'addressLocality': '송파구',
+        'addressRegion': '서울특별시',
+        'postalCode': '05765',
+        'addressCountry': 'KR'
+      }
+    },
+    'itemListElement': priceItems.filter(function(it){ return it.priceRegular; }).map(function(it){
+      return {
+        '@type': 'Offer',
+        'itemOffered': {
+          '@type': 'MedicalProcedure',
+          'name': it.name + (it.option ? ' (' + it.option + ')' : ''),
+        },
+        'price': String(it.priceRegular),
+        'priceCurrency': 'KRW',
+      };
+    }),
+  };
+
+  // 카테고리 섹션 렌더
+  var catSections = cats.map(function(cat){
+    var groups = groupByName(byCat.get(cat.id) || []);
+    var rows = groups.map(function(g){
+      return g.opts.map(function(it, i){
+        var isFirst = i === 0;
+        var isLast = i === g.opts.length - 1;
+        var cls = [];
+        if (isFirst) cls.push('grp-first');
+        if (isLast) cls.push('grp-last');
+        if (!isFirst) cls.push('opt-continuation');
+        // 가격 셀
+        var priceCell;
+        if (it.priceEvent) {
+          if (settings.eventPriceDisplay === 'strike_regular' && it.priceRegular) {
+            priceCell = '<s>' + _feeWon(it.priceRegular) + '</s><span class="event-price">' + _feeWon(it.priceEvent) + '</span>';
+          } else {
+            priceCell = '<span class="event-price">' + _feeWon(it.priceEvent) + '</span>';
+          }
+          if (it.eventCondition) priceCell += '<small>' + _feeEsc(it.eventCondition) + '</small>';
+        } else if (it.priceRegular) {
+          priceCell = _feeWon(it.priceRegular);
+          if (it.eventCondition) priceCell += '<small>' + _feeEsc(it.eventCondition) + '</small>';
+        } else if (it.eventCondition) {
+          priceCell = _feeEsc(it.eventCondition);
+        } else {
+          priceCell = '-';
+        }
+        return ''
+          + '        <tr class="' + cls.join(' ') + '">\n'
+          + '          <td class="t-name">' + (isFirst ? _feeEsc(g.name) : '<span class="opt-only">↳</span>')
+          + (isFirst && it.publicDescription ? '<span class="t-desc">' + _feeEsc(it.publicDescription) + '</span>' : '')
+          + '</td>\n'
+          + '          <td class="t-spec">' + _feeEsc(it.option || '1회') + '</td>\n'
+          + '          <td class="t-price">' + priceCell + '</td>\n'
+          + '        </tr>';
+      }).join('\n');
+    }).join('\n');
+    return ''
+      + '  <!-- ============ ' + cat.label + ' ============ -->\n'
+      + '  <section class="price-group" id="' + _feeEsc(cat.id) + '">\n'
+      + '    <h2>' + _feeEsc(cat.label) + (cat.labelEn ? '<span class="en">' + _feeEsc(cat.labelEn) + '</span>' : '') + '</h2>\n'
+      + (cat.note ? '    <p class="group-note">' + _feeEsc(cat.note) + '</p>\n' : '')
+      + '    <table class="price-table">\n'
+      + '      <caption>' + _feeEsc(cat.label) + ' 시술 가격</caption>\n'
+      + '      <thead><tr><th scope="col">시술</th><th scope="col">옵션</th><th scope="col">가격</th></tr></thead>\n'
+      + '      <tbody>\n' + rows + '\n      </tbody>\n'
+      + '    </table>\n'
+      + (cat.pageLink ? '    <a href="' + _feeEsc(cat.pageLink) + '" class="group-link">' + _feeEsc(cat.label) + ' 상세 →</a>\n' : '')
+      + '  </section>';
+  }).join('\n\n');
+
+  var navLis = cats.map(function(c){ return '<li><a href="#' + _feeEsc(c.id) + '">' + _feeEsc(c.label) + '</a></li>'; }).join('\n    ');
+  var catNames = cats.map(function(c){ return c.label; }).join(', ');
+
+  return '<!DOCTYPE html>\n'
+    + '<!-- 자동 생성됨 by Cloud Function publishFees / regenerateFeePages\n'
+    + '     소스: fee_public/current (편집은 staff.lumiclinic.co.kr 수가표2 탭)\n'
+    + '     기준일: ' + publishedDateStr + '\n'
+    + '     ⚠️ 이 파일을 직접 수정하지 마세요 — 다음 게시 시 덮어써집니다 -->\n'
+    + '<html lang="ko">\n'
+    + '<head>\n'
+    + '<meta charset="UTF-8">\n'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+    + '<title>시술 가격 안내 | 더클리닉루미 · 송파구 삼전역 피부과</title>\n'
+    + '<meta name="description" content="더클리닉루미 시술 가격 안내. ' + _feeEsc(catNames) + ' 전 항목 가격을 공개합니다. 서울 송파구 삼전역 3번 출구.">\n'
+    + '<link rel="canonical" href="https://lumiclinic.co.kr/price.html">\n'
+    + '<meta property="og:type" content="website">\n'
+    + '<meta property="og:site_name" content="더클리닉루미">\n'
+    + '<meta property="og:title" content="시술 가격 안내 | 더클리닉루미">\n'
+    + '<meta property="og:description" content="' + _feeEsc(catNames) + ' 전 항목 가격 공개.">\n'
+    + '<meta property="og:url" content="https://lumiclinic.co.kr/price.html">\n'
+    + '<meta property="og:image" content="https://lumiclinic.co.kr/images/og-image.jpg">\n'
+    + '<meta property="og:locale" content="ko_KR">\n'
+    + '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+    + '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@200;300;400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">\n'
+    + '<link rel="icon" href="images/favicon.png">\n'
+    + '<script type="application/ld+json">' + JSON.stringify(jsonLd) + '</script>\n'
+    + '<style>\n'
+    + ':root{--cream:#FAF8F5;--warm:#F3EDE7;--beige:#E8E0D5;--taupe:#C4B7A6;--brown:#8B7355;--charcoal:#2D2D2D;--dark:#1A1A1A;--text:#3D3D3D;--text-light:#6B6B6B;--gold:#C9A962;--white:#FFF;--red:#a94442}\n'
+    + '*{box-sizing:border-box}\n'
+    + 'body{margin:0;background:var(--cream);color:var(--text);font-family:\'Noto Sans KR\',sans-serif;font-weight:300;-webkit-font-smoothing:antialiased}\n'
+    + '.price-hero{padding:140px 24px 56px;text-align:center}\n'
+    + '.price-hero .section-label{margin:0 0 14px;font-family:\'Montserrat\',\'Noto Sans KR\',sans-serif;font-size:12px;letter-spacing:.24em;color:var(--taupe);font-weight:400}\n'
+    + '.price-hero h1{margin:0 0 20px;font-family:\'Cormorant Garamond\',serif;font-size:clamp(34px,5vw,52px);font-weight:300;color:var(--dark);letter-spacing:.01em}\n'
+    + '.price-hero h1 em{font-style:italic;color:var(--brown)}\n'
+    + '.price-hero p{margin:0 auto;max-width:37em;font-size:15px;line-height:1.9;color:var(--text-light)}\n'
+    + '.price-nav{position:sticky;top:0;z-index:50;background:rgba(250,248,245,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--beige)}\n'
+    + '.price-nav ul{display:flex;gap:4px;overflow-x:auto;list-style:none;margin:0 auto;padding:14px 24px;max-width:960px;scrollbar-width:none}\n'
+    + '.price-nav ul::-webkit-scrollbar{display:none}\n'
+    + '.price-nav a{display:block;flex:0 0 auto;padding:8px 16px;white-space:nowrap;font-size:14px;color:var(--text-light);text-decoration:none;border-bottom:1.5px solid transparent;transition:color .2s,border-color .2s}\n'
+    + '.price-nav a:hover{color:var(--brown)}\n'
+    + '.price-nav a.is-current{color:var(--dark);border-bottom-color:var(--gold);font-weight:500}\n'
+    + '.price-body{max-width:960px;margin:0 auto;padding:0 24px 120px}\n'
+    + '.price-group{padding-top:76px;scroll-margin-top:72px}\n'
+    + '.price-group h2{margin:0 0 6px;font-family:\'Cormorant Garamond\',serif;font-size:30px;font-weight:400;color:var(--dark)}\n'
+    + '.price-group h2 .en{font-style:italic;font-size:18px;color:var(--taupe);margin-left:10px;letter-spacing:2px}\n'
+    + '.price-group .group-note{margin:0 0 26px;font-size:13.5px;line-height:1.8;color:var(--text-light)}\n'
+    + '.price-group .group-link{display:inline-block;margin-top:14px;padding:6px 16px;border:1px solid var(--taupe);color:var(--brown);text-decoration:none;font-size:12.5px;letter-spacing:1.5px;border-radius:3px;transition:all .2s}\n'
+    + '.price-group .group-link:hover{background:var(--brown);color:var(--cream);border-color:var(--brown)}\n'
+    + '.price-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;margin-top:8px}\n'
+    + '.price-table caption{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}\n'
+    + '.price-table thead th{padding:10px 0;font-size:12px;font-weight:400;letter-spacing:.1em;color:var(--taupe);text-align:left;border-bottom:1px solid var(--brown)}\n'
+    + '.price-table thead th:last-child{text-align:right}\n'
+    + '.price-table td{padding:18px 0;border-bottom:1px solid var(--beige);vertical-align:top}\n'
+    + '.price-table tr:hover td{background:rgba(233,224,213,.28)}\n'
+    + '.price-table tr.opt-continuation td{padding-top:6px}\n'
+    + '.price-table tr.opt-continuation td.t-name{padding-top:8px;color:var(--text-light)}\n'
+    + '.price-table tr.grp-first td{padding-top:20px}\n'
+    + '.price-table tr.grp-last td{border-bottom-color:var(--brown);border-bottom-width:1.5px}\n'
+    + '.t-name{font-size:16px;font-weight:400;color:var(--dark);line-height:1.5}\n'
+    + '.t-name .opt-only{color:var(--text-light);font-size:14px}\n'
+    + '.t-desc{display:block;margin-top:5px;font-size:13px;line-height:1.7;color:var(--text-light);max-width:44em}\n'
+    + '.t-spec{width:26%;font-size:13.5px;color:var(--text-light);padding-left:16px!important}\n'
+    + '.t-price{width:26%;text-align:right;font-size:16px;color:var(--dark);white-space:nowrap;padding-left:16px!important}\n'
+    + '.t-price small{display:block;margin-top:4px;font-size:11.5px;color:var(--taupe)}\n'
+    + '.t-price .event-price{color:var(--red);font-weight:500;display:inline-block}\n'
+    + '.t-price s{color:var(--taupe);font-size:12.5px;margin-right:6px}\n'
+    + '.price-foot{margin-top:80px;padding:26px 28px;background:var(--warm);border-left:2px solid var(--gold);font-size:13px;line-height:1.95;color:var(--text-light)}\n'
+    + '.price-foot p{margin:0 0 6px}\n'
+    + '.price-foot p:last-child{margin:0}\n'
+    + '.price-cta{margin-top:40px;display:flex;gap:10px;flex-wrap:wrap}\n'
+    + '.price-cta a{flex:1 1 200px;padding:17px 12px;text-align:center;text-decoration:none;font-size:14px;letter-spacing:.02em;border:1px solid var(--brown);color:var(--brown);transition:background .2s,color .2s}\n'
+    + '.price-cta a:hover{background:var(--brown);color:var(--cream)}\n'
+    + '.price-cta a.is-primary{background:var(--brown);color:var(--cream)}\n'
+    + '.price-cta a.is-primary:hover{background:var(--dark);border-color:var(--dark)}\n'
+    + 'a:focus-visible{outline:2px solid var(--brown);outline-offset:3px}\n'
+    + '.print-btn{position:fixed;top:20px;right:20px;padding:10px 20px;background:var(--brown);color:var(--cream);border:none;border-radius:4px;font-size:13px;cursor:pointer;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}\n'
+    + '.print-btn:hover{background:var(--dark)}\n'
+    + '@media(max-width:720px){.price-hero{padding:104px 20px 44px}.price-body{padding:0 20px 90px}.price-group{padding-top:56px}.price-group h2{font-size:25px}.price-group h2 .en{font-size:14px;margin-left:6px}.price-table thead{display:none}.price-table td{display:block;border:0;padding:0}.price-table tr{display:block;padding:16px 0;border-bottom:1px solid var(--beige)}.price-table tr:hover td{background:none}.t-spec,.t-price{width:auto;padding-left:0!important}.t-spec{margin-top:8px}.t-price{text-align:left;margin-top:6px;font-weight:500}.t-price small{display:inline;margin-left:6px}.print-btn{display:none}}\n'
+    + '@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}\n'
+    + '@media print{@page{size:A4;margin:1.5cm 1.2cm}body{background:#fff;color:#000;font-size:11pt;line-height:1.5}.price-hero{padding:0 0 1cm;text-align:left}.price-hero h1{font-size:24pt;margin-bottom:.3cm}.price-hero h1 em{color:#666}.price-hero p{font-size:9pt}.price-nav,.price-cta,.print-btn{display:none!important}.price-body{padding:0;max-width:none}.price-group{padding-top:.8cm;break-inside:avoid;page-break-inside:avoid}.price-group h2{font-size:16pt;border-bottom:1pt solid #000;padding-bottom:.15cm}.price-group h2 .en{color:#666;font-size:11pt}.price-group .group-note{font-size:9pt;margin-bottom:.3cm}.price-group .group-link{display:none}.price-table td{padding:.15cm 0;border-bottom:.5pt dotted #999;background:none!important}.price-table thead th{color:#666;padding:.1cm 0;border-bottom:.5pt solid #333}.t-name{font-size:10pt}.t-desc{display:none}.t-spec,.t-price{color:#000;font-size:10pt}.t-price s{color:#999}.t-price .event-price{color:#000}.price-foot{background:none;border-left:none;padding:1cm 0 0;border-top:1pt solid #000;font-size:8.5pt;color:#333;margin-top:1cm}.print-header{display:block!important;text-align:center;margin-bottom:.6cm;padding-bottom:.3cm;border-bottom:1pt solid #000}.print-header strong{font-size:14pt}.print-header p{margin:.15cm 0 0;font-size:9pt;color:#333}}\n'
+    + '.print-header{display:none}\n'
+    + 'html{scroll-behavior:smooth}\n'
+    + '</style>\n'
+    + '</head>\n'
+    + '<body>\n'
+    + '<button class="print-btn" onclick="window.print()">🖨 인쇄</button>\n'
+    + '<div class="print-header">\n'
+    + '  <strong>더클리닉루미 시술 가격표</strong>\n'
+    + '  <p>서울 송파구 백제고분로 204 5·6층 · Tel. 02-419-1900 · 기준일 ' + publishedDateStr + '</p>\n'
+    + '  <p>' + _feeEsc(settings.vatNotice || '') + '</p>\n'
+    + '</div>\n'
+    + '<section class="price-hero">\n'
+    + '  <p class="section-label">PRICE</p>\n'
+    + '  <h1>시술 <em>가격</em> 안내</h1>\n'
+    + '  <p>모든 시술의 가격을 있는 그대로 공개합니다. 피부 상태와 치료 범위에 따라 실제 비용은 달라질 수 있으며, 진료 후 정확한 계획과 금액을 안내드립니다.</p>\n'
+    + '</section>\n'
+    + '<nav class="price-nav" aria-label="시술 분류">\n'
+    + '  <ul>\n    ' + navLis + '\n  </ul>\n'
+    + '</nav>\n'
+    + '<main class="price-body">\n'
+    + catSections + '\n\n'
+    + '  <div class="price-foot">\n'
+    + '    <p>' + _feeEsc(settings.vatNotice || '모든 가격은 부가세 10% 별도입니다.') + '</p>\n'
+    + '    <p>' + _feeEsc(settings.footerNotice || '실제 비용은 진료 후 결정됩니다.') + '</p>\n'
+    + '    <p>비급여 진료비용은 의료법에 따라 원내에도 게시하고 있습니다.</p>\n'
+    + '    <p>기준일: <time datetime="' + publishedDateStr + '">' + publishedDateStr + '</time></p>\n'
+    + '  </div>\n'
+    + '  <div class="price-cta">\n'
+    + '    <a href="https://m.booking.naver.com/booking/13/bizes/597156?area=pll" target="_blank" rel="noopener" class="is-primary">네이버로 예약하기</a>\n'
+    + '    <a href="https://pf.kakao.com/_Ntdxfxb/chat" target="_blank" rel="noopener">카카오톡 상담</a>\n'
+    + '    <a href="contact.html">오시는 길</a>\n'
+    + '  </div>\n'
+    + '</main>\n'
+    + '<script>\n'
+    + '(function(){var links=Array.prototype.slice.call(document.querySelectorAll(\'.price-nav a\'));var map={};links.forEach(function(a){map[a.getAttribute(\'href\').slice(1)]=a;});var io=new IntersectionObserver(function(entries){entries.forEach(function(e){if(!e.isIntersecting)return;links.forEach(function(a){a.classList.remove(\'is-current\');});var cur=map[e.target.id];if(cur){cur.classList.add(\'is-current\');cur.scrollIntoView({block:\'nearest\',inline:\'nearest\'});}});},{rootMargin:\'-72px 0px -70% 0px\',threshold:0});document.querySelectorAll(\'.price-group\').forEach(function(s){io.observe(s);});})();\n'
+    + '</script>\n'
+    + '</body>\n'
+    + '</html>\n';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// event.html 템플릿 (진행 중 이벤트 카드 그리드 · #ID 딥링크 ·
+// data-end 로 클라이언트에서 만료 즉시 숨김 · 종료된 링크 안내)
+// ══════════════════════════════════════════════════════════════════
+function _buildEventHtml(snap){
+  var settings = snap.settings || {};
+  var publishedAt = snap.publishedAt ? new Date(snap.publishedAt) : new Date();
+  var publishedDateStr = publishedAt.toISOString().slice(0, 10);
+  var eventItems = (snap.items || []).filter(function(it){ return it.showOnEvent; });
+  eventItems.sort(function(a,b){ return (a.sortOrder||0) - (b.sortOrder||0); });
+
+  var catMap = new Map();
+  (snap.categories || []).forEach(function(c){ catMap.set(c.id, c); });
+
+  function priceHtml(it){
+    if (it.priceEvent) {
+      if (settings.eventPriceDisplay === 'strike_regular' && it.priceRegular) {
+        return '<div class="ev-price"><s>' + _feeWon(it.priceRegular) + '</s> <b>' + _feeWon(it.priceEvent) + '</b></div>';
+      }
+      return '<div class="ev-price"><b>' + _feeWon(it.priceEvent) + '</b></div>';
+    }
+    if (it.eventCondition) return '<div class="ev-price ev-cond">' + _feeEsc(it.eventCondition) + '</div>';
+    if (it.priceRegular) return '<div class="ev-price">' + _feeWon(it.priceRegular) + '</div>';
+    return '';
+  }
+
+  var cards = eventItems.map(function(it){
+    var cat = catMap.get(it.homeCategory) || { label: it.homeCategory };
+    var endStr = _feeDateIso(it.eventEnd);
+    var startStr = _feeDateIso(it.eventStart);
+    var period = '';
+    if (startStr && endStr) period = startStr + ' ~ ' + endStr;
+    else if (endStr) period = '~ ' + endStr;
+    else if (startStr) period = startStr + ' ~';
+    return ''
+      + '<article class="ev-card" id="' + _feeEsc(it.id) + '"' + (endStr ? ' data-end="' + endStr + '"' : '') + '>\n'
+      + '  <div class="ev-cat">' + _feeEsc(cat.label) + '</div>\n'
+      + '  <h3 class="ev-name">' + _feeEsc(it.name) + (it.option ? ' <span class="ev-opt">· ' + _feeEsc(it.option) + '</span>' : '') + '</h3>\n'
+      + (it.publicDescription ? '  <p class="ev-desc">' + _feeEsc(it.publicDescription) + '</p>\n' : '')
+      + '  ' + priceHtml(it) + '\n'
+      + (period ? '  <div class="ev-period">' + _feeEsc(period) + '</div>\n' : '')
+      + '  <a class="ev-share" href="#' + _feeEsc(it.id) + '" title="이 이벤트만 보기">🔗 링크</a>\n'
+      + '</article>';
+  }).join('\n');
+
+  var jsonLd = eventItems.filter(function(it){ return it.priceEvent || it.priceRegular; }).map(function(it){
+    var end = _feeDateIso(it.eventEnd);
+    var start = _feeDateIso(it.eventStart);
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'Offer',
+      'name': it.name + (it.option ? ' · ' + it.option : ''),
+      'price': String(it.priceEvent || it.priceRegular),
+      'priceCurrency': 'KRW',
+      'validFrom': start || undefined,
+      'validThrough': end || undefined,
+      'url': 'https://lumiclinic.co.kr/event.html#' + it.id,
+    };
+  });
+
+  return '<!DOCTYPE html>\n'
+    + '<!-- 자동 생성됨 by publishFees / regenerateFeePages · 기준일 ' + publishedDateStr + '\n'
+    + '     ⚠️ 직접 수정 금지 — 다음 게시 시 덮어써집니다 -->\n'
+    + '<html lang="ko">\n'
+    + '<head>\n'
+    + '<meta charset="UTF-8">\n'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+    + '<title>진행 중 이벤트 | 더클리닉루미</title>\n'
+    + '<meta name="description" content="더클리닉루미에서 진행 중인 시술 이벤트 안내. ' + eventItems.length + '건. 서울 송파구 삼전역 3번 출구.">\n'
+    + '<link rel="canonical" href="https://lumiclinic.co.kr/event.html">\n'
+    + '<meta property="og:type" content="website">\n'
+    + '<meta property="og:site_name" content="더클리닉루미">\n'
+    + '<meta property="og:title" content="진행 중 이벤트 | 더클리닉루미">\n'
+    + '<meta property="og:description" content="진행 중인 시술 이벤트 ' + eventItems.length + '건.">\n'
+    + '<meta property="og:url" content="https://lumiclinic.co.kr/event.html">\n'
+    + '<meta property="og:image" content="https://lumiclinic.co.kr/images/og-image.jpg">\n'
+    + '<meta property="og:locale" content="ko_KR">\n'
+    + '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+    + '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@200;300;400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">\n'
+    + '<link rel="icon" href="images/favicon.png">\n'
+    + '<script type="application/ld+json">' + JSON.stringify(jsonLd) + '</script>\n'
+    + '<style>\n'
+    + ':root{--cream:#FAF8F5;--warm:#F3EDE7;--beige:#E8E0D5;--taupe:#C4B7A6;--brown:#8B7355;--charcoal:#2D2D2D;--dark:#1A1A1A;--text:#3D3D3D;--text-light:#6B6B6B;--gold:#C9A962;--white:#FFF;--red:#a94442}\n'
+    + '*{box-sizing:border-box}\n'
+    + 'body{margin:0;background:var(--cream);color:var(--text);font-family:\'Noto Sans KR\',sans-serif;font-weight:300;-webkit-font-smoothing:antialiased}\n'
+    + '.ev-hero{padding:140px 24px 44px;text-align:center}\n'
+    + '.ev-hero .section-label{margin:0 0 14px;font-size:12px;letter-spacing:.24em;color:var(--taupe)}\n'
+    + '.ev-hero h1{margin:0 0 20px;font-family:\'Cormorant Garamond\',serif;font-size:clamp(34px,5vw,52px);font-weight:300;color:var(--dark)}\n'
+    + '.ev-hero h1 em{font-style:italic;color:var(--brown)}\n'
+    + '.ev-hero p{margin:0 auto;max-width:36em;font-size:15px;line-height:1.9;color:var(--text-light)}\n'
+    + '.ev-back{display:none;margin:20px auto;max-width:960px;padding:0 24px}\n'
+    + '.ev-back a{color:var(--brown);text-decoration:none;font-size:14px;border-bottom:1px solid var(--taupe);padding-bottom:2px}\n'
+    + '.ev-body{max-width:960px;margin:0 auto;padding:0 24px 120px}\n'
+    + '.ev-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px}\n'
+    + '.ev-card{background:var(--white);border:1px solid var(--beige);border-radius:8px;padding:26px 24px;position:relative;transition:box-shadow .2s,transform .2s;scroll-margin-top:20px}\n'
+    + '.ev-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.06);transform:translateY(-2px)}\n'
+    + '.ev-cat{font-size:11px;letter-spacing:.15em;color:var(--taupe);text-transform:uppercase;font-weight:500;margin-bottom:10px}\n'
+    + '.ev-name{margin:0 0 8px;font-size:18px;font-weight:500;color:var(--dark);line-height:1.4;font-family:\'Noto Sans KR\',sans-serif}\n'
+    + '.ev-opt{font-weight:400;font-size:14px;color:var(--text-light)}\n'
+    + '.ev-desc{margin:0 0 16px;font-size:13px;line-height:1.75;color:var(--text-light)}\n'
+    + '.ev-price{font-size:22px;font-family:\'Cormorant Garamond\',serif;color:var(--dark);margin:8px 0}\n'
+    + '.ev-price s{color:var(--taupe);font-size:15px;margin-right:6px}\n'
+    + '.ev-price b{color:var(--red);font-weight:500}\n'
+    + '.ev-price.ev-cond{font-family:\'Noto Sans KR\',sans-serif;font-size:14px;color:var(--brown);font-weight:500;padding:5px 10px;background:var(--warm);display:inline-block;border-radius:4px}\n'
+    + '.ev-period{font-size:12px;color:var(--text-light);margin-top:12px;padding-top:12px;border-top:1px solid var(--beige)}\n'
+    + '.ev-share{position:absolute;top:14px;right:14px;font-size:11px;color:var(--taupe);text-decoration:none;opacity:.7;padding:4px 8px;border-radius:3px;transition:all .2s}\n'
+    + '.ev-card:hover .ev-share{opacity:1;background:var(--warm);color:var(--brown)}\n'
+    + '.ev-empty{text-align:center;padding:60px 20px;color:var(--text-light);font-size:15px;line-height:1.9}\n'
+    + '.ev-empty a{color:var(--brown)}\n'
+    + '.ev-foot{margin-top:60px;padding:24px 28px;background:var(--warm);border-left:2px solid var(--gold);font-size:13px;line-height:1.9;color:var(--text-light)}\n'
+    + '.ev-cta{margin-top:40px;display:flex;gap:10px;flex-wrap:wrap}\n'
+    + '.ev-cta a{flex:1 1 200px;padding:17px 12px;text-align:center;text-decoration:none;font-size:14px;letter-spacing:.02em;border:1px solid var(--brown);color:var(--brown)}\n'
+    + '.ev-cta a.is-primary{background:var(--brown);color:var(--cream)}\n'
+    + '@media(max-width:600px){.ev-hero{padding:104px 20px 32px}.ev-body{padding:0 20px 90px}.ev-grid{grid-template-columns:1fr;gap:16px}.ev-card{padding:22px 20px}}\n'
+    + 'body.ev-detail .ev-grid{grid-template-columns:1fr;max-width:520px;margin:0 auto}\n'
+    + 'body.ev-detail .ev-back{display:block}\n'
+    + 'body.ev-detail .ev-card{transform:none;box-shadow:0 4px 24px rgba(0,0,0,.08);padding:30px 28px}\n'
+    + 'body.ev-detail .ev-card:hover{transform:none}\n'
+    + '</style>\n'
+    + '</head>\n'
+    + '<body>\n'
+    + '<section class="ev-hero">\n'
+    + '  <p class="section-label">EVENT</p>\n'
+    + '  <h1>진행 중인 <em>이벤트</em></h1>\n'
+    + '  <p>지금 진행 중인 시술 이벤트를 안내드립니다. 카드를 눌러 이벤트 전용 링크를 복사하실 수 있습니다.</p>\n'
+    + '</section>\n'
+    + '<div class="ev-back"><a href="event.html">← 전체 이벤트 보기</a></div>\n'
+    + '<main class="ev-body">\n'
+    + '  <div class="ev-grid" id="evGrid">\n'
+    + (eventItems.length ? cards : '    <div class="ev-empty">현재 진행 중인 이벤트가 없습니다.<br><a href="index.html">홈으로</a></div>')
+    + '\n  </div>\n'
+    + '  <div class="ev-empty" id="evExpiredNotice" style="display:none">종료된 이벤트입니다.<br><a href="event.html">전체 이벤트 보기 →</a></div>\n'
+    + '  <div class="ev-foot">\n'
+    + '    <p>' + _feeEsc(settings.vatNotice || '모든 가격은 부가세 10% 별도입니다.') + '</p>\n'
+    + '    <p>' + _feeEsc(settings.footerNotice || '실제 비용은 진료 후 결정됩니다.') + '</p>\n'
+    + '    <p>기준일: ' + publishedDateStr + '</p>\n'
+    + '  </div>\n'
+    + '  <div class="ev-cta">\n'
+    + '    <a href="https://m.booking.naver.com/booking/13/bizes/597156?area=pll" target="_blank" rel="noopener" class="is-primary">네이버로 예약하기</a>\n'
+    + '    <a href="https://pf.kakao.com/_Ntdxfxb/chat" target="_blank" rel="noopener">카카오톡 상담</a>\n'
+    + '  </div>\n'
+    + '</main>\n'
+    + '<script>\n'
+    + '// 이벤트 만료 즉시 숨김(server 재생성 지연 대비) + #ID 딥링크 처리\n'
+    + '(function(){\n'
+    + '  var today = new Date(); today.setHours(0,0,0,0);\n'
+    + '  var grid = document.getElementById("evGrid");\n'
+    + '  var cards = grid ? grid.querySelectorAll(".ev-card") : [];\n'
+    + '  for (var i = 0; i < cards.length; i++) {\n'
+    + '    var c = cards[i];\n'
+    + '    var end = c.getAttribute("data-end");\n'
+    + '    if (end) { var d = new Date(end + "T23:59:59"); if (!isNaN(d) && d < today) c.style.display = "none"; }\n'
+    + '  }\n'
+    + '  // 딥링크 (#P196) 처리: 해당 카드만 노출 + 링크 공유 UX\n'
+    + '  var hash = (location.hash || "").slice(1);\n'
+    + '  if (hash) {\n'
+    + '    var target = document.getElementById(hash);\n'
+    + '    if (target && target.classList.contains("ev-card")) {\n'
+    + '      document.body.classList.add("ev-detail");\n'
+    + '      for (var j = 0; j < cards.length; j++) if (cards[j] !== target) cards[j].style.display = "none";\n'
+    + '      target.style.display = "";\n'
+    + '      // 딥링크된 이벤트가 만료됐다면 안내\n'
+    + '      var end2 = target.getAttribute("data-end");\n'
+    + '      if (end2) { var d2 = new Date(end2 + "T23:59:59"); if (!isNaN(d2) && d2 < today) { target.style.display = "none"; document.getElementById("evExpiredNotice").style.display = ""; } }\n'
+    + '      target.scrollIntoView({behavior:"smooth", block:"center"});\n'
+    + '    } else {\n'
+    + '      document.getElementById("evExpiredNotice").style.display = "";\n'
+    + '    }\n'
+    + '  }\n'
+    + '  // 링크 공유 버튼 → 클립보드 복사 (share 버튼 자체는 그냥 앵커라 default 동작 유지)\n'
+    + '  document.querySelectorAll(".ev-share").forEach(function(a){\n'
+    + '    a.addEventListener("click", function(e){\n'
+    + '      e.preventDefault();\n'
+    + '      var url = location.origin + location.pathname + a.getAttribute("href");\n'
+    + '      if (navigator.clipboard) { navigator.clipboard.writeText(url); a.textContent = "✅ 복사됨"; setTimeout(function(){ a.textContent = "🔗 링크"; }, 1500); }\n'
+    + '      else { location.hash = a.getAttribute("href"); }\n'
+    + '    });\n'
+    + '  });\n'
+    + '})();\n'
+    + '</script>\n'
+    + '</body>\n'
+    + '</html>\n';
+}
