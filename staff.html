@@ -611,17 +611,19 @@
         .fee2-status.dirty{background:#fef3c7;color:#92400e}
         .fee2-empty{padding:2rem;text-align:center;color:var(--text-muted);font-size:.85rem}
 
-        .fee2-scroll{overflow-x:auto;overflow-y:visible;max-width:100%;margin:.5rem 0 0;
-            border-top:1px solid var(--border)}
-        .fee2-table{border-collapse:collapse;font-size:.72rem;background:var(--bg-card);
+        /* 스크롤 컨테이너: 자체 max-height + overflow → th sticky가 실제로 동작.
+           calc(100vh - 15rem)로 헤더·툴바·상태바 영역을 감안. */
+        .fee2-scroll{overflow:auto;max-height:calc(100vh - 15rem);max-width:100%;margin:.4rem 0 0;
+            border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+        .fee2-table{border-collapse:collapse;font-size:.68rem;background:var(--bg-card);
             white-space:nowrap;font-variant-numeric:tabular-nums;min-width:100%}
         .fee2-table th{position:sticky;top:0;z-index:5;background:#2c2c2c;color:#fff;
-            padding:.4rem .5rem;text-align:left;font-weight:500;
-            border-right:1px solid rgba(255,255,255,.15);white-space:nowrap;font-size:.7rem}
+            padding:.3rem .35rem;text-align:left;font-weight:500;
+            border-right:1px solid rgba(255,255,255,.15);white-space:nowrap;font-size:.66rem;letter-spacing:-.4px}
         .fee2-table th:last-child{border-right:0}
-        .fee2-table td{padding:.3rem .5rem;border-bottom:1px solid var(--border);
-            border-right:1px solid var(--border);vertical-align:middle;line-height:1.4;max-width:16rem;
-            overflow:hidden;text-overflow:ellipsis}
+        .fee2-table td{padding:.22rem .35rem;border-bottom:1px solid var(--border);
+            border-right:1px solid var(--border);vertical-align:middle;line-height:1.35;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:11rem}
         .fee2-table td:last-child{border-right:0}
         .fee2-table tr:hover td{background:rgba(154,139,122,.06)}
         .fee2-table tr.review-row td{background:#fef3c7}
@@ -630,20 +632,34 @@
         .fee2-table td.col-internal{background:rgba(0,0,0,.045)}
         .fee2-table tr.review-row td.col-internal{background:rgba(180,120,0,.15)}
         .fee2-table td.col-num{text-align:right;font-variant-numeric:tabular-nums}
-        .fee2-table td.col-check{text-align:center}
-        .fee2-table td.col-discount{color:var(--red);text-align:right}
+        .fee2-table td.col-check{text-align:center;padding:.15rem}
+        .fee2-table td.col-discount{color:var(--red);text-align:right;font-size:.66rem}
         .fee2-table td.col-price{font-weight:500}
+        /* 컬럼별 폭 축소 · 좁게 → 넓게 */
+        .fee2-table td.col-id{max-width:3.3rem;font-family:monospace;color:var(--text-secondary);font-size:.65rem}
+        .fee2-table td.col-cat{max-width:5.5rem;font-size:.66rem}
+        .fee2-table td.col-intcat{max-width:5.5rem;font-size:.65rem;color:var(--text-secondary)}
+        .fee2-table td.col-name{max-width:16rem}
+        .fee2-table td.col-option{max-width:8rem}
+        .fee2-table td.col-cond{max-width:8rem}
+        .fee2-table td.col-date{max-width:5rem;font-size:.65rem}
+        .fee2-table td.col-dur{max-width:5rem;font-size:.65rem;color:var(--text-secondary)}
+        .fee2-table td.col-desc{max-width:11rem}
+        .fee2-table td.col-internal{max-width:9rem}
+        .fee2-table td.col-review{max-width:12rem;color:#a94442;font-size:.66rem}
         .fee2-table td[data-editable]{cursor:cell;user-select:none}
         .fee2-table td[data-editable]:hover{outline:1px solid var(--primary);outline-offset:-1px}
         .fee2-table td.cell-dirty{background:#fef9c3!important;outline:1.5px solid #f59e0b;outline-offset:-2px;font-weight:600}
-        .fee2-cell-input{width:100%;font:inherit;padding:.15rem .2rem;border:1.5px solid var(--primary);
-            border-radius:3px;background:#fffbe6;outline:none;box-sizing:border-box}
+        .fee2-cell-input{width:100%;font:inherit;padding:.1rem .15rem;border:1.5px solid var(--primary);
+            border-radius:3px;background:#fffbe6;outline:none;box-sizing:border-box;font-size:.7rem}
         .fee2-cell-input:focus{border-color:var(--primary-dark)}
-        .fee2-row-actions{display:flex;gap:.15rem;justify-content:center}
-        .fee2-row-actions button{padding:.05rem .3rem;font-size:.7rem;border:1px solid var(--border);
-            border-radius:3px;background:var(--bg);cursor:pointer;line-height:1.3;font-family:inherit;color:var(--text)}
+        .fee2-row-actions{display:flex;gap:.1rem;justify-content:center;flex-wrap:nowrap}
+        .fee2-row-actions button{padding:.02rem .25rem;font-size:.68rem;border:1px solid var(--border);
+            border-radius:3px;background:var(--bg);cursor:pointer;line-height:1.3;font-family:inherit;color:var(--text);min-width:1.5rem}
         .fee2-row-actions button:hover{background:var(--warm,#f0eae0)}
-        .fee2-cat-head td{background:var(--bg-page)!important;font-weight:600;font-size:.75rem;padding:.5rem;color:var(--primary-dark)}
+        .fee2-row-actions button.danger{color:var(--red);border-color:#fca5a5}
+        .fee2-row-actions button.danger:hover{background:#fee2e2}
+        .fee2-cat-head td{background:var(--bg-page)!important;font-weight:600;font-size:.72rem;padding:.4rem .5rem;color:var(--primary-dark);max-width:none!important}
 
         /* 게시 다이얼로그 */
         .fee2-publish-dialog{max-height:70vh;overflow-y:auto;padding:.5rem}
@@ -21359,27 +21375,37 @@
             const showEd=canFeeEdit;
             const attr=f=>showEd?`data-editable data-id="${it.id}" data-field="${f}"`:'';
             const dcls=f=>(f in dirty)?' cell-dirty':'';
+            // 컬럼별 폭 제한을 위한 class + title(전체 텍스트 hover 노출) 헬퍼
+            const cell=(f, extraCls)=>{
+                const v=cur(f); const s=(v==null?'':String(v));
+                return `<td class="${extraCls||''}${dcls(f)}" ${attr(f)} title="${_esc(s)}">${_esc(s)}</td>`;
+            };
             const catLbl=_fee2Cats.find(c=>c.id===cur('homeCategory'))?.label || cur('homeCategory');
             const rowCls=(it.archived?'archived ':'') + ((it.needsReview||'').trim()?'review-row':'');
+            const actions=showEd?[
+                `<button onclick="fee2DupRow('${it.id}')" title="같은 시술의 옵션 추가용 복제">⧉</button>`,
+                `<button onclick="fee2Archive('${it.id}')" title="${it.archived?'복원 (다시 활성화)':'아카이브 — 숨김 (감사 로그 유지, 복원 가능)'}">${it.archived?'↺':'✕'}</button>`,
+                it.archived?`<button class="danger" onclick="fee2HardDelete('${it.id}')" title="⚠️ 완전 삭제 — fee_items 문서를 지우고 되돌릴 수 없음 (fee_audit 로그는 남음)">🗑</button>`:''
+            ].filter(Boolean).join(''):'';
             return `<tr class="${rowCls}" data-id="${it.id}">
-<td>${_esc(it.id)}</td>
-<td${dcls('homeCategory')?' class="cell-dirty"':''} ${attr('homeCategory')}>${_esc(catLbl)}</td>
-<td${dcls('internalCategory')?' class="cell-dirty"':''} ${attr('internalCategory')}>${_esc(cur('internalCategory'))}</td>
-<td${dcls('name')?' class="cell-dirty"':''} ${attr('name')}>${_esc(cur('name'))}</td>
-<td${dcls('option')?' class="cell-dirty"':''} ${attr('option')}>${_esc(cur('option'))}</td>
+<td class="col-id" title="${_esc(it.id)}">${_esc(it.id)}</td>
+<td class="col-cat${dcls('homeCategory')}" ${attr('homeCategory')} title="${_esc(catLbl)}">${_esc(catLbl)}</td>
+<td class="col-intcat${dcls('internalCategory')}" ${attr('internalCategory')} title="${_esc(cur('internalCategory'))}">${_esc(cur('internalCategory'))}</td>
+<td class="col-name${dcls('name')}" ${attr('name')} title="${_esc(cur('name'))}">${_esc(cur('name'))}</td>
+<td class="col-option${dcls('option')}" ${attr('option')} title="${_esc(cur('option'))}">${_esc(cur('option'))}</td>
 <td class="col-num col-price${dcls('priceRegular')}" ${attr('priceRegular')} data-type="num">${num(pr)}</td>
 <td class="col-num col-price${dcls('priceEvent')}" ${attr('priceEvent')} data-type="num">${num(pe)}</td>
 <td class="col-num col-discount">${discount}</td>
-<td${dcls('eventCondition')?' class="cell-dirty"':''} ${attr('eventCondition')}>${_esc(cur('eventCondition'))}</td>
-<td${dcls('eventStart')?' class="cell-dirty"':''} ${attr('eventStart')} data-type="date">${_dateShort(cur('eventStart'))}</td>
-<td${dcls('eventEnd')?' class="cell-dirty"':''} ${attr('eventEnd')} data-type="date">${_dateShort(cur('eventEnd'))}</td>
+<td class="col-cond${dcls('eventCondition')}" ${attr('eventCondition')} title="${_esc(cur('eventCondition'))}">${_esc(cur('eventCondition'))}</td>
+<td class="col-date${dcls('eventStart')}" ${attr('eventStart')} data-type="date">${_dateShort(cur('eventStart'))}</td>
+<td class="col-date${dcls('eventEnd')}" ${attr('eventEnd')} data-type="date">${_dateShort(cur('eventEnd'))}</td>
 <td class="col-check">${_boolCell(it.id,'showOnPrice',cur('showOnPrice'),showEd)}</td>
 <td class="col-check">${_boolCell(it.id,'showOnEvent',cur('showOnEvent'),showEd)}</td>
-<td${dcls('duration')?' class="cell-dirty"':''} ${attr('duration')}>${_esc(cur('duration'))}</td>
-<td${dcls('publicDescription')?' class="cell-dirty"':''} ${attr('publicDescription')}>${_esc(cur('publicDescription'))}</td>
-<td class="col-internal${dcls('internalMemo')}" ${attr('internalMemo')}>${_esc(cur('internalMemo'))}</td>
-<td${dcls('needsReview')?' class="cell-dirty"':''} ${attr('needsReview')}>${_esc(cur('needsReview'))}</td>
-<td><div class="fee2-row-actions">${showEd?`<button onclick="fee2DupRow('${it.id}')" title="옵션 추가용 복제">⧉</button>`:''}${showEd?`<button onclick="fee2Archive('${it.id}')" title="${it.archived?'복원':'아카이브'}">${it.archived?'↺':'✕'}</button>`:''}</div></td>
+<td class="col-dur${dcls('duration')}" ${attr('duration')} title="${_esc(cur('duration'))}">${_esc(cur('duration'))}</td>
+<td class="col-desc${dcls('publicDescription')}" ${attr('publicDescription')} title="${_esc(cur('publicDescription'))}">${_esc(cur('publicDescription'))}</td>
+<td class="col-internal${dcls('internalMemo')}" ${attr('internalMemo')} title="${_esc(cur('internalMemo'))}">${_esc(cur('internalMemo'))}</td>
+<td class="col-review${dcls('needsReview')}" ${attr('needsReview')} title="${_esc(cur('needsReview'))}">${_esc(cur('needsReview'))}</td>
+<td><div class="fee2-row-actions">${actions}</div></td>
 </tr>`;
         }
         function _boolCell(id, field, val, editable){
@@ -21588,7 +21614,7 @@
             if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
             const it=_fee2Items.find(x=>x.id===id); if(!it) return;
             const next=!it.archived;
-            if(next && !confirm(id+' 를 아카이브(홈페이지·이벤트 노출 OFF)로 전환하시겠습니까?\n(복원 가능)')) return;
+            if(next && !confirm(id+' 를 아카이브(홈페이지·이벤트 노출 OFF)로 전환하시겠습니까?\n\n· 화면·홈페이지에서 사라지지만 문서는 남습니다 (감사 로그 유지)\n· ↺ 버튼으로 언제든 복원\n· 완전 삭제는 아카이브 상태에서 🗑 버튼')) return;
             const uid=firebase.auth().currentUser?.uid||'';
             const email=firebase.auth().currentUser?.email||'';
             const now=firebase.firestore.FieldValue.serverTimestamp();
@@ -21597,6 +21623,31 @@
                 await _db().collection('fee_audit').add({itemId:id, field:'archived', before:!!it.archived, after:next, uid, email, action:next?'archive':'restore', at:now});
                 await _fee2LoadAll();
                 renderFee2Table();
+            }catch(e){ alert('실패: '+(e.message||e)); }
+        };
+        // ⚠️ 완전 삭제 — 되돌릴 수 없음. 아카이브 → 삭제 2단계 확인 흐름.
+        window.fee2HardDelete=async function(id){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            const it=_fee2Items.find(x=>x.id===id); if(!it) return;
+            if(!it.archived){ alert('완전 삭제 전에 먼저 아카이브(✕)로 숨겨주세요.\n\n이유: 실수 방지 2단계 확인.'); return; }
+            const promptTxt='⚠️ 완전 삭제 확인\n\n'+id+' "'+(it.name||'')+'" '+(it.option?'· '+it.option:'')+'\n\nfee_items 문서 자체를 지웁니다. 되돌릴 수 없습니다.\n(fee_audit 감사 로그는 남아있어 언제 누가 지웠는지는 기록됩니다)\n\n확인하려면 아래에 문서 ID("'+id+'")를 정확히 입력하세요:';
+            const typed=prompt(promptTxt);
+            if(typed!==id){ if(typed!==null) alert('ID 불일치 — 삭제 취소'); return; }
+            const uid=firebase.auth().currentUser?.uid||'';
+            const email=firebase.auth().currentUser?.email||'';
+            const now=firebase.firestore.FieldValue.serverTimestamp();
+            try{
+                // 감사 로그 먼저 (문서가 지워진 후엔 before 값을 알 수 없음)
+                await _db().collection('fee_audit').add({
+                    itemId:id, field:'*',
+                    before:{name:it.name, option:it.option, homeCategory:it.homeCategory, priceRegular:it.priceRegular, priceEvent:it.priceEvent},
+                    after:null,
+                    uid, email, action:'delete', at:now
+                });
+                await _db().collection('fee_items').doc(id).delete();
+                await _fee2LoadAll();
+                renderFee2Table();
+                _flash('완전 삭제: '+id);
             }catch(e){ alert('실패: '+(e.message||e)); }
         };
 
