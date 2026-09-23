@@ -660,6 +660,15 @@
         .fee2-row-actions button.danger{color:var(--red);border-color:#fca5a5}
         .fee2-row-actions button.danger:hover{background:#fee2e2}
         .fee2-cat-head td{background:var(--bg-page)!important;font-weight:600;font-size:.72rem;padding:.4rem .5rem;color:var(--primary-dark);max-width:none!important}
+        /* 컬럼 폭 드래그 조절 — 헤더 오른쪽 끝 5px 영역 */
+        .fee2-table{table-layout:fixed}
+        .fee2-table th{position:sticky;top:0;overflow:visible}
+        .fee2-resize-handle{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;background:transparent;z-index:6;user-select:none;transition:background .15s}
+        .fee2-resize-handle:hover,.fee2-resize-handle.active{background:var(--gold)}
+        .fee2-toolbar .fee2-tool-sep{width:1px;height:1.4rem;background:var(--border);margin:0 .1rem}
+        /* 컬럼 리사이즈 중일 때 전체 커서 강제 */
+        body.fee2-resizing{cursor:col-resize!important;user-select:none}
+        body.fee2-resizing *{cursor:col-resize!important;user-select:none}
 
         /* 게시 다이얼로그 */
         .fee2-publish-dialog{max-height:70vh;overflow-y:auto;padding:.5rem}
@@ -1117,11 +1126,20 @@
                         <button onclick="fee2AddRow()" title="새 시술 추가">+ 행</button>
                         <button onclick="openFee2Audit()" title="변경 이력 보기">📜</button>
                         <button onclick="fee2ExportXlsx()" title="현재 표를 xlsx로 내려받기 (백업)">📥 XLSX</button>
+                        <span class="fee2-tool-sep"></span>
+                        <button onclick="fee2BulkClearReview()" title="현재 필터에 걸린 행의 [확인필요] 텍스트를 일괄로 비웁니다 (일괄 지우기 · 감사 로그 기록)">🧹 확인필요 일괄지우기</button>
+                        <button onclick="fee2ResetColWidths()" title="컬럼 폭을 기본값으로 되돌립니다">↔️ 폭 초기화</button>
                         <button class="fee2-publish" id="fee2PublishBtn" onclick="openFee2PublishDialog()" title="공개 스냅샷 게시 (price.html·event.html 갱신)" style="display:none">🚀 게시</button>
                     </div>
                     <div id="fee2Status" class="fee2-status">로딩 중...</div>
                     <div class="fee2-scroll">
                         <table class="fee2-table" id="fee2Table">
+                            <colgroup id="fee2ColGroup">
+                                <col data-col="id"><col data-col="cat"><col data-col="intcat"><col data-col="name"><col data-col="option">
+                                <col data-col="priceR"><col data-col="priceE"><col data-col="discount"><col data-col="cond">
+                                <col data-col="start"><col data-col="end"><col data-col="showP"><col data-col="showE">
+                                <col data-col="dur"><col data-col="desc"><col data-col="memo"><col data-col="review"><col data-col="actions">
+                            </colgroup>
                             <thead><tr>
                                 <th>ID</th><th>홈분류</th><th>내부분류</th><th>시술명</th><th>옵션</th>
                                 <th>정가</th><th>이벤트가</th><th>할인</th><th>조건</th>
@@ -21833,8 +21851,178 @@
             if(status){ status.textContent=msg; status.classList.remove('dirty'); setTimeout(_updateBadges, 2500); }
         }
 
+        // ─── 컬럼 폭 드래그 리사이즈 + localStorage 저장 ─────────────────
+        // colgroup의 <col data-col="…"> 순서와 동일. 픽셀 단위.
+        const FEE2_COL_ORDER=['id','cat','intcat','name','option','priceR','priceE','discount','cond','start','end','showP','showE','dur','desc','memo','review','actions'];
+        const FEE2_COL_DEFAULTS={
+            id:52, cat:88, intcat:88, name:220, option:130,
+            priceR:80, priceE:80, discount:56, cond:120,
+            start:78, end:78, showP:44, showE:52,
+            dur:70, desc:180, memo:150, review:170, actions:80
+        };
+        const FEE2_COL_MIN=32, FEE2_COL_MAX=800;
+        const FEE2_LS_KEY='lumi.fee2.colWidths.v1';
+
+        function _fee2LoadColWidthsFromLS(){
+            try{
+                const raw=localStorage.getItem(FEE2_LS_KEY);
+                if(!raw) return {...FEE2_COL_DEFAULTS};
+                const parsed=JSON.parse(raw);
+                const out={...FEE2_COL_DEFAULTS};
+                for(const k of FEE2_COL_ORDER){
+                    const v=parsed[k];
+                    if(typeof v==='number' && isFinite(v) && v>=FEE2_COL_MIN && v<=FEE2_COL_MAX) out[k]=Math.round(v);
+                }
+                return out;
+            }catch(_){ return {...FEE2_COL_DEFAULTS}; }
+        }
+        function _fee2SaveColWidthsToLS(widths){
+            try{ localStorage.setItem(FEE2_LS_KEY, JSON.stringify(widths)); }catch(_){}
+        }
+        function _fee2ApplyColWidths(widths){
+            const cg=document.getElementById('fee2ColGroup'); if(!cg) return;
+            const cols=cg.querySelectorAll('col');
+            cols.forEach(col=>{
+                const key=col.getAttribute('data-col');
+                const w=widths[key];
+                if(typeof w==='number' && isFinite(w)) col.style.width=w+'px';
+            });
+        }
+        function _fee2CurrentWidths(){
+            const cg=document.getElementById('fee2ColGroup'); if(!cg) return {...FEE2_COL_DEFAULTS};
+            const out={};
+            cg.querySelectorAll('col').forEach(col=>{
+                const key=col.getAttribute('data-col');
+                const px=parseInt((col.style.width||'').replace('px',''),10);
+                out[key]=(isFinite(px) && px>0)?px:(FEE2_COL_DEFAULTS[key]||100);
+            });
+            return out;
+        }
+        window.fee2ResetColWidths=function(){
+            try{ localStorage.removeItem(FEE2_LS_KEY); }catch(_){}
+            _fee2ApplyColWidths({...FEE2_COL_DEFAULTS});
+            _flash('컬럼 폭을 기본값으로 되돌렸습니다.');
+        };
+
+        // 헤더 <th>에 리사이즈 손잡이 부착 (mousedown → mousemove → mouseup)
+        let _fee2ResizeInited=false;
+        function _fee2InitResizeHandlers(){
+            if(_fee2ResizeInited) return;
+            const table=document.getElementById('fee2Table'); if(!table) return;
+            const ths=table.tHead?.rows?.[0]?.cells; if(!ths) return;
+            const cg=document.getElementById('fee2ColGroup');
+            const cols=cg?cg.querySelectorAll('col'):[];
+            if(ths.length!==cols.length) return; // 안전장치
+            for(let i=0;i<ths.length;i++){
+                const th=ths[i]; const col=cols[i];
+                if(!th || !col) continue;
+                // 상대 위치로 만들어야 손잡이 오른쪽 끝 배치 가능
+                const cs=getComputedStyle(th);
+                if(cs.position==='static') th.style.position='sticky'; // sticky 유지
+                const handle=document.createElement('div');
+                handle.className='fee2-resize-handle';
+                handle.title='드래그해서 폭 조절';
+                handle.addEventListener('mousedown', ev=>{
+                    ev.preventDefault(); ev.stopPropagation();
+                    const startX=ev.clientX;
+                    const startW=col.offsetWidth || parseInt(col.style.width,10) || FEE2_COL_DEFAULTS[col.getAttribute('data-col')] || 100;
+                    handle.classList.add('active');
+                    document.body.classList.add('fee2-resizing');
+                    const onMove=e=>{
+                        const dx=e.clientX-startX;
+                        let w=startW+dx;
+                        if(w<FEE2_COL_MIN) w=FEE2_COL_MIN;
+                        if(w>FEE2_COL_MAX) w=FEE2_COL_MAX;
+                        col.style.width=w+'px';
+                    };
+                    const onUp=()=>{
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                        handle.classList.remove('active');
+                        document.body.classList.remove('fee2-resizing');
+                        _fee2SaveColWidthsToLS(_fee2CurrentWidths());
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                });
+                // 손잡이 위에서 셀 편집 진입 방지
+                handle.addEventListener('click', e=>{ e.stopPropagation(); });
+                handle.addEventListener('dblclick', e=>{
+                    e.preventDefault(); e.stopPropagation();
+                    const key=col.getAttribute('data-col');
+                    const w=FEE2_COL_DEFAULTS[key]||100;
+                    col.style.width=w+'px';
+                    _fee2SaveColWidthsToLS(_fee2CurrentWidths());
+                });
+                th.appendChild(handle);
+            }
+            _fee2ResizeInited=true;
+        }
+
+        // ─── 일괄 필드 지우기 (현재 필터에 걸린 행 대상) ─────────
+        // field='needsReview' 처럼 문자열 필드를 배치로 비움. fee_audit 기록.
+        window.fee2BulkClearField=async function(field, opts){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            opts=opts||{};
+            const label=opts.label||field;
+            // 현재 renderFee2Table 필터 로직과 동일하게 대상 산출
+            const q=(document.getElementById('fee2Search')?.value||'').trim().toLowerCase();
+            const filterCat=document.getElementById('fee2FilterCat')?.value||'';
+            const filterShowP=document.getElementById('fee2FilterShowOnPrice')?.checked;
+            const filterShowE=document.getElementById('fee2FilterShowOnEvent')?.checked;
+            const filterRev=document.getElementById('fee2FilterReview')?.checked;
+            const includeArch=document.getElementById('fee2FilterArchived')?.checked;
+            const targets=_fee2Items.filter(it=>{
+                if(!includeArch && it.archived) return false;
+                if(filterCat && it.homeCategory!==filterCat) return false;
+                if(filterShowP && !it.showOnPrice) return false;
+                if(filterShowE && !it.showOnEvent) return false;
+                if(filterRev && !(it.needsReview||'').trim()) return false;
+                if(q){
+                    const hay=[it.name, it.option, it.publicDescription, it.internalMemo, it.id].join(' ').toLowerCase();
+                    if(!hay.includes(q)) return false;
+                }
+                // 실제로 비울 값이 있는 행만
+                return (it[field]!=null && String(it[field]).trim()!=='');
+            });
+            if(!targets.length){ alert('현재 필터 조건에서 비울 값이 있는 행이 없습니다.'); return; }
+            const sample=targets.slice(0,5).map(t=>' · '+t.id+' '+(t.name||'')+(t.option?(' ('+t.option+')'):'')+' → '+String(t[field]||'').slice(0,40)).join('\n');
+            const more=targets.length>5?('\n … 외 '+(targets.length-5)+'건'):'';
+            if(!confirm('⚠️ 일괄 지우기 — 되돌릴 수 없습니다 (감사 로그는 남음)\n\n필드: '+label+' ('+field+')\n대상: '+targets.length+'개\n\n'+sample+more+'\n\n계속하시겠습니까?')) return;
+            const uid=firebase.auth().currentUser?.uid||'';
+            const email=firebase.auth().currentUser?.email||'';
+            const now=firebase.firestore.FieldValue.serverTimestamp();
+            const db=_db();
+            const CHUNK=400; // Firestore batch 500 한도 (audit + item = 2 write / 행)
+            let done=0;
+            try{
+                for(let i=0;i<targets.length;i+=CHUNK){
+                    const slice=targets.slice(i, i+CHUNK);
+                    const batch=db.batch();
+                    for(const it of slice){
+                        const itemRef=db.collection('fee_items').doc(it.id);
+                        batch.set(itemRef, {[field]:'', updatedAt:now, updatedBy:uid}, {merge:true});
+                        const auditRef=db.collection('fee_audit').doc();
+                        batch.set(auditRef, {itemId:it.id, field:field, before:it[field]||'', after:'', uid, email, action:'bulk-clear', at:now});
+                    }
+                    await batch.commit();
+                    done+=slice.length;
+                }
+                await _fee2LoadAll();
+                renderFee2Table();
+                _flash('일괄 지우기 완료: '+done+'행 · 필드 '+label);
+            }catch(e){ alert('실패 ('+done+'/'+targets.length+' 처리): '+(e.message||e)); }
+        };
+        // 확인필요 단축
+        window.fee2BulkClearReview=function(){
+            return window.fee2BulkClearField('needsReview', {label:'확인필요'});
+        };
+
         // ─── 진입점 (showTop에서 호출됨) ─────────────────
         window._initFee2Tab=async function(){
+            // 폭·리사이즈는 권한과 무관하게 미리 적용 (권한 없어도 UI 정렬은 유지)
+            try{ _fee2ApplyColWidths(_fee2LoadColWidthsFromLS()); }catch(_){}
+            try{ _fee2InitResizeHandlers(); }catch(_){}
             if(!canFeeEdit){
                 const s=document.getElementById('fee2Status');
                 if(s) s.textContent='편집 권한이 없습니다. 관리자에게 fee_access.editors 등록을 요청하세요.';
