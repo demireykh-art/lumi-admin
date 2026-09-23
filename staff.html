@@ -685,6 +685,99 @@
         .fee2-master{margin-top:.15rem;cursor:pointer;accent-color:var(--gold,#d4a943);transform:scale(1.05)}
         .fee2-table th:has(.fee2-master){text-align:center;line-height:1.15}
 
+        /* [A] 긴 텍스트 컬럼: 3줄까지 자동 줄바꿈 + 초과분 잘림 (툴팁·상세 패널로 전체 확인) */
+        .fee2-table td.col-name,
+        .fee2-table td.col-option,
+        .fee2-table td.col-cond,
+        .fee2-table td.col-desc,
+        .fee2-table td.col-internal,
+        .fee2-table td.col-review{
+            white-space:normal!important;
+            word-break:break-word;
+            overflow:hidden;
+            line-height:1.35;
+            max-height:4.1em;
+            vertical-align:top;
+            padding-top:.3rem;
+            padding-bottom:.3rem;
+        }
+        /* 3줄 초과시 아래쪽 아이콘 힌트 */
+        .fee2-table td.col-desc,
+        .fee2-table td.col-internal,
+        .fee2-table td.col-review,
+        .fee2-table td.col-cond,
+        .fee2-table td.col-name,
+        .fee2-table td.col-option{position:relative}
+        .fee2-table td.fee2-overflow::after{
+            content:'⋯';position:absolute;right:.2rem;bottom:.05rem;
+            font-size:.85rem;color:var(--text-secondary);line-height:1;
+            background:inherit;padding:0 .15rem;pointer-events:none;
+        }
+
+        /* [B] 상세 편집 패널 — 오른쪽 슬라이드 */
+        .fee2-detail-backdrop{
+            position:fixed;inset:0;background:rgba(0,0,0,.2);z-index:1080;
+            opacity:0;pointer-events:none;transition:opacity .15s ease-out;
+        }
+        .fee2-detail-backdrop.open{opacity:1;pointer-events:auto}
+        .fee2-detail-panel{
+            position:fixed;top:0;right:0;height:100vh;width:min(520px,92vw);
+            background:var(--bg-card,#fff);box-shadow:-6px 0 20px rgba(0,0,0,.18);
+            z-index:1090;transform:translateX(105%);transition:transform .2s ease-out;
+            display:flex;flex-direction:column;border-left:1px solid var(--border);
+        }
+        .fee2-detail-panel.open{transform:translateX(0)}
+        .fee2-detail-header{
+            padding:.85rem 1rem;border-bottom:1px solid var(--border);
+            display:flex;align-items:center;gap:.5rem;background:var(--bg-page);
+        }
+        .fee2-detail-header .fee2-detail-id{font-family:monospace;font-size:.7rem;color:var(--text-secondary);background:#fff;padding:.15rem .4rem;border-radius:4px;border:1px solid var(--border)}
+        .fee2-detail-header h3{margin:0;font-size:.95rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .fee2-detail-header button.fee2-detail-close{
+            border:0;background:transparent;font-size:1.4rem;line-height:1;
+            padding:.2rem .5rem;cursor:pointer;color:var(--text-secondary);
+        }
+        .fee2-detail-header button.fee2-detail-close:hover{color:var(--text)}
+        .fee2-detail-body{
+            flex:1;padding:.9rem 1rem;overflow-y:auto;
+            display:flex;flex-direction:column;gap:.85rem;
+        }
+        .fee2-detail-field{display:flex;flex-direction:column;gap:.25rem}
+        .fee2-detail-field label{
+            font-size:.72rem;font-weight:600;color:var(--text-secondary);
+            display:flex;align-items:center;gap:.35rem;
+        }
+        .fee2-detail-field .fee2-detail-hint{font-weight:400;color:var(--text-secondary);font-size:.68rem;margin-left:auto}
+        .fee2-detail-field textarea,
+        .fee2-detail-field input[type=text]{
+            width:100%;font-family:inherit;font-size:.85rem;line-height:1.5;
+            padding:.5rem .55rem;border:1.5px solid var(--border);
+            border-radius:var(--r-sm,4px);box-sizing:border-box;background:#fff;
+            resize:vertical;
+        }
+        .fee2-detail-field textarea:focus,
+        .fee2-detail-field input[type=text]:focus{
+            outline:none;border-color:var(--primary);
+            box-shadow:0 0 0 3px rgba(154,139,122,.15);
+        }
+        .fee2-detail-field .fee2-detail-count{font-size:.66rem;color:var(--text-secondary);text-align:right;margin-top:.15rem}
+        .fee2-detail-footer{
+            padding:.7rem 1rem;border-top:1px solid var(--border);
+            display:flex;gap:.5rem;justify-content:flex-end;background:var(--bg-page);
+        }
+        .fee2-detail-footer button{
+            font-size:.8rem;padding:.5rem .9rem;border:1px solid var(--border);
+            background:#fff;color:var(--text);border-radius:var(--r-sm,4px);cursor:pointer;
+        }
+        .fee2-detail-footer button:hover{background:var(--bg-page)}
+        .fee2-detail-footer button.fee2-detail-primary{
+            background:var(--primary);color:#fff;border-color:var(--primary);font-weight:600;
+        }
+        .fee2-detail-footer button.fee2-detail-primary:hover{filter:brightness(.9)}
+        @media (max-width:640px){
+            .fee2-detail-panel{width:100vw}
+        }
+
         /* 게시 다이얼로그 */
         .fee2-publish-dialog{max-height:70vh;overflow-y:auto;padding:.5rem}
         .fee2-publish-dialog h4{font-size:.85rem;margin:.75rem 0 .3rem;font-weight:600}
@@ -1167,6 +1260,21 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- 상세 편집 패널 (오른쪽 슬라이드) — 긴 텍스트 필드용 -->
+                <div id="fee2DetailBackdrop" class="fee2-detail-backdrop" onclick="fee2CloseDetail()"></div>
+                <aside id="fee2DetailPanel" class="fee2-detail-panel" role="dialog" aria-hidden="true" aria-labelledby="fee2DetailTitle">
+                    <div class="fee2-detail-header">
+                        <span class="fee2-detail-id" id="fee2DetailId">–</span>
+                        <h3 id="fee2DetailTitle">상세 편집</h3>
+                        <button type="button" class="fee2-detail-close" onclick="fee2CloseDetail()" title="닫기 (Esc)">×</button>
+                    </div>
+                    <div class="fee2-detail-body" id="fee2DetailBody"></div>
+                    <div class="fee2-detail-footer">
+                        <button type="button" onclick="fee2CloseDetail()">취소 (Esc)</button>
+                        <button type="button" class="fee2-detail-primary" onclick="fee2ApplyDetail()">✓ 적용 (Ctrl+Enter)</button>
+                    </div>
+                </aside>
 
                 <!-- 게시 다이얼로그 -->
                 <div class="modal" id="fee2PublishModal">
@@ -21399,6 +21507,8 @@
             body.innerHTML=html || '<tr><td colspan="18" class="fee2-empty">일치하는 행이 없습니다.</td></tr>';
             _updateBadges();
             try{ _fee2SyncMasterCheckboxes(); }catch(_){}
+            // 3줄 초과 셀에 ⋯ 힌트 (레이아웃 확정 후)
+            try{ requestAnimationFrame(()=>{ try{ _fee2MarkOverflowCells(); }catch(_){} }); }catch(_){}
         }
         window.renderFee2Table=renderFee2Table;
 
@@ -21466,8 +21576,16 @@
         }
 
         // ─── 인라인 편집 ───────────────────────────────────
+        // 긴 텍스트 필드는 상세 패널로 열고, 그 외는 인라인 편집.
+        const _FEE2_PANEL_FIELDS = new Set(['name','option','eventCondition','publicDescription','internalMemo','needsReview']);
         document.addEventListener('click', function(ev){
             const td=ev.target.closest?.('#tab-feeschedule2 td[data-editable]'); if(!td) return;
+            const field=td.dataset.field;
+            if(_FEE2_PANEL_FIELDS.has(field)){
+                if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+                fee2OpenDetail(td.dataset.id, field);
+                return;
+            }
             _fee2StartEdit(td);
         });
         function _fee2StartEdit(td){
@@ -21931,6 +22049,101 @@
         function _flash(msg){
             const status=document.getElementById('fee2Status');
             if(status){ status.textContent=msg; status.classList.remove('dirty'); setTimeout(_updateBadges, 2500); }
+        }
+
+        // ─── 상세 편집 패널 (오른쪽 슬라이드) — 긴 텍스트 필드 편집 ─────────
+        // 표 셀에서 클릭한 필드에 자동 포커스, 저장은 _fee2Dirty 로 반영 (💾 저장 필요)
+        const _FEE2_DETAIL_FIELDS = [
+            { key:'name',              label:'시술명',                            type:'text',     hint:'홈페이지에 노출' },
+            { key:'option',            label:'옵션',                              type:'text',     hint:'홈페이지에 노출' },
+            { key:'publicDescription', label:'공개설명',                          type:'textarea', rows:5, hint:'홈페이지 상세 설명' },
+            { key:'eventCondition',    label:'이벤트 조건',                       type:'textarea', rows:3, hint:'홈페이지 이벤트 카드에 표시' },
+            { key:'internalMemo',      label:'내부메모 (홈페이지 비공개)',        type:'textarea', rows:4, hint:'직원 전용' },
+            { key:'needsReview',       label:'확인필요 (내부 표기, 홈페이지 비공개)', type:'textarea', rows:3, hint:'검토 후 비우기' },
+        ];
+        function _fee2DetailIsOpen(){ return document.getElementById('fee2DetailPanel')?.classList.contains('open'); }
+        window.fee2OpenDetail=function(id, focusField){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            const it=_fee2Items.find(x=>x.id===id); if(!it) return;
+            const panel=document.getElementById('fee2DetailPanel');
+            const backdrop=document.getElementById('fee2DetailBackdrop');
+            const body=document.getElementById('fee2DetailBody');
+            const idSpan=document.getElementById('fee2DetailId');
+            const title=document.getElementById('fee2DetailTitle');
+            const dirty=_fee2Dirty.get(id)||{};
+            const cur=f=>(f in dirty)?dirty[f]:(it[f]??'');
+            const catLbl=_fee2Cats.find(c=>c.id===cur('homeCategory'))?.label || cur('homeCategory') || '';
+            idSpan.textContent=id;
+            title.textContent=(cur('name')||'(무명)') + (catLbl?' · '+catLbl:'');
+            body.innerHTML=_FEE2_DETAIL_FIELDS.map(f=>{
+                const val=String(cur(f.key)??'');
+                const inputEl = f.type==='textarea'
+                    ? `<textarea id="fee2DetailIn_${f.key}" data-field="${f.key}" rows="${f.rows||4}" placeholder="${_esc(f.label)}">${_esc(val)}</textarea>`
+                    : `<input type="text" id="fee2DetailIn_${f.key}" data-field="${f.key}" value="${_esc(val)}" placeholder="${_esc(f.label)}">`;
+                return `<div class="fee2-detail-field">
+                    <label for="fee2DetailIn_${f.key}">${_esc(f.label)} <span class="fee2-detail-hint">${_esc(f.hint||'')}</span></label>
+                    ${inputEl}
+                    <div class="fee2-detail-count" id="fee2DetailCt_${f.key}"></div>
+                </div>`;
+            }).join('');
+            // 글자수 카운터
+            _FEE2_DETAIL_FIELDS.forEach(f=>{
+                const el=document.getElementById('fee2DetailIn_'+f.key);
+                const ct=document.getElementById('fee2DetailCt_'+f.key);
+                const upd=()=>{ if(ct) ct.textContent=(el.value||'').length+' 자'; };
+                if(el){ el.addEventListener('input', upd); upd(); }
+            });
+            panel.dataset.editingId=id;
+            panel.classList.add('open');
+            panel.setAttribute('aria-hidden','false');
+            backdrop.classList.add('open');
+            // 클릭한 필드로 포커스, 없으면 첫 번째
+            setTimeout(()=>{
+                const target=focusField?document.getElementById('fee2DetailIn_'+focusField):body.querySelector('textarea,input');
+                if(target){ target.focus(); if(target.select) target.select(); }
+            },120);
+        };
+        window.fee2CloseDetail=function(){
+            const panel=document.getElementById('fee2DetailPanel');
+            const backdrop=document.getElementById('fee2DetailBackdrop');
+            if(panel){ panel.classList.remove('open'); panel.setAttribute('aria-hidden','true'); delete panel.dataset.editingId; }
+            if(backdrop) backdrop.classList.remove('open');
+        };
+        window.fee2ApplyDetail=function(){
+            const panel=document.getElementById('fee2DetailPanel');
+            const id=panel?.dataset.editingId; if(!id) return;
+            const it=_fee2Items.find(x=>x.id===id); if(!it){ fee2CloseDetail(); return; }
+            let changed=0;
+            for(const f of _FEE2_DETAIL_FIELDS){
+                const el=document.getElementById('fee2DetailIn_'+f.key); if(!el) continue;
+                const newVal=(el.value||'').trim();
+                const origVal=String(it[f.key]??'');
+                const d=_fee2Dirty.get(id)||{};
+                if(newVal===origVal){
+                    if(f.key in d){ delete d[f.key]; changed++; }
+                    if(Object.keys(d).length===0) _fee2Dirty.delete(id); else _fee2Dirty.set(id,d);
+                }else{
+                    if(!(f.key in d) || d[f.key]!==newVal){ d[f.key]=newVal; _fee2Dirty.set(id,d); changed++; }
+                }
+            }
+            fee2CloseDetail();
+            renderFee2Table();
+            if(changed) _flash('상세 편집 반영: '+id+' · '+changed+'개 필드 (💾 저장 필요)'); else _flash('변경 없음');
+        };
+        // 패널이 열려있을 때 Esc = 닫기, Ctrl/Cmd+Enter = 적용
+        document.addEventListener('keydown', function(ev){
+            if(!_fee2DetailIsOpen()) return;
+            if(ev.key==='Escape'){ ev.preventDefault(); fee2CloseDetail(); }
+            else if(ev.key==='Enter' && (ev.ctrlKey||ev.metaKey)){ ev.preventDefault(); fee2ApplyDetail(); }
+        });
+
+        // 렌더 후 각 긴 텍스트 셀에 overflow 여부 판정해서 ⋯ 아이콘 힌트 부착
+        function _fee2MarkOverflowCells(){
+            const table=document.getElementById('fee2Table'); if(!table) return;
+            table.querySelectorAll('td.col-name, td.col-option, td.col-cond, td.col-desc, td.col-internal, td.col-review').forEach(td=>{
+                if(td.scrollHeight > td.clientHeight + 1) td.classList.add('fee2-overflow');
+                else td.classList.remove('fee2-overflow');
+            });
         }
 
         // ─── 컬럼 폭 드래그 리사이즈 + localStorage 저장 ─────────────────
