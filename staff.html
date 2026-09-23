@@ -681,6 +681,9 @@
         /* 편집 중인 셀은 열 폭 제한을 뚫고 확장 — 좁은 컬럼도 넓게 입력 가능 */
         .fee2-table td.fee2-editing{overflow:visible!important;position:relative;z-index:20;max-width:none!important;background:#fffbea!important;outline:2px solid var(--primary);outline-offset:-2px}
         .fee2-table td.fee2-editing .fee2-cell-input{position:relative;min-width:14rem;width:100%;box-sizing:border-box;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+        /* 헤더 마스터 체크박스 — 홈/이벤트 전체 켜기/끄기 */
+        .fee2-master{margin-top:.15rem;cursor:pointer;accent-color:var(--gold,#d4a943);transform:scale(1.05)}
+        .fee2-table th:has(.fee2-master){text-align:center;line-height:1.15}
 
         /* 게시 다이얼로그 */
         .fee2-publish-dialog{max-height:70vh;overflow-y:auto;padding:.5rem}
@@ -1155,7 +1158,9 @@
                             <thead><tr>
                                 <th>ID</th><th>홈분류</th><th>내부분류</th><th>시술명</th><th>옵션</th>
                                 <th>정가</th><th>이벤트가</th><th>할인</th><th>조건</th>
-                                <th>시작</th><th>종료</th><th>홈</th><th>이벤트</th>
+                                <th>시작</th><th>종료</th>
+                                <th title="현재 필터 대상 홈 노출 전체 켜기/끄기">홈<br><input type="checkbox" id="fee2MasterShowP" class="fee2-master" onclick="fee2ToggleAllBool('showOnPrice', event)"></th>
+                                <th title="현재 필터 대상 이벤트 노출 전체 켜기/끄기">이벤트<br><input type="checkbox" id="fee2MasterShowE" class="fee2-master" onclick="fee2ToggleAllBool('showOnEvent', event)"></th>
                                 <th>시술시간</th><th>공개설명</th><th class="col-internal">내부메모</th><th>확인필요</th><th></th>
                             </tr></thead>
                             <tbody id="fee2TableBody"><tr><td colspan="18" class="fee2-empty">로딩 중...</td></tr></tbody>
@@ -21393,6 +21398,7 @@
             }
             body.innerHTML=html || '<tr><td colspan="18" class="fee2-empty">일치하는 행이 없습니다.</td></tr>';
             _updateBadges();
+            try{ _fee2SyncMasterCheckboxes(); }catch(_){}
         }
         window.renderFee2Table=renderFee2Table;
 
@@ -21547,6 +21553,69 @@
             if(!!it[field]===!!checked){ delete d[field]; if(!Object.keys(d).length) _fee2Dirty.delete(id); else _fee2Dirty.set(id,d); }
             else{ d[field]=!!checked; _fee2Dirty.set(id,d); }
             _updateBadges();
+            _fee2SyncMasterCheckboxes();
+        };
+
+        // 현재 필터에 걸린 행 산출 (renderFee2Table 과 동일 로직)
+        function _fee2FilteredRows(){
+            const q=(document.getElementById('fee2Search')?.value||'').trim().toLowerCase();
+            const filterCat=document.getElementById('fee2FilterCat')?.value||'';
+            const filterShowP=document.getElementById('fee2FilterShowOnPrice')?.checked;
+            const filterShowE=document.getElementById('fee2FilterShowOnEvent')?.checked;
+            const filterRev=document.getElementById('fee2FilterReview')?.checked;
+            const includeArch=document.getElementById('fee2FilterArchived')?.checked;
+            return _fee2Items.filter(it=>{
+                if(!includeArch && it.archived) return false;
+                if(filterCat && it.homeCategory!==filterCat) return false;
+                if(filterShowP && !it.showOnPrice) return false;
+                if(filterShowE && !it.showOnEvent) return false;
+                if(filterRev && !(it.needsReview||'').trim()) return false;
+                if(q){
+                    const hay=[it.name, it.option, it.publicDescription, it.internalMemo, it.id].join(' ').toLowerCase();
+                    if(!hay.includes(q)) return false;
+                }
+                return true;
+            });
+        }
+        // 현재 값(dirty 반영) 얻기
+        function _fee2Cur(it, field){
+            const d=_fee2Dirty.get(it.id);
+            return (d && field in d)?d[field]:it[field];
+        }
+        // 마스터 체크박스 상태 갱신 (all=checked / none=unchecked / partial=indeterminate)
+        function _fee2SyncMasterCheckboxes(){
+            const rows=_fee2FilteredRows();
+            const pairs=[['fee2MasterShowP','showOnPrice'], ['fee2MasterShowE','showOnEvent']];
+            for(const [chkId, field] of pairs){
+                const chk=document.getElementById(chkId); if(!chk) continue;
+                if(!rows.length){ chk.checked=false; chk.indeterminate=false; chk.disabled=true; continue; }
+                chk.disabled=!canFeeEdit;
+                const on=rows.filter(it=>!!_fee2Cur(it,field)).length;
+                if(on===0){ chk.checked=false; chk.indeterminate=false; }
+                else if(on===rows.length){ chk.checked=true; chk.indeterminate=false; }
+                else{ chk.checked=false; chk.indeterminate=true; }
+            }
+        }
+        // 헤더 마스터 클릭: 현재 필터 대상 전체를 true 또는 false 로 (indeterminate → true 우선)
+        window.fee2ToggleAllBool=function(field, ev){
+            if(ev){ ev.stopPropagation(); }
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); _fee2SyncMasterCheckboxes(); return; }
+            const rows=_fee2FilteredRows();
+            if(!rows.length){ alert('현재 필터 대상 행이 없습니다.'); _fee2SyncMasterCheckboxes(); return; }
+            const on=rows.filter(it=>!!_fee2Cur(it,field)).length;
+            // 전부 켜져있으면 → 전부 끄기, 그 외는 전부 켜기
+            const nextVal = (on===rows.length) ? false : true;
+            let changed=0;
+            for(const it of rows){
+                const cur=!!_fee2Cur(it, field);
+                if(cur===nextVal) continue;
+                const d=_fee2Dirty.get(it.id)||{};
+                if(!!it[field]===!!nextVal){ delete d[field]; if(!Object.keys(d).length) _fee2Dirty.delete(it.id); else _fee2Dirty.set(it.id,d); }
+                else{ d[field]=nextVal; _fee2Dirty.set(it.id,d); }
+                changed++;
+            }
+            _flash((nextVal?'✅ 전체 켜기':'⛔ 전체 끄기')+' — '+field+' · '+changed+'행 (💾 저장 필요)');
+            renderFee2Table();
         };
         window.fee2DiscardAll=function(){
             if(!_fee2Dirty.size) return;
