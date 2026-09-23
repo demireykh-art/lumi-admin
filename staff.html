@@ -660,15 +660,27 @@
         .fee2-row-actions button.danger{color:var(--red);border-color:#fca5a5}
         .fee2-row-actions button.danger:hover{background:#fee2e2}
         .fee2-cat-head td{background:var(--bg-page)!important;font-weight:600;font-size:.72rem;padding:.4rem .5rem;color:var(--primary-dark);max-width:none!important}
-        /* 컬럼 폭 드래그 조절 — 헤더 오른쪽 끝 5px 영역 */
+        /* 컬럼 폭 드래그 조절 — 헤더 오른쪽 끝 6px 영역 */
         .fee2-table{table-layout:fixed}
-        .fee2-table th{position:sticky;top:0;overflow:visible}
-        .fee2-resize-handle{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;background:transparent;z-index:6;user-select:none;transition:background .15s}
-        .fee2-resize-handle:hover,.fee2-resize-handle.active{background:var(--gold)}
+        .fee2-table th{position:sticky;top:0;overflow:visible;position:sticky}
+        /* 컴팩트 패치에서 걸어둔 td.max-width 를 무력화 — 이제 <col> 폭이 유일한 결정자 */
+        .fee2-table td,
+        .fee2-table td.col-id,.fee2-table td.col-cat,.fee2-table td.col-intcat,
+        .fee2-table td.col-name,.fee2-table td.col-option,.fee2-table td.col-cond,
+        .fee2-table td.col-date,.fee2-table td.col-dur,.fee2-table td.col-desc,
+        .fee2-table td.col-internal,.fee2-table td.col-review{max-width:none!important}
+        /* 표 전체는 컨테이너 최소폭에 갇히지 않도록 — <col> 합만큼 자연스레 확장 */
+        .fee2-table{min-width:0!important;width:auto!important}
+        .fee2-resize-handle{position:absolute;right:-3px;top:0;width:8px;height:100%;cursor:col-resize;background:transparent;z-index:10;user-select:none;transition:background .15s;touch-action:none}
+        .fee2-resize-handle::after{content:'';position:absolute;right:3px;top:15%;bottom:15%;width:2px;background:rgba(255,255,255,.25);border-radius:1px;transition:background .15s}
+        .fee2-resize-handle:hover::after,.fee2-resize-handle.active::after{background:var(--gold,#d4a943)}
         .fee2-toolbar .fee2-tool-sep{width:1px;height:1.4rem;background:var(--border);margin:0 .1rem}
         /* 컬럼 리사이즈 중일 때 전체 커서 강제 */
-        body.fee2-resizing{cursor:col-resize!important;user-select:none}
-        body.fee2-resizing *{cursor:col-resize!important;user-select:none}
+        body.fee2-resizing{cursor:col-resize!important;user-select:none!important}
+        body.fee2-resizing *{cursor:col-resize!important;user-select:none!important}
+        /* 편집 중인 셀은 열 폭 제한을 뚫고 확장 — 좁은 컬럼도 넓게 입력 가능 */
+        .fee2-table td.fee2-editing{overflow:visible!important;position:relative;z-index:20;max-width:none!important;background:#fffbea!important;outline:2px solid var(--primary);outline-offset:-2px}
+        .fee2-table td.fee2-editing .fee2-cell-input{position:relative;min-width:14rem;width:100%;box-sizing:border-box;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.1)}
 
         /* 게시 다이얼로그 */
         .fee2-publish-dialog{max-height:70vh;overflow-y:auto;padding:.5rem}
@@ -21469,6 +21481,7 @@
             inp.type=type==='date'?'date':'text';
             inp.value=editVal;
             td.textContent=''; td.appendChild(inp);
+            td.classList.add('fee2-editing');
             inp.focus(); inp.select();
             _fee2Editing={td,id,field,type,orig:editVal,inp};
             inp.addEventListener('blur', ()=>_fee2CommitEdit());
@@ -21882,18 +21895,28 @@
         function _fee2ApplyColWidths(widths){
             const cg=document.getElementById('fee2ColGroup'); if(!cg) return;
             const cols=cg.querySelectorAll('col');
-            cols.forEach(col=>{
+            const table=document.getElementById('fee2Table');
+            const ths=table?.tHead?.rows?.[0]?.cells;
+            cols.forEach((col,i)=>{
                 const key=col.getAttribute('data-col');
                 const w=widths[key];
-                if(typeof w==='number' && isFinite(w)) col.style.width=w+'px';
+                if(typeof w==='number' && isFinite(w)){
+                    col.style.width=w+'px';
+                    // <th>에도 미러링해서 table-layout:fixed가 확실히 잡도록
+                    if(ths && ths[i]){ ths[i].style.width=w+'px'; ths[i].style.minWidth=w+'px'; ths[i].style.maxWidth=w+'px'; }
+                }
             });
         }
         function _fee2CurrentWidths(){
             const cg=document.getElementById('fee2ColGroup'); if(!cg) return {...FEE2_COL_DEFAULTS};
             const out={};
-            cg.querySelectorAll('col').forEach(col=>{
+            const table=document.getElementById('fee2Table');
+            const ths=table?.tHead?.rows?.[0]?.cells;
+            cg.querySelectorAll('col').forEach((col,i)=>{
                 const key=col.getAttribute('data-col');
-                const px=parseInt((col.style.width||'').replace('px',''),10);
+                // 우선순위: 인라인 style.width → <th>.offsetWidth → 기본값
+                let px=parseInt((col.style.width||'').replace('px',''),10);
+                if(!(isFinite(px) && px>0) && ths && ths[i]) px=ths[i].offsetWidth;
                 out[key]=(isFinite(px) && px>0)?px:(FEE2_COL_DEFAULTS[key]||100);
             });
             return out;
@@ -21925,7 +21948,10 @@
                 handle.addEventListener('mousedown', ev=>{
                     ev.preventDefault(); ev.stopPropagation();
                     const startX=ev.clientX;
-                    const startW=col.offsetWidth || parseInt(col.style.width,10) || FEE2_COL_DEFAULTS[col.getAttribute('data-col')] || 100;
+                    // <col>.offsetWidth 는 브라우저마다 0을 반환하므로 <th>.offsetWidth 우선
+                    let startW=th.offsetWidth;
+                    if(!(startW>0)) startW=parseInt(col.style.width,10);
+                    if(!(startW>0)) startW=FEE2_COL_DEFAULTS[col.getAttribute('data-col')]||100;
                     handle.classList.add('active');
                     document.body.classList.add('fee2-resizing');
                     const onMove=e=>{
@@ -21934,6 +21960,8 @@
                         if(w<FEE2_COL_MIN) w=FEE2_COL_MIN;
                         if(w>FEE2_COL_MAX) w=FEE2_COL_MAX;
                         col.style.width=w+'px';
+                        // <th> 인라인 너비도 함께 → table-layout:fixed 가 확실히 반영
+                        th.style.width=w+'px'; th.style.minWidth=w+'px'; th.style.maxWidth=w+'px';
                     };
                     const onUp=()=>{
                         document.removeEventListener('mousemove', onMove);
@@ -21952,6 +21980,7 @@
                     const key=col.getAttribute('data-col');
                     const w=FEE2_COL_DEFAULTS[key]||100;
                     col.style.width=w+'px';
+                    th.style.width=w+'px'; th.style.minWidth=w+'px'; th.style.maxWidth=w+'px';
                     _fee2SaveColWidthsToLS(_fee2CurrentWidths());
                 });
                 th.appendChild(handle);
