@@ -663,6 +663,14 @@
         /* 컬럼 폭 드래그 조절 — 헤더 오른쪽 끝 6px 영역 */
         .fee2-table{table-layout:fixed}
         .fee2-table th{position:sticky;top:0;overflow:visible;position:sticky}
+        /* 컴팩트 패치에서 걸어둔 td.max-width 를 무력화 — 이제 <col> 폭이 유일한 결정자 */
+        .fee2-table td,
+        .fee2-table td.col-id,.fee2-table td.col-cat,.fee2-table td.col-intcat,
+        .fee2-table td.col-name,.fee2-table td.col-option,.fee2-table td.col-cond,
+        .fee2-table td.col-date,.fee2-table td.col-dur,.fee2-table td.col-desc,
+        .fee2-table td.col-internal,.fee2-table td.col-review{max-width:none!important}
+        /* 표 전체는 컨테이너 최소폭에 갇히지 않도록 — <col> 합만큼 자연스레 확장 */
+        .fee2-table{min-width:0!important;width:auto!important}
         .fee2-resize-handle{position:absolute;right:-3px;top:0;width:8px;height:100%;cursor:col-resize;background:transparent;z-index:10;user-select:none;transition:background .15s;touch-action:none}
         .fee2-resize-handle::after{content:'';position:absolute;right:3px;top:15%;bottom:15%;width:2px;background:rgba(255,255,255,.25);border-radius:1px;transition:background .15s}
         .fee2-resize-handle:hover::after,.fee2-resize-handle.active::after{background:var(--gold,#d4a943)}
