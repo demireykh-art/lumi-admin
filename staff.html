@@ -583,6 +583,26 @@
         .sns-log-ctrl input{flex:1;min-width:0}
         .sns-log-del{flex:0 0 auto;background:#fff;border:1px solid var(--border);color:var(--red);
             border-radius:var(--r-sm);padding:.4rem .5rem;font-size:.72rem;font-family:inherit;cursor:pointer;min-height:36px}
+        .sns-badge.red{background:var(--red)}
+        /* 📅 업로드 일정 — 달력 칸은 공지 달력(.nc-*)을 그대로 쓰고 칩 색만 더한다 */
+        .sns-cal-head{display:flex;align-items:center;gap:.35rem;margin-bottom:.5rem}
+        .sns-cal-title{flex:1;font-weight:700;font-size:.95rem}
+        .sns-cal-nav{flex:0 0 auto;width:32px;height:32px;border:1px solid var(--border);background:#fff;
+            border-radius:var(--r-sm);font-size:1rem;line-height:1;cursor:pointer;color:var(--text)}
+        #snsCal .nc-chip{font-size:.55rem}
+        .nc-chip.sns-plan{background:#fef3c7;color:#78350f}
+        .nc-chip.sns-late{background:#fee2e2;color:#991b1b;font-weight:700}
+        .nc-chip.sns-done{background:#d1fae5;color:#065f46;text-decoration:line-through;opacity:.75}
+        .sns-day-head{font-weight:700;font-size:.85rem;margin-bottom:.45rem;display:flex;align-items:center;gap:.4rem}
+        .sns-day-add{margin-left:auto;background:var(--text);color:#fff;border:0;border-radius:var(--r-sm);
+            padding:.45rem .7rem;font-size:.75rem;font-family:inherit;cursor:pointer;min-height:36px}
+        .sns-sec-title{font-weight:700;font-size:.82rem;color:var(--text-secondary);margin:0 0 .4rem}
+        .sns-log-ctrl input.sns-date-input{flex:0 0 9rem;font-family:inherit;font-size:.75rem;padding:.4rem .45rem;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text);min-height:36px}
+        .sns-done-btn{flex:0 0 auto;border:1px solid var(--border);background:#fff;color:var(--text-secondary);
+            border-radius:var(--r-sm);padding:.4rem .55rem;font-size:.75rem;font-family:inherit;cursor:pointer;min-height:36px}
+        .sns-done-btn.on{background:#d1fae5;border-color:#6ee7b7;color:#065f46;font-weight:700}
+        .sns-log-row.late{border-color:#fecaca;background:#fef2f2}
 
         /* ══════ 💵 수가표2 (홈페이지 공개 가격 편집) ══════
            지시서 Section 3: 스프레드시트형 표. 셀 클릭 → 인라인 편집, Tab/Enter 이동.
@@ -1613,11 +1633,29 @@
                         <span class="view-title">📣 SNS</span>
                     </div>
                     <div class="sns-subtabs">
-                        <button type="button" id="snsSubtab-slate" class="sns-subtab on" onclick="snsSetView('slate')">🎬 촬영 슬레이트</button>
+                        <button type="button" id="snsSubtab-cal" class="sns-subtab on" onclick="snsSetView('cal')">📅 일정 <span id="snsCalBadge" class="sns-badge red" style="display:none">0</span></button>
+                        <button type="button" id="snsSubtab-slate" class="sns-subtab" onclick="snsSetView('slate')">🎬 촬영 슬레이트</button>
                         <button type="button" id="snsSubtab-log" class="sns-subtab" onclick="snsSetView('log')">📋 영상 대장 <span id="snsLogBadge" class="sns-badge" style="display:none">0</span></button>
                     </div>
 
-                    <div id="snsViewSlate">
+                    <!-- ── 📅 업로드 일정 (기본 진입) ──
+                         snsSlateLog 의 uploadDate 를 달력에 펼친 것이다. 일정용 컬렉션을
+                         따로 두면 같은 영상이 두 곳에 생겨 반드시 어긋나므로 대장 하나만 쓴다.
+                         업로드완료 = 완료 표시(초록·취소선), 예정일이 지났는데 미완료 = 밀림(빨강). -->
+                    <div id="snsViewCal">
+                        <div class="sns-cal-head">
+                            <button type="button" class="sns-cal-nav" onclick="snsMoveCalMonth(-1)" aria-label="이전 달">‹</button>
+                            <span class="sns-cal-title" id="snsCalTitle"></span>
+                            <button type="button" class="sns-cal-nav" onclick="snsMoveCalMonth(1)" aria-label="다음 달">›</button>
+                            <button type="button" class="view-btn" onclick="snsCalToday()">오늘</button>
+                        </div>
+                        <div class="sns-status" id="snsCalStatus">불러오는 중…</div>
+                        <div id="snsCal"></div>
+                        <div id="snsCalDay" style="margin-top:.8rem"></div>
+                        <div id="snsCalUnset" style="margin-top:.9rem"></div>
+                    </div>
+
+                    <div id="snsViewSlate" style="display:none">
                     <div class="sns-status" id="snsStatus">불러오는 중…</div>
 
                     <div class="sns-stage">
@@ -5043,7 +5081,8 @@
             if(_snsLogUnsub){ try{_snsLogUnsub();}catch(_){}
                 _snsLogUnsub=null; }
             _snsSeries=[]; _snsSel=null; _snsSeeded=false; _snsOffline=false; _snsSynced=false;
-            _snsLog=[]; _snsLogLastId=null; _snsLogLastKey=''; _snsLogLastAt=0; _snsView='slate';
+            _snsLog=[]; _snsLogLastId=null; _snsLogLastKey=''; _snsLogLastAt=0; _snsView='cal';
+            _snsCalSel=null; _snsCalMonth=new Date();
             try{await auth.signOut();}catch(_){}
             localStorage.removeItem('lumi_staff_user');
             currentUser=null;
@@ -9290,6 +9329,7 @@
             await _snsLoadFonts();
             _snsSubscribe();
             _snsLogSubscribe();
+            if(!_snsCalSel) _snsCalSel=_todayYmd();
             snsSetView(_snsView);
             _snsDrawSafe();
         }
@@ -9647,9 +9687,11 @@
         //  상태를 올리고, 편집 측에서 확정된 파일명을 적어 둔다.
         //  "밀린 것" = 상태가 촬영에서 멈춘 것.
         // ==================================================================
-        const SNS_LOG_STATUSES=['촬영','편집완료','업로드완료','보류'];
+        //  예정: 아직 안 찍었고 업로드 날짜만 잡아둔 것 (달력에서 바로 만든 행)
+        const SNS_LOG_STATUSES=['예정','촬영','편집완료','업로드완료','보류'];
+        const SNS_DONE='업로드완료';
         const SNS_LOG_LIMIT=300;
-        let _snsView='slate';         // 'slate' | 'log'
+        let _snsView='cal';           // 'cal' | 'slate' | 'log'
         let _snsLog=[];               // [{id,...}]
         let _snsLogUnsub=null;
         let _snsLogFilter='all';      // 'all' | 'pending' | 상태값
@@ -9658,16 +9700,17 @@
         let _snsLogLastAt=0;
 
         function snsSetView(v){
-            _snsView=(v==='log')?'log':'slate';
-            const slate=document.getElementById('snsViewSlate');
-            const log=document.getElementById('snsViewLog');
-            if(slate) slate.style.display=(_snsView==='slate')?'':'none';
-            if(log) log.style.display=(_snsView==='log')?'':'none';
-            const bs=document.getElementById('snsSubtab-slate');
-            const bl=document.getElementById('snsSubtab-log');
-            if(bs) bs.classList.toggle('on',_snsView==='slate');
-            if(bl) bl.classList.toggle('on',_snsView==='log');
+            _snsView=(v==='log'||v==='slate')?v:'cal';
+            [['cal','snsViewCal','snsSubtab-cal'],
+             ['slate','snsViewSlate','snsSubtab-slate'],
+             ['log','snsViewLog','snsSubtab-log']].forEach(([key,viewId,btnId])=>{
+                const view=document.getElementById(viewId);
+                if(view) view.style.display=(_snsView===key)?'':'none';
+                const btn=document.getElementById(btnId);
+                if(btn) btn.classList.toggle('on',_snsView===key);
+            });
             if(_snsView==='log'){ _snsLogSubscribe(); _snsLogRender(); }
+            if(_snsView==='cal'){ _snsLogSubscribe(); _snsCalRender(); }
         }
 
         function _snsLogSubscribe(){
@@ -9687,6 +9730,7 @@
                                 seriesName:String(v.seriesName||''),
                                 seriesNo:Number(v.seriesNo)||0,
                                 content:String(v.content||''),
+                                uploadDate:String(v.uploadDate||''),   // 업로드 예정일 (YYYY-MM-DD, 없으면 미정)
                                 status:(SNS_LOG_STATUSES.indexOf(v.status)>=0?v.status:'촬영'),
                                 filename:String(v.filename||''),
                                 byName:String(v.byName||'')
@@ -9694,6 +9738,7 @@
                         });
                         _snsLog=out;
                         _snsLogRender();
+                        _snsCalRender();
                         _snsLogBadge();
                     }, err=>{
                         console.warn('영상 대장 구독 실패', err);
@@ -9706,10 +9751,22 @@
         }
         function _snsLogBadge(){
             const b=document.getElementById('snsLogBadge');
-            if(!b) return;
-            const n=_snsLog.filter(x=>x.status==='촬영').length;
-            b.textContent=n;
-            b.style.display=n?'':'none';
+            if(b){
+                const n=_snsLog.filter(x=>x.status==='촬영').length;
+                b.textContent=n;
+                b.style.display=n?'':'none';
+            }
+            const c=document.getElementById('snsCalBadge');
+            if(c){
+                const n=_snsLateItems().length;
+                c.textContent=n;
+                c.style.display=n?'':'none';
+            }
+        }
+        // 예정일이 오늘보다 지났는데 아직 업로드하지 않은 것 = 밀린 업로드
+        function _snsLateItems(){
+            const t=_todayYmd();
+            return _snsLog.filter(x=>x.uploadDate && x.uploadDate<t && x.status!==SNS_DONE);
         }
         // 슬레이트 저장 시 기록. 같은 시리즈·내용을 10분 안에 다시 저장하면
         // (같은 컷을 여러 번 찍는 경우) 새 줄을 만들지 않고 시각만 갱신한다.
@@ -9742,6 +9799,183 @@
                 _snsLogLastKey=key; _snsLogLastAt=now;
             }catch(e){ console.warn('영상 대장 기록 실패', e); }
         }
+        // ── 📅 업로드 일정 달력 ──────────────────────────────────────────
+        //  달력 칸은 공지 달력(.nc-*)과 같은 모양을 쓴다. 표시 규칙:
+        //    업로드완료 → 초록·취소선 / 예정일이 지난 미완료 → 빨강 / 그 외 → 노랑
+        let _snsCalMonth=new Date();
+        let _snsCalSel=null;          // 선택한 날짜(YYYY-MM-DD)
+        function snsMoveCalMonth(delta){
+            _snsCalMonth=new Date(_snsCalMonth.getFullYear(), _snsCalMonth.getMonth()+delta, 1);
+            _snsCalRender();
+        }
+        function snsCalToday(){
+            _snsCalMonth=new Date();
+            _snsCalSel=_todayYmd();
+            _snsCalRender();
+        }
+        function snsCalSelect(ymd){
+            // 토글하지 않는다 — 진입 시 오늘이 선택돼 있어서, 토글이면 첫 탭이 "닫기"가 된다
+            _snsCalSel=ymd;
+            _snsCalRender();
+        }
+        function _snsOnDate(ymd){
+            return _snsLog.filter(x=>x.uploadDate===ymd)
+                .slice().sort((a,b)=>(a.seriesNo||99)-(b.seriesNo||99));
+        }
+        function _snsItemCls(item, today){
+            if(item.status===SNS_DONE) return 'sns-done';
+            if(item.uploadDate && item.uploadDate<today) return 'sns-late';
+            return 'sns-plan';
+        }
+        function _snsCalRender(){
+            const wrap=document.getElementById('snsCal');
+            if(!wrap) return;
+            const year=_snsCalMonth.getFullYear(), month=_snsCalMonth.getMonth();
+            const title=document.getElementById('snsCalTitle');
+            if(title) title.textContent=year+'년 '+(month+1)+'월';
+            const today=_todayYmd();
+            const firstDow=new Date(year,month,1).getDay();
+            const lastDate=new Date(year,month+1,0).getDate();
+            const prevLast=new Date(year,month,0).getDate();
+
+            let html='<div class="nc-cal">';
+            _DOW_KO.forEach((d,i)=>{
+                html+='<div class="nc-hdr '+(i===0?'sun':i===6?'sat':'')+'">'+d+'</div>';
+            });
+            for(let i=firstDow-1;i>=0;i--){
+                html+='<div class="nc-cell other"><div class="nc-num">'+(prevLast-i)+'</div></div>';
+            }
+            for(let d=1;d<=lastDate;d++){
+                const ds=_ymd(year,month+1,d);
+                const dow=(firstDow+d-1)%7;
+                let cls='nc-cell';
+                if(ds===today) cls+=' today';
+                if(ds===_snsCalSel) cls+=' sel';
+                if(dow===0) cls+=' sun'; else if(dow===6) cls+=' sat';
+                let inner='<div class="nc-num">'+d+'</div>';
+                const items=_snsOnDate(ds);
+                items.slice(0,2).forEach(it=>{
+                    inner+='<span class="nc-chip '+_snsItemCls(it,today)+'">'
+                        +(it.status===SNS_DONE?'✓ ':'')+_esc(_snsShort(it.content,8))+'</span>';
+                });
+                if(items.length>2) inner+='<span class="nc-more">+'+(items.length-2)+'</span>';
+                html+='<button type="button" class="'+cls+'" onclick="snsCalSelect(\''+ds+'\')">'+inner+'</button>';
+            }
+            const rest=(7-(firstDow+lastDate)%7)%7;
+            for(let i=1;i<=rest;i++){
+                html+='<div class="nc-cell other"><div class="nc-num">'+i+'</div></div>';
+            }
+            html+='</div>';
+            wrap.innerHTML=html;
+
+            const st=document.getElementById('snsCalStatus');
+            if(st){
+                const ym=year+'-'+String(month+1).padStart(2,'0');
+                const monthItems=_snsLog.filter(x=>x.uploadDate&&x.uploadDate.slice(0,7)===ym);
+                const done=monthItems.filter(x=>x.status===SNS_DONE).length;
+                const late=_snsLateItems().length;
+                st.innerHTML=(monthItems.length
+                    ? ('이번 달 업로드 '+monthItems.length+'건 · 완료 <b>'+done+'건</b>')
+                    : '이 달에 잡힌 업로드가 없습니다.')
+                    +(late?(' · <span style="color:var(--red);font-weight:700">밀린 것 '+late+'건</span>'):'');
+            }
+            _snsCalDayRender();
+            _snsCalUnsetRender();
+        }
+        function _snsShort(t,n){
+            t=String(t||'').trim();
+            return t.length>n ? (t.slice(0,n)+'…') : (t||'(내용 없음)');
+        }
+        // 선택한 날짜의 업로드 목록 + 그 날짜로 새 예정 추가
+        function _snsCalDayRender(){
+            const box=document.getElementById('snsCalDay');
+            if(!box) return;
+            box.innerHTML='';
+            if(!_snsCalSel){
+                const hint=document.createElement('div');
+                hint.className='sns-hint';
+                hint.textContent='날짜를 누르면 그 날 업로드 목록이 열리고, 거기서 예정을 추가할 수 있습니다.';
+                box.appendChild(hint);
+                return;
+            }
+            const head=document.createElement('div');
+            head.className='sns-day-head';
+            const label=document.createElement('span');
+            const dd=_snsCalSel.split('-');
+            label.textContent=Number(dd[1])+'월 '+Number(dd[2])+'일'
+                +(_snsCalSel===_todayYmd()?' (오늘)':'');
+            const add=document.createElement('button');
+            add.type='button'; add.className='sns-day-add'; add.textContent='+ 업로드 예정 추가';
+            add.addEventListener('click',()=>snsCalAddPlan(_snsCalSel));
+            head.appendChild(label); head.appendChild(add);
+            box.appendChild(head);
+
+            const items=_snsOnDate(_snsCalSel);
+            if(!items.length){
+                const e=document.createElement('div');
+                e.className='empty'; e.textContent='이 날 잡힌 업로드가 없습니다.';
+                box.appendChild(e);
+                return;
+            }
+            items.forEach(it=>box.appendChild(_snsLogRowEl(it,{compact:true})));
+        }
+        // 아직 업로드 날짜를 안 잡은 기록 (촬영만 해둔 것)
+        function _snsCalUnsetRender(){
+            const box=document.getElementById('snsCalUnset');
+            if(!box) return;
+            box.innerHTML='';
+            const items=_snsLog.filter(x=>!x.uploadDate && x.status!==SNS_DONE && x.status!=='보류');
+            if(!items.length) return;
+            const t=document.createElement('div');
+            t.className='sns-sec-title';
+            t.textContent='일정 미정 '+items.length+'건 — 날짜를 정하면 달력에 올라갑니다';
+            box.appendChild(t);
+            items.slice(0,20).forEach(it=>box.appendChild(_snsLogRowEl(it,{compact:true})));
+            if(items.length>20){
+                const more=document.createElement('div');
+                more.className='sns-hint';
+                more.textContent='그 외 '+(items.length-20)+'건은 📋 영상 대장에서 볼 수 있습니다.';
+                box.appendChild(more);
+            }
+        }
+        // 달력에서 바로 만드는 "예정" — 아직 촬영 전이라 status 는 예정으로 둔다
+        async function snsCalAddPlan(ymd){
+            if(typeof db==='undefined'){ alert('연결 후 다시 시도하세요.'); return; }
+            const content=prompt('업로드할 내용 한 줄 (예: 아내 모임 전 시술)');
+            if(!content || !content.trim()) return;
+            const list=_snsActive();
+            let cur=_snsSeries.filter(x=>x.suffix===_snsSel)[0]||null;
+            if(list.length){
+                const menu=list.map(x=>(x.no||'·')+'. '+x.name).join('\n');
+                const pick=prompt('시리즈 번호를 고르세요:\n\n'+menu, cur?String(cur.no||''):'');
+                if(pick===null) return;
+                const n=parseInt(pick,10);
+                const found=list.filter(x=>x.no===n)[0];
+                if(found) cur=found;
+            }
+            try{
+                await db.collection('snsSlateLog').add({
+                    ymd:_todayYmd(),
+                    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+                    seriesSuffix:cur?cur.suffix:'',
+                    seriesName:cur?cur.name:'',
+                    seriesNo:cur?(cur.no||0):0,
+                    content:content.trim(),
+                    uploadDate:ymd,
+                    status:'예정',
+                    filename:'',
+                    byName:(currentUser&&(currentUser.name||currentUser.email))||''
+                });
+            }catch(e){ alert('추가하지 못했습니다: '+((e&&e.message)||e)); }
+        }
+        // 완료 토글 — 되돌릴 때는 파일명이 있으면 편집완료, 없으면 예정으로
+        function snsToggleDone(id){
+            const it=_snsLog.filter(x=>x.id===id)[0];
+            if(!it) return;
+            const next=(it.status===SNS_DONE) ? (it.filename?'편집완료':'예정') : SNS_DONE;
+            _snsLogUpdate(id,{status:next});
+        }
+
         function snsLogSetFilter(f){
             _snsLogFilter=f;
             _snsLogRender();
@@ -9757,7 +9991,7 @@
             const fl=document.getElementById('snsLogFilters');
             if(!box) return;
             if(fl){
-                const defs=[['pending','밀린 것'],['all','전체'],['편집완료','편집완료'],['업로드완료','업로드완료'],['보류','보류']];
+                const defs=[['pending','밀린 것'],['all','전체'],['예정','예정'],['편집완료','편집완료'],['업로드완료','업로드완료'],['보류','보류']];
                 fl.innerHTML='';
                 defs.forEach(([k,label])=>{
                     const n=(k==='all')?_snsLog.length
@@ -9788,49 +10022,82 @@
                 box.appendChild(e);
                 return;
             }
-            rows.forEach(r=>{
-                const row=document.createElement('div');
-                row.className='sns-log-row'+((r.status==='업로드완료')?' done':'');
+            rows.forEach(r=>box.appendChild(_snsLogRowEl(r)));
+        }
+        // 대장·달력이 같이 쓰는 한 줄. compact=true 면 파일명 칸을 접는다(달력 아래는 폭이 좁다).
+        function _snsLogRowEl(r, opts){
+            opts=opts||{};
+            const today=_todayYmd();
+            const late=r.uploadDate && r.uploadDate<today && r.status!==SNS_DONE;
+            const row=document.createElement('div');
+            row.className='sns-log-row'+((r.status===SNS_DONE)?' done':'')+(late?' late':'');
 
-                const top=document.createElement('div');
-                top.className='sns-log-top';
-                const no=document.createElement('span');
-                no.className='sns-log-no'; no.textContent=(r.seriesNo||'·')+' '+(r.seriesName||'-');
-                const sfx=document.createElement('span');
-                sfx.className='sns-log-suffix'; sfx.textContent=r.seriesSuffix?('_'+r.seriesSuffix):'';
-                const dt=document.createElement('span');
-                dt.className='sns-log-date';
-                dt.textContent=r.createdAt?_snsLogWhen(r.createdAt):(r.ymd||'');
-                top.appendChild(no); top.appendChild(sfx); top.appendChild(dt);
+            const top=document.createElement('div');
+            top.className='sns-log-top';
+            const no=document.createElement('span');
+            no.className='sns-log-no'; no.textContent=(r.seriesNo||'·')+' '+(r.seriesName||'-');
+            const sfx=document.createElement('span');
+            sfx.className='sns-log-suffix'; sfx.textContent=r.seriesSuffix?('_'+r.seriesSuffix):'';
+            const dt=document.createElement('span');
+            dt.className='sns-log-date';
+            dt.textContent=(late?'⚠ 지남 · ':'')+(r.createdAt?_snsLogWhen(r.createdAt):(r.ymd||''));
+            if(late) dt.style.color='var(--red)';
+            top.appendChild(no); top.appendChild(sfx); top.appendChild(dt);
 
-                const ct=document.createElement('div');
-                ct.className='sns-log-content'; ct.textContent=r.content||'(내용 없음)';
+            const ct=document.createElement('div');
+            ct.className='sns-log-content'; ct.textContent=r.content||'(내용 없음)';
+            if(r.status===SNS_DONE) ct.style.textDecoration='line-through';
 
-                const ctrl=document.createElement('div');
-                ctrl.className='sns-log-ctrl';
-                const sel=document.createElement('select');
-                sel.setAttribute('aria-label','상태');
-                SNS_LOG_STATUSES.forEach(v=>{
-                    const o=document.createElement('option');
-                    o.value=v; o.textContent=v; if(v===r.status) o.selected=true;
-                    sel.appendChild(o);
-                });
-                sel.addEventListener('change',()=>_snsLogUpdate(r.id,{status:sel.value}));
+            // 1줄: 업로드 예정일 + 완료 토글
+            const plan=document.createElement('div');
+            plan.className='sns-log-ctrl';
+            plan.style.marginBottom='.3rem';
+            const dateIn=document.createElement('input');
+            dateIn.type='date'; dateIn.className='sns-date-input'; dateIn.value=r.uploadDate||'';
+            dateIn.setAttribute('aria-label','업로드 예정일');
+            dateIn.addEventListener('change',()=>_snsLogUpdate(r.id,{uploadDate:dateIn.value||''}));
+            const doneBtn=document.createElement('button');
+            doneBtn.type='button';
+            doneBtn.className='sns-done-btn'+((r.status===SNS_DONE)?' on':'');
+            doneBtn.textContent=(r.status===SNS_DONE)?'✓ 업로드완료':'업로드 완료로';
+            doneBtn.addEventListener('click',()=>snsToggleDone(r.id));
+            plan.appendChild(dateIn); plan.appendChild(doneBtn);
+
+            // 2줄: 상태 · 파일명 · 삭제
+            const ctrl=document.createElement('div');
+            ctrl.className='sns-log-ctrl';
+            const sel=document.createElement('select');
+            sel.setAttribute('aria-label','상태');
+            SNS_LOG_STATUSES.forEach(v=>{
+                const o=document.createElement('option');
+                o.value=v; o.textContent=v; if(v===r.status) o.selected=true;
+                sel.appendChild(o);
+            });
+            sel.addEventListener('change',()=>_snsLogUpdate(r.id,{status:sel.value}));
+            ctrl.appendChild(sel);
+            if(!opts.compact){
                 const fn=document.createElement('input');
                 fn.type='text'; fn.value=r.filename; fn.placeholder='확정된 파일명 (예: 아내모임전시술_dont.MOV)';
                 fn.setAttribute('aria-label','파일명');
                 fn.addEventListener('change',()=>_snsLogUpdate(r.id,{filename:fn.value.trim()}));
-                const del=document.createElement('button');
-                del.type='button'; del.className='sns-log-del'; del.textContent='삭제';
-                del.addEventListener('click',()=>{
-                    if(!confirm('이 기록을 지울까요?\n\n'+(r.content||'(내용 없음)'))) return;
-                    _snsLogDelete(r.id);
-                });
-                ctrl.appendChild(sel); ctrl.appendChild(fn); ctrl.appendChild(del);
-
-                row.appendChild(top); row.appendChild(ct); row.appendChild(ctrl);
-                box.appendChild(row);
+                ctrl.appendChild(fn);
+            }else if(r.filename){
+                const fnTxt=document.createElement('span');
+                fnTxt.className='sns-log-suffix';
+                fnTxt.style.cssText='flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+                fnTxt.textContent=r.filename;
+                ctrl.appendChild(fnTxt);
+            }
+            const del=document.createElement('button');
+            del.type='button'; del.className='sns-log-del'; del.textContent='삭제';
+            del.addEventListener('click',()=>{
+                if(!confirm('이 기록을 지울까요?\n\n'+(r.content||'(내용 없음)'))) return;
+                _snsLogDelete(r.id);
             });
+            ctrl.appendChild(del);
+
+            row.appendChild(top); row.appendChild(ct); row.appendChild(plan); row.appendChild(ctrl);
+            return row;
         }
         function _snsLogWhen(d){
             const p=n=>n<10?('0'+n):(''+n);
