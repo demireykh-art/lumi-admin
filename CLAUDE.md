@@ -32,7 +32,7 @@
 ## 📣 SNS 탭 (관리자 전용) — 촬영 슬레이트
 
 - 위치: 통합앱 홈 → `관리` 섹션 → **SNS** (`tab-sns`, `showTop('sns')`).
-  서브탭 2개 — 🎬 촬영 슬레이트 / 📋 영상 대장.
+  서브탭 3개 — 📅 일정(기본 진입) / 🎬 촬영 슬레이트 / 📋 영상 대장.
 - 노출 조건은 `isSnsAdmin()` = `settings/bizAdmins` ∪ `settings/adminHigh` ∪ `settings/snsAccess`.
   `snsAccess` 는 ⚙ 관리자 설정 → **📣 SNS 탭 권한** 에서 계정별 스위치로 켜고 끈다
   (💵 매출 결산 권한과 같은 방식).
@@ -42,9 +42,15 @@
   - `snsSeries/{suffix}` — `{no, name, order, active}`. 문서ID가 **파일명 접미사**다.
     오프라인 대비로 `localStorage(lumi_sns_series_v1)` 에 캐시한다.
   - `snsSlateLog/{autoId}` — 영상 대장. `{ymd, createdAt, seriesSuffix, seriesNo, seriesName,
-    content, status, filename, byName}`. 슬레이트를 저장하면 `촬영` 으로 한 건 쌓이고
+    content, uploadDate, status, filename, byName}`. 슬레이트를 저장하면 `촬영` 으로 한 건 쌓이고
     (같은 시리즈·내용을 10분 안에 다시 저장하면 새 줄 대신 갱신), 편집완료·업로드완료·보류로
     상태를 올린다. "밀린 것" = 상태가 `촬영` 에서 멈춘 것.
+- 📅 일정 달력은 **별도 컬렉션이 아니라** `snsSlateLog.uploadDate` 를 월별로 펼친 뷰다.
+  일정용 컬렉션을 따로 두면 같은 영상이 두 곳에 생겨 반드시 어긋나므로 대장 하나만 쓴다.
+  · 달력 칸은 공지 달력과 같은 `.nc-*` 클래스를 쓴다.
+  · 칩 색: 업로드완료 = 초록·취소선 / 예정일이 지난 미완료 = 빨강(밀림) / 그 외 = 노랑.
+  · 달력에서 바로 만든 행은 아직 촬영 전이라 상태가 `예정` 이다(상태는 예정·촬영·편집완료·
+    업로드완료·보류 5단계). 📅 탭 배지 = 밀린 업로드 건수.
 - 슬레이트 이미지(1200×1600 · JPEG 0.94 · 레이아웃)는 **맥 편집 파이프라인이 읽어 파싱**한다.
   규격을 바꾸면 자동화가 깨지므로 임의 변경 금지.
 - ⚠️ 접미사 목록은 이 탭과 **맥의 `CLAUDE.md` 두 곳**에 존재한다. 시리즈를 추가하면
