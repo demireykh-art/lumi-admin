@@ -2420,16 +2420,20 @@
                 </div>
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:var(--r-sm);margin-top:.5rem">
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보</div>
-                    <div style="display:flex;gap:.5rem">
-                        <div class="form-group" style="flex:1">
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                        <div class="form-group" style="flex:1;min-width:80px">
                             <label class="form-label" style="font-size:.75rem">구매 총액 (원) <span style="font-size:.7rem;color:var(--text-muted)">(선택)</span></label>
                             <input type="number" class="form-input" id="newItemTotalPrice" min="0" placeholder="몰라도 됨" oninput="calcNewItemUnit()">
                         </div>
-                        <div class="form-group" style="flex:1">
-                            <label class="form-label" style="font-size:.75rem">박스 수</label>
+                        <div class="form-group" style="flex:1;min-width:64px">
+                            <label class="form-label" style="font-size:.75rem">박스 수 <span style="font-size:.66rem;color:var(--text-muted)">(유상)</span></label>
                             <input type="number" class="form-input" id="newItemBoxes" min="1" value="1" placeholder="1" oninput="calcNewItemUnit()">
                         </div>
-                        <div class="form-group" style="flex:1">
+                        <div class="form-group" style="flex:1;min-width:64px">
+                            <label class="form-label" style="font-size:.75rem">할증(덤) <span style="font-size:.66rem;color:#c2410c">🎁</span></label>
+                            <input type="number" class="form-input" id="newItemFree" min="0" value="0" placeholder="0" oninput="calcNewItemUnit()">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:64px">
                             <label class="form-label" style="font-size:.75rem">박스당 낱개</label>
                             <input type="number" class="form-input" id="newItemPerBox" min="1" value="1" placeholder="100" oninput="calcNewItemUnit()">
                         </div>
@@ -2437,6 +2441,7 @@
                     <div id="newItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:var(--r-sm);font-size:.85rem;font-weight:600;color:var(--primary)">
                         낱개당 단가: -
                     </div>
+                    <div style="font-size:.68rem;color:var(--text-muted);margin-top:.25rem">🎁 명세서에 <b>단가 0으로 찍힌 덤</b>은 '할증(덤)'에 넣으세요. 그만큼 낱개 단가가 내려갑니다.</div>
                     <div style="font-size:.7rem;color:var(--text-muted);margin-top:.4rem;line-height:1.4">
                         💡 예시: 1박스(100개입) 50만원 구매 시 → 총액 500000, 박스수 1, 낱개수 100 입력
                     </div>
@@ -2485,21 +2490,26 @@
                 <div id="receiveCurrentStock" style="font-size:.8rem;color:var(--text-muted);padding:.5rem .75rem;background:var(--bg);border-radius:var(--r-sm);margin-bottom:.75rem"></div>
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:var(--r-sm)">
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보 (선택)</div>
-                    <div style="display:flex;gap:.5rem">
-                        <div class="form-group" style="flex:1;margin-bottom:0">
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                        <div class="form-group" style="flex:1;min-width:80px;margin-bottom:0">
                             <label class="form-label" style="font-size:.75rem">구매 총액 (원) <span style="color:var(--red)">*</span></label>
                             <input type="number" class="form-input" id="receivePrice" min="1" placeholder="0" oninput="calcReceiveUnit()" required>
                         </div>
-                        <div class="form-group" style="flex:1;margin-bottom:0">
-                            <label class="form-label" style="font-size:.75rem">박스 수</label>
+                        <div class="form-group" style="flex:1;min-width:64px;margin-bottom:0">
+                            <label class="form-label" style="font-size:.75rem">박스 수 <span style="font-size:.66rem;color:var(--text-muted)">(유상)</span></label>
                             <input type="number" class="form-input" id="receiveBoxes" min="1" value="1" oninput="calcReceiveUnit()">
                         </div>
-                        <div class="form-group" style="flex:1;margin-bottom:0">
+                        <div class="form-group" style="flex:1;min-width:64px;margin-bottom:0">
+                            <label class="form-label" style="font-size:.75rem">할증(덤) <span style="font-size:.66rem;color:#c2410c">🎁</span></label>
+                            <input type="number" class="form-input" id="receiveFree" min="0" value="0" oninput="calcReceiveUnit()">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:64px;margin-bottom:0">
                             <label class="form-label" style="font-size:.75rem">박스당 낱개</label>
                             <input type="number" class="form-input" id="receivePerBox" min="1" value="1" oninput="calcReceiveUnit()">
                         </div>
                     </div>
                     <div id="receiveUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:var(--r-sm);font-size:.85rem;font-weight:600;color:var(--primary);margin-top:.4rem">낱개당 단가: -</div>
+                    <div style="font-size:.68rem;color:var(--text-muted);margin-top:.25rem">🎁 단가 0으로 찍힌 덤은 '할증(덤)'에 넣으세요 (낱개 단가 자동 하향).</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -2528,26 +2538,30 @@
                 </div>
                 <div style="background:var(--bg);border:1px solid var(--border);padding:.75rem;border-radius:var(--r-sm);margin-top:.5rem">
                     <div style="font-weight:600;font-size:.85rem;margin-bottom:.5rem">💰 구매 정보 수정</div>
-                    <div style="display:flex;gap:.5rem">
-                        <div class="form-group" style="flex:1">
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                        <div class="form-group" style="flex:1;min-width:80px">
                             <label class="form-label" style="font-size:.75rem">구매 총액 (원)</label>
                             <input type="number" class="form-input" id="editItemTotalPrice" min="0" oninput="calcEditItemUnit()">
                         </div>
-                        <div class="form-group" style="flex:1">
-                            <label class="form-label" style="font-size:.75rem">박스 수</label>
+                        <div class="form-group" style="flex:1;min-width:64px">
+                            <label class="form-label" style="font-size:.75rem">박스 수 <span style="font-size:.66rem;color:var(--text-muted)">(유상)</span></label>
                             <input type="number" class="form-input" id="editItemBoxes" min="1" value="1" oninput="calcEditItemUnit()">
                         </div>
-                        <div class="form-group" style="flex:1">
+                        <div class="form-group" style="flex:1;min-width:64px">
+                            <label class="form-label" style="font-size:.75rem">할증(덤) <span style="font-size:.66rem;color:#c2410c">🎁</span></label>
+                            <input type="number" class="form-input" id="editItemFree" min="0" value="0" oninput="calcEditItemUnit()">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:64px">
                             <label class="form-label" style="font-size:.75rem">박스당 낱개</label>
                             <input type="number" class="form-input" id="editItemPerBox" min="1" value="1" oninput="calcEditItemUnit()">
                         </div>
-                        <div class="form-group" style="flex:1">
+                        <div class="form-group" style="flex:1;min-width:64px">
                             <label class="form-label" style="font-size:.75rem">1개 용량 <span style="color:var(--text-muted)">(ml/cc)</span></label>
                             <input type="number" class="form-input" id="editItemVolumeMl" step="0.1" placeholder="예:20">
                         </div>
                     </div>
                     <div id="editItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:var(--r-sm);font-size:.85rem;font-weight:600;color:var(--primary)">낱개당 단가: -</div>
-                    <div style="font-size:.68rem;color:var(--text-muted);margin-top:.2rem">1개 용량 = 주사제 등 액상 1병/1개의 ml·cc (믹스 용량 계산용, 액상 아니면 비워두세요)</div>
+                    <div style="font-size:.68rem;color:var(--text-muted);margin-top:.2rem">🎁 단가 0 덤은 '할증(덤)'에. · 1개 용량 = 액상 1병/1개의 ml·cc(믹스 계산용, 아니면 비움)</div>
                 </div>
                 <div class="form-group" style="margin-top:.5rem">
                     <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(이 개수 미만이면 발주 필요)</span></label>
@@ -17969,11 +17983,19 @@
         function calcNewItemUnit(){
             const total=parseFloat(document.getElementById('newItemTotalPrice').value)||0;
             const boxes=parseFloat(document.getElementById('newItemBoxes').value)||1;
+            const free=parseFloat(document.getElementById('newItemFree').value)||0;
             const perBox=parseFloat(document.getElementById('newItemPerBox').value)||1;
             const el=document.getElementById('newItemUnitCalc');
-            if(total>0&&boxes>0&&perBox>0){
-                const unitPrice=Math.round(total/(boxes*perBox));
-                el.textContent='낱개당 단가: '+unitPrice.toLocaleString()+'원';
+            const totalBoxes=boxes+free;   // 유상+할증(덤) = 실제 입고 박스
+            if(total>0&&totalBoxes>0&&perBox>0){
+                const unitPrice=Math.round(total/(totalBoxes*perBox));
+                if(free>0){
+                    const printed=Math.round(total/(boxes*perBox));  // 할증 무시 시(명세서 인쇄값)
+                    el.innerHTML='낱개당 단가: <b>'+unitPrice.toLocaleString()+'원</b> '
+                        +'<span style="color:var(--text-light)">(할증 '+free+'박스 반영 · 인쇄값 '+printed.toLocaleString()+'원)</span>';
+                }else{
+                    el.textContent='낱개당 단가: '+unitPrice.toLocaleString()+'원';
+                }
                 el.style.color='var(--green)';
             }else{
                 el.textContent='낱개당 단가: -';
@@ -18007,11 +18029,15 @@
             });
 
             const totalPrice=parseFloat(document.getElementById('newItemTotalPrice').value)||0;
-            const boxes=parseFloat(document.getElementById('newItemBoxes').value)||1;
+            const boxes=parseFloat(document.getElementById('newItemBoxes').value)||1;   // 유상 박스
+            const free=parseFloat(document.getElementById('newItemFree').value)||0;      // 할증(덤) 박스
             const perBox=parseFloat(document.getElementById('newItemPerBox').value)||1;
-            const totalQty=boxes*perBox;
+            const paidQty=boxes*perBox;              // 지불한 낱개
+            const freeQty=free*perBox;               // 무상(덤) 낱개
+            const totalQty=paidQty+freeQty;          // 실제 입고 낱개(유상+할증)
+            // 낱개당 단가 = 지불액 / 실제 받은 낱개(할증 포함) — 할증이 있으면 낮아짐
             const unitPrice=totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0;
-            
+
             const data={
                 name:name,
                 parentName:(document.getElementById('newItemParent')?.value||'').trim(),
@@ -18023,6 +18049,9 @@
                 safetyStock:parseFloat(document.getElementById('newItemSafety').value)||0,
                 purchasePrice:totalPrice,
                 purchaseQty:totalQty,
+                purchaseQtyPaid:paidQty,             // 유상 낱개
+                purchaseQtyFree:freeQty,             // 할증(덤) 낱개
+                costSource:'paid',                   // 단가 산출 기준: 실지불액
                 unitPrice:unitPrice,
                 expiryDate:document.getElementById('newItemExpiry').value||null,
                 purchaseLink:document.getElementById('newItemPurchaseLink')?.value?.trim()||'',
@@ -18125,11 +18154,19 @@
         function calcReceiveUnit(){
             const total = parseFloat(document.getElementById('receivePrice').value) || 0;
             const boxes = parseFloat(document.getElementById('receiveBoxes').value) || 1;
+            const free = parseFloat(document.getElementById('receiveFree').value) || 0;
             const perBox = parseFloat(document.getElementById('receivePerBox').value) || 1;
             const el = document.getElementById('receiveUnitCalc');
-            if(total > 0 && boxes > 0 && perBox > 0){
-                const unit = Math.round(total / (boxes * perBox));
-                el.textContent = '낱개당 단가: ' + unit.toLocaleString() + '원';
+            const totalBoxes = boxes + free;   // 유상+할증(덤)
+            if(total > 0 && totalBoxes > 0 && perBox > 0){
+                const unit = Math.round(total / (totalBoxes * perBox));
+                if(free > 0){
+                    const printed = Math.round(total / (boxes * perBox));
+                    el.innerHTML = '낱개당 단가: <b>' + unit.toLocaleString() + '원</b> '
+                        + '<span style="color:var(--text-light)">(할증 ' + free + '박스 반영 · 인쇄값 ' + printed.toLocaleString() + '원)</span>';
+                } else {
+                    el.textContent = '낱개당 단가: ' + unit.toLocaleString() + '원';
+                }
                 el.style.color = 'var(--green)';
             } else {
                 el.textContent = '낱개당 단가: -';
@@ -18175,9 +18212,30 @@
 
             // 구매정보 업데이트 (입력된 경우만)
             const totalPrice = parseFloat(document.getElementById('receivePrice').value) || 0;
-            const boxes = parseFloat(document.getElementById('receiveBoxes').value) || 1;
+            const boxes = parseFloat(document.getElementById('receiveBoxes').value) || 1;   // 유상 박스
+            const free = parseFloat(document.getElementById('receiveFree').value) || 0;      // 할증(덤) 박스
             const perBox = parseFloat(document.getElementById('receivePerBox').value) || 1;
-            const totalQty = boxes * perBox;
+            const paidQty = boxes * perBox;      // 유상 낱개
+            const freeQty = free * perBox;       // 할증(덤) 낱개
+            const totalQty = paidQty + freeQty;  // 지불액을 나눌 실제 낱개(유상+할증)
+
+            // ⚠️ 안전장치(§7): 지불액÷수량으로 나온 새 낱개단가가 기존 단가와 5배 이상 차이나면 확인
+            if(totalPrice > 0 && totalQty > 0){
+                const impliedUnit = totalPrice / totalQty;
+                const prevUnit = parseFloat(item.unitPrice) || 0;
+                if(prevUnit > 0){
+                    const ratio = impliedUnit / prevUnit;
+                    if(ratio >= 5 || ratio <= 0.2){
+                        const ok = confirm(
+                            '⚠️ 낱개당 단가가 크게 바뀝니다.\n\n'
+                            + '기존: ' + Math.round(prevUnit).toLocaleString() + '원\n'
+                            + '이번: ' + Math.round(impliedUnit).toLocaleString() + '원\n\n'
+                            + '박스가(박스당 금액)를 낱개칸에 넣었거나, 박스당 낱개/할증 수량이 틀리지 않았는지 확인하세요.\n'
+                            + '이대로 저장할까요?');
+                        if(!ok){ document.getElementById('receivePrice').focus(); return; }
+                    }
+                }
+            }
 
             // 현재 시점의 거래처 스냅샷 (localStorage) — vendorId 있으면 이름/링크 캐시
             let snapVendorName='';
@@ -18201,6 +18259,9 @@
                 newUnitPrice = Math.round(totalPrice / totalQty);
                 updateData.purchasePrice = totalPrice;
                 updateData.purchaseQty = totalQty;
+                updateData.purchaseQtyPaid = paidQty;   // 유상 낱개
+                updateData.purchaseQtyFree = freeQty;   // 할증(덤) 낱개
+                updateData.costSource = 'paid';         // 단가 산출 기준: 실지불액
                 updateData.unitPrice = newUnitPrice;
             }
 
@@ -18213,7 +18274,9 @@
                     vendorName: snapVendorName || '',
                     receiveDate: receiveDate,
                     totalPrice: totalPrice,
-                    totalQty: totalQty
+                    totalQty: totalQty,
+                    qtyPaid: paidQty,
+                    qtyFree: freeQty
                 });
                 updateData.priceHistory = prevHist.slice(0, 5);
             }
@@ -18230,6 +18293,8 @@
                     locations: addMap,
                     totalQty: totalAdd,
                     purchasePrice: totalPrice || null,
+                    purchaseQtyPaid: totalPrice > 0 ? paidQty : null,
+                    purchaseQtyFree: totalPrice > 0 ? freeQty : null,
                     unitPrice: newUnitPrice,
                     vendorId: item.vendorId || null,
                     vendorName: snapVendorName || '',
@@ -18567,6 +18632,7 @@
             const totalQty=item.purchaseQty||1;
             document.getElementById('editItemTotalPrice').value=totalPrice||'';
             document.getElementById('editItemBoxes').value=1;
+            const _ef=document.getElementById('editItemFree'); if(_ef) _ef.value=0;  // 할증칸 초기화(저장된 purchaseQty엔 이미 할증 포함)
             document.getElementById('editItemPerBox').value=totalQty||1;
             calcEditItemUnit();
             openModal('editItemModal');
@@ -18630,11 +18696,19 @@
         function calcEditItemUnit(){
             const total=parseFloat(document.getElementById('editItemTotalPrice').value)||0;
             const boxes=parseFloat(document.getElementById('editItemBoxes').value)||1;
+            const free=parseFloat(document.getElementById('editItemFree').value)||0;
             const perBox=parseFloat(document.getElementById('editItemPerBox').value)||1;
             const el=document.getElementById('editItemUnitCalc');
-            if(total>0&&boxes>0&&perBox>0){
-                const unitPrice=Math.round(total/(boxes*perBox));
-                el.textContent='낱개당 단가: '+unitPrice.toLocaleString()+'원';
+            const totalBoxes=boxes+free;   // 유상+할증(덤)
+            if(total>0&&totalBoxes>0&&perBox>0){
+                const unitPrice=Math.round(total/(totalBoxes*perBox));
+                if(free>0){
+                    const printed=Math.round(total/(boxes*perBox));
+                    el.innerHTML='낱개당 단가: <b>'+unitPrice.toLocaleString()+'원</b> '
+                        +'<span style="color:var(--text-light)">(할증 '+free+'박스 반영 · 인쇄값 '+printed.toLocaleString()+'원)</span>';
+                }else{
+                    el.textContent='낱개당 단가: '+unitPrice.toLocaleString()+'원';
+                }
                 el.style.color='var(--green)';
             }else{
                 el.textContent='낱개당 단가: -';
@@ -18680,10 +18754,32 @@
             }
             
             const totalPrice=parseFloat(document.getElementById('editItemTotalPrice').value)||0;
-            const boxes=parseFloat(document.getElementById('editItemBoxes').value)||1;
+            const boxes=parseFloat(document.getElementById('editItemBoxes').value)||1;   // 유상 박스
+            const free=parseFloat(document.getElementById('editItemFree').value)||0;      // 할증(덤) 박스
             const perBox=parseFloat(document.getElementById('editItemPerBox').value)||1;
-            const totalQty=boxes*perBox;
-            
+            const paidQty=boxes*perBox;          // 유상 낱개
+            const freeQty=free*perBox;           // 할증(덤) 낱개
+            const totalQty=paidQty+freeQty;      // 지불액을 나눌 실제 낱개(유상+할증)
+            const _editUnitPrice=totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0;
+
+            // ⚠️ 안전장치(§7): 새 낱개단가가 기존 단가와 5배 이상 차이나면 확인
+            if(totalPrice>0&&totalQty>0){
+                const _prevItem=(typeof invItems!=='undefined')?invItems.find(i=>i.id===id):null;
+                const prevUnit=parseFloat(_prevItem?.unitPrice)||0;
+                if(prevUnit>0){
+                    const ratio=_editUnitPrice/prevUnit;
+                    if(ratio>=5||ratio<=0.2){
+                        const ok=confirm(
+                            '⚠️ 낱개당 단가가 크게 바뀝니다.\n\n'
+                            +'기존: '+Math.round(prevUnit).toLocaleString()+'원\n'
+                            +'이번: '+_editUnitPrice.toLocaleString()+'원\n\n'
+                            +'박스가(박스당 금액)를 낱개칸에 넣었거나, 박스당 낱개/할증 수량이 틀리지 않았는지 확인하세요.\n'
+                            +'이대로 저장할까요?');
+                        if(!ok){ document.getElementById('editItemTotalPrice').focus(); return; }
+                    }
+                }
+            }
+
             const data={
                 parentName:(document.getElementById('editItemParent')?.value||'').trim(),
                 category:document.getElementById('editItemCategory').value,
@@ -18694,7 +18790,10 @@
                 expiryDate:document.getElementById('editItemExpiry').value||null,
                 purchasePrice:totalPrice,
                 purchaseQty:totalQty,
-                unitPrice:totalPrice>0&&totalQty>0?Math.round(totalPrice/totalQty):0,
+                purchaseQtyPaid:paidQty,         // 유상 낱개
+                purchaseQtyFree:freeQty,         // 할증(덤) 낱개
+                costSource:'paid',               // 단가 산출 기준: 실지불액
+                unitPrice:_editUnitPrice,
                 purchaseLink:document.getElementById('editItemPurchaseLink').value.trim(),
                 contactName:(document.getElementById('editItemContactName')?.value||'').trim(),
                 contactPhone:(document.getElementById('editItemContactPhone')?.value||'').trim(),
