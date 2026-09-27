@@ -659,6 +659,15 @@
             resize:vertical}
         .sns-memo-body:focus{outline:none;border-color:var(--primary)}
         .sns-memo-empty{font-size:.76rem;color:var(--text-muted);padding:.6rem .2rem}
+        .sns-search{display:flex;gap:.3rem;align-items:center;margin:.1rem 0 .6rem}
+        .sns-search-input{flex:1;min-width:0;font-family:inherit;font-size:.82rem;padding:.5rem .6rem;
+            border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text);min-height:40px}
+        .sns-search-input:focus{outline:none;border-color:var(--primary)}
+        .sns-search-x{flex:0 0 auto;width:40px;min-height:40px;border:1px solid var(--border);background:#fff;
+            color:var(--text-muted);border-radius:var(--r-sm);font-size:1.1rem;line-height:1;cursor:pointer;font-family:inherit}
+        .sns-memo-move{flex:0 0 auto;width:30px;min-height:36px;padding:0;background:#fff;border:1px solid var(--border);
+            color:var(--text-secondary);border-radius:var(--r-sm);font-size:.8rem;line-height:1;cursor:pointer;font-family:inherit}
+        .sns-memo-move:disabled{opacity:.3;cursor:default}
         @media (min-width:720px){
             .sns-log-wrap{display:grid;grid-template-columns:1fr 20rem;gap:1rem;align-items:start}
             .sns-memo-side{order:2;margin-bottom:0;position:sticky;top:.5rem}
@@ -1768,10 +1777,20 @@
                                     </button>
                                     <button type="button" class="sns-memo-add" onclick="snsAddMemo()">+ 메모</button>
                                 </div>
+                                <div id="snsMemoSearchWrap" class="sns-search" style="display:none">
+                                    <input type="text" id="snsMemoSearch" class="sns-search-input" placeholder="메모 검색"
+                                        autocomplete="off" enterkeyhint="search" oninput="snsMemoSearch(this.value)">
+                                    <button type="button" class="sns-search-x" onclick="snsMemoSearchClear()" aria-label="검색어 지우기">×</button>
+                                </div>
                                 <div id="snsMemoList" style="display:none"></div>
                             </aside>
                             <div class="sns-log-main">
                                 <div class="sns-status" id="snsLogStatus">불러오는 중…</div>
+                                <div class="sns-search">
+                                    <input type="text" id="snsLogSearch" class="sns-search-input" placeholder="내용·시리즈·파일명·문구 검색"
+                                        autocomplete="off" enterkeyhint="search" oninput="snsLogSearch(this.value)">
+                                    <button type="button" class="sns-search-x" onclick="snsLogSearchClear()" aria-label="검색어 지우기">×</button>
+                                </div>
                                 <div class="sns-chips" id="snsLogFilters" style="margin-bottom:.7rem"></div>
                                 <div id="snsLogList"></div>
                             </div>
@@ -9789,6 +9808,7 @@
         let _snsLog=[];               // [{id,...}]
         let _snsLogUnsub=null;
         let _snsLogFilter='all';      // 'all' | 'pending' | 상태값
+        let _snsLogQuery='';          // 대장 검색어
         let _snsLogLastId=null;       // 직전에 기록한 문서 (같은 슬레이트 재저장 시 갱신)
         let _snsLogLastKey='';
         let _snsLogLastAt=0;
@@ -9902,6 +9922,7 @@
         let _snsMemos=[];
         let _snsMemoUnsub=null;
         let _snsMemoPanelOpen=false;      // 패널 자체를 접었다 폈다
+        let _snsMemoQuery='';             // 메모 검색어
         const _snsMemoOpen=new Set();     // 본문을 펼쳐 둔 메모
 
         function _snsMemoSubscribe(){
@@ -9910,11 +9931,19 @@
                 _snsMemoUnsub=db.collection('snsMemos').orderBy('createdAt','asc')
                     .onSnapshot(snap=>{
                         const out=[];
-                        snap.forEach(doc=>{
+                        snap.forEach((doc,i)=>{
                             const v=doc.data()||{};
-                            out.push({id:doc.id, title:String(v.title||''), body:String(v.body||'')});
+                            out.push({
+                                id:doc.id, title:String(v.title||''), body:String(v.body||''),
+                                order:(v.order==null?null:Number(v.order))
+                            });
                         });
-                        _snsMemos=out;
+                        // order 가 있는 것 먼저, 없으면 만든 순(쿼리 순서)을 지킨다
+                        _snsMemos=out.map((m,i)=>Object.assign({_i:i},m))
+                            .sort((a,b)=>{
+                                const oa=(a.order==null?1e9+a._i:a.order), ob=(b.order==null?1e9+b._i:b.order);
+                                return oa===ob ? a._i-b._i : oa-ob;
+                            });
                         _snsMemoRender();
                     }, err=>{
                         console.warn('메모장 구독 실패', err);
@@ -9927,11 +9956,44 @@
             _snsMemoPanelOpen=!_snsMemoPanelOpen;
             _snsMemoRender();
         }
+        function snsMemoSearch(q){ _snsMemoQuery=String(q||''); _snsMemoRender(); }
+        function snsMemoSearchClear(){
+            const el=document.getElementById('snsMemoSearch');
+            if(el) el.value='';
+            snsMemoSearch('');
+        }
+        function _snsMemoMatched(){
+            const q=_snsMemoQuery.trim().toLowerCase();
+            if(!q) return _snsMemos;
+            return _snsMemos.filter(m=>
+                (m.title+' '+m.body).toLowerCase().indexOf(q)>=0);
+        }
+        // 위아래 이동 — 보이는 순서대로 order 를 0..n-1 로 다시 매겨 저장한다.
+        //  (검색 중에는 보이는 목록이 전체가 아니라서 순서를 바꾸지 않는다)
+        async function snsMoveMemo(id, delta){
+            const i=_snsMemos.findIndex(m=>m.id===id);
+            const j=i+delta;
+            if(i<0 || j<0 || j>=_snsMemos.length) return;
+            const arr=_snsMemos.slice();
+            const tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp;
+            _snsMemos=arr;
+            _snsMemoRender();      // 화면을 먼저 바꾸고 저장한다
+            if(typeof db==='undefined') return;
+            try{
+                const batch=db.batch();
+                arr.forEach((m,k)=>{
+                    m.order=k;
+                    batch.set(db.collection('snsMemos').doc(m.id), {order:k}, {merge:true});
+                });
+                await batch.commit();
+            }catch(e){ alert('순서를 저장하지 못했습니다: '+((e&&e.message)||e)); }
+        }
         async function snsAddMemo(){
             if(typeof db==='undefined'){ alert('연결 후 다시 시도하세요.'); return; }
             try{
                 const ref=await db.collection('snsMemos').add({
                     title:'', body:'',
+                    order:_snsMemos.length,
                     createdAt:firebase.firestore.FieldValue.serverTimestamp(),
                     byName:(currentUser&&(currentUser.name||currentUser.email))||''
                 });
@@ -9956,9 +10018,14 @@
             const cnt=document.getElementById('snsMemoCount');
             const tgl=document.getElementById('snsMemoToggle');
             if(!box) return;
-            if(cnt) cnt.textContent=_snsMemos.length?('('+_snsMemos.length+')'):'';
+            const searching=!!_snsMemoQuery.trim();
+            const list=_snsMemoMatched();
+            if(cnt) cnt.textContent=_snsMemos.length
+                ? (searching?('('+list.length+'/'+_snsMemos.length+')'):('('+_snsMemos.length+')')) : '';
             if(tgl) tgl.firstChild.nodeValue=(_snsMemoPanelOpen?'▾ ':'▸ ')+'✂️ 자주 쓰는 문구 ';
             box.style.display=_snsMemoPanelOpen?'':'none';
+            const sw=document.getElementById('snsMemoSearchWrap');
+            if(sw) sw.style.display=(_snsMemoPanelOpen&&_snsMemos.length)?'':'none';
             if(!_snsMemoPanelOpen) return;
 
             box.innerHTML='';
@@ -9969,7 +10036,14 @@
                 box.appendChild(e);
                 return;
             }
-            _snsMemos.forEach(m=>{
+            if(!list.length){
+                const e=document.createElement('div');
+                e.className='sns-memo-empty';
+                e.textContent='"'+_snsMemoQuery.trim()+'" 에 맞는 메모가 없습니다.';
+                box.appendChild(e);
+                return;
+            }
+            list.forEach((m,vi)=>{
                 const card=document.createElement('div');
                 card.className='sns-memo-card';
 
@@ -10016,7 +10090,19 @@
                     _snsMemoDelete(m.id);
                 });
 
+                // 위아래 이동 — 검색 중에는 보이는 목록이 전체가 아니라 잠근다
+                const idx=_snsMemos.findIndex(x=>x.id===m.id);
+                const up=document.createElement('button');
+                up.type='button'; up.className='sns-memo-move'; up.textContent='↑'; up.title='위로';
+                up.disabled=searching||idx<=0;
+                up.addEventListener('click',()=>snsMoveMemo(m.id,-1));
+                const down=document.createElement('button');
+                down.type='button'; down.className='sns-memo-move'; down.textContent='↓'; down.title='아래로';
+                down.disabled=searching||idx<0||idx>=_snsMemos.length-1;
+                down.addEventListener('click',()=>snsMoveMemo(m.id,1));
+
                 top.appendChild(fold); top.appendChild(title);
+                top.appendChild(up); top.appendChild(down);
                 top.appendChild(copy); top.appendChild(del);
 
                 const body=document.createElement('textarea');
@@ -10397,10 +10483,26 @@
             _snsLogFilter=f;
             _snsLogRender();
         }
+        function snsLogSearch(q){ _snsLogQuery=String(q||''); _snsLogRender(); }
+        function snsLogSearchClear(){
+            const el=document.getElementById('snsLogSearch');
+            if(el) el.value='';
+            snsLogSearch('');
+        }
+        // 내용·시리즈·접미사·파일명 + 업로드 문구 네 칸까지 본다
+        function _snsLogHaystack(r){
+            const c=r.captions||{};
+            return [r.content, r.seriesName, r.seriesSuffix, r.filename, r.status, r.uploadDate,
+                    c.caption, c.firstComment, c.dm, c.cta, r.captionsRaw]
+                .filter(Boolean).join(' ').toLowerCase();
+        }
         function _snsLogFiltered(){
-            if(_snsLogFilter==='all') return _snsLog;
-            if(_snsLogFilter==='pending') return _snsLog.filter(x=>x.status==='촬영');
-            return _snsLog.filter(x=>x.status===_snsLogFilter);
+            let arr=_snsLog;
+            if(_snsLogFilter==='pending') arr=arr.filter(x=>x.status==='촬영');
+            else if(_snsLogFilter!=='all') arr=arr.filter(x=>x.status===_snsLogFilter);
+            const q=_snsLogQuery.trim().toLowerCase();
+            if(q) arr=arr.filter(x=>_snsLogHaystack(x).indexOf(q)>=0);
+            return arr;
         }
         function _snsLogRender(){
             const box=document.getElementById('snsLogList');
@@ -10427,15 +10529,18 @@
             const rows=_snsLogFiltered();
             if(st){
                 const pend=_snsLog.filter(x=>x.status==='촬영').length;
-                st.innerHTML=_snsLog.length
-                    ? ('기록 '+_snsLog.length+'건 · 밀린 것 <b>'+pend+'건</b>')
-                    : '아직 기록이 없습니다. 슬레이트를 저장하면 여기에 쌓입니다.';
+                const q=_snsLogQuery.trim();
+                st.innerHTML=!_snsLog.length
+                    ? '아직 기록이 없습니다. 슬레이트를 저장하면 여기에 쌓입니다.'
+                    : (q ? ('“'+_esc(q)+'” 검색 <b>'+rows.length+'건</b> · 전체 '+_snsLog.length+'건')
+                         : ('기록 '+_snsLog.length+'건 · 밀린 것 <b>'+pend+'건</b>'));
             }
             box.innerHTML='';
             if(!rows.length){
                 const e=document.createElement('div');
                 e.className='empty';
-                e.textContent=_snsLog.length?'이 조건에 해당하는 기록이 없습니다.':'슬레이트를 저장하면 촬영 기록이 자동으로 쌓입니다.';
+                e.textContent=!_snsLog.length ? '슬레이트를 저장하면 촬영 기록이 자동으로 쌓입니다.'
+                    : (_snsLogQuery.trim() ? '검색어에 맞는 기록이 없습니다.' : '이 조건에 해당하는 기록이 없습니다.');
                 box.appendChild(e);
                 return;
             }
