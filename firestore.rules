@@ -184,8 +184,10 @@ service cloud.firestore {
     //    snsSeries/{suffix}  : 시리즈 목록(번호·이름·정렬·활성). 문서ID = 파일명 접미사.
     //    snsSlateLog/{autoId}: 영상 대장. 슬레이트를 저장할 때 촬영 기록이 쌓이고
     //                          편집완료·업로드완료로 상태를 올린다.
+    //    snsMemos/{autoId}   : 영상 대장 옆 "자주 쓰는 문구" 메모장(상용구).
     match /snsSeries/{id}                       { allow read, write: if isSnsAdmin(); }
     match /snsSlateLog/{id}                     { allow read, write: if isSnsAdmin(); }
+    match /snsMemos/{id}                        { allow read, write: if isSnsAdmin(); }
 
     // ── 고객 채팅 (카카오·네이버) ──
     match /chatThreads/{id}                     { allow read, write: if signedIn(); }
