@@ -630,6 +630,40 @@
             border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text);resize:vertical}
         .sns-cap-input:focus{outline:none;border-color:var(--primary)}
         .sns-cap-copy.off{background:var(--bg);color:var(--text-muted);border:1px solid var(--border);cursor:default}
+        /* ✂️ 자주 쓰는 문구 메모장 — 좁은 화면은 대장 위, 넓은 화면은 오른쪽 칸 */
+        .sns-log-wrap{display:block}
+        .sns-memo-side{margin-bottom:.8rem}
+        .sns-memo-head{display:flex;gap:.35rem;align-items:center}
+        .sns-memo-toggle{flex:1;min-width:0;text-align:left;background:var(--bg);border:1px solid var(--border);
+            color:var(--text);border-radius:var(--r-sm);padding:.5rem .7rem;font-size:.82rem;font-weight:600;
+            font-family:inherit;cursor:pointer;min-height:44px}
+        .sns-memo-count{color:var(--text-muted);font-weight:500;font-size:.75rem}
+        .sns-memo-add{flex:0 0 auto;background:var(--text);color:#fff;border:0;border-radius:var(--r-sm);
+            padding:.5rem .7rem;font-size:.78rem;font-family:inherit;cursor:pointer;min-height:44px}
+        .sns-memo-card{border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;
+            padding:.45rem .55rem;margin-top:.4rem}
+        .sns-memo-top{display:flex;align-items:center;gap:.3rem}
+        .sns-memo-title{flex:1;min-width:0;font-family:inherit;font-size:.82rem;font-weight:700;color:var(--text);
+            background:transparent;border:1px solid transparent;border-radius:var(--r-sm);padding:.35rem .4rem;
+            min-height:36px}
+        .sns-memo-title:focus{outline:none;background:#fff;border-color:var(--primary)}
+        .sns-memo-btn{flex:0 0 auto;background:#fff;border:1px solid var(--border);color:var(--text-secondary);
+            border-radius:var(--r-sm);padding:.35rem .5rem;font-size:.72rem;font-family:inherit;cursor:pointer;
+            min-height:36px}
+        .sns-memo-btn.copy{background:var(--text);color:#fff;border-color:var(--text)}
+        .sns-memo-btn.copy.on{background:var(--green);border-color:var(--green)}
+        .sns-memo-btn.copy.off{background:var(--bg);color:var(--text-muted);border-color:var(--border);cursor:default}
+        .sns-memo-btn.del{color:var(--red)}
+        .sns-memo-body{width:100%;margin-top:.35rem;font-family:inherit;font-size:.8rem;line-height:1.5;
+            padding:.5rem;border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text);
+            resize:vertical}
+        .sns-memo-body:focus{outline:none;border-color:var(--primary)}
+        .sns-memo-empty{font-size:.76rem;color:var(--text-muted);padding:.6rem .2rem}
+        @media (min-width:720px){
+            .sns-log-wrap{display:grid;grid-template-columns:1fr 20rem;gap:1rem;align-items:start}
+            .sns-memo-side{order:2;margin-bottom:0;position:sticky;top:.5rem}
+            .sns-log-main{order:1;min-width:0}
+        }
 
         /* ══════ 💵 수가표2 (홈페이지 공개 가격 편집) ══════
            지시서 Section 3: 스프레드시트형 표. 셀 클릭 → 인라인 편집, Tab/Enter 이동.
@@ -1722,10 +1756,26 @@
                          슬레이트를 저장할 때 한 건씩 쌓인다(촬영). 편집·업로드가 끝나면
                          상태를 올리고, 편집 후 확정된 파일명을 적어 둔다.
                          "밀린 것" = 상태가 촬영에서 멈춘 것. -->
+                    <!-- 대장 + 자주 쓰는 문구 메모장.
+                         폰에서는 위아래로 쌓이고(메모가 위, 기본 접힘),
+                         화면이 넓으면 메모가 대장 오른쪽 칸으로 간다. -->
                     <div id="snsViewLog" style="display:none">
-                        <div class="sns-status" id="snsLogStatus">불러오는 중…</div>
-                        <div class="sns-chips" id="snsLogFilters" style="margin-bottom:.7rem"></div>
-                        <div id="snsLogList"></div>
+                        <div class="sns-log-wrap">
+                            <aside class="sns-memo-side">
+                                <div class="sns-memo-head">
+                                    <button type="button" class="sns-memo-toggle" id="snsMemoToggle" onclick="snsToggleMemoPanel()">
+                                        ✂️ 자주 쓰는 문구 <span id="snsMemoCount" class="sns-memo-count"></span>
+                                    </button>
+                                    <button type="button" class="sns-memo-add" onclick="snsAddMemo()">+ 메모</button>
+                                </div>
+                                <div id="snsMemoList" style="display:none"></div>
+                            </aside>
+                            <div class="sns-log-main">
+                                <div class="sns-status" id="snsLogStatus">불러오는 중…</div>
+                                <div class="sns-chips" id="snsLogFilters" style="margin-bottom:.7rem"></div>
+                                <div id="snsLogList"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -5121,6 +5171,9 @@
                 _snsUnsub=null; }
             if(_snsLogUnsub){ try{_snsLogUnsub();}catch(_){}
                 _snsLogUnsub=null; }
+            if(_snsMemoUnsub){ try{_snsMemoUnsub();}catch(_){}
+                _snsMemoUnsub=null; }
+            _snsMemos=[]; _snsMemoOpen.clear(); _snsMemoPanelOpen=false;
             _snsSeries=[]; _snsSel=null; _snsSeeded=false; _snsOffline=false; _snsSynced=false;
             _snsLog=[]; _snsLogLastId=null; _snsLogLastKey=''; _snsLogLastAt=0; _snsView='cal';
             _snsCalSel=null; _snsCalMonth=new Date();
@@ -9750,7 +9803,7 @@
                 const btn=document.getElementById(btnId);
                 if(btn) btn.classList.toggle('on',_snsView===key);
             });
-            if(_snsView==='log'){ _snsLogSubscribe(); _snsLogRender(); }
+            if(_snsView==='log'){ _snsLogSubscribe(); _snsLogRender(); _snsMemoSubscribe(); _snsMemoRender(); }
             if(_snsView==='cal'){ _snsLogSubscribe(); _snsCalRender(); }
         }
 
@@ -9842,6 +9895,152 @@
                 _snsLogLastKey=key; _snsLogLastAt=now;
             }catch(e){ console.warn('영상 대장 기록 실패', e); }
         }
+        // ── ✂️ 자주 쓰는 문구 메모장 (snsMemos) ───────────────────────────
+        //  영상 대장 옆에 두는 상용구 모음. 예약 안내·주의문구처럼 매번 같은 말을
+        //  꺼내 쓰는 자리다. 제목·본문 모두 그 자리에서 고치고(blur 때 저장),
+        //  복사 버튼으로 본문을 클립보드에 넣는다.
+        let _snsMemos=[];
+        let _snsMemoUnsub=null;
+        let _snsMemoPanelOpen=false;      // 패널 자체를 접었다 폈다
+        const _snsMemoOpen=new Set();     // 본문을 펼쳐 둔 메모
+
+        function _snsMemoSubscribe(){
+            if(_snsMemoUnsub || typeof db==='undefined') return;
+            try{
+                _snsMemoUnsub=db.collection('snsMemos').orderBy('createdAt','asc')
+                    .onSnapshot(snap=>{
+                        const out=[];
+                        snap.forEach(doc=>{
+                            const v=doc.data()||{};
+                            out.push({id:doc.id, title:String(v.title||''), body:String(v.body||'')});
+                        });
+                        _snsMemos=out;
+                        _snsMemoRender();
+                    }, err=>{
+                        console.warn('메모장 구독 실패', err);
+                        try{ _snsMemoUnsub&&_snsMemoUnsub(); }catch(_){}
+                        _snsMemoUnsub=null;
+                    });
+            }catch(e){ console.warn('메모장 구독 예외', e); }
+        }
+        function snsToggleMemoPanel(){
+            _snsMemoPanelOpen=!_snsMemoPanelOpen;
+            _snsMemoRender();
+        }
+        async function snsAddMemo(){
+            if(typeof db==='undefined'){ alert('연결 후 다시 시도하세요.'); return; }
+            try{
+                const ref=await db.collection('snsMemos').add({
+                    title:'', body:'',
+                    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+                    byName:(currentUser&&(currentUser.name||currentUser.email))||''
+                });
+                _snsMemoPanelOpen=true;
+                _snsMemoOpen.add(ref.id);      // 새 메모는 펼친 채로 열어 둔다
+                _snsMemoFocusId=ref.id;
+            }catch(e){ alert('메모를 추가하지 못했습니다: '+((e&&e.message)||e)); }
+        }
+        let _snsMemoFocusId=null;   // 방금 만든 메모의 제목에 커서를 둔다
+        async function _snsMemoSave(id, patch){
+            if(typeof db==='undefined') return;
+            try{ await db.collection('snsMemos').doc(id).set(patch,{merge:true}); }
+            catch(e){ alert('저장하지 못했습니다: '+((e&&e.message)||e)); }
+        }
+        async function _snsMemoDelete(id){
+            if(typeof db==='undefined') return;
+            try{ await db.collection('snsMemos').doc(id).delete(); }
+            catch(e){ alert('삭제하지 못했습니다: '+((e&&e.message)||e)); }
+        }
+        function _snsMemoRender(){
+            const box=document.getElementById('snsMemoList');
+            const cnt=document.getElementById('snsMemoCount');
+            const tgl=document.getElementById('snsMemoToggle');
+            if(!box) return;
+            if(cnt) cnt.textContent=_snsMemos.length?('('+_snsMemos.length+')'):'';
+            if(tgl) tgl.firstChild.nodeValue=(_snsMemoPanelOpen?'▾ ':'▸ ')+'✂️ 자주 쓰는 문구 ';
+            box.style.display=_snsMemoPanelOpen?'':'none';
+            if(!_snsMemoPanelOpen) return;
+
+            box.innerHTML='';
+            if(!_snsMemos.length){
+                const e=document.createElement('div');
+                e.className='sns-memo-empty';
+                e.textContent='+ 메모 를 눌러 자주 쓰는 문구를 저장해 두세요.';
+                box.appendChild(e);
+                return;
+            }
+            _snsMemos.forEach(m=>{
+                const card=document.createElement('div');
+                card.className='sns-memo-card';
+
+                const top=document.createElement('div');
+                top.className='sns-memo-top';
+
+                const title=document.createElement('input');
+                title.type='text'; title.className='sns-memo-title';
+                title.value=m.title; title.placeholder='제목 (예: 예약 안내)';
+                title.setAttribute('aria-label','메모 제목');
+                title.addEventListener('change',()=>{
+                    m.title=title.value;
+                    _snsMemoSave(m.id,{title:title.value});
+                });
+                title.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); title.blur(); } });
+
+                const fold=document.createElement('button');
+                fold.type='button'; fold.className='sns-memo-btn';
+                const isOpen=()=>_snsMemoOpen.has(m.id);
+                fold.textContent=isOpen()?'▾':'▸';
+                fold.title=isOpen()?'접기':'펼치기';
+                fold.addEventListener('click',()=>{
+                    if(isOpen()) _snsMemoOpen.delete(m.id); else _snsMemoOpen.add(m.id);
+                    _snsMemoRender();
+                });
+
+                const copy=document.createElement('button');
+                copy.type='button'; copy.className='sns-memo-btn copy'; copy.textContent='복사';
+                const syncCopy=()=>{
+                    const has=!!(body.value||'').trim();
+                    copy.disabled=!has;
+                    copy.classList.toggle('off',!has);
+                };
+                copy.addEventListener('click',()=>{
+                    if(!body.value.trim()) return;
+                    _snsCopy(body.value, copy);
+                });
+
+                const del=document.createElement('button');
+                del.type='button'; del.className='sns-memo-btn del'; del.textContent='삭제';
+                del.addEventListener('click',()=>{
+                    if(!confirm('이 메모를 지울까요?\n\n'+(m.title||'(제목 없음)'))) return;
+                    _snsMemoOpen.delete(m.id);
+                    _snsMemoDelete(m.id);
+                });
+
+                top.appendChild(fold); top.appendChild(title);
+                top.appendChild(copy); top.appendChild(del);
+
+                const body=document.createElement('textarea');
+                body.className='sns-memo-body'; body.rows=4;
+                body.value=m.body; body.placeholder='자주 쓰는 문구를 적어 두세요.';
+                body.setAttribute('aria-label','메모 내용');
+                body.style.display=isOpen()?'':'none';
+                body.addEventListener('input',syncCopy);
+                body.addEventListener('change',()=>{
+                    m.body=body.value;
+                    _snsMemoSave(m.id,{body:body.value});
+                });
+                syncCopy();
+
+                card.appendChild(top); card.appendChild(body);
+                box.appendChild(card);
+
+                if(_snsMemoFocusId===m.id){
+                    _snsMemoFocusId=null;
+                    setTimeout(()=>title.focus(),0);
+                }
+            });
+        }
+
         // ── 📅 업로드 일정 달력 ──────────────────────────────────────────
         //  달력 칸은 공지 달력(.nc-*)과 같은 모양을 쓴다. 표시 규칙:
         //    업로드완료 → 초록·취소선 / 예정일이 지난 미완료 → 빨강 / 그 외 → 노랑
