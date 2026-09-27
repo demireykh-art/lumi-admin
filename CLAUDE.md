@@ -42,7 +42,7 @@
   - `snsSeries/{suffix}` — `{no, name, order, active}`. 문서ID가 **파일명 접미사**다.
     오프라인 대비로 `localStorage(lumi_sns_series_v1)` 에 캐시한다.
   - `snsSlateLog/{autoId}` — 영상 대장. `{ymd, createdAt, seriesSuffix, seriesNo, seriesName,
-    content, uploadDate, status, filename, captions{caption,firstComment,dm}, byName}`. 슬레이트를 저장하면 `촬영` 으로 한 건 쌓이고
+    content, uploadDate, status, filename, captions{caption,firstComment,dm,cta}, byName}`. 슬레이트를 저장하면 `촬영` 으로 한 건 쌓이고
     (같은 시리즈·내용을 10분 안에 다시 저장하면 새 줄 대신 갱신), 편집완료·업로드완료·보류로
     상태를 올린다. "밀린 것" = 상태가 `촬영` 에서 멈춘 것.
 - 📅 일정 달력은 **별도 컬렉션이 아니라** `snsSlateLog.uploadDate` 를 월별로 펼친 뷰다.
@@ -53,9 +53,12 @@
     업로드완료·보류 5단계). 📅 탭 배지 = 밀린 업로드 건수.
   · `+ 업로드 예정 추가` 는 인라인 폼(날짜·시리즈·내용)이다. **날짜를 폼에서 직접 고른다** —
     선택한 날짜로 고정하면 늘 오늘로만 들어간다.
-- 📝 업로드 문구(`captions`): 올릴 때 실제로 쓰는 세 덩어리를 칸으로 나눠 둔다 —
-  `caption`(게시물 본문) · `firstComment`(올린 직후 다는 댓글) · `dm`(문의 오면 보낼 정리 내용).
-  칸마다 복사 버튼이 있어 폰에서 버튼만 누르면 된다. 입력은 blur(`change`) 때 저장한다
+- 📝 업로드 문구(`captions`): 올릴 때 실제로 쓰는 네 덩어리를 칸으로 나눠 둔다 —
+  `caption`(게시물 본문) · `firstComment`(올린 직후 다는 댓글) · `dm`(문의 오면 보낼 정리 내용) ·
+  `cta`(DM 보낸 뒤 이어서 보낼 예약 안내).
+  칸마다 복사 버튼이 있어 폰에서 버튼만 누르면 된다.
+  · 문구는 **기획 세션에서 작성해 이 칸에 직접 넣는다.** 맥 편집 파이프라인은 영상·썸네일·
+    파일명까지만 담당하고 문구를 만들지 않는다. 입력은 blur(`change`) 때 저장한다
   (타이핑 중 실시간 구독이 끼어들면 커서가 튄다). 펼쳐 둔 행은 `_snsCapOpen` 으로 기억해
   저장해도 접히지 않는다.
   · 예전에 맥 문구를 통째로 넣던 `captionsRaw` 는 캡션 칸의 초기값으로만 살려 읽고,

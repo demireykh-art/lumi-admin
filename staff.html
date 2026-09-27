@@ -10049,7 +10049,7 @@
                         uploadDate:when,
                         status:'예정',
                         filename:'',
-                        captions:{caption:'', firstComment:'', dm:''},
+                        captions:{caption:'', firstComment:'', dm:'', cta:''},
                         byName:(currentUser&&(currentUser.name||currentUser.email))||''
                     });
                     _snsAddOpen=false;
@@ -10075,12 +10075,14 @@
         //    캡션      — 게시물 본문
         //    첫 댓글   — 올린 직후 다는 댓글(해시태그·안내)
         //    DM        — 문의가 오면 보낼 정리 내용
+        //    CTA       — DM 보낸 뒤 이어서 보낼 예약 유도
         //  저장은 snsSlateLog.captions 맵. 예전에 통째로 붙여넣던 captionsRaw 는
         //  캡션 칸의 초기값으로 살려 읽는다.
         const SNS_CAP_FIELDS=[
             {key:'caption',      label:'📄 캡션',        ph:'게시물 본문'},
             {key:'firstComment', label:'💬 첫 댓글',     ph:'올린 직후 다는 댓글 (해시태그·예약 안내 등)'},
-            {key:'dm',           label:'✉️ DM 보낼 내용', ph:'문의가 오면 보낼 정리 내용'}
+            {key:'dm',           label:'✉️ DM 보낼 내용', ph:'문의가 오면 보낼 정리 내용'},
+            {key:'cta',          label:'🔗 CTA (DM 후)',  ph:'DM 보낸 뒤 이어서 보낼 예약 안내 (예약 링크·전화·위치 등)'}
         ];
         const _snsCapOpen=new Set();   // 펼쳐 둔 행 (저장해도 접히지 않게)
 
