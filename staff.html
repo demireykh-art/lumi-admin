@@ -765,6 +765,65 @@
         .fee2-resize-handle::after{content:'';position:absolute;right:3px;top:15%;bottom:15%;width:2px;background:rgba(255,255,255,.25);border-radius:1px;transition:background .15s}
         .fee2-resize-handle:hover::after,.fee2-resize-handle.active::after{background:var(--gold,#d4a943)}
         .fee2-toolbar .fee2-tool-sep{width:1px;height:1.4rem;background:var(--border);margin:0 .1rem}
+
+        /* ─── 가격표 미리보기 모드 (price.html 스타일 복제) ─── */
+        .fee2-toolbar .fee2-view-toggle{background:#2c2c2c;color:#fff;border-color:#2c2c2c;font-weight:600}
+        .fee2-toolbar .fee2-view-toggle:hover{background:#000;border-color:#000;filter:none}
+        .fee2-toolbar .fee2-view-toggle.is-preview{background:#C9A962;border-color:#C9A962}
+        #fee2Preview{display:none;background:#FAF8F5;padding:0;margin:0;font-family:'Noto Sans KR',sans-serif;color:#3D3D3D;font-weight:300}
+        #fee2Preview.active{display:block}
+        #fee2Preview .fp-scroll{max-height:calc(100vh - 15rem);overflow:auto}
+        #fee2Preview .fp-hero{padding:60px 24px 30px;text-align:center;background:#FAF8F5;border-bottom:1px solid #E8E0D5}
+        #fee2Preview .fp-label{font-size:12px;letter-spacing:.24em;color:#C4B7A6;margin-bottom:12px;font-weight:400}
+        #fee2Preview .fp-title{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:300;color:#1A1A1A;margin:0}
+        #fee2Preview .fp-title em{font-style:italic;color:#C9A962}
+        #fee2Preview .fp-hint{margin-top:16px;font-size:12.5px;color:#6B6B6B;line-height:1.7;max-width:34em;margin-left:auto;margin-right:auto}
+        #fee2Preview .fp-hint b{color:#C9A962}
+        #fee2Preview .fp-nav{position:sticky;top:0;z-index:5;background:rgba(250,248,245,.96);backdrop-filter:blur(10px);border-bottom:1px solid #E8E0D5;padding:12px 24px}
+        #fee2Preview .fp-nav-inner{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;max-width:960px;margin:0 auto}
+        #fee2Preview .fp-nav-inner::-webkit-scrollbar{display:none}
+        #fee2Preview .fp-nav a{white-space:nowrap;padding:6px 14px;font-size:12.5px;color:#6B6B6B;text-decoration:none;border-bottom:1.5px solid transparent;cursor:pointer;transition:color .2s,border-color .2s}
+        #fee2Preview .fp-nav a:hover{color:#8B7355}
+        #fee2Preview .fp-nav a.is-current{color:#1A1A1A;border-bottom-color:#C9A962;font-weight:500}
+        #fee2Preview .fp-body{max-width:960px;margin:0 auto;padding:0 24px 60px}
+        #fee2Preview .fp-group{padding-top:56px;scroll-margin-top:60px}
+        #fee2Preview .fp-group:first-child{padding-top:36px}
+        #fee2Preview .fp-group h2{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;color:#1A1A1A;margin:0 0 6px}
+        #fee2Preview .fp-group h2 .en{font-style:italic;font-size:14px;color:#C4B7A6;margin-left:10px;letter-spacing:2px}
+        #fee2Preview .fp-group .fp-note{font-size:13px;line-height:1.75;color:#6B6B6B;margin:0 0 18px}
+        #fee2Preview .fp-group-actions{display:flex;gap:8px;margin-bottom:12px}
+        #fee2Preview .fp-group-actions button{font-size:11.5px;padding:5px 12px;border:1px solid #E8E0D5;background:#fff;color:#8B7355;border-radius:20px;cursor:pointer;font-family:inherit}
+        #fee2Preview .fp-group-actions button:hover{background:#C9A962;color:#fff;border-color:#C9A962}
+        #fee2Preview table.fp-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+        #fee2Preview table.fp-table thead th{padding:12px 16px;font-size:11.5px;font-weight:500;letter-spacing:.1em;color:#C4B7A6;text-align:left;background:#F3EDE7;border-bottom:1px solid #E8E0D5}
+        #fee2Preview table.fp-table thead th:last-child{text-align:right}
+        #fee2Preview table.fp-table td{padding:12px 16px;border-bottom:1px solid #E8E0D5;vertical-align:middle;transition:background .15s}
+        #fee2Preview table.fp-table tr:last-child td{border-bottom:0}
+        #fee2Preview table.fp-table tr:hover td{background:rgba(233,224,213,.35)}
+        #fee2Preview table.fp-table tr.fp-off td{color:#C4B7A6;background:rgba(0,0,0,.02)}
+        #fee2Preview table.fp-table tr.fp-off td.fp-name,#fee2Preview table.fp-table tr.fp-off td.fp-price{color:#B0A896}
+        #fee2Preview table.fp-table tr.fp-off .fp-name-text{text-decoration:line-through}
+        #fee2Preview table.fp-table td.fp-check{width:32px;padding-right:0}
+        #fee2Preview table.fp-table td.fp-check input{cursor:pointer;accent-color:#C9A962;width:16px;height:16px}
+        #fee2Preview table.fp-table td.fp-name{font-size:14.5px;color:#1A1A1A;line-height:1.5;cursor:pointer}
+        #fee2Preview table.fp-table td.fp-name .fp-desc{display:block;margin-top:4px;font-size:12px;color:#6B6B6B;line-height:1.6;max-width:36em}
+        #fee2Preview table.fp-table td.fp-spec{width:22%;font-size:12.5px;color:#6B6B6B;cursor:pointer}
+        #fee2Preview table.fp-table td.fp-price{width:22%;text-align:right;font-size:15px;color:#1A1A1A;white-space:nowrap;font-weight:500;cursor:pointer}
+        #fee2Preview .fp-empty{padding:60px 20px;text-align:center;color:#8B7355;font-size:14px}
+        #fee2Preview .fp-foot{margin-top:40px;padding:18px 24px;background:#F3EDE7;border-left:3px solid #C9A962;font-size:12.5px;line-height:1.8;color:#6B6B6B;border-radius:4px;max-width:960px;margin-left:auto;margin-right:auto}
+        @media (max-width:720px){
+            #fee2Preview .fp-hero{padding:36px 16px 20px}
+            #fee2Preview .fp-title{font-size:26px}
+            #fee2Preview .fp-body{padding:0 16px 40px}
+            #fee2Preview .fp-group{padding-top:36px}
+            #fee2Preview table.fp-table thead{display:none}
+            #fee2Preview table.fp-table tr{display:flex;flex-wrap:wrap;padding:12px 12px}
+            #fee2Preview table.fp-table td{display:block;border:0;padding:2px 4px;width:auto}
+            #fee2Preview table.fp-table td.fp-check{flex:0 0 32px}
+            #fee2Preview table.fp-table td.fp-name{flex:1 1 100%}
+            #fee2Preview table.fp-table td.fp-spec{flex:1 1 60%;padding-left:36px!important}
+            #fee2Preview table.fp-table td.fp-price{flex:0 0 auto;text-align:right}
+        }
         /* 컬럼 리사이즈 중일 때 전체 커서 강제 */
         body.fee2-resizing{cursor:col-resize!important;user-select:none!important}
         body.fee2-resizing *{cursor:col-resize!important;user-select:none!important}
@@ -1327,10 +1386,26 @@
                         <span class="fee2-tool-sep"></span>
                         <button onclick="fee2BulkClearReview()" title="현재 필터에 걸린 행의 [확인필요] 텍스트를 일괄로 비웁니다 (일괄 지우기 · 감사 로그 기록)">🧹 확인필요 일괄지우기</button>
                         <button onclick="fee2ResetColWidths()" title="컬럼 폭을 기본값으로 되돌립니다">↔️ 폭 초기화</button>
+                        <span class="fee2-tool-sep"></span>
+                        <button class="fee2-view-toggle" id="fee2ViewToggle" onclick="fee2ToggleView()" title="편집 뷰(스프레드시트) ↔ 가격표 미리보기(홈페이지 스타일)">🌐 가격표 미리보기</button>
                         <button class="fee2-publish" id="fee2PublishBtn" onclick="openFee2PublishDialog()" title="공개 스냅샷 게시 (price.html·event.html 갱신)" style="display:none">🚀 게시</button>
                     </div>
                     <div id="fee2Status" class="fee2-status">로딩 중...</div>
-                    <div class="fee2-scroll">
+
+                    <!-- 가격표 미리보기 뷰 (홈페이지 price.html 스타일 복제) -->
+                    <div id="fee2Preview">
+                        <div class="fp-scroll">
+                            <section class="fp-hero">
+                                <p class="fp-label">PRICE</p>
+                                <h1 class="fp-title">시술 <em>가격</em> 안내</h1>
+                                <p class="fp-hint">각 행 왼쪽 체크박스로 <b>홈페이지 노출 여부</b>를 조절합니다. 시술명/범위/가격 클릭 → 상세 편집. 저장 후 <b>🚀 게시</b> 로 홈페이지 반영.</p>
+                            </section>
+                            <nav class="fp-nav" aria-label="분류"><div class="fp-nav-inner" id="fee2PreviewNav"></div></nav>
+                            <main class="fp-body" id="fee2PreviewBody"></main>
+                        </div>
+                    </div>
+
+                    <div class="fee2-scroll" id="fee2EditScroll">
                         <table class="fee2-table" id="fee2Table">
                             <colgroup id="fee2ColGroup">
                                 <col data-col="id"><col data-col="cat"><col data-col="intcat"><col data-col="name"><col data-col="option">
@@ -22384,6 +22459,8 @@
             try{ _fee2SyncMasterCheckboxes(); }catch(_){}
             // 3줄 초과 셀에 ⋯ 힌트 (레이아웃 확정 후)
             try{ requestAnimationFrame(()=>{ try{ _fee2MarkOverflowCells(); }catch(_){} }); }catch(_){}
+            // 미리보기 모드일 때도 함께 업데이트
+            if(_fee2ViewMode==='preview'){ try{ _fee2RenderPreview(); }catch(_){} }
         }
         window.renderFee2Table=renderFee2Table;
 
@@ -22926,6 +23003,168 @@
             if(status){ status.textContent=msg; status.classList.remove('dirty'); setTimeout(_updateBadges, 2500); }
         }
 
+        // ─── 가격표 미리보기 모드 (holyshit price.html 스타일 복제) ─────────
+        // 편집 뷰 ↔ 미리보기 뷰 토글. localStorage 로 마지막 뷰 저장.
+        const FEE2_VIEW_LS_KEY='lumi.fee2.viewMode.v1';
+        let _fee2ViewMode='edit'; // 'edit' | 'preview'
+        // 홈페이지 price.html 과 동일한 카테고리 매핑 + 라벨/설명
+        const FEE2_PREVIEW_META = {
+            pigment:    { label:'색소',                 en:'PIGMENTATION',     note:'기미, 잡티, 흑자, 검버섯, 오타모반 등 색소 병변을 다룹니다.' },
+            lifting:    { label:'리프팅 · 탄력',        en:'LIFTING',          note:'처진 윤곽과 탄력 저하, 잔주름을 다룹니다.' },
+            acne:       { label:'여드름 · 흉터',        en:'ACNE & SCAR',      note:'활동성 여드름부터 남은 흉터까지 단계별로 접근합니다.' },
+            skinbooster:{ label:'스킨부스터',           en:'SKIN BOOSTER',     note:'피부 속 수분과 탄력 기반을 채우는 주사 시술입니다.' },
+            wrinkle:    { label:'주름 · 볼륨',          en:'WRINKLE & VOLUME', note:'근육주름과 꺼진 부분을 채우는 자연스러운 주사 시술입니다.' },
+            stemcell:   { label:'줄기세포 · 재생',      en:'STEM CELL & REGEN',note:'본인의 혈액과 세포를 활용한 재생 치료입니다.' },
+            wart:       { label:'사마귀 · 비립종 · 제모', en:'WART · MILIA · HAIR', note:'편평사마귀, 비립종, 쥐젖, 피지선증식증, 돌출점, 포다이스반과 레이저 제모를 다룹니다.' },
+            care:       { label:'케어 · 수액',          en:'CARE & IV',        note:'시술 전후 피부 컨디션과 전신 컨디션을 관리합니다.' },
+        };
+        // _fee2Cats 에서 label 못 찾으면 여기 fallback 사용
+        function _fee2CatLabel(catId){
+            const m=FEE2_PREVIEW_META[catId];
+            if(m) return { label:m.label, en:m.en, note:m.note };
+            const c=_fee2Cats.find(c=>c.id===catId);
+            return { label:c?.label||catId, en:c?.labelEn||'', note:c?.note||'' };
+        }
+        // 원 단위 포맷
+        function _fee2Won(v){
+            if(v==null||v==='') return '';
+            const n=Number(v); if(!isFinite(n)) return String(v);
+            return n.toLocaleString()+'원';
+        }
+        window.fee2ToggleView=function(){
+            _fee2ViewMode = (_fee2ViewMode==='preview') ? 'edit' : 'preview';
+            try{ localStorage.setItem(FEE2_VIEW_LS_KEY, _fee2ViewMode); }catch(_){}
+            _fee2ApplyViewMode();
+        };
+        function _fee2LoadViewMode(){
+            try{ const v=localStorage.getItem(FEE2_VIEW_LS_KEY); if(v==='preview'||v==='edit') _fee2ViewMode=v; }catch(_){}
+        }
+        function _fee2ApplyViewMode(){
+            const editEl=document.getElementById('fee2EditScroll');
+            const prevEl=document.getElementById('fee2Preview');
+            const btn=document.getElementById('fee2ViewToggle');
+            const isPreview = _fee2ViewMode==='preview';
+            if(editEl) editEl.style.display=isPreview?'none':'';
+            if(prevEl) prevEl.classList.toggle('active', isPreview);
+            if(btn){
+                btn.textContent = isPreview ? '📊 편집 뷰' : '🌐 가격표 미리보기';
+                btn.classList.toggle('is-preview', isPreview);
+                btn.title = isPreview ? '스프레드시트 편집 뷰로 전환' : '홈페이지에 나올 모습으로 미리보기 + 노출 체크박스';
+            }
+            if(isPreview) _fee2RenderPreview();
+        }
+        function _fee2RenderPreview(){
+            const bodyEl=document.getElementById('fee2PreviewBody');
+            const navEl=document.getElementById('fee2PreviewNav');
+            if(!bodyEl) return;
+            // 아카이브 제외한 전체 (미리보기에서는 아카이브 안 보임)
+            // 검색어와 홈분류 필터만 반영
+            const q=(document.getElementById('fee2Search')?.value||'').trim().toLowerCase();
+            const filterCat=document.getElementById('fee2FilterCat')?.value||'';
+            const rows=_fee2Items.filter(it=>{
+                if(it.archived) return false;
+                if(filterCat && it.homeCategory!==filterCat) return false;
+                if(q){
+                    const hay=[it.name, it.option, it.publicDescription, it.id].join(' ').toLowerCase();
+                    if(!hay.includes(q)) return false;
+                }
+                return true;
+            });
+            // 그룹핑 (홈분류 기준)
+            const byCat=new Map();
+            for(const it of rows){ const k=it.homeCategory||'_'; if(!byCat.has(k)) byCat.set(k,[]); byCat.get(k).push(it); }
+            // 각 그룹 내 sortOrder → priceRegular
+            for(const [,arr] of byCat) arr.sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+            // 카테고리 순서: _fee2Cats 순 + 나머지
+            const catOrder=[..._fee2Cats.map(c=>c.id), ...[...byCat.keys()].filter(k=>!_fee2Cats.some(c=>c.id===k))];
+            // 네비
+            const catsWithItems = catOrder.filter(k=>byCat.get(k)?.length);
+            navEl.innerHTML = catsWithItems.map(k=>{
+                const meta=_fee2CatLabel(k);
+                return `<a href="javascript:void(0)" data-cat="${k}" onclick="_fee2PreviewJump('${k}')">${_esc(meta.label)}</a>`;
+            }).join('');
+            // 본문
+            if(!catsWithItems.length){
+                bodyEl.innerHTML='<div class="fp-empty">일치하는 시술이 없습니다. 상단 검색/필터를 확인해주세요.</div>';
+                return;
+            }
+            let html='';
+            for(const catId of catsWithItems){
+                const arr=byCat.get(catId);
+                const meta=_fee2CatLabel(catId);
+                const totalOn = arr.filter(it=>{ const d=_fee2Dirty.get(it.id); return ('showOnPrice' in (d||{}))?d.showOnPrice:it.showOnPrice; }).length;
+                html+=`<section class="fp-group" id="fee2-fp-${_esc(catId)}">
+                    <h2>${_esc(meta.label)}${meta.en?`<span class="en">${_esc(meta.en)}</span>`:''}</h2>
+                    <p class="fp-note">${_esc(meta.note||'')}</p>
+                    <div class="fp-group-actions">
+                        <button onclick="_fee2PreviewGroupAll('${catId}', true)">이 분류 전체 노출</button>
+                        <button onclick="_fee2PreviewGroupAll('${catId}', false)">이 분류 전체 숨김</button>
+                        <span style="font-size:11.5px;color:#8B7355;align-self:center;margin-left:auto">노출 <b style="color:#C9A962">${totalOn}</b> / ${arr.length}</span>
+                    </div>
+                    <table class="fp-table"><thead><tr><th></th><th>시술</th><th>범위</th><th>가격</th></tr></thead><tbody>
+                    ${arr.map(it=>{
+                        const d=_fee2Dirty.get(it.id)||{};
+                        const cur=f=>(f in d)?d[f]:it[f];
+                        const showOn=!!cur('showOnPrice');
+                        const isDirty=('showOnPrice' in d);
+                        const name=cur('name')||'';
+                        const opt=cur('option')||'';
+                        const desc=cur('publicDescription')||'';
+                        const price=cur('priceRegular');
+                        return `<tr class="${showOn?'':'fp-off'}" data-id="${_esc(it.id)}">
+                            <td class="fp-check"><input type="checkbox" ${showOn?'checked':''} ${isDirty?'style="outline:2px solid #f59e0b;outline-offset:2px"':''} onchange="_fee2PreviewToggleShow('${it.id}', this.checked)" title="${showOn?'홈페이지 노출 ON — 클릭시 OFF':'홈페이지 노출 OFF — 클릭시 ON'}"></td>
+                            <td class="fp-name" onclick="_fee2PreviewEdit('${it.id}','name')"><span class="fp-name-text">${_esc(name)}</span>${desc?`<span class="fp-desc">${_esc(desc)}</span>`:''}</td>
+                            <td class="fp-spec" onclick="_fee2PreviewEdit('${it.id}','option')">${_esc(opt)}</td>
+                            <td class="fp-price" onclick="_fee2PreviewEdit('${it.id}','priceRegular')">${_fee2Won(price)}</td>
+                        </tr>`;
+                    }).join('')}
+                    </tbody></table>
+                </section>`;
+            }
+            html+=`<div class="fp-foot">
+                <p><b>미리보기 모드입니다.</b> 이 화면은 실제 홈페이지 <code>price.html</code> 과 동일한 서식을 보여줍니다.</p>
+                <p>왼쪽 체크박스 = 홈페이지 노출. 노출 OFF 인 행은 회색 처리됩니다. 편집 후 상단 <b>💾 저장</b> → <b>🚀 게시</b> 로 반영.</p>
+            </div>`;
+            bodyEl.innerHTML=html;
+        }
+        window._fee2PreviewJump=function(catId){
+            const el=document.getElementById('fee2-fp-'+catId); if(!el) return;
+            el.scrollIntoView({block:'start', behavior:'smooth'});
+            document.querySelectorAll('#fee2PreviewNav a').forEach(a=>a.classList.remove('is-current'));
+            document.querySelector(`#fee2PreviewNav a[data-cat="${catId}"]`)?.classList.add('is-current');
+        };
+        window._fee2PreviewToggleShow=function(id, checked){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); _fee2RenderPreview(); return; }
+            const it=_fee2Items.find(x=>x.id===id); if(!it) return;
+            const d=_fee2Dirty.get(id)||{};
+            if(!!it.showOnPrice===!!checked){ delete d.showOnPrice; if(!Object.keys(d).length) _fee2Dirty.delete(id); else _fee2Dirty.set(id,d); }
+            else{ d.showOnPrice=!!checked; _fee2Dirty.set(id,d); }
+            _updateBadges();
+            _fee2RenderPreview();
+        };
+        window._fee2PreviewGroupAll=function(catId, next){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            const rows=_fee2Items.filter(it=>!it.archived && it.homeCategory===catId);
+            let changed=0;
+            for(const it of rows){
+                const d=_fee2Dirty.get(it.id)||{};
+                const cur=('showOnPrice' in d)?d.showOnPrice:it.showOnPrice;
+                if(!!cur===!!next) continue;
+                if(!!it.showOnPrice===!!next){ delete d.showOnPrice; if(!Object.keys(d).length) _fee2Dirty.delete(it.id); else _fee2Dirty.set(it.id,d); }
+                else{ d.showOnPrice=!!next; _fee2Dirty.set(it.id,d); }
+                changed++;
+            }
+            _flash((next?'✅ 전체 노출':'⛔ 전체 숨김')+' — '+_fee2CatLabel(catId).label+' · '+changed+'행 (💾 저장 필요)');
+            _fee2RenderPreview();
+        };
+        window._fee2PreviewEdit=function(id, focusField){
+            if(!canFeeEdit){ alert('편집 권한이 없습니다.'); return; }
+            // 가격/이름/옵션 편집은 기존 상세 편집 패널 재사용
+            if(typeof fee2OpenDetail==='function'){
+                fee2OpenDetail(id, focusField==='priceRegular'?'name':focusField);
+            }
+        };
+
         // ─── 상세 편집 패널 (오른쪽 슬라이드) — 긴 텍스트 필드 편집 ─────────
         // 표 셀에서 클릭한 필드에 자동 포커스, 저장은 _fee2Dirty 로 반영 (💾 저장 필요)
         const _FEE2_DETAIL_FIELDS = [
@@ -23219,6 +23458,8 @@
             const s=document.getElementById('fee2Status'); if(s) s.textContent='데이터 로드 중...';
             try{ await _fee2LoadAll(); }catch(e){ if(s) s.textContent='로드 실패: '+(e.message||e); return; }
             renderFee2Table();
+            // 뷰 모드 복원 (localStorage) + 적용
+            try{ _fee2LoadViewMode(); _fee2ApplyViewMode(); }catch(_){}
         };
     })();
     </script>
