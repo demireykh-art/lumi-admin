@@ -505,7 +505,15 @@ exports.parseRevenueFile = onCall(
 
     for (const r of dataRows) {
       const amt = Number(r[COL.amount]) || 0;
-      if (amt <= 0) continue; // admin 과 동일: 0 이하 스킵
+      // 0 이하 스킵 (admin 과 동일). 여기서 걸리는 건 거의 전부 0원 행이다 —
+      // 2026-09 파일 기준 데이터 2,460행 중 금액 0 이 1,278행(0원 투약 항목 등),
+      // 음수는 0행이었다.
+      // ⚠️ 이 엑셀에는 환불이 들어 있지 않다. 음수 행도, 구분 칸의 취소·반품 표시도,
+      //    오더명의 '환불' 문구도 없다(2026-09 전수 확인). 그래서 여기서 나오는
+      //    총매출은 늘 "환불 전 발생매출" 이다. 환불을 반영한 숫자가 필요하면
+      //    💵 매출 결산(dailySales)의 수납 합계를 써야 한다 — 이 파서를 고쳐서
+      //    얻을 수 있는 값이 아니다.
+      if (amt <= 0) continue;
 
       totalRevenue += amt;
       transactions++;
