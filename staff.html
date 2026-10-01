@@ -3557,7 +3557,34 @@
                             <option value="totalAll">총매출 전체 (마케팅)</option>
                         </select>
                     </div>
-                    <div class="form-group"><label class="form-label">인센티브 비율 (%)</label><input type="number" class="form-input" id="seEmpIncPercent" value="0" step="0.1" min="0" max="10" placeholder="예: 0.9"></div>
+                    <div class="form-group"><label class="form-label">계산 방식</label>
+                        <select class="form-select" id="seEmpIncMode" onchange="_seSyncIncMode()">
+                            <option value="flat">단일 비율 — 대상매출 전체에 같은 %</option>
+                            <option value="tiered">구간별 누진 — 구간마다 다른 % (원장)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="seEmpIncFlatBox"><label class="form-label">인센티브 비율 (%)</label><input type="number" class="form-input" id="seEmpIncPercent" value="0" step="0.1" min="0" max="100" placeholder="예: 0.9"></div>
+                    <div class="form-group" id="seEmpIncTierBox" style="display:none">
+                        <label class="form-label">구간별 누진 인센티브</label>
+                        <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.5rem;line-height:1.6">
+                            각 구간에 <b>걸친 금액에만</b> 그 구간의 %를 매깁니다(누진).
+                            마지막 구간은 상한이 없습니다.<br>
+                            예) 8,000만 10% · 9,000만 20% → 월 매출 1억이면
+                            (9,000만−8,000만)×10% + (1억−9,000만)×20% = <b>300만원</b>
+                        </div>
+                        <div id="seEmpTierRows" style="display:flex;flex-direction:column;gap:.35rem"></div>
+                        <button type="button" onclick="_seAddIncTier()" style="margin-top:.4rem;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:var(--r-sm);font-size:.78rem;font-weight:600;padding:.35rem .7rem;cursor:pointer">+ 구간 추가</button>
+                        <div style="margin-top:.6rem;padding:.55rem .7rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:var(--r-sm)">
+                            <label style="display:flex;align-items:center;gap:.35rem;font-size:.75rem;color:#374151;font-weight:600">
+                                <span style="white-space:nowrap">미리보기 · 월 매출</span>
+                                <input type="text" inputmode="numeric" id="seEmpTierTest" value="100,000,000"
+                                    oninput="_onCommaInput(this);_seRenderIncTiers(true)"
+                                    style="width:120px;padding:.25rem .4rem;font-size:.78rem;text-align:right;border:1px solid #d1d5db;border-radius:4px">
+                                <span>원</span>
+                            </label>
+                            <div id="seEmpTierPreview" style="font-size:.74rem;color:#374151;margin-top:.35rem;line-height:1.7"></div>
+                        </div>
+                    </div>
                     <div class="form-group"><label class="form-label">반올림 단위</label>
                         <select class="form-select" id="seEmpIncRounding">
                             <option value="0">1원 올림 (ROUNDUP 0)</option><option value="-1">10원 올림 (ROUNDUP -1)</option><option value="-2">100원 올림</option>
@@ -6338,7 +6365,9 @@
             let salesDetailHTML='';
             const card=document.getElementById('salesIncentiveCard');
             
-            if(incType!=='none'&&incPercent>0){
+            const incMode=currentUser.incMode||'flat';
+            const incTiers=currentUser.incTiers;
+            if(incType!=='none'&&(incMode==='tiered'?true:incPercent>0)){
                 let baseRevenue=0;
                 let typeLabel='';
                 
@@ -6354,14 +6383,27 @@
                     typeLabel='총매출';
                 }
                 
-                const salesInc=Math.round(baseRevenue*incPercent);
+                const tiered=(incMode==='tiered');
+                const rows=tiered?_incTieredBreakdown(baseRevenue,incTiers):[];
+                const salesInc=tiered?rows.reduce((s,r)=>s+r.amount,0)
+                                     :Math.round(baseRevenue*incPercent);
                 const japanInc=incJapan?japanVisitors*10000:0;
                 salesBasedIncentive=salesInc+japanInc;
-                
+
+                // 누진이면 구간별로 얼마가 어떻게 붙었는지 그대로 보여준다 —
+                // 금액만 적으면 본인이 맞는지 확인할 방법이 없다.
+                const tierHTML=rows.filter(r=>r.base>0).map(r=>{
+                    const to=(r.to===Infinity)?'초과분':`~ ${formatCurrency(r.to)}`;
+                    return `<div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-secondary);margin-top:.25rem">`
+                        +`<span>${formatCurrency(r.from)} ${to} · ${formatCurrency(r.base)} × ${r.percent}%</span>`
+                        +`<span>${formatCurrency(r.amount)}</span></div>`;
+                }).join('');
+
                 salesDetailHTML=`
                     <div style="background:var(--bg);padding:.75rem;margin-bottom:.5rem;border:1px solid var(--border)">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>${typeLabel} × ${currentUser.incPercent}%</span><span style="font-weight:700">${formatCurrency(salesInc)}</span></div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:.5rem"><span>${typeLabel} ${tiered?'· 구간별 누진':'× '+currentUser.incPercent+'%'}</span><span style="font-weight:700">${formatCurrency(salesInc)}</span></div>
                         <div style="font-size:.85rem;color:var(--text-secondary)">대상매출: ${formatCurrency(baseRevenue)}</div>
+                        ${tierHTML}
                     </div>`;
                 if(incJapan&&japanVisitors>0){
                     salesDetailHTML+=`
@@ -14830,11 +14872,14 @@
         //  입력칸만 채우고 끝내면 아래 인센티브 미리보기가 0 으로 계산되어 어긋난다.
         const _staffRevSeeded={};
         function _staffSeedTotalRev(ym){
-            const ds=_staffDsRev[ym];
             _staffRevSeeded[ym]=false;
-            if(!ds||!ds.ok||!ds.received) return;
             if(_dsN(_staffMonthIncInput.totalRevenue)>0) return;
-            _staffMonthIncInput={..._staffMonthIncInput, totalRevenue:ds.received};
+            // 인센티브 기준은 오더판매내역 파싱(발생매출)이다.
+            // 파싱이 아직 없는 달에만 매출 결산 수납 합계로 대신 채운다.
+            const ds=_staffDsRev[ym];
+            const seed=_staffParsedTotal(ym) || ((ds&&ds.ok)?ds.received:0);
+            if(!seed) return;
+            _staffMonthIncInput={..._staffMonthIncInput, totalRevenue:seed};
             _staffRevSeeded[ym]=true;
         }
 
@@ -15541,6 +15586,7 @@
             g('seEmpMealMode').value='';
             g('seEmpLocationExempt').checked=false;
             g('seEmpIncType').value='none'; g('seEmpIncPercent').value='0';
+            g('seEmpIncMode').value='flat'; _seIncTiers=[];
             g('seEmpIncRounding').value='0'; g('seEmpIncJapan').checked=false;
             g('seEmpPersonalSalesSource').value='manual';
             g('seEmpAnnualLeave').value=''; g('seEmpUsedLeave').value='0';
@@ -15572,6 +15618,8 @@
                     g('seEmpMealMode').value=(emp.mealMode==='monthly'||emp.mealMode==='daily')?emp.mealMode:'';
                     g('seEmpLocationExempt').checked=!!emp.locationExempt;
                     g('seEmpIncType').value=emp.incType||'none';
+                    g('seEmpIncMode').value=emp.incMode||'flat';
+                    _seIncTiers=_incNormalizeTiers(emp.incTiers);
                     g('seEmpIncPercent').value=emp.incPercent||0;
                     g('seEmpIncRounding').value=emp.incRounding!=null?emp.incRounding:0;
                     g('seEmpIncJapan').checked=!!emp.incJapan;
@@ -15588,6 +15636,7 @@
                 }
             }
             _seRenderMealModeHint();
+            _seSyncIncMode();
             openModal('seEmployeeModal');
         }
         // Firebase Auth 계정 생성 (secondary app — 현재 로그인 세션 유지)
@@ -15692,6 +15741,8 @@
                 mealMode:(g('seEmpMealMode').value==='monthly'||g('seEmpMealMode').value==='daily')?g('seEmpMealMode').value:'',
                 locationExempt:g('seEmpLocationExempt').checked, incType:g('seEmpIncType').value||'none',
                 incPercent:parseFloat(g('seEmpIncPercent').value)||0, incRounding:parseInt(g('seEmpIncRounding').value)||0,
+                incMode:g('seEmpIncMode').value||'flat',
+                incTiers:_incNormalizeTiers((g('seEmpIncMode').value==='tiered')?_seReadIncTiersFromDom():_seIncTiers),
                 incJapan:g('seEmpIncJapan').checked, personalSalesSource:g('seEmpPersonalSalesSource').value||'manual',
                 isIncentiveTarget, visibleTabs:visibleTabsValue, salaryHistory,
                 // 테스트 계정은 다른 직원에게 보이는 공용 목록에서 제외된다
@@ -16518,6 +16569,108 @@
         // ─────────────────────────────
         // 💰 급여·인센티브 (통합앱 이관)
         // ─────────────────────────────
+        // ── 구간별 누진 인센티브 ───────────────────────────────────────
+        //  구간마다 "그 구간에 걸친 금액" 에만 그 구간의 %를 매긴다(누진).
+        //  예) 8,000만 초과분 10% / 9,000만 초과분 20%, 월 매출 1억이면
+        //      (9,000만−8,000만)×10% + (1억−9,000만)×20% = 100만 + 200만 = 300만
+        //  tiers = [{from, percent}] — from 오름차순. 마지막 구간은 상한이 없다.
+        const DEFAULT_INC_TIERS=[{from:80000000,percent:10},{from:90000000,percent:20}];
+        function _incNormalizeTiers(tiers){
+            return (Array.isArray(tiers)?tiers:[])
+                .map(t=>({from:Math.max(0,Math.round(Number(t&&t.from)||0)),
+                          percent:Math.max(0,Number(t&&t.percent)||0)}))
+                .sort((a,b)=>a.from-b.from);
+        }
+        // 금액만 돌려준다. 구간별 내역이 필요하면 _incTieredBreakdown 을 쓴다.
+        function _incTieredAmount(revenue, tiers){
+            return _incTieredBreakdown(revenue,tiers).reduce((s,r)=>s+r.amount,0);
+        }
+        function _incTieredBreakdown(revenue, tiers){
+            const rev=Math.max(0,Math.round(Number(revenue)||0));
+            const ts=_incNormalizeTiers(tiers);
+            const out=[];
+            ts.forEach((t,i)=>{
+                const upper=(i+1<ts.length)?ts[i+1].from:Infinity;
+                const base=Math.max(0, Math.min(rev,upper)-t.from);
+                out.push({from:t.from, to:upper, percent:t.percent,
+                          base, amount:Math.round(base*t.percent/100)});
+            });
+            return out;
+        }
+
+        // ── 직원 설정: 구간 편집기 ─────────────────────────────────────
+        //  입력 중인 구간은 DOM 이 아니라 여기에 들고 있는다. 행을 다시 그릴 때마다
+        //  DOM 에서 읽어오면 타이핑 중 커서가 튄다.
+        let _seIncTiers=[];
+        function _seSyncIncMode(){
+            const mode=(document.getElementById('seEmpIncMode')||{}).value||'flat';
+            const flat=document.getElementById('seEmpIncFlatBox');
+            const tier=document.getElementById('seEmpIncTierBox');
+            if(flat) flat.style.display=(mode==='tiered')?'none':'';
+            if(tier) tier.style.display=(mode==='tiered')?'':'none';
+            if(mode==='tiered'){
+                if(!_seIncTiers.length) _seIncTiers=DEFAULT_INC_TIERS.map(t=>({...t}));
+                _seRenderIncTiers();
+            }
+        }
+        function _seAddIncTier(){
+            const last=_seIncTiers[_seIncTiers.length-1];
+            _seIncTiers.push({from:last?last.from+10000000:80000000, percent:last?last.percent+10:10});
+            _seRenderIncTiers();
+        }
+        function _seRemoveIncTier(i){ _seIncTiers.splice(i,1); _seRenderIncTiers(); }
+        function _seEditIncTier(i,field,el){
+            if(!_seIncTiers[i]) return;
+            _seIncTiers[i][field]= field==='from' ? _numParse(el.value) : (parseFloat(el.value)||0);
+            _seRenderIncTiers(field!=='from');   // 금액 칸은 콤마가 붙어야 하니 다시 그린다
+        }
+        // previewOnly=true 면 입력 행은 그대로 두고 미리보기만 갱신한다(포커스 보존).
+        function _seRenderIncTiers(previewOnly){
+            const box=document.getElementById('seEmpTierRows');
+            if(!box) return;
+            if(!previewOnly){
+                _seIncTiers=_incNormalizeTiers(_seIncTiers);
+                box.innerHTML=_seIncTiers.map((t,i)=>
+                    '<div style="display:flex;align-items:center;gap:.3rem">'
+                    +`<input type="text" inputmode="numeric" value="${_numComma(t.from)}" `
+                    +`oninput="_onCommaInput(this)" onchange="_seEditIncTier(${i},'from',this)" `
+                    +'style="flex:1;min-width:0;padding:.3rem .4rem;font-size:.8rem;text-align:right;border:1px solid #d1d5db;border-radius:4px">'
+                    +'<span style="font-size:.75rem;color:#6b7280;white-space:nowrap">원 초과분</span>'
+                    +`<input type="number" step="0.1" min="0" value="${t.percent}" `
+                    +`onchange="_seEditIncTier(${i},'percent',this)" oninput="_seRenderIncTiers(true)" `
+                    +'style="width:62px;padding:.3rem .4rem;font-size:.8rem;text-align:right;border:1px solid #d1d5db;border-radius:4px">'
+                    +'<span style="font-size:.75rem;color:#6b7280">%</span>'
+                    +`<button type="button" onclick="_seRemoveIncTier(${i})" title="구간 삭제" `
+                    +'style="border:none;background:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:0 .2rem">✕</button>'
+                    +'</div>').join('')
+                    ||'<div style="font-size:.75rem;color:var(--text-muted)">구간이 없습니다. [+ 구간 추가] 를 누르세요.</div>';
+            }
+            // 미리보기 — 설정한 규칙이 실제로 얼마를 내는지 그 자리에서 보여준다
+            const pv=document.getElementById('seEmpTierPreview');
+            if(!pv) return;
+            const live=previewOnly?_seReadIncTiersFromDom():_seIncTiers;
+            const test=_numParse((document.getElementById('seEmpTierTest')||{}).value);
+            const rows=_incTieredBreakdown(test,live);
+            const sum=rows.reduce((s,r)=>s+r.amount,0);
+            const lines=rows.filter(r=>r.base>0).map(r=>{
+                const to=(r.to===Infinity)?'초과분':`~ ${_numComma(r.to)}원`;
+                return `<div>${_numComma(r.from)}원 ${to} · ${_numComma(r.base)}원 × ${r.percent}% = <b>${_numComma(r.amount)}원</b></div>`;
+            }).join('');
+            pv.innerHTML=(lines||'<div style="color:#6b7280">이 매출에서는 인센티브가 없습니다.</div>')
+                +`<div style="margin-top:.25rem;padding-top:.25rem;border-top:1px solid #e5e7eb;font-weight:700">합계 ${_numComma(sum)}원 (세전)</div>`;
+        }
+        // % 칸은 입력 중에도 미리보기가 따라와야 해서 DOM 에서 바로 읽는다
+        function _seReadIncTiersFromDom(){
+            const box=document.getElementById('seEmpTierRows');
+            if(!box) return _seIncTiers;
+            return [...box.children].map(row=>{
+                const ins=row.querySelectorAll('input');
+                return ins.length>=2
+                    ? {from:_numParse(ins[0].value), percent:parseFloat(ins[1].value)||0}
+                    : null;
+            }).filter(Boolean);
+        }
+
         function _staffRoundUp(v, digits){
             if(digits>=0) return Math.ceil(v);
             const f=Math.pow(10, Math.abs(digits));
@@ -16537,56 +16690,60 @@
         }
         // 총매출 칸 아래 한 줄 — 어디서 온 숫자인지, 며칠분인지, 저장값과 다른지.
         function _staffDsRevNote(ds,cur,ym){
-            const days=new Date(Number(ym.slice(0,4)),Number(ym.slice(5,7)),0).getDate();
-            if(!ds.ok){
-                return '<div style="font-size:.68rem;color:#b45309;margin-top:.2rem">'
-                    +'매출 결산을 불러오지 못했습니다 — 총매출을 직접 넣어주세요.</div>';
+            const parsed=_staffParsedTotal(ym);
+            let h='';
+            // ① 인센티브 기준 — 오더판매내역 파싱(발생매출)
+            if(parsed){
+                h+='<div style="font-size:.68rem;color:#6b7280;margin-top:.2rem;line-height:1.6">'
+                  +`📊 오더판매내역 파싱(발생매출) <b>${_numComma(parsed)}원</b>`
+                  +(cur!==parsed
+                    ? ` <button onclick="_staffPullParsed()" style="margin-left:.2rem;background:#eef2ff;color:#4338ca;`
+                      +`border:1px solid #c7d2fe;border-radius:var(--r-sm);font-size:.68rem;font-weight:600;`
+                      +`padding:.12rem .45rem;cursor:pointer">총매출·개인매출 불러오기</button>`
+                    : (_staffRevSeeded[ym]?' · <b>자동으로 채웠습니다</b> (고쳐도 됩니다)':' · 저장값과 같음'))
+                  +'</div>';
+            }else{
+                h+='<div style="font-size:.68rem;color:#b45309;margin-top:.2rem;line-height:1.6">'
+                  +`${ym} 오더판매내역 파싱이 아직 없습니다 — 📊 매출 탭에서 먼저 파싱하세요.</div>`;
+            }
+            // ② 참고 — 💵 매출 결산 수납 합계
+            h+=_staffDsRefNote(ds,parsed,ym);
+            return h;
+        }
+
+        // 수납 합계는 참고값으로 아래에 적는다. 재는 것이 달라 원래 다르다.
+        function _staffDsRefNote(ds,parsed,ym){
+            if(!ds||!ds.ok){
+                return '<div style="font-size:.66rem;color:#9ca3af;margin-top:.15rem">'
+                    +'💵 매출 결산을 불러오지 못했습니다.</div>';
             }
             if(!ds.days){
-                return '<div style="font-size:.68rem;color:#6b7280;margin-top:.2rem">'
-                    +`${ym} 매출 결산이 아직 없습니다 — 총매출을 직접 넣어주세요.</div>`;
+                return '<div style="font-size:.66rem;color:#9ca3af;margin-top:.15rem">'
+                    +`💵 ${ym} 매출 결산이 아직 없습니다.</div>`;
             }
+            const days=new Date(Number(ym.slice(0,4)),Number(ym.slice(5,7)),0).getDate();
             const miss=days-ds.days;
-            const sum=`수납 합계 <b>${_numComma(ds.received)}원</b> · ${ds.days}일 입력`
-                + (miss>0?` <span style="color:#b45309">(${miss}일 미입력 — 그만큼 빠져 있습니다)</span>`:'');
-            let tail;
-            if(cur!==ds.received){
-                tail=` <button onclick="_staffPullDsRev()" style="margin-left:.2rem;background:#eef2ff;color:#4338ca;`
-                    +`border:1px solid #c7d2fe;border-radius:var(--r-sm);font-size:.68rem;font-weight:600;`
-                    +`padding:.12rem .45rem;cursor:pointer">이 값으로 불러오기</button>`;
-            }else{
-                tail=_staffRevSeeded[ym] ? ' · <b>자동으로 채웠습니다</b> (고쳐도 됩니다)' : ' · 저장값과 같음';
-            }
-            return `<div style="font-size:.68rem;color:#6b7280;margin-top:.2rem;line-height:1.6">${sum}${tail}</div>`
-                + _staffParsedRevNote(ds,ym);
+            const diff=parsed?parsed-ds.received:0;
+            return '<div style="font-size:.66rem;color:#9ca3af;margin-top:.15rem;line-height:1.6">'
+                +`💵 매출 결산 수납 합계 ${_numComma(ds.received)}원 · ${ds.days}일 입력`
+                +(miss>0?` <span style="color:#b45309">(${miss}일 미입력)</span>`:'')
+                +(parsed?` · 파싱과 ${diff>0?'+':'−'}${_numComma(Math.abs(diff))}원 차이`:'')
+                +'<br><span style="opacity:.85">참고값입니다 — 수납은 <b>실제로 들어온 돈</b>'
+                +'(환불·미수납 본부금 차감), 파싱은 <b>오더가 생긴 금액</b>. 인센티브는 파싱 기준입니다.</span></div>';
         }
 
-        // 📊 매출(오더판매내역 엑셀 파싱) 숫자도 같이 적는다.
-        //  두 숫자는 재는 것이 달라 원래 다르다. 한쪽만 보이면 "왜 다르지" 가 되고,
-        //  둘 다 보이면 차이가 얼마인지 바로 읽힌다.
-        //   · 파싱 = 발생매출. 오더가 생긴 금액. 엑셀에 환불 행이 없어 환불 전 총액이다.
-        //   · 수납 = 그 달 실제로 들어온 돈. 환불·미수납 본부금이 이미 빠져 있다.
-        //  선수납을 쓰거나 미수가 생기면 잡히는 날짜도 달라진다.
-        function _staffParsedRevNote(ds,ym){
-            const r=_staffRevenueMap[ym]||{};
-            const parsed=_dsN(r.totalRevenue||r.total);
-            if(!parsed) return '';
-            const diff=parsed-_dsN(ds.received);
-            const sign=diff>0?'+':'';
-            return '<div style="font-size:.66rem;color:#6b7280;margin-top:.15rem;line-height:1.6">'
-                + `📊 오더판매내역 파싱(발생매출) <b>${_numComma(parsed)}원</b>`
-                + (ds.ok&&ds.days?` · 수납과 ${sign}${_numComma(Math.abs(diff))}원 차이`:'')
-                + '<br><span style="opacity:.8">재는 것이 달라 원래 다릅니다 — 파싱은 <b>오더가 생긴 금액</b>(엑셀에 '
-                + '환불 행이 없어 환불 전), 수납은 <b>실제로 들어온 돈</b>(환불·미수납 본부금 차감). '
-                + '선수납·미수는 잡히는 날짜도 다릅니다.</span></div>';
-        }
-
-        function _staffPullDsRev(){
-            const ds=_staffDsRev[_staffPayrollYm];
-            if(!ds||!ds.ok) return;
+        // 파싱값으로 총매출과 개인매출 칸을 한 번에 채운다. 채운 뒤에도 전부 고칠 수 있다.
+        function _staffPullParsed(){
+            const ym=_staffPayrollYm;
+            const total=_staffParsedTotal(ym);
             const el=document.getElementById('staffIncTotalRev');
-            if(!el) return;
-            el.value=_numComma(ds.received);
+            if(el&&total) el.value=_numComma(total);
+            _staffAdminEmployees
+                .filter(e=>(!e.status||e.status==='active')&&e.incType==='personal')
+                .forEach(emp=>{
+                    const inp=document.getElementById('staffIncEmp_'+emp.id);
+                    if(inp) inp.value=_numComma(_staffParsedEmpRevenue(emp,ym));
+                });
             _staffPreviewInc();
         }
 
@@ -16594,30 +16751,50 @@
             const r=_staffRevenueMap[_staffPayrollYm];
             return (r&&r.japanVisitors)||_staffMonthIncInput.japanVisitors||0;
         }
-        function _staffGetEmpPersonalRevenue(emp){
-            const src=emp.personalSalesSource||'manual';
-            if(src==='manual') return (_staffMonthIncInput.staffRevenue||{})[emp.id]||0;
-            const r=_staffRevenueMap[_staffPayrollYm]||{};
+        // 📊 오더판매내역 파싱값 — 총매출(발생매출)과 직원별 매출.
+        //  인센티브의 기준은 이쪽이다. 수납(💵 매출 결산)은 참고로만 같이 적는다.
+        function _staffParsedTotal(ym){
+            const r=_staffRevenueMap[ym||_staffPayrollYm]||{};
+            return _dsN(r.totalRevenue||r.total);
+        }
+        function _staffParsedEmpRevenue(emp,ym){
+            const r=_staffRevenueMap[ym||_staffPayrollYm]||{};
             const detail=r.salesDetail||{};
             const key=emp.matchName||emp.name;
-            if(src==='japan') return detail.japanStaffSales?.[key]?.amount||0;
-            if(src==='total') return detail.staffSales?.[key]?.amount||0;
-            return 0;
+            const src=emp.personalSalesSource||'manual';
+            // 소스 설정은 "어느 파싱값을 가져올까" 만 고른다. 넣고 나면 어느 쪽이든 고칠 수 있다.
+            const pick=(src==='japan')?detail.japanStaffSales:detail.staffSales;
+            return _dsN(pick&&pick[key]&&pick[key].amount);
         }
-        function _staffCalcIncentive(emp){
-            const totalRev=_staffMonthIncInput.totalRevenue||0;
-            const japanVis=_staffGetJapanVisitors();
-            const percent=(emp.incPercent||0)/100;
-            const rounding=emp.incRounding||0;
-            let sales=0, japan=0;
+
+        //  손으로 넣은 값이 있으면 그걸 쓰고, 없으면 파싱값을 쓴다.
+        //  (예전에는 소스가 manual 이 아니면 손으로 못 고쳤다 — 이제 전부 고칠 수 있다)
+        function _staffGetEmpPersonalRevenue(emp){
+            const saved=(_staffMonthIncInput.staffRevenue||{})[emp.id];
+            if(_dsN(saved)>0) return _dsN(saved);
+            return _staffParsedEmpRevenue(emp);
+        }
+        // 인센티브의 대상 매출 — 유형이 고르고, 계산 방식(단일/누진)은 따로 고른다.
+        function _staffIncBaseRevenue(emp){
+            const totalRev=_dsN(_staffMonthIncInput.totalRevenue);
             if(emp.incType==='totalMinusPersonal'){
                 const perEmps=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&e.incType==='personal');
                 const perTotal=perEmps.reduce((s,e)=>s+_staffGetEmpPersonalRevenue(e),0);
-                sales=_staffRoundUp((totalRev-perTotal)*percent, rounding);
-            }else if(emp.incType==='personal'){
-                sales=_staffRoundUp(_staffGetEmpPersonalRevenue(emp)*percent, rounding);
-            }else if(emp.incType==='totalAll'){
-                sales=_staffRoundUp(totalRev*percent, rounding);
+                return Math.max(0,totalRev-perTotal);
+            }
+            if(emp.incType==='personal') return _dsN(_staffGetEmpPersonalRevenue(emp));
+            if(emp.incType==='totalAll') return totalRev;
+            return 0;
+        }
+        function _staffCalcIncentive(emp){
+            const japanVis=_staffGetJapanVisitors();
+            const rounding=emp.incRounding||0;
+            let sales=0, japan=0;
+            if(emp.incType&&emp.incType!=='none'){
+                const base=_staffIncBaseRevenue(emp);
+                sales=(emp.incMode==='tiered')
+                    ? _staffRoundUp(_incTieredAmount(base, emp.incTiers), rounding)
+                    : _staffRoundUp(base*((emp.incPercent||0)/100), rounding);
             }
             if(emp.incJapan) japan=japanVis*10000;
             return {sales, japan};
@@ -16688,21 +16865,21 @@
             if(personalEmps.length){
                 html+='<div style="font-size:.72rem;color:#6b7280;font-weight:600;margin:.35rem 0 .2rem">개인매출 (수동 입력 직원)</div>';
                 html+='<div style="display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.4rem">';
+                // 전부 입력칸이다 — 파싱값으로 채워 두되 언제든 고칠 수 있어야 한다.
                 personalEmps.forEach(emp=>{
+                    const saved=_dsN((_staffMonthIncInput.staffRevenue||{})[emp.id]);
+                    const parsed=_staffParsedEmpRevenue(emp);
+                    const v=saved||parsed;
                     const src=emp.personalSalesSource||'manual';
-                    if(src!=='manual'){
-                        const auto=_staffGetEmpPersonalRevenue(emp);
-                        html+=`<div style="flex:1 1 200px;padding:.35rem .5rem;background:#f9fafb;border-radius:var(--r-sm);font-size:.78rem;color:#6b7280">
-                            <strong style="color:#374151">${_esc(emp.name)}</strong>: ${_staffFormatMoney(auto)} <span style="font-size:.7rem">(자동·${src==='japan'?'일본':'전체'})</span>
-                        </div>`;
-                    }else{
-                        const v=(_staffMonthIncInput.staffRevenue||{})[emp.id]||'';
-                        html+=`<div style="flex:1 1 200px;display:flex;align-items:center;gap:.35rem">
-                            <span style="font-size:.78rem;font-weight:600;color:#374151;min-width:65px">${_esc(emp.name)}</span>
-                            <input type="text" inputmode="numeric" id="staffIncEmp_${_esc(emp.id)}" value="${v?_numComma(v):''}" placeholder="개인매출" oninput="_onCommaInput(this)" onchange="_staffPreviewInc()"
-                                style="flex:1;padding:.35rem .45rem;font-size:.8rem;border:1px solid #d1d5db;border-radius:var(--r-sm)">
-                        </div>`;
-                    }
+                    const tag=parsed
+                        ? `<span style="font-size:.66rem;color:#9ca3af;white-space:nowrap">파싱 ${_numComma(parsed)}${src==='japan'?'·일본':''}</span>`
+                        : '';
+                    html+=`<div style="flex:1 1 230px;display:flex;align-items:center;gap:.35rem">
+                        <span style="font-size:.78rem;font-weight:600;color:#374151;min-width:65px">${_esc(emp.name)}</span>
+                        <input type="text" inputmode="numeric" id="staffIncEmp_${_esc(emp.id)}" value="${v?_numComma(v):''}" placeholder="개인매출" oninput="_onCommaInput(this)" onchange="_staffPreviewInc()"
+                            style="flex:1;min-width:0;padding:.35rem .45rem;font-size:.8rem;text-align:right;border:1px solid #d1d5db;border-radius:var(--r-sm)">
+                        ${tag}
+                    </div>`;
                 });
                 html+='</div>';
             }
@@ -17080,7 +17257,7 @@
         function _staffPreviewInc(){
             const total=_numParse(document.getElementById('staffIncTotalRev')?.value);
             const staffRev={};
-            const active=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&e.incType==='personal'&&(e.personalSalesSource||'manual')==='manual');
+            const active=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&e.incType==='personal');
             active.forEach(emp=>{
                 const el=document.getElementById('staffIncEmp_'+emp.id);
                 if(el){ const v=_numParse(el.value); if(v>0) staffRev[emp.id]=v; }
