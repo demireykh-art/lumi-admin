@@ -16859,6 +16859,7 @@
             m+=delta;
             if(m<1){m=12;y--;} else if(m>12){m=1;y++;}
             _staffPayrollYm=y+'-'+String(m).padStart(2,'0');
+            _staffPayrollSel=null;   // 달이 바뀌면 전체 선택으로 되돌린다
             await _staffLoadMonthIncInput(_staffPayrollYm);
             await _staffLoadDailySalesRev(_staffPayrollYm);
             _staffSeedTotalRev(_staffPayrollYm);
@@ -16990,14 +16991,24 @@
             html+='</div>';
 
             // 3) 사전 급여 대장 — OT 분해 (저녁·점심·조퇴·총)
+            const _allN=_staffPayrollActive().length;
+            const _selN=_staffPayrollSelected().length;
             html+=`<div style="border:1px solid #e5e7eb;border-radius:var(--r-sm);padding:.75rem;background:#fff">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem">
                     <div style="font-weight:700;font-size:.9rem;color:#111827">📊 사전 급여 대장 <span style="font-size:.72rem;color:#9ca3af;font-weight:400">(노무사 전달용)</span></div>
-                    <button onclick="_staffExportPrePayroll()" style="background:#059669;color:#fff;border:none;padding:.4rem .8rem;border-radius:var(--r-sm);font-size:.8rem;font-weight:600;cursor:pointer">⬇ 엑셀 다운로드</button>
+                    <div style="display:flex;align-items:center;gap:.5rem">
+                        <span style="font-size:.75rem;color:${_selN===_allN?'#6b7280':'#b45309'};font-weight:600">
+                            선택 ${_selN} / ${_allN}명${_selN===_allN?'':' <button onclick="_staffPayrollSelectAllOn()" style="background:none;border:none;color:#4338ca;font-size:.72rem;font-weight:600;text-decoration:underline;cursor:pointer;padding:0">전체선택</button>'}
+                        </span>
+                        <button onclick="_staffExportPrePayroll()" ${_selN?'':'disabled'} style="background:${_selN?'#059669':'#d1d5db'};color:#fff;border:none;padding:.4rem .8rem;border-radius:var(--r-sm);font-size:.8rem;font-weight:600;cursor:${_selN?'pointer':'default'}">⬇ 엑셀 다운로드${_selN&&_selN!==_allN?' ('+_selN+'명)':''}</button>
+                    </div>
                 </div>
                 <div style="overflow-x:auto">
-                <table style="width:100%;border-collapse:collapse;font-size:.78rem;min-width:660px">
+                <table style="width:100%;border-collapse:collapse;font-size:.78rem;min-width:700px">
                     <thead><tr style="background:#f9fafb">
+                        <th style="padding:.35rem .3rem;text-align:center;border-bottom:1px solid #e5e7eb;width:30px">
+                            <input type="checkbox" id="staffPayrollSelAll" onclick="_staffPayrollToggleAll()" ${_selN===_allN?'checked':''}
+                                title="전체 선택 / 해제" style="width:15px;height:15px;cursor:pointer;accent-color:#059669;vertical-align:middle"></th>
                         <th style="padding:.35rem .4rem;text-align:left;border-bottom:1px solid #e5e7eb">직원</th>
                         <th style="padding:.35rem .4rem;text-align:left;border-bottom:1px solid #e5e7eb">직급</th>
                         <th style="padding:.35rem .4rem;text-align:left;border-bottom:1px solid #e5e7eb">연봉</th>
@@ -17037,7 +17048,11 @@
                 let salaryTxt=emp.salary?emp.salary+'만원':'-';
                 if(emp.role==='doctor'&&emp.salaryType==='afterTax') salaryTxt+='(세후)';
                 const totalStyle=totalOt<0?'color:#dc2626;font-weight:700':(totalOt>0?'font-weight:700':'color:#9ca3af');
-                html+=`<tr>
+                const _on=_staffPayrollIsSel(emp.id);
+                html+=`<tr style="${_on?'':'opacity:.45'}">
+                    <td style="padding:.3rem .3rem;border-bottom:1px solid #f3f4f6;text-align:center">
+                        <input type="checkbox" onclick="_staffPayrollToggle('${_esc(emp.id).replace(/'/g,"\\'")}')" ${_on?'checked':''}
+                            style="width:15px;height:15px;cursor:pointer;accent-color:#059669;vertical-align:middle"></td>
                     <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;font-weight:600">${_esc(emp.name)}</td>
                     <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6;color:#6b7280">${_staffRoleLabel(emp.role)}</td>
                     <td style="padding:.3rem .4rem;border-bottom:1px solid #f3f4f6">${salaryTxt}</td>
@@ -17052,6 +17067,9 @@
             html+='</div>';
             html+=_staffPayslipSectionHtml();
             el.innerHTML=html;
+            // 일부만 선택된 상태는 HTML 속성으로 표현할 수 없다 — 그려진 뒤에 지정한다
+            const _selAllBox=document.getElementById('staffPayrollSelAll');
+            if(_selAllBox) _selAllBox.indeterminate=(_selN>0&&_selN<_allN);
             _staffRenderPayslipList();
         }
 
@@ -17271,9 +17289,30 @@
             catch(e){ alert('삭제 실패: '+(e.message||e)); }
         }
 
-        // 사전 급여 대장 → 엑셀 aoa 생성 (다운로드/이메일 공용)
+        // 사전 급여 대장 선택 — null 이면 "전체". 표가 다시 그려져도 유지되도록
+        //  DOM 이 아니라 여기에 들고 있는다(미리보기·월 이동 때마다 다시 그려진다).
+        let _staffPayrollSel=null;
+        function _staffPayrollActive(){
+            return _staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&!String(e.id||'').startsWith('lumi'));
+        }
+        function _staffPayrollIsSel(id){ return !_staffPayrollSel || _staffPayrollSel.has(id); }
+        function _staffPayrollSelected(){ return _staffPayrollActive().filter(e=>_staffPayrollIsSel(e.id)); }
+        function _staffPayrollToggle(id){
+            if(!_staffPayrollSel) _staffPayrollSel=new Set(_staffPayrollActive().map(e=>e.id));
+            if(_staffPayrollSel.has(id)) _staffPayrollSel.delete(id); else _staffPayrollSel.add(id);
+            _renderStaffAdminBody();
+        }
+        function _staffPayrollSelectAllOn(){ _staffPayrollSel=null; _renderStaffAdminBody(); }
+        function _staffPayrollToggleAll(){
+            const all=_staffPayrollActive();
+            // 하나라도 빠져 있으면 전체 선택으로, 전부 선택돼 있으면 전부 해제로
+            _staffPayrollSel=(_staffPayrollSelected().length===all.length) ? new Set() : null;
+            _renderStaffAdminBody();
+        }
+
+        // 사전 급여 대장 → 엑셀 aoa 생성. 체크한 직원만 담는다.
         function _staffBuildPrePayrollAoa(ym){
-            const active=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&!String(e.id||'').startsWith('lumi'));
+            const active=_staffPayrollSelected();
             const rows=[['직원','직급','연봉(만원) 세전','저녁OT(분)','점심OT(분)','조퇴(분)','총OT(분)','인센티브(원) 세전']];
             active.forEach(emp=>{
                 const empAtt=_staffAdminAttendance.filter(a=>(a.employeeId===emp.id||a.empId===emp.id)&&String(a.date||'').startsWith(ym));
@@ -17308,8 +17347,13 @@
         }
         function _staffExportPrePayroll(){
             if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리(XLSX)를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.'); return; }
+            const picked=_staffPayrollSelected();
+            if(!picked.length){ alert('내보낼 직원을 한 명 이상 선택해주세요.'); return; }
             const ym=_staffPayrollYm||_staffDefaultPayslipYM();
-            XLSX.writeFile(_staffPrePayrollWorkbook(ym), '사전급여대장_'+ym+'_노무사전달용.xlsx');
+            const all=_staffPayrollActive().length;
+            // 일부만 골랐으면 파일명에 남긴다 — 나중에 열었을 때 전체인 줄 알면 안 된다
+            const tag=(picked.length===all)?'':'_선택'+picked.length+'명';
+            XLSX.writeFile(_staffPrePayrollWorkbook(ym), '사전급여대장_'+ym+tag+'_노무사전달용.xlsx');
         }
 
         // 미리보기(입력값만 임시 반영)
