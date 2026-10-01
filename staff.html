@@ -3549,15 +3549,19 @@
                 <!-- 인센티브 설정 -->
                 <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem">
                     <label class="form-label" style="font-weight:600;margin-bottom:.5rem">💰 매출 인센티브 설정</label>
-                    <div class="form-group"><label class="form-label">인센티브 유형</label>
-                        <select class="form-select" id="seEmpIncType">
+                    <div class="form-group"><label class="form-label">인센티브 유형 <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">— 어떤 매출에 매길지</span></label>
+                        <select class="form-select" id="seEmpIncType" onchange="_seSyncIncMode()">
                             <option value="none">없음</option>
                             <option value="totalMinusPersonal">총매출 - 개인매출직원 합계 (실장)</option>
                             <option value="personal">본인 매출 기반 (코디네이터)</option>
                             <option value="totalAll">총매출 전체 (마케팅)</option>
                         </select>
                     </div>
-                    <div class="form-group"><label class="form-label">계산 방식</label>
+                    <div id="seEmpIncTypeWarn" style="display:none;margin:-.4rem 0 .75rem;padding:.5rem .65rem;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r-sm);font-size:.75rem;color:#92400e;line-height:1.6">
+                        ⚠ <b>인센티브 유형이 '없음'</b> 이라 계산되지 않고 인센티브 요약에도 나오지 않습니다.
+                        위에서 유형을 골라주세요 (원장은 보통 <b>총매출 전체</b>).
+                    </div>
+                    <div class="form-group"><label class="form-label">계산 방식 <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">— 그 매출에 어떻게 매길지</span></label>
                         <select class="form-select" id="seEmpIncMode" onchange="_seSyncIncMode()">
                             <option value="flat">단일 비율 — 대상매출 전체에 같은 %</option>
                             <option value="tiered">구간별 누진 — 구간마다 다른 % (원장)</option>
@@ -3596,9 +3600,11 @@
                             🗾 일본인 건별 (1명당 ₩10,000)
                         </label>
                     </div>
-                    <div class="form-group"><label class="form-label">본인매출 산출 소스 <span style="font-size:.75rem;color:var(--text-muted)">("본인 매출 기반"일 때)</span></label>
+                    <div class="form-group"><label class="form-label">본인매출 산출 소스 <span style="font-size:.75rem;color:var(--text-muted)">("본인 매출 기반"일 때 · 어느 파싱값을 가져올지. 넣은 뒤 손으로 고칠 수 있습니다)</span></label>
                         <select class="form-select" id="seEmpPersonalSalesSource">
-                            <option value="manual">수동 입력</option><option value="total">자동 — 본인 전체매출</option><option value="japan">자동 — 본인 일본인매출</option>
+                            <option value="manual">담당직원 매출 (파싱 staffSales)</option>
+                            <option value="doctor">진료의 매출 (파싱 doctorSales · 원장)</option>
+                            <option value="japan">본인 일본인매출 (파싱 japanStaffSales)</option>
                         </select>
                     </div>
                 </div>
@@ -16604,8 +16610,12 @@
         let _seIncTiers=[];
         function _seSyncIncMode(){
             const mode=(document.getElementById('seEmpIncMode')||{}).value||'flat';
+            const type=(document.getElementById('seEmpIncType')||{}).value||'none';
             const flat=document.getElementById('seEmpIncFlatBox');
             const tier=document.getElementById('seEmpIncTierBox');
+            // 유형과 방식은 짝이다. 방식만 바꾸고 유형을 '없음' 으로 두면 조용히 0원이 된다.
+            const warn=document.getElementById('seEmpIncTypeWarn');
+            if(warn) warn.style.display=(type==='none'&&mode==='tiered')?'':'none';
             if(flat) flat.style.display=(mode==='tiered')?'none':'';
             if(tier) tier.style.display=(mode==='tiered')?'':'none';
             if(mode==='tiered'){
@@ -16763,7 +16773,12 @@
             const key=emp.matchName||emp.name;
             const src=emp.personalSalesSource||'manual';
             // 소스 설정은 "어느 파싱값을 가져올까" 만 고른다. 넣고 나면 어느 쪽이든 고칠 수 있다.
-            const pick=(src==='japan')?detail.japanStaffSales:detail.staffSales;
+            //  · doctor  = 진료의 매출(원장). 담당직원(staffSales)과 다른 축이다.
+            //  · japan   = 본인 일본인매출
+            //  · 그 밖에 = 담당직원 매출
+            const pick=(src==='doctor')?detail.doctorSales
+                      :(src==='japan')?detail.japanStaffSales
+                      :detail.staffSales;
             return _dsN(pick&&pick[key]&&pick[key].amount);
         }
 
@@ -16905,6 +16920,7 @@
                         <th style="padding:.35rem .5rem;text-align:right;border-bottom:1px solid #e5e7eb">합계</th>
                     </tr></thead><tbody>`;
             let anyInc=false;
+            const _noInc=[];   // 인센티브 설정이 없는 활성 직원 — 아래에 이름을 적는다
             active.forEach(emp=>{
                 const {sales, japan}=_staffCalcIncentive(emp);
                 const recs=_staffIncRecords.filter(r=>r.employeeId===emp.id && r.yearMonth===ym);
@@ -16914,10 +16930,14 @@
                     if(it && it.type==='perCase') perCase+=(it.price||0);
                 });
                 const total=sales+japan+perCase;
-                if(!(emp.incType&&emp.incType!=='none')&&perCase===0) return;
+                const hasType=!!(emp.incType&&emp.incType!=='none');
+                // 계산 방식만 '구간별 누진' 으로 바꾸고 유형을 '없음' 으로 둔 경우 —
+                // 설정했다고 생각하는데 조용히 빠진다. 숨기지 말고 경고로 보여준다.
+                const tierOnly=!hasType&&emp.incMode==='tiered'&&_incNormalizeTiers(emp.incTiers).length>0;
+                if(!hasType&&!tierOnly&&perCase===0){ _noInc.push(emp); return; }
                 anyInc=true;
-                html+=`<tr>
-                    <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;font-weight:600">${_esc(emp.name)}</td>
+                html+=`<tr${tierOnly?' style="background:#fffbeb"':''}>
+                    <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;font-weight:600">${_esc(emp.name)}${tierOnly?' <span style="font-weight:600;color:#b45309;font-size:.7rem">⚠ 유형 미설정</span>':''}</td>
                     <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;color:#6b7280">${_staffRoleLabel(emp.role)}</td>
                     <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right">${sales>0?_staffFormatMoney(sales):'-'}</td>
                     <td style="padding:.3rem .5rem;border-bottom:1px solid #f3f4f6;text-align:right">${japan>0?_staffFormatMoney(japan):'-'}</td>
@@ -16928,7 +16948,19 @@
             if(!anyInc){
                 html+='<tr><td colspan="6" style="padding:.7rem;text-align:center;color:#9ca3af">인센티브 대상 없음</td></tr>';
             }
-            html+='</tbody></table></div></div>';
+            html+='</tbody></table></div>';
+            // 빠진 사람을 이름으로 적는다 — "원장이 왜 없지?" 를 화면에서 바로 풀 수 있게.
+            if(_noInc.length){
+                html+='<div style="font-size:.72rem;color:#6b7280;margin-top:.5rem;line-height:1.7">'
+                    +'인센티브 <b>미설정</b> — '
+                    +_noInc.map(e=>`<button onclick="_seOpenEmployeeModal('${_esc(e.id).replace(/'/g,"\\'")}')" `
+                        +'style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;border-radius:var(--r-pill);'
+                        +'font-size:.72rem;padding:.1rem .5rem;margin:0 .15rem .15rem 0;cursor:pointer">'
+                        +`${_esc(e.name)} <span style="color:#9ca3af">${_staffRoleLabel(e.role)}</span></button>`).join('')
+                    +'<br><span style="color:#9ca3af">이름을 누르면 그 직원의 [수정] 이 열립니다. '
+                    +'매출 인센티브 설정에서 <b>인센티브 유형</b>을 고르면 위 표에 나옵니다.</span></div>';
+            }
+            html+='</div>';
 
             // 3) 사전 급여 대장 — OT 분해 (저녁·점심·조퇴·총)
             html+=`<div style="border:1px solid #e5e7eb;border-radius:var(--r-sm);padding:.75rem;background:#fff">
