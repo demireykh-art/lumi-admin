@@ -14798,12 +14798,46 @@
                     });
                 }catch(_){}
                 await _staffLoadMonthIncInput(_staffPayrollYm);
+                await _staffLoadDailySalesRev(_staffPayrollYm);
+                _staffSeedTotalRev(_staffPayrollYm);
                 _renderStaffAdminBody();
             }catch(e){
                 document.getElementById('staffAdminBody').innerHTML=
                     '<div style="color:var(--red);padding:1rem;font-size:.85rem">로드 실패: '+_esc(e.message)+'</div>';
             }
         }
+        // 💵 매출 결산의 그 달 "받은 돈(수납)" 합계 — 매출 인센티브의 총매출로 쓴다.
+        //  일별 문서를 그대로 합산한다. _dsMetrics 가 미수납 본부금을 이미 빼고
+        //  내보내므로 여기서 또 손대지 않는다.
+        //  며칠이 올라와 있는지도 같이 센다 — 빠진 날이 있으면 총매출이 과소가 되고,
+        //  그걸 모르고 저장하면 인센티브가 조용히 틀어진다.
+        let _staffDsRev={};
+        async function _staffLoadDailySalesRev(ym){
+            if(_staffDsRev[ym]) return _staffDsRev[ym];
+            try{
+                const snap=await db.collection('dailySales').where('ym','==',ym).get();
+                let received=0;
+                snap.docs.forEach(d=>{ received+=_dsN(_dsMetrics({id:d.id,...d.data()}).received); });
+                _staffDsRev[ym]={received, days:snap.size, ok:true};
+            }catch(e){
+                console.warn('dailySales 월 합계 로드 실패',e);
+                _staffDsRev[ym]={received:0, days:0, ok:false};
+            }
+            return _staffDsRev[ym];
+        }
+
+        // 저장된 총매출이 없는 달이면 수납 합계를 기본값으로 메모리에도 올린다.
+        //  입력칸만 채우고 끝내면 아래 인센티브 미리보기가 0 으로 계산되어 어긋난다.
+        const _staffRevSeeded={};
+        function _staffSeedTotalRev(ym){
+            const ds=_staffDsRev[ym];
+            _staffRevSeeded[ym]=false;
+            if(!ds||!ds.ok||!ds.received) return;
+            if(_dsN(_staffMonthIncInput.totalRevenue)>0) return;
+            _staffMonthIncInput={..._staffMonthIncInput, totalRevenue:ds.received};
+            _staffRevSeeded[ym]=true;
+        }
+
         async function _staffLoadMonthIncInput(ym){
             try{
                 const d=await db.collection('monthlyIncentiveInput').doc(ym).get();
@@ -16501,6 +16535,40 @@
             if(co>=graceMin) return 0;
             return co-graceMin; // 음수 (조기퇴근)
         }
+        // 총매출 칸 아래 한 줄 — 어디서 온 숫자인지, 며칠분인지, 저장값과 다른지.
+        function _staffDsRevNote(ds,cur,ym){
+            const days=new Date(Number(ym.slice(0,4)),Number(ym.slice(5,7)),0).getDate();
+            if(!ds.ok){
+                return '<div style="font-size:.68rem;color:#b45309;margin-top:.2rem">'
+                    +'매출 결산을 불러오지 못했습니다 — 총매출을 직접 넣어주세요.</div>';
+            }
+            if(!ds.days){
+                return '<div style="font-size:.68rem;color:#6b7280;margin-top:.2rem">'
+                    +`${ym} 매출 결산이 아직 없습니다 — 총매출을 직접 넣어주세요.</div>`;
+            }
+            const miss=days-ds.days;
+            const sum=`수납 합계 <b>${_numComma(ds.received)}원</b> · ${ds.days}일 입력`
+                + (miss>0?` <span style="color:#b45309">(${miss}일 미입력 — 그만큼 빠져 있습니다)</span>`:'');
+            let tail;
+            if(cur!==ds.received){
+                tail=` <button onclick="_staffPullDsRev()" style="margin-left:.2rem;background:#eef2ff;color:#4338ca;`
+                    +`border:1px solid #c7d2fe;border-radius:var(--r-sm);font-size:.68rem;font-weight:600;`
+                    +`padding:.12rem .45rem;cursor:pointer">이 값으로 불러오기</button>`;
+            }else{
+                tail=_staffRevSeeded[ym] ? ' · <b>자동으로 채웠습니다</b> (고쳐도 됩니다)' : ' · 저장값과 같음';
+            }
+            return `<div style="font-size:.68rem;color:#6b7280;margin-top:.2rem;line-height:1.6">${sum}${tail}</div>`;
+        }
+
+        function _staffPullDsRev(){
+            const ds=_staffDsRev[_staffPayrollYm];
+            if(!ds||!ds.ok) return;
+            const el=document.getElementById('staffIncTotalRev');
+            if(!el) return;
+            el.value=_numComma(ds.received);
+            _staffPreviewInc();
+        }
+
         function _staffGetJapanVisitors(){
             const r=_staffRevenueMap[_staffPayrollYm];
             return (r&&r.japanVisitors)||_staffMonthIncInput.japanVisitors||0;
@@ -16552,6 +16620,8 @@
             if(m<1){m=12;y--;} else if(m>12){m=1;y++;}
             _staffPayrollYm=y+'-'+String(m).padStart(2,'0');
             await _staffLoadMonthIncInput(_staffPayrollYm);
+            await _staffLoadDailySalesRev(_staffPayrollYm);
+            _staffSeedTotalRev(_staffPayrollYm);
             _renderStaffAdminBody();
         }
 
@@ -16572,15 +16642,21 @@
             let html=_staffMonthHeader();
 
             // 1) 매출 인센티브 입력 (총매출·개인매출)
+            //  총매출은 💵 매출 결산의 그 달 "받은 돈(수납)" 합계를 받아온다.
+            //  아직 저장된 값이 없는 달만 자동으로 채운다 — 이미 저장해 둔 달을
+            //  말없이 덮으면 지난달 인센티브가 조용히 바뀐다. 그런 달은 자동값을
+            //  옆에 적어 주고 [불러오기] 를 눌렀을 때만 바꾼다.
             const personalEmps=active.filter(e=>e.incType==='personal');
-            const totalRev=_staffMonthIncInput.totalRevenue||0;
+            const totalRev=_dsN(_staffMonthIncInput.totalRevenue);
+            const ds=_staffDsRev[ym]||{received:0,days:0,ok:false};
             html+=`<div style="border:1px solid #e5e7eb;border-radius:var(--r-sm);padding:.75rem;margin-bottom:.6rem;background:#fff">
                 <div style="font-weight:700;font-size:.9rem;color:#111827;margin-bottom:.5rem">🎯 매출 인센티브 입력</div>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem">
                     <div style="flex:1;min-width:150px">
-                        <label style="display:block;font-size:.7rem;color:#6b7280;font-weight:600;margin-bottom:.15rem">총매출</label>
+                        <label style="display:block;font-size:.7rem;color:#6b7280;font-weight:600;margin-bottom:.15rem">총매출 <span style="font-weight:400">— 💵 매출 결산의 받은 돈(수납) 합계</span></label>
                         <input type="text" inputmode="numeric" id="staffIncTotalRev" value="${totalRev?_numComma(totalRev):''}" oninput="_onCommaInput(this)" onchange="_staffPreviewInc()" placeholder="총매출액"
                             style="width:100%;padding:.4rem .5rem;font-size:.85rem;border:1px solid #d1d5db;border-radius:var(--r-sm);box-sizing:border-box">
+                        ${_staffDsRevNote(ds,totalRev,ym)}
                     </div>
                     <div style="flex:0 0 130px">
                         <label style="display:block;font-size:.7rem;color:#6b7280;font-weight:600;margin-bottom:.15rem">일본인 방문객 (자동)</label>
@@ -21509,6 +21585,7 @@
                 await db.collection('dailySales').doc(d.date).set(payload);
                 const ym=d.date.slice(0,7);
                 delete _dsCache[ym];
+                delete _staffDsRev[ym];   // 급여 탭 총매출(수납 합계)도 다시 세게 한다
                 _dsMonth=ym; _dsSelDate=d.date; _dsDraft=null;
                 _dsView='day';
                 await _dsLoadMonth(ym,true);
@@ -21538,6 +21615,7 @@
                 await db.collection('dailySales').doc(ymd).delete();
                 const ym=ymd.slice(0,7);
                 delete _dsCache[ym];
+                delete _staffDsRev[ym];
                 await _dsLoadMonth(ym,true);
                 _dsView='month'; _dsRender();
             }catch(e){ alert('삭제 실패: '+(e&&e.message||e)); }
