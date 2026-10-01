@@ -223,12 +223,34 @@ fineshotVisits/{auto}   💾 기록 저장 스냅샷 (통계 집계 대상)
   화면에서 경고를 띄우고, 요약에서도 숨기지 않고 `⚠ 유형 미설정` 행으로 보여준다.
 - **인센티브 요약 아래에 미설정 직원 이름을 적는다.** "원장이 왜 없지?" 를 화면에서
   바로 풀 수 있어야 한다. 이름을 누르면 그 직원의 [수정] 이 열린다.
-- **본인매출 산출 소스** (`personalSalesSource`) — 어느 파싱값을 가져올지만 고른다.
-  가져온 뒤에는 어느 쪽이든 손으로 고칠 수 있다.
-  · `manual` = `staffSales` (담당직원 매출) · `doctor` = `doctorSales` (진료의 매출 · 원장)
-  · `japan` = `japanStaffSales`
-  **원장은 `doctor` 를 써야 한다** — 담당직원(staffSales)과 진료의(doctorSales)는 다른
-  축이라 원장을 `manual` 로 두면 엉뚱한 값(보통 0)이 잡힌다.
+- **인센티브 기준은 한 칸이다.** 예전에는 `인센티브 유형` 과 `본인매출 산출 소스` 가
+  따로 있어 서로 모순될 수 있었다 — 유형을 `총매출 전체` 로 두고 소스를 `진료의` 로
+  고르면 소스가 무시되고 총매출로 계산됐다(실제로 원장 인센티브가 23,866,249원으로
+  잘못 나왔다). 두 칸을 하나로 합쳐 모순이 생길 수 없게 한다.
+
+  | 화면 (`seEmpIncBase`) | 저장 (`incType` / `personalSalesSource`) |
+  | --- | --- |
+  | 없음 | `none` |
+  | 총매출 전체 (마케팅) | `totalAll` |
+  | 총매출 − 개인매출직원 합계 (실장) | `totalMinusPersonal` |
+  | 본인 매출 — 담당직원 (코디·실장) | `personal` / `manual` (`staffSales`) |
+  | 본인 매출 — 진료의 (원장) | `personal` / `doctor` (`doctorSales`) |
+  | 본인 매출 — 일본인 | `personal` / `japan` (`japanStaffSales`) |
+
+  저장 스키마는 그대로 두 필드다(`_seIncBaseJoin`/`_seIncBaseSplit` 가 변환) — 직원
+  본인 화면과 옛 문서가 그대로 동작해야 한다. 고른 기준이 어느 파싱값을 쓰는지
+  바로 아래 한 줄로 적는다.
+
+- **⚠️ `doctorSales` 는 `salesDetail` 안이 아니라 `_staffRevenueMap[ym]` 최상위에 있다.**
+  로더가 그렇게 병합한다(`doctorSales: ex.doctorSales||sd.doctorSales` 는 바깥,
+  `salesDetail` 에는 `staffSales`·`japanStaffSales` 만). 안쪽만 보면 진료의 매출이
+  **늘 0** 이 된다. `_staffParsedEmpRevenue` 는 양쪽을 다 본다.
+
+- **⚠️ `총매출 − 개인매출` 에서 진료의 축은 빼지 않는다.** `staffSales`(담당직원)와
+  `doctorSales`(진료의)는 같은 총매출을 **다른 축으로 쪼갠 값**이라 둘 다 빼면 이중
+  차감이다. 9월 실측: 204,331,244 − 150,164,150 − 5,025,900 − 95,950,824 =
+  **−46,809,630** 으로 음수가 된다. `_staffIncBaseRevenue` 가
+  `personalSalesSource!=='doctor'` 인 직원만 뺀다.
       · 칸 아래에 📊 **오더판매내역 파싱(발생매출)** 금액과 수납과의 차이도 같이 적는다.
         두 숫자는 **재는 것이 달라 원래 다르다** — 한쪽만 보이면 "왜 다르지" 가 된다.
 

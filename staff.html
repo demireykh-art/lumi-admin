@@ -3549,17 +3549,20 @@
                 <!-- 인센티브 설정 -->
                 <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:.5rem">
                     <label class="form-label" style="font-weight:600;margin-bottom:.5rem">💰 매출 인센티브 설정</label>
-                    <div class="form-group"><label class="form-label">인센티브 유형 <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">— 어떤 매출에 매길지</span></label>
-                        <select class="form-select" id="seEmpIncType" onchange="_seSyncIncMode()">
+                    <div class="form-group"><label class="form-label">인센티브 기준 <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">— 어떤 매출에 매길지</span></label>
+                        <select class="form-select" id="seEmpIncBase" onchange="_seSyncIncMode()">
                             <option value="none">없음</option>
-                            <option value="totalMinusPersonal">총매출 - 개인매출직원 합계 (실장)</option>
-                            <option value="personal">본인 매출 기반 (코디네이터)</option>
                             <option value="totalAll">총매출 전체 (마케팅)</option>
+                            <option value="totalMinusPersonal">총매출 − 개인매출직원 합계 (실장)</option>
+                            <option value="personal:manual">본인 매출 — 담당직원 (코디·실장)</option>
+                            <option value="personal:doctor">본인 매출 — 진료의 (원장)</option>
+                            <option value="personal:japan">본인 매출 — 일본인</option>
                         </select>
+                        <div id="seEmpIncBaseHint" style="font-size:.72rem;color:var(--text-muted);margin-top:.25rem;line-height:1.6"></div>
                     </div>
                     <div id="seEmpIncTypeWarn" style="display:none;margin:-.4rem 0 .75rem;padding:.5rem .65rem;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--r-sm);font-size:.75rem;color:#92400e;line-height:1.6">
-                        ⚠ <b>인센티브 유형이 '없음'</b> 이라 계산되지 않고 인센티브 요약에도 나오지 않습니다.
-                        위에서 유형을 골라주세요 (원장은 보통 <b>총매출 전체</b>).
+                        ⚠ <b>인센티브 기준이 '없음'</b> 이라 계산되지 않고 인센티브 요약에도 나오지 않습니다.
+                        위에서 기준을 골라주세요 (원장은 보통 <b>본인 매출 — 진료의</b>).
                     </div>
                     <div class="form-group"><label class="form-label">계산 방식 <span style="font-weight:400;font-size:.72rem;color:var(--text-muted)">— 그 매출에 어떻게 매길지</span></label>
                         <select class="form-select" id="seEmpIncMode" onchange="_seSyncIncMode()">
@@ -3599,13 +3602,6 @@
                             <input type="checkbox" id="seEmpIncJapan" style="width:16px;height:16px">
                             🗾 일본인 건별 (1명당 ₩10,000)
                         </label>
-                    </div>
-                    <div class="form-group"><label class="form-label">본인매출 산출 소스 <span style="font-size:.75rem;color:var(--text-muted)">("본인 매출 기반"일 때 · 어느 파싱값을 가져올지. 넣은 뒤 손으로 고칠 수 있습니다)</span></label>
-                        <select class="form-select" id="seEmpPersonalSalesSource">
-                            <option value="manual">담당직원 매출 (파싱 staffSales)</option>
-                            <option value="doctor">진료의 매출 (파싱 doctorSales · 원장)</option>
-                            <option value="japan">본인 일본인매출 (파싱 japanStaffSales)</option>
-                        </select>
                     </div>
                 </div>
                 <div class="form-group" style="margin-top:.5rem">
@@ -15591,10 +15587,9 @@
             g('seEmpResignDate').value=''; g('seEmpMealLimit').value=''; g('seEmpMealDaily').value='';
             g('seEmpMealMode').value='';
             g('seEmpLocationExempt').checked=false;
-            g('seEmpIncType').value='none'; g('seEmpIncPercent').value='0';
+            g('seEmpIncBase').value='none'; g('seEmpIncPercent').value='0';
             g('seEmpIncMode').value='flat'; _seIncTiers=[];
             g('seEmpIncRounding').value='0'; g('seEmpIncJapan').checked=false;
-            g('seEmpPersonalSalesSource').value='manual';
             g('seEmpAnnualLeave').value=''; g('seEmpUsedLeave').value='0';
             g('seAutoAnnualLeave').textContent='0';
             document.querySelectorAll('.seEmpTab').forEach(cb=>cb.checked=SE_DEFAULT_TABS.includes(cb.getAttribute('data-tab')));
@@ -15623,13 +15618,12 @@
                     g('seEmpMealDaily').value=emp.mealDaily||'';
                     g('seEmpMealMode').value=(emp.mealMode==='monthly'||emp.mealMode==='daily')?emp.mealMode:'';
                     g('seEmpLocationExempt').checked=!!emp.locationExempt;
-                    g('seEmpIncType').value=emp.incType||'none';
+                    g('seEmpIncBase').value=_seIncBaseJoin(emp.incType,emp.personalSalesSource);
                     g('seEmpIncMode').value=emp.incMode||'flat';
                     _seIncTiers=_incNormalizeTiers(emp.incTiers);
                     g('seEmpIncPercent').value=emp.incPercent||0;
                     g('seEmpIncRounding').value=emp.incRounding!=null?emp.incRounding:0;
                     g('seEmpIncJapan').checked=!!emp.incJapan;
-                    g('seEmpPersonalSalesSource').value=emp.personalSalesSource||'manual';
                     g('seEmpAnnualLeave').value=emp.annualLeave||'';
                     g('seEmpUsedLeave').value=emp.usedLeave||0;
                     g('seAutoAnnualLeave').textContent=_seCalcLegalLeave(emp.joinDate);
@@ -15745,11 +15739,11 @@
                 mealDaily:parseInt(g('seEmpMealDaily').value)||0,
                 // '' = 전체 정책 따름, 'monthly'/'daily' = 이 직원만 고정
                 mealMode:(g('seEmpMealMode').value==='monthly'||g('seEmpMealMode').value==='daily')?g('seEmpMealMode').value:'',
-                locationExempt:g('seEmpLocationExempt').checked, incType:g('seEmpIncType').value||'none',
+                locationExempt:g('seEmpLocationExempt').checked, incType:_seIncBaseSplit().incType,
                 incPercent:parseFloat(g('seEmpIncPercent').value)||0, incRounding:parseInt(g('seEmpIncRounding').value)||0,
                 incMode:g('seEmpIncMode').value||'flat',
                 incTiers:_incNormalizeTiers((g('seEmpIncMode').value==='tiered')?_seReadIncTiersFromDom():_seIncTiers),
-                incJapan:g('seEmpIncJapan').checked, personalSalesSource:g('seEmpPersonalSalesSource').value||'manual',
+                incJapan:g('seEmpIncJapan').checked, personalSalesSource:_seIncBaseSplit().personalSalesSource,
                 isIncentiveTarget, visibleTabs:visibleTabsValue, salaryHistory,
                 // 테스트 계정은 다른 직원에게 보이는 공용 목록에서 제외된다
                 isTestAccount:!!g('seEmpIsTest').checked
@@ -16608,9 +16602,35 @@
         //  입력 중인 구간은 DOM 이 아니라 여기에 들고 있는다. 행을 다시 그릴 때마다
         //  DOM 에서 읽어오면 타이핑 중 커서가 튄다.
         let _seIncTiers=[];
+        // 인센티브 기준 한 칸 ↔ 저장 스키마(incType + personalSalesSource) 사이의 변환.
+        //  화면에서는 하나로 고르게 하고(모순이 생길 수 없게), 저장은 기존 두 필드로 한다 —
+        //  직원 본인 화면과 옛 문서가 그대로 동작해야 한다.
+        const _SE_INC_HINT={
+            none:'',
+            totalAll:'병원 전체 매출에 매깁니다.',
+            totalMinusPersonal:'총매출에서 <b>담당직원 축</b>의 개인매출을 뺀 금액. 진료의(원장) 매출은 같은 총매출을 다른 축으로 쪼갠 값이라 빼지 않습니다.',
+            'personal:manual':'파싱 <code>staffSales</code> — 담당직원별 매출. 급여 탭에서 손으로 고칠 수 있습니다.',
+            'personal:doctor':'파싱 <code>doctorSales</code> — 진료의별 매출. 담당직원과 다른 축입니다. 급여 탭에서 손으로 고칠 수 있습니다.',
+            'personal:japan':'파싱 <code>japanStaffSales</code> — 본인 일본인 매출.'
+        };
+        function _seIncBaseJoin(incType,src){
+            if(!incType||incType==='none') return 'none';
+            if(incType!=='personal') return incType;
+            const s=src||'manual';
+            return 'personal:'+(['manual','doctor','japan'].includes(s)?s:'manual');
+        }
+        function _seIncBaseSplit(){
+            const v=(document.getElementById('seEmpIncBase')||{}).value||'none';
+            if(v.startsWith('personal:')) return {incType:'personal', personalSalesSource:v.slice(9)};
+            return {incType:v, personalSalesSource:'manual'};
+        }
+
         function _seSyncIncMode(){
             const mode=(document.getElementById('seEmpIncMode')||{}).value||'flat';
-            const type=(document.getElementById('seEmpIncType')||{}).value||'none';
+            const base=(document.getElementById('seEmpIncBase')||{}).value||'none';
+            const type=_seIncBaseSplit().incType;
+            const hint=document.getElementById('seEmpIncBaseHint');
+            if(hint) hint.innerHTML=_SE_INC_HINT[base]||'';
             const flat=document.getElementById('seEmpIncFlatBox');
             const tier=document.getElementById('seEmpIncTierBox');
             // 유형과 방식은 짝이다. 방식만 바꾸고 유형을 '없음' 으로 두면 조용히 0원이 된다.
@@ -16776,7 +16796,9 @@
             //  · doctor  = 진료의 매출(원장). 담당직원(staffSales)과 다른 축이다.
             //  · japan   = 본인 일본인매출
             //  · 그 밖에 = 담당직원 매출
-            const pick=(src==='doctor')?detail.doctorSales
+            // ⚠ doctorSales 는 salesDetail 안이 아니라 _staffRevenueMap[ym] 최상위에 병합된다
+            //   (로더가 그렇게 넣는다). 안쪽만 보면 진료의 매출이 늘 0 이 된다.
+            const pick=(src==='doctor')?(r.doctorSales||detail.doctorSales)
                       :(src==='japan')?detail.japanStaffSales
                       :detail.staffSales;
             return _dsN(pick&&pick[key]&&pick[key].amount);
@@ -16793,7 +16815,12 @@
         function _staffIncBaseRevenue(emp){
             const totalRev=_dsN(_staffMonthIncInput.totalRevenue);
             if(emp.incType==='totalMinusPersonal'){
-                const perEmps=_staffAdminEmployees.filter(e=>(!e.status||e.status==='active')&&e.incType==='personal');
+                // 담당직원 축에서만 뺀다. 진료의(doctorSales)는 같은 총매출을 다른 축으로
+                // 쪼갠 값이라 같이 빼면 이중 차감이 되어 기준이 음수로 간다
+                // (9월: 204,331,244 − 150,164,150 − 5,025,900 − 95,950,824 = −46,809,630).
+                const perEmps=_staffAdminEmployees.filter(e=>
+                    (!e.status||e.status==='active') && e.incType==='personal'
+                    && (e.personalSalesSource||'manual')!=='doctor');
                 const perTotal=perEmps.reduce((s,e)=>s+_staffGetEmpPersonalRevenue(e),0);
                 return Math.max(0,totalRev-perTotal);
             }
