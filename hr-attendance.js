@@ -211,12 +211,23 @@ function renderAttendance(){
     // 이번 달 근무일 = 출근 기록이 있는 고유 날짜 수
     const uniqueDates=new Set(filtered.filter(a=>a.checkIn).map(a=>a.date));
     document.getElementById('workDays').textContent=uniqueDates.size+'일';
-    const sorted=filtered.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    // 퇴근 정정 '승인 대기'를 맨 위로, 그 외는 날짜 내림차순
+    const sorted=filtered.sort((a,b)=>{
+        const pa=a.checkoutStatus==='pending'?0:1, pb=b.checkoutStatus==='pending'?0:1;
+        if(pa!==pb) return pa-pb;
+        return (b.date||'').localeCompare(a.date||'');
+    });
     document.getElementById('attendanceTable').innerHTML=sorted.slice(0,50).map(a=>{
         const emp=employees.find(e=>e.id===a.employeeId);
         const otDisplay=calculateAfterOT(a);
         const statusBadge={normal:'<span class="badge badge-green">정상</span>',late:'<span class="badge badge-orange">지각</span>',early:'<span class="badge badge-blue">조퇴</span>',absent:'<span class="badge badge-red">결근</span>'};
-        return `<tr><td>${a.date||'-'}</td><td>${emp?emp.name:a.employeeId}</td><td>${a.checkIn||'-'}</td><td>${a.checkOut||'-'}</td><td>${otDisplay}</td><td>${statusBadge[a.status]||'-'}</td><td><button class="btn btn-sm btn-secondary" onclick="editAttendance('${a.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteAttendance('${a.id}')">삭제</button></td></tr>`;
+        const name=emp?emp.name:a.employeeId;
+        if(a.checkoutStatus==='pending'){
+            const who=a.checkoutRequestedBy?` · 요청자 ${a.checkoutRequestedBy}`:'';
+            return `<tr style="background:#fffbeb"><td>${a.date||'-'}</td><td>${name}</td><td>${a.checkIn||'-'}</td><td><span style="color:#b45309;font-weight:600">⏳ 요청 ${a.pendingCheckOut||'-'}</span></td><td>-</td><td><span class="badge badge-orange">정정 승인대기</span>${who?`<div style="font-size:.7rem;color:#777">${who}</div>`:''}</td><td><button class="btn btn-sm btn-primary" onclick="approveCheckout('${a.id}')">승인</button> <button class="btn btn-sm btn-danger" onclick="rejectCheckout('${a.id}')">반려</button></td></tr>`;
+        }
+        const rej=a.checkoutStatus==='rejected'?' <span class="badge badge-red" style="font-size:.6rem">정정반려</span>':'';
+        return `<tr><td>${a.date||'-'}</td><td>${name}</td><td>${a.checkIn||'-'}</td><td>${a.checkOut||'-'}</td><td>${otDisplay}</td><td>${(statusBadge[a.status]||'-')}${rej}</td><td><button class="btn btn-sm btn-secondary" onclick="editAttendance('${a.id}')">수정</button> <button class="btn btn-sm btn-danger" onclick="deleteAttendance('${a.id}')">삭제</button></td></tr>`;
     }).join('')||'<tr><td colspan="7" class="text-center">근태 기록 없음</td></tr>';
     // 직원별 OT 현황 (이번 달) 표도 함께 렌더
     if(typeof renderStaffOTTable==='function') renderStaffOTTable();
@@ -303,6 +314,48 @@ async function deleteAttendance(id){
         await loadAttendance();renderAttendance();
         alert('삭제되었습니다.');
     }catch(e){alert('삭제 실패: '+e.message);}
+}
+
+// 퇴근 정정 요청 승인 → pendingCheckOut 을 checkOut 으로 확정(조퇴 재계산)
+async function approveCheckout(id){
+    const att=attendance.find(a=>a.id===id);
+    if(!att)return;
+    const t=att.pendingCheckOut;
+    if(!t||!/^\d{2}:\d{2}$/.test(t)){ alert('요청된 퇴근 시간이 올바르지 않습니다.'); return; }
+    const emp=employees.find(e=>e.id===att.employeeId);
+    if(!confirm(`${emp?emp.name:att.employeeId} · ${att.date} 퇴근 시간을 ${t}(으)로 승인합니다.`))return;
+    try{
+        const [hh,mm]=t.split(':').map(Number);
+        const endMin=getAdminWorkEndMin(att.date);
+        const newStatus=(hh*60+mm<endMin-EARLY_LEAVE_GRACE_MIN)?'early':(att.status||'normal');
+        await db.collection('attendance').doc(id).update({
+            checkOut:t, status:newStatus,
+            manualCorrection:true, correctionNote:'퇴근 누락 - 승인됨',
+            checkoutStatus:'approved',
+            checkoutApprovedAt:firebase.firestore.FieldValue.serverTimestamp(),
+            correctedAt:firebase.firestore.FieldValue.serverTimestamp(),
+            pendingCheckOut:firebase.firestore.FieldValue.delete(),
+            checkoutRejectReason:firebase.firestore.FieldValue.delete()
+        });
+        await loadAttendance();renderAttendance();
+        alert('승인되었습니다: '+t);
+    }catch(e){alert('승인 실패: '+e.message);}
+}
+// 퇴근 정정 요청 반려
+async function rejectCheckout(id){
+    const att=attendance.find(a=>a.id===id);
+    if(!att)return;
+    const reason=prompt('반려 사유(직원에게 표시됩니다):','시간 확인 필요');
+    if(reason===null)return;
+    try{
+        await db.collection('attendance').doc(id).update({
+            checkoutStatus:'rejected',
+            checkoutRejectReason:(reason||'').trim(),
+            checkoutRejectedAt:firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await loadAttendance();renderAttendance();
+        alert('반려되었습니다.');
+    }catch(e){alert('반려 실패: '+e.message);}
 }
 
 function calculateWorkHours(checkIn,checkOut){
