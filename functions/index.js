@@ -1548,6 +1548,75 @@ exports.closingNightlyCheck = onSchedule(
   }
 );
 
+// ⏰ 미퇴근(퇴근 미기록) 리마인드 — 매일 22:45 KST
+//   · 퇴근 기록(checkOut)이 없으면 OT=0 으로 계산되므로, 기본값을 넣지 않고
+//     실제 퇴근시간을 받아 '승인'해야 OT가 정확해진다(끌어쓰기 방지).
+//   · 현재 직원 개인 FCM 토큰은 미등록(adminHigh 관리자만 등록)이라, 관리자에게
+//     '오늘 미퇴근 명단'을 보내 확인·승인·독려하도록 한다.
+//     (직원 개인에게 직접 보내려면 직원 토큰 등록 플로우가 선행되어야 함 — 추후 확장)
+exports.missedCheckoutReminder = onSchedule(
+  {schedule: '45 22 * * *', timeZone: 'Asia/Seoul', region: 'asia-northeast3'},
+  async () => {
+    const db = admin.firestore();
+    const dateStr = _kstToday();
+    const markRef = db.collection('attendanceReminder').doc(dateStr);
+    const mark = await markRef.get();
+    if (mark.exists && mark.data().pushedAt) {
+      logger.info('미퇴근 리마인드 이미 발송', dateStr);
+      return;
+    }
+    // 오늘 출근O·퇴근X (승인완료 제외)
+    const snap = await db.collection('attendance').where('date', '==', dateStr).get();
+    const open = snap.docs.map((d) => ({id: d.id, ...d.data()}))
+      .filter((a) => a.checkIn && !a.checkOut && a.checkoutStatus !== 'approved');
+    if (!open.length) {
+      logger.info('오늘 미퇴근 없음', dateStr);
+      return;
+    }
+    const empSnap = await db.collection('employees').get();
+    const nameOf = {};
+    empSnap.docs.forEach((d) => { nameOf[d.id] = (d.data().name) || d.id; });
+    const tokSnap = await db.collection('fcmTokens').where('adminHigh', '==', true).get();
+    const tokens = tokSnap.docs.map((d) => d.id);
+    if (!tokens.length) {
+      logger.info('미퇴근 리마인드: 관리자 토큰 없음', dateStr);
+      await markRef.set({pushedAt: new Date().toISOString(), count: open.length, pushCount: 0}, {merge: true});
+      return;
+    }
+    const pending = open.filter((a) => a.checkoutStatus === 'pending').length;
+    const title = '⏰ 오늘 미퇴근 ' + open.length + '명';
+    const body = open.slice(0, 20).map((a) => {
+      const nm = nameOf[a.employeeId] || a.employeeId || '?';
+      const tag = a.checkoutStatus === 'pending' ? ' (정정 승인대기)' : '';
+      return '· ' + nm + ' (출근 ' + (a.checkIn || '-') + ')' + tag;
+    }).join('\n') + (pending ?
+      ('\n\n정정 승인대기 ' + pending + '건 — 근태에서 승인해주세요.') :
+      '\n\n직원에게 퇴근시간 입력(승인요청)을 안내해주세요.');
+    const message = {
+      tokens,
+      notification: {title, body},
+      data: {type: 'missedCheckout', date: dateStr},
+      webpush: {fcmOptions: {link: 'https://staff.lumiclinic.co.kr/staff.html'}},
+    };
+    const resp = await admin.messaging().sendEachForMulticast(message);
+    const dels = [];
+    resp.responses.forEach((r, i) => {
+      if (!r.success) {
+        const code = r.error && r.error.code;
+        if (code === 'messaging/registration-token-not-registered' ||
+            code === 'messaging/invalid-argument') {
+          dels.push(db.collection('fcmTokens').doc(tokens[i]).delete());
+        }
+      }
+    });
+    await Promise.allSettled(dels);
+    await markRef.set(
+      {pushedAt: new Date().toISOString(), count: open.length, pushCount: resp.successCount},
+      {merge: true});
+    logger.info('미퇴근 리마인드 발송', {date: dateStr, open: open.length, success: resp.successCount});
+  }
+);
+
 // 즉시 알림: 마지막 퇴근자 위임(adminAlert) 시
 exports.onClosingDelegated = onDocumentWritten(
   {document: 'closingStatus/{date}', region: 'asia-northeast3'},

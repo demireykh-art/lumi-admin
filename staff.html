@@ -1026,19 +1026,16 @@
                 </section>
                 <div class="gps-status loading" id="gpsStatus">📍 위치 확인 중...</div>
                 
-                <!-- 어제 퇴근 누락 알림 -->
+                <!-- 퇴근 누락 → 수동 입력 + 관리자 승인 요청 (오늘 포함 최근 기록) -->
                 <div id="missedClockOutAlert" style="display:none;background:#FFF3CD;border:1px solid #FFEEBA;padding:1rem;margin-bottom:1rem;border-radius:var(--r-sm)">
-                    <div style="font-weight:600;color:#856404;margin-bottom:.5rem">⚠️ 어제 퇴근 기록이 없습니다</div>
-                    <div style="font-size:.85rem;color:#856404;margin-bottom:.75rem">
-                        단체 LINE방에 남긴 시간과 동일하게 입력해주세요.
+                    <div style="font-weight:600;color:#856404;margin-bottom:.5rem">⚠️ 퇴근 기록이 없는 날이 있어요</div>
+                    <div style="font-size:.8rem;color:#856404;margin-bottom:.75rem;line-height:1.5">
+                        퇴근 시간을 입력하고 <b>승인 요청</b>을 보내면, 관리자 승인 후 퇴근 시간이 기록됩니다.<br>
+                        (단체 LINE방에 남긴 실제 퇴근 시간과 동일하게 입력해주세요. OT는 승인된 시간으로 계산됩니다.)
                     </div>
-                    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
-                        <span style="font-size:.85rem;color:#856404" id="missedDateLabel">-</span>
-                        <input type="time" id="missedClockOutTime" style="padding:.4rem;border:1px solid #FFEEBA;border-radius:var(--r-sm);font-size:.95rem">
-                    </div>
-                    <div style="display:flex;gap:.5rem">
-                        <button onclick="submitMissedClockOut()" style="flex:1;padding:.6rem;background:#856404;color:#fff;border:none;font-size:.85rem;font-weight:500;cursor:pointer;border-radius:var(--r-sm)">퇴근 시간 입력</button>
-                        <button onclick="dismissMissedAlert()" style="padding:.6rem .8rem;background:transparent;border:1px solid #FFEEBA;color:#856404;font-size:.85rem;cursor:pointer;border-radius:var(--r-sm)">닫기</button>
+                    <div id="missedClockOutBody"></div>
+                    <div style="display:flex;justify-content:flex-end;margin-top:.25rem">
+                        <button onclick="dismissMissedAlert()" style="padding:.4rem .8rem;background:transparent;border:1px solid #FFEEBA;color:#856404;font-size:.8rem;cursor:pointer;border-radius:var(--r-sm)">닫기</button>
                     </div>
                 </div>
                 
@@ -6653,64 +6650,103 @@
         function openModal(id){document.getElementById(id).classList.add('active');}
         function closeModal(id){document.getElementById(id).classList.remove('active');}
         
-        // ===== 퇴근 누락 감지 v2.1 =====
-        let _missedRecord=null;
-        
-        function checkMissedClockOut(){
-            const today=getToday();
-            const d=new Date();
-            d.setDate(d.getDate()-1);
-            const yesterday=d.toISOString().split('T')[0];
-            
-            // 어제 출근했는데 퇴근 안 찍은 기록 찾기
-            const missed=attendance.find(a=>a.date===yesterday && a.checkIn && !a.checkOut);
-            const alert_el=document.getElementById('missedClockOutAlert');
-            
-            if(missed){
-                _missedRecord=missed;
-                document.getElementById('missedDateLabel').textContent=`${yesterday} 퇴근 시간:`;
-                alert_el.style.display='block';
-            }else{
-                _missedRecord=null;
-                alert_el.style.display='none';
-            }
+        // ===== 퇴근 누락 → 수동 입력 + 관리자 승인 요청 v3 =====
+        //  · 퇴근 기록(checkOut)이 없으면 OT는 0으로 계산됨(기본값 자동입력 안 함).
+        //  · 직원이 실제 퇴근시간을 입력해 '승인 요청'(pending) → 관리자 승인 시 checkOut 기록.
+        //  · attendance 문서에 직접 저장: pendingCheckOut / checkoutStatus / checkoutNote …
+        const MISSED_LOOKBACK_DAYS=7;      // 최근 며칠까지 조회
+        const MISSED_TODAY_BUFFER_MIN=120; // 오늘 건은 정규 퇴근 +이 분(分) 이후에만 노출(근무/OT 중 과도한 알림 방지)
+        let _missedDismissed=false;
+
+        // 승인 대기/반려가 아닌 '미기록' 상태인지
+        function _coNeedsAction(a){
+            return a && a.checkIn && !a.checkOut
+                && a.checkoutStatus!=='pending' && a.checkoutStatus!=='approved';
         }
-        
-        async function submitMissedClockOut(){
-            if(!_missedRecord) return;
-            const timeInput=document.getElementById('missedClockOutTime').value;
-            if(!timeInput){
-                alert('퇴근 시간을 입력해주세요.');
-                return;
-            }
-            
-            if(!confirm(`${_missedRecord.date} 퇴근 시간을 ${timeInput}으로 입력하시겠습니까?\n\n※ 단체 LINE방에 남긴 시간과 동일해야 합니다.`)) return;
-            
+        function _missedCandidates(){
+            const today=getToday();
+            const nowMin=(()=>{ const n=new Date(); return n.getHours()*60+n.getMinutes(); })();
+            const lo=new Date(); lo.setDate(lo.getDate()-MISSED_LOOKBACK_DAYS);
+            const loYmd=lo.toISOString().split('T')[0];
+            return (attendance||[]).filter(a=>{
+                if(!a.date || a.date<loYmd || a.date>today) return false;
+                // 오늘 건은 정규 퇴근 + 버퍼 이후에만(아직 근무/OT 중인 사람에게 안 띄움)
+                if(a.date===today){
+                    if(!(a.checkIn && !a.checkOut)) return false;
+                    if(a.checkoutStatus==='pending'||a.checkoutStatus==='rejected') return true;
+                    return nowMin > getWorkEndMin(today)+MISSED_TODAY_BUFFER_MIN;
+                }
+                // 과거 건: 미기록이거나 대기/반려 상태면 표시
+                if(a.checkOut) return false;
+                return a.checkIn && (a.checkoutStatus==='pending'||a.checkoutStatus==='rejected'||!a.checkoutStatus);
+            }).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+        }
+        function checkMissedClockOut(){
+            const box=document.getElementById('missedClockOutAlert');
+            if(!box) return;
+            const list=_missedCandidates();
+            if(!list.length || _missedDismissed){ box.style.display='none'; return; }
+            const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const rows=list.map(a=>{
+                const defEnd=(()=>{ const e=getWorkEndMin(a.date); return String(Math.floor(e/60)).padStart(2,'0')+':'+String(e%60).padStart(2,'0'); })();
+                if(a.checkoutStatus==='pending'){
+                    return `<div style="border-top:1px dashed #FFEEBA;padding:.55rem 0">
+                        <div style="font-size:.85rem;color:#856404"><b>${esc(a.date)}</b> · 📋 승인 대기 중 (요청 ${esc(a.pendingCheckOut||'-')})</div>
+                        <div style="display:flex;justify-content:flex-end;margin-top:.35rem">
+                            <button onclick="cancelCheckoutRequest('${esc(a.id)}')" style="padding:.35rem .7rem;background:#fff;border:1px solid #d97706;color:#b45309;font-size:.78rem;cursor:pointer;border-radius:var(--r-sm)">요청 취소</button>
+                        </div></div>`;
+                }
+                const rejected=a.checkoutStatus==='rejected';
+                const head=rejected
+                    ? `<div style="font-size:.85rem;color:#b91c1c"><b>${esc(a.date)}</b> · ⛔ 반려됨${a.checkoutRejectReason?(' ('+esc(a.checkoutRejectReason)+')'):''} — 다시 요청</div>`
+                    : `<div style="font-size:.85rem;color:#856404"><b>${esc(a.date)}</b> · 퇴근 미기록 (출근 ${esc(a.checkIn||'-')})</div>`;
+                return `<div style="border-top:1px dashed #FFEEBA;padding:.55rem 0">
+                    ${head}
+                    <div style="display:flex;align-items:center;gap:.5rem;margin-top:.4rem">
+                        <input type="time" id="missedTime_${esc(a.id)}" value="${esc(a.pendingCheckOut||defEnd)}" style="padding:.4rem;border:1px solid #FFEEBA;border-radius:var(--r-sm);font-size:.95rem">
+                        <button onclick="requestCheckoutCorrection('${esc(a.id)}')" style="flex:1;padding:.55rem;background:#856404;color:#fff;border:none;font-size:.82rem;font-weight:600;cursor:pointer;border-radius:var(--r-sm)">승인 요청</button>
+                    </div></div>`;
+            }).join('');
+            document.getElementById('missedClockOutBody').innerHTML=rows;
+            box.style.display='block';
+        }
+
+        async function requestCheckoutCorrection(recId){
+            const rec=(attendance||[]).find(a=>a.id===recId);
+            if(!rec){ alert('기록을 찾을 수 없습니다.'); return; }
+            const inp=document.getElementById('missedTime_'+recId);
+            const timeInput=inp&&inp.value;
+            if(!timeInput){ alert('퇴근 시간을 입력해주세요.'); return; }
+            if(!/^\d{2}:\d{2}$/.test(timeInput)){ alert('시간 형식이 올바르지 않습니다.'); return; }
+            if(!confirm(`${rec.date} 퇴근 시간을 ${timeInput}(으)로 승인 요청합니다.\n\n※ 단체 LINE방에 남긴 실제 시간과 동일해야 합니다.\n관리자 승인 후 퇴근 시간이 기록됩니다.`)) return;
             try{
-                // 조퇴 여부 계산
-                const [hh,mm]=timeInput.split(':').map(Number);
-                const endMin=getWorkEndMin(_missedRecord.date);
-                // grace 10분 이내는 정상 처리 (조퇴 아님)
-                const newStatus=(hh*60+mm<endMin-10)?'early':_missedRecord.status;
-                
-                await db.collection('attendance').doc(_missedRecord.id).update({
-                    checkOut:timeInput,
-                    status:newStatus==='early'?'early':(newStatus||'normal'),
-                    manualCorrection:true,
-                    correctionNote:'퇴근 누락 - 본인 입력',
-                    correctedAt:firebase.firestore.FieldValue.serverTimestamp()
+                await db.collection('attendance').doc(recId).update({
+                    pendingCheckOut:timeInput,
+                    checkoutStatus:'pending',
+                    checkoutNote:'퇴근 누락 - 본인 승인요청',
+                    checkoutRequestedBy:(currentUser&&(currentUser.name||currentUser.id))||'',
+                    checkoutRequestedAt:firebase.firestore.FieldValue.serverTimestamp(),
+                    checkoutRejectReason:firebase.firestore.FieldValue.delete()
                 });
-                alert('퇴근 시간이 입력되었습니다: '+timeInput);
-                _missedRecord=null;
-                document.getElementById('missedClockOutAlert').style.display='none';
+                alert('승인 요청을 보냈습니다. 관리자 승인 후 반영됩니다.');
                 await loadAttendance();
                 renderAttendance();
-            }catch(e){
-                alert('저장 실패: '+e.message);
-            }
+            }catch(e){ alert('요청 실패: '+(e.message||e)); }
         }
-        
+        async function cancelCheckoutRequest(recId){
+            if(!confirm('승인 요청을 취소할까요?')) return;
+            try{
+                await db.collection('attendance').doc(recId).update({
+                    checkoutStatus:firebase.firestore.FieldValue.delete(),
+                    pendingCheckOut:firebase.firestore.FieldValue.delete()
+                });
+                await loadAttendance();
+                renderAttendance();
+            }catch(e){ alert('취소 실패: '+(e.message||e)); }
+        }
+
         function dismissMissedAlert(){
+            _missedDismissed=true;
             document.getElementById('missedClockOutAlert').style.display='none';
         }
         
@@ -16334,13 +16370,34 @@
                 early:'<span style="background:#dbeafe;color:#1e40af;padding:1px 7px;border-radius:var(--r-sm);font-size:.68rem">조퇴</span>',
                 absent:'<span style="background:#fee2e2;color:#991b1b;padding:1px 7px;border-radius:var(--r-sm);font-size:.68rem">결근</span>'
             };
+            // 퇴근 정정 '승인 대기'를 맨 위로
+            recs.sort((a,b)=>{
+                const pa=a.checkoutStatus==='pending'?0:1, pb=b.checkoutStatus==='pending'?0:1;
+                if(pa!==pb) return pa-pb;
+                return String(b.date||'').localeCompare(String(a.date||''));
+            });
             box.innerHTML=recs.slice(0,100).map(a=>{
                 const cin=a.checkIn||a.clockIn||'-';
                 const cout=a.checkOut||a.clockOut||'-';
                 const badge=statusBadge[a.status]||'';
+                const pending=a.checkoutStatus==='pending';
+                if(pending){
+                    const who=a.checkoutRequestedBy?(' · 요청자 '+_esc(a.checkoutRequestedBy)):'';
+                    return `<div style="padding:.55rem .6rem;border:1px solid #fcd34d;border-radius:var(--r-sm);margin-bottom:.35rem;background:#fffbeb">
+                        <div style="font-weight:700;font-size:.82rem">${_esc(_name(a))} <span style="color:#6b7280;font-weight:500;font-size:.75rem">${_esc(a.date||'')}</span>
+                            <span style="background:#fde68a;color:#92400e;padding:1px 7px;border-radius:var(--r-sm);font-size:.66rem;margin-left:4px">퇴근 정정 승인대기</span></div>
+                        <div style="font-size:.75rem;color:#374151;margin-top:.15rem">출근 ${_esc(cin)} · 요청 퇴근 <b>${_esc(a.pendingCheckOut||'-')}</b>${who}</div>
+                        <div style="display:flex;gap:.3rem;flex-shrink:0;margin-top:.45rem;justify-content:flex-end">
+                            <button onclick="_staffRejectCheckout('${a.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer">반려</button>
+                            <button onclick="_staffApproveCheckout('${a.id}')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer;font-weight:600">✓ 승인</button>
+                        </div>
+                    </div>`;
+                }
+                const rej=a.checkoutStatus==='rejected'
+                    ? `<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:var(--r-sm);font-size:.64rem;margin-left:4px">정정 반려</span>` : '';
                 return `<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:var(--r-sm);margin-bottom:.35rem;background:#fff">
                     <div style="min-width:0">
-                        <div style="font-weight:700;font-size:.82rem">${_esc(_name(a))} <span style="color:#6b7280;font-weight:500;font-size:.75rem">${_esc(a.date||'')}</span></div>
+                        <div style="font-weight:700;font-size:.82rem">${_esc(_name(a))} <span style="color:#6b7280;font-weight:500;font-size:.75rem">${_esc(a.date||'')}</span>${rej}</div>
                         <div style="font-size:.75rem;color:#374151;margin-top:.1rem">출근 ${_esc(cin)} · 퇴근 ${_esc(cout)} ${badge}</div>
                     </div>
                     <div style="display:flex;gap:.3rem;flex-shrink:0">
@@ -16388,6 +16445,49 @@
                 _staffAdminAttendance=_staffAdminAttendance.filter(a=>a.id!==id);
                 _renderStaffAdminBody();
             }catch(e){ alert('삭제 실패: '+(e?.message||e)); }
+        }
+        // 퇴근 정정 요청 승인 → pendingCheckOut 을 checkOut 으로 확정(조퇴 재계산)
+        async function _staffApproveCheckout(id){
+            const att=_staffAdminAttendance.find(a=>a.id===id);
+            if(!att){ alert('기록을 찾을 수 없습니다.'); return; }
+            const t=att.pendingCheckOut;
+            if(!t||!/^\d{2}:\d{2}$/.test(t)){ alert('요청된 퇴근 시간이 올바르지 않습니다.'); return; }
+            if(!confirm(`${_name(att)} · ${att.date} 퇴근 시간을 ${t}(으)로 승인합니다.`)) return;
+            try{
+                const [hh,mm]=t.split(':').map(Number);
+                const endMin=getWorkEndMin(att.date);
+                const newStatus=(hh*60+mm<endMin-10)?'early':(att.status||'normal');
+                const update={
+                    checkOut:t, status:newStatus,
+                    manualCorrection:true, correctionNote:'퇴근 누락 - 승인됨',
+                    checkoutStatus:'approved',
+                    checkoutApprovedBy:(currentUser&&(currentUser.name||currentUser.id))||'',
+                    checkoutApprovedAt:firebase.firestore.FieldValue.serverTimestamp(),
+                    correctedAt:firebase.firestore.FieldValue.serverTimestamp(),
+                    pendingCheckOut:firebase.firestore.FieldValue.delete(),
+                    checkoutRejectReason:firebase.firestore.FieldValue.delete()
+                };
+                await db.collection('attendance').doc(id).update(update);
+                Object.assign(att,{checkOut:t,status:newStatus,checkoutStatus:'approved'}); delete att.pendingCheckOut;
+                _renderStaffAdminBody();
+            }catch(e){ alert('승인 실패: '+(e?.message||e)); }
+        }
+        // 퇴근 정정 요청 반려
+        async function _staffRejectCheckout(id){
+            const att=_staffAdminAttendance.find(a=>a.id===id);
+            if(!att){ alert('기록을 찾을 수 없습니다.'); return; }
+            const reason=prompt('반려 사유(직원에게 표시됩니다):','시간 확인 필요');
+            if(reason===null) return;
+            try{
+                await db.collection('attendance').doc(id).update({
+                    checkoutStatus:'rejected',
+                    checkoutRejectReason:reason.trim()||'',
+                    checkoutRejectedBy:(currentUser&&(currentUser.name||currentUser.id))||'',
+                    checkoutRejectedAt:firebase.firestore.FieldValue.serverTimestamp()
+                });
+                Object.assign(att,{checkoutStatus:'rejected',checkoutRejectReason:reason.trim()||''});
+                _renderStaffAdminBody();
+            }catch(e){ alert('반려 실패: '+(e?.message||e)); }
         }
 
         // ─────────────────────────────
