@@ -1,6 +1,5 @@
 node_modules/
 functions/node_modules/
-functions/package-lock.json
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
