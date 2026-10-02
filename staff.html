@@ -26,8 +26,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
     <!-- FCM(messaging) SDK 는 관리자 푸시 사용 시에만 지연 로드 (인앱 브라우저 로그인 영향 방지) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- JSZip·XLSX(엑셀/백업 전용, 약 1MB)는 화면을 막지 않도록 '쓸 때만' 지연 로드한다.
+         (_ensureJszip / _ensureXlsx) — head에서 동기 로드하면 콜드 스타트 때 로그인 버튼이 늦게 살아난다. -->
     <!-- Black Han Sans: 📣 SNS 탭 촬영 슬레이트의 제목용 굵은 서체 (실제 글립 사용 시에만 내려받음) -->
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -967,7 +967,17 @@
             <button type="button" class="login-btn" id="biometricBtn" style="display:none;margin-top:.5rem;background:var(--primary)" onclick="biometricLogin()">🔐 생체인식 로그인</button>
         </form>
     </div>
-    
+    <script>
+        /* 콜드 스타트 가드: 메인 스크립트(수천 줄)가 아직 평가되기 전에 로그인 버튼을 누르면
+           onsubmit="attemptLogin()"이 ReferenceError로 '아무 반응 없이 죽은 버튼'처럼 보인다.
+           그 짧은 창에서 사용자에게 로딩 중임을 알리는 임시 스텁. 메인 스크립트가 평가되면
+           실제 attemptLogin 함수 선언이 이 전역을 덮어쓴다(함수 선언 호이스팅). */
+        window.attemptLogin = window.attemptLogin || function(){
+            var el=document.getElementById('loginError');
+            if(el) el.textContent='앱을 불러오는 중입니다… 잠시 후 다시 눌러주세요.';
+        };
+    </script>
+
     <div class="pw-setup" id="pwSetup">
         <div class="pw-setup-title">비밀번호 설정</div>
         <div class="pw-setup-desc">최초 로그인입니다.<br>새 비밀번호를 설정해주세요.</div>
@@ -15351,6 +15361,29 @@
                 document.head.appendChild(s);
             });
         }
+        // 외부 스크립트 1회 지연 로드 (중복 로드 방지)
+        const _lazyScriptCache={};
+        function _loadScriptOnce(src){
+            if(_lazyScriptCache[src]) return _lazyScriptCache[src];
+            _lazyScriptCache[src]=new Promise((resolve,reject)=>{
+                const s=document.createElement('script');
+                s.src=src; s.async=true;
+                s.onload=()=>resolve();
+                s.onerror=()=>{ delete _lazyScriptCache[src]; reject(new Error('스크립트 로드 실패: '+src)); };
+                document.head.appendChild(s);
+            });
+            return _lazyScriptCache[src];
+        }
+        // JSZip(백업 복원용) — 쓸 때만 로드
+        function _ensureJszip(){
+            if(typeof JSZip!=='undefined') return Promise.resolve();
+            return _loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+        }
+        // XLSX(엑셀 내보내기용) — 쓸 때만 로드
+        function _ensureXlsx(){
+            if(typeof XLSX!=='undefined') return Promise.resolve();
+            return _loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+        }
         async function enableAdminPush(){
             if(!isAdminHigh){ alert('대표원장(adminHigh) 계정만 사용합니다.'); return; }
             if(!_fcmVapidKey){ alert('먼저 아래에 VAPID 키를 저장해주세요.\n(Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서)'); return; }
@@ -17147,6 +17180,7 @@
             const file=input&&input.files&&input.files[0];
             if(!file) return;
             const resultEl=document.getElementById('staffPayslipUploadResult');
+            try{ await _ensureJszip(); }catch(_){}
             if(typeof JSZip==='undefined'){ alert('ZIP 라이브러리(JSZip)를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.'); input.value=''; return; }
             const ym=_staffPayslipCurrentYm();
             const deliverAt=_staffPayslipDeliverDate(ym);
@@ -17306,7 +17340,8 @@
             XLSX.utils.book_append_sheet(wb,ws,'사전급여대장');
             return wb;
         }
-        function _staffExportPrePayroll(){
+        async function _staffExportPrePayroll(){
+            try{ await _ensureXlsx(); }catch(_){}
             if(typeof XLSX==='undefined'){ alert('엑셀 라이브러리(XLSX)를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.'); return; }
             const ym=_staffPayrollYm||_staffDefaultPayslipYM();
             XLSX.writeFile(_staffPrePayrollWorkbook(ym), '사전급여대장_'+ym+'_노무사전달용.xlsx');
@@ -18524,7 +18559,8 @@
         }
 
         // 재고 목록 전체를 관련 정보와 함께 엑셀(.xlsx)로 다운로드 (XLSX 없으면 CSV 폴백)
-        function exportInventoryXlsx(){
+        async function exportInventoryXlsx(){
+            try{ await _ensureXlsx(); }catch(_){}
             const items=(invItems||[]).slice().sort((a,b)=>{
                 const pa=String(a.parentName||'').localeCompare(String(b.parentName||''),'ko');
                 if(pa!==0) return pa;
@@ -23252,7 +23288,8 @@
         };
 
         // ─── XLSX 내보내기 (백업·원내 공유용, 내부 메모 포함) ──
-        window.fee2ExportXlsx=function(){
+        window.fee2ExportXlsx=async function(){
+            try{ await _ensureXlsx(); }catch(_){}
             if(!window.XLSX){ alert('XLSX 라이브러리 로드 안 됨'); return; }
             const rows=_fee2Items.map(it=>({
                 'ID': it.id,
