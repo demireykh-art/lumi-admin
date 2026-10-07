@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<base target="_top">
+<title>원내 가격표</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&family=Noto+Serif+KR:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+/* price.html 과 같은 팔레트 · 서체 (functions/index.js _buildPriceHtml) */
+:root{--cream:#FAF8F5;--warm:#F3EDE7;--beige:#E8E0D5;--taupe:#C4B7A6;--brown:#8B7355;
+  --dark:#1A1A1A;--text:#3D3D3D;--text-light:#6B6B6B;--gold:#C9A962;--fs:8.6pt}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#ECE9E4;color:var(--text);font-family:'Noto Sans KR',sans-serif;font-weight:300;
+  -webkit-font-smoothing:antialiased;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* ── 툴바 (화면 전용) ── */
+.toolbar{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1rem;
+  padding:.6rem 1rem;background:#fff;border-bottom:1px solid var(--beige);font-size:13px;font-weight:400}
+.toolbar .seg{display:inline-flex;border:1px solid var(--taupe);border-radius:4px;overflow:hidden}
+.toolbar .seg button{border:0;background:#fff;padding:.3rem .7rem;font:inherit;color:var(--text-light);cursor:pointer}
+.toolbar .seg button.on{background:var(--brown);color:#fff}
+.toolbar label{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:var(--text)}
+.toolbar .grow{flex:1}
+.toolbar .btn{border:1px solid var(--brown);background:#fff;color:var(--brown);padding:.4rem .9rem;border-radius:4px;font:inherit;cursor:pointer}
+.toolbar .btn.primary{background:var(--brown);color:#fff}
+.status{padding:.45rem 1rem;font-size:12px;color:var(--text-light);background:var(--warm)}
+.status b{color:var(--dark);font-weight:500}
+.status .warn{color:#a94442;display:block;margin-top:.2rem}
+
+/* ── 종이 ── */
+.sheet{width:210mm;min-height:297mm;margin:16px auto 40px;padding:13mm 12mm 12mm;background:#fff;
+  box-shadow:0 2px 14px rgba(0,0,0,.12);font-size:var(--fs);line-height:1.5}
+.sheet.lg{--fs:10pt}
+
+.ph{display:flex;align-items:flex-end;justify-content:space-between;gap:8mm;
+  padding-bottom:4mm;margin-bottom:5mm;border-bottom:.8pt solid var(--brown)}
+.ph .label{margin:0 0 1.5mm;font-family:'Cormorant Garamond',serif;font-size:9pt;letter-spacing:.32em;color:var(--taupe)}
+.ph h1{margin:0;font-family:'Cormorant Garamond','Noto Serif KR',serif;font-weight:400;font-size:24pt;
+  color:var(--dark);letter-spacing:.01em;line-height:1.1}
+.ph h1 em{font-style:italic;color:var(--brown)}
+.ph .meta{text-align:right;font-size:7.6pt;line-height:1.7;color:var(--text-light);white-space:nowrap}
+.ph .meta .brand{display:block;font-family:'Cormorant Garamond',serif;font-size:12pt;letter-spacing:.18em;color:var(--dark)}
+
+.cols.c2{column-count:2;column-gap:9mm;column-rule:.4pt solid var(--beige)}
+
+.cat-head{break-inside:avoid;page-break-inside:avoid}
+.cat{margin:0 0 5.2mm}
+.cat h2{margin:0;padding:0 0 1.2mm;font-family:'Cormorant Garamond','Noto Serif KR',serif;font-weight:500;
+  font-size:calc(var(--fs) * 1.55);color:var(--dark);letter-spacing:.02em;
+  border-bottom:.5pt solid var(--gold);display:flex;align-items:baseline;gap:2mm}
+.cat .note{margin:1.4mm 0 0;font-size:calc(var(--fs) * .86);color:var(--text-light);line-height:1.55}
+
+.grp{break-inside:avoid;page-break-inside:avoid;padding:1.9mm 0 1.7mm;border-bottom:.4pt solid var(--beige)}
+.grp:last-child{border-bottom:0}
+.line{display:flex;align-items:baseline;gap:1.6mm}
+.line .nm{font-weight:500;color:var(--dark)}
+.line .sp{color:var(--text-light);font-size:calc(var(--fs) * .92)}
+.line .nm .sp{font-weight:300;margin-left:1.4mm}
+.line .dots{flex:1;min-width:4mm;border-bottom:.6pt dotted var(--taupe);transform:translateY(-.25em)}
+.line .pr{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--dark);font-weight:400}
+.line .pr s{color:var(--taupe);font-size:.86em;margin-right:1.4mm;font-weight:300}
+.line .pr .ev{color:var(--brown);font-weight:500}
+.line .pr .ask{color:var(--text-light);font-size:.92em}
+.desc{margin:.3mm 0 .5mm;font-size:calc(var(--fs) * .86);color:var(--text-light);line-height:1.5}
+.opt{padding-left:3mm}
+.opt + .opt{margin-top:.3mm}
+
+.pf{margin-top:6mm;padding:3.2mm 4mm;background:var(--warm);border-left:1.4pt solid var(--gold);
+  font-size:calc(var(--fs) * .88);color:var(--text-light);line-height:1.75;break-inside:avoid}
+.pf p{margin:0}
+.addr{margin-top:3mm;text-align:center;font-size:7.4pt;letter-spacing:.04em;color:var(--taupe)}
+
+@media print{
+  @page{size:A4;margin:12mm 12mm 12mm}
+  body{background:#fff}
+  .toolbar,.status{display:none!important}
+  .sheet{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}
+}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="seg" id="segCols"><button data-v="2" class="on">2단</button><button data-v="1">1단</button></span>
+  <span class="seg" id="segSize"><button data-v="md" class="on">글자 보통</button><button data-v="lg">글자 크게</button></span>
+  <label><input type="checkbox" id="optStrike" checked> 할인 전 가격 표시</label>
+  <span class="grow"></span>
+  <button class="btn" id="btnPop" title="인쇄 버튼이 안 먹을 때">새 창에서 열기</button>
+  <button class="btn primary" id="btnPrint">🖨 인쇄</button>
+</div>
+<div class="status" id="status">시트 읽는 중…</div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+(function(){
+  var DATA = null;
+  var opt = { cols: 2, size: 'md', strike: true };
+
+  // 노출 값 → [원내 출력물, 홈페이지]
+  var LV = { '둘다':[1,1], '원내만':[1,0], '홈페이지만':[0,1], '숨김':[0,0] };
+  function norm(v){
+    v = String(v == null ? '' : v).trim();
+    if (v === '원내') return '원내만';
+    if (v === '홈페이지') return '홈페이지만';
+    return v;
+  }
+  // 우선순위: 더 좁은 쪽이 이긴다(교집합).
+  //   줄 노출이 비어 있으면 카테고리 값을 그대로 따르고,
+  //   채워져 있으면 카테고리 ∩ 줄. → 카테고리가 '둘다'여도 줄 '숨김'이면 숨김,
+  //   카테고리가 '숨김'이면 줄에 뭐라고 써도 숨김.
+  function visible(catV, rowV, warns, where){
+    var c = norm(catV) || '둘다', r = norm(rowV);
+    if (!LV[c]) { warns.push(where + ' 카테고리 노출 값 "' + c + '" 를 몰라서 숨김 처리'); c = '숨김'; }
+    if (r && !LV[r]) { warns.push(where + ' 노출 값 "' + r + '" 를 몰라서 숨김 처리'); r = '숨김'; }
+    var cl = LV[c], rl = r ? LV[r] : cl;
+    return [cl[0] & rl[0], cl[1] & rl[1]];
+  }
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+  function won(v){
+    if (v === '' || v == null) return '';
+    if (typeof v === 'number') return v.toLocaleString('ko-KR') + '원';
+    var s = String(v).trim();
+    if (/^[\d,]+$/.test(s)) return Number(s.replace(/,/g, '')).toLocaleString('ko-KR') + '원';
+    return s;   // 이미 "1,800,000원" 처럼 글자로 들어 있는 경우
+  }
+  function col(header, name, fallback){
+    var i = header.map(function(h){ return String(h).trim(); }).indexOf(name);
+    return i >= 0 ? i : fallback;
+  }
+
+  function build(){
+    var warns = [], fees = DATA.fees || [], cats = DATA.cats || [], foot = DATA.foot || [];
+    var fh = fees[0] || [];
+    var C = { cat:col(fh,'카테고리',0), name:col(fh,'시술명',1), desc:col(fh,'설명',2), spec:col(fh,'범위',3),
+              price:col(fh,'가격',4), disp:col(fh,'가격 표시(선택)',5), was:col(fh,'할인 전 가격',6), show:col(fh,'노출',7) };
+    var ch = cats[0] || [];
+    var K = { name:col(ch,'카테고리',0), note:col(ch,'카테고리 설명',1), show:col(ch,'노출',2) };
+
+    var catOrder = [], catInfo = {};
+    cats.slice(1).forEach(function(r){
+      var n = String(r[K.name] || '').trim(); if (!n || catInfo[n]) return;
+      catOrder.push(n); catInfo[n] = { note: String(r[K.note] || '').trim(), show: r[K.show] };
+    });
+
+    // 시트 순서대로, 같은 카테고리·같은 시술명이 붙어 있으면 한 묶음
+    var groups = {}, shown = 0, hidden = 0;
+    var last = null;
+    fees.slice(1).forEach(function(r, i){
+      var cat = String(r[C.cat] || '').trim(), name = String(r[C.name] || '').trim();
+      if (!cat && !name) return;
+      var where = (i + 2) + '행(' + (name || '이름 없음') + ')';
+      if (!catInfo[cat]) {
+        warns.push(where + ' 카테고리 "' + cat + '" 가 카테고리 탭에 없음 — 맨 뒤에 붙임');
+        catOrder.push(cat); catInfo[cat] = { note: '', show: '둘다' };
+      }
+      var g;
+      if (last && last.cat === cat && last.name === name) g = last;
+      else {
+        g = { cat: cat, name: name, desc: '', rows: [], opts: [] };
+        (groups[cat] = groups[cat] || []).push(g); last = g;
+      }
+      g.rows.push(String(r[C.desc] || '').trim());   // 숨긴 줄 설명도 묶음 설명 판정엔 쓴다
+      if (!visible(catInfo[cat].show, r[C.show], warns, where)[0]) { hidden++; return; }
+      shown++;
+      g.opts.push({
+        spec: String(r[C.spec] || '').trim(),
+        d: String(r[C.desc] || '').trim(),
+        disp: String(r[C.disp] || '').trim(),
+        price: won(r[C.price]),
+        was: won(r[C.was]),
+      });
+    });
+
+    // 설명: 묶음 안 설명이 한 가지뿐이면 시술명 밑에 한 번(작성 규칙 3),
+    // 줄마다 다르면(여성 제모: 겨드랑이/인중/…) 각 줄의 범위 옆에 붙인다.
+    Object.keys(groups).forEach(function(cat){ groups[cat].forEach(function(g){
+      var all = g.rows.filter(Boolean), uniq = all.filter(function(v, i){ return all.indexOf(v) === i; });
+      if (uniq.length > 1) { g.desc = ''; g.opts.forEach(function(o){ o.extra = o.d; }); }
+      else g.desc = uniq[0] || '';
+    }); });
+
+    function priceHtml(o){
+      if (o.disp) return esc(o.disp);
+      if (!o.price) return '<span class="ask">상담 후 안내</span>';
+      if (opt.strike && o.was && o.was !== o.price) return '<s>' + esc(o.was) + '</s><span class="ev">' + esc(o.price) + '</span>';
+      return esc(o.price);
+    }
+    function specText(o){ return [o.spec, o.extra].filter(Boolean).join(' · '); }
+
+    function grpHtml(g){
+      var o = g.opts;
+      if (o.length === 1) {
+        var sp = specText(o[0]);
+        return '<div class="grp"><div class="line"><span class="nm">' + esc(g.name)
+          + (sp ? '<span class="sp">' + esc(sp) + '</span>' : '') + '</span><span class="dots"></span>'
+          + '<span class="pr">' + priceHtml(o[0]) + '</span></div>'
+          + (g.desc ? '<div class="desc">' + esc(g.desc) + '</div>' : '') + '</div>';
+      }
+      return '<div class="grp"><div class="line"><span class="nm">' + esc(g.name) + '</span></div>'
+        + (g.desc ? '<div class="desc">' + esc(g.desc) + '</div>' : '')
+        + o.map(function(x){
+            return '<div class="line opt"><span class="sp">' + esc(specText(x) || '1회') + '</span><span class="dots"></span>'
+              + '<span class="pr">' + priceHtml(x) + '</span></div>';
+          }).join('') + '</div>';
+    }
+
+    var body = catOrder.map(function(cat){
+      var gs = (groups[cat] || []).filter(function(g){ return g.opts.length; });
+      if (!gs.length) return '';
+      var info = catInfo[cat];
+      // 카테고리 제목은 첫 묶음과 함께 붙여서 단·쪽 끝에 제목만 남지 않게
+      return '<section class="cat"><div class="cat-head"><h2>' + esc(cat) + '</h2>'
+        + (info.note ? '<p class="note">' + esc(info.note) + '</p>' : '')
+        + grpHtml(gs[0]) + '</div>' + gs.slice(1).map(grpHtml).join('') + '</section>';
+    }).join('');
+
+    var fhh = foot[0] || [];
+    var F = { text: col(fhh,'문구',0), show: col(fhh,'노출',1) };
+    var notes = foot.slice(1).filter(function(r){
+      var v = norm(r[F.show]) || '둘다';
+      if (!LV[v]) { warns.push('하단 문구 노출 값 "' + v + '" 를 몰라서 숨김 처리'); return false; }
+      return String(r[F.text] || '').trim() && LV[v][0];
+    }).map(function(r){ return '<p>' + esc(r[F.text]) + '</p>'; }).join('');
+
+    var date = DATA.today || '';
+    document.getElementById('sheet').innerHTML =
+        '<header class="ph"><div><p class="label">PRICE LIST</p><h1>시술 <em>가격</em> 안내</h1></div>'
+      + '<div class="meta"><span class="brand">THE CLINIC LUMI</span>더클리닉루미 · 기준일 ' + esc(date) + '</div></header>'
+      + '<main class="cols' + (opt.cols === 2 ? ' c2' : '') + '">' + body + '</main>'
+      + (notes ? '<footer class="pf">' + notes + '</footer>' : '')
+      + '<div class="addr">서울 송파구 백제고분로 204 5·6층 · Tel. 02-419-1900</div>';
+    document.getElementById('sheet').className = 'sheet' + (opt.size === 'lg' ? ' lg' : '');
+
+    document.getElementById('status').innerHTML = '출력 <b>' + shown + '줄</b> · 노출 설정으로 빠진 줄 ' + hidden
+      + (warns.length ? warns.map(function(w){ return '<span class="warn">⚠ ' + esc(w) + '</span>'; }).join('') : '');
+  }
+
+  function seg(id, key, conv){
+    document.getElementById(id).addEventListener('click', function(e){
+      var b = e.target.closest('button'); if (!b) return;
+      Array.prototype.forEach.call(this.children, function(x){ x.classList.toggle('on', x === b); });
+      opt[key] = conv ? conv(b.dataset.v) : b.dataset.v; if (DATA) build();
+    });
+  }
+  seg('segCols', 'cols', Number);
+  seg('segSize', 'size');
+  document.getElementById('optStrike').addEventListener('change', function(){ opt.strike = this.checked; if (DATA) build(); });
+  document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
+  document.getElementById('btnPop').addEventListener('click', function(){
+    var w = window.open('', '_blank');
+    if (!w) { alert('팝업이 막혔어요. 브라우저 주소창 오른쪽에서 팝업을 허용해 주세요.'); return; }
+    w.document.write('<!DOCTYPE html><html lang="ko"><head>' + document.head.innerHTML
+      + '</head><body>' + document.getElementById('sheet').outerHTML + '</body></html>');
+    w.document.close();
+    setTimeout(function(){ w.focus(); w.print(); }, 900);
+  });
+
+  function load(d){ DATA = d; build(); }
+  if (window.__PREVIEW_DATA__) load(window.__PREVIEW_DATA__);
+  else google.script.run
+    .withSuccessHandler(load)
+    .withFailureHandler(function(e){ document.getElementById('status').textContent = '시트를 못 읽었어요: ' + (e && e.message || e); })
+    .getPrintData();
+})();
+</script>
+</body>
+</html>
