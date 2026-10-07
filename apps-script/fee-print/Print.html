@@ -5,23 +5,20 @@
 <base target="_top">
 <title>원내 가격표</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&family=Noto+Serif+KR:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&family=Noto+Serif+KR:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
-/* price.html 과 같은 팔레트 · 서체 (functions/index.js _buildPriceHtml) */
+/* price.html 과 같은 팔레트 · 서체 (functions/index.js 에 있던 _buildPriceHtml 기준) */
 :root{--cream:#FAF8F5;--warm:#F3EDE7;--beige:#E8E0D5;--taupe:#C4B7A6;--brown:#8B7355;
-  --dark:#1A1A1A;--text:#3D3D3D;--text-light:#6B6B6B;--gold:#C9A962;--fs:8.6pt}
+  --dark:#1A1A1A;--text:#3D3D3D;--text-light:#6B6B6B;--gold:#C9A962}
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:#ECE9E4;color:var(--text);font-family:'Noto Sans KR',sans-serif;font-weight:300;
+body{background:#ECE9E4;color:var(--text);font-family:'Noto Sans KR',sans-serif;font-weight:400;
   -webkit-font-smoothing:antialiased;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 
 /* ── 툴바 (화면 전용) ── */
 .toolbar{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1rem;
-  padding:.6rem 1rem;background:#fff;border-bottom:1px solid var(--beige);font-size:13px;font-weight:400}
-.toolbar .seg{display:inline-flex;border:1px solid var(--taupe);border-radius:4px;overflow:hidden}
-.toolbar .seg button{border:0;background:#fff;padding:.3rem .7rem;font:inherit;color:var(--text-light);cursor:pointer}
-.toolbar .seg button.on{background:var(--brown);color:#fff}
-.toolbar label{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:var(--text)}
+  padding:.6rem 1rem;background:#fff;border-bottom:1px solid var(--beige);font-size:13px}
+.toolbar label{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer}
 .toolbar .grow{flex:1}
 .toolbar .btn{border:1px solid var(--brown);background:#fff;color:var(--brown);padding:.4rem .9rem;border-radius:4px;font:inherit;cursor:pointer}
 .toolbar .btn.primary{background:var(--brown);color:#fff}
@@ -29,73 +26,72 @@ body{background:#ECE9E4;color:var(--text);font-family:'Noto Sans KR',sans-serif;
 .status b{color:var(--dark);font-weight:500}
 .status .warn{color:#a94442;display:block;margin-top:.2rem}
 
-/* ── 종이 ── */
-.sheet{width:210mm;min-height:297mm;margin:16px auto 40px;padding:13mm 12mm 12mm;background:#fff;
-  box-shadow:0 2px 14px rgba(0,0,0,.12);font-size:var(--fs);line-height:1.5}
-.sheet.lg{--fs:10pt}
+/* ── A4 한 장 = .page 하나. 내용이 넘치면 그 장만 글자를 줄여 맞춘다(fitPages). ── */
+.page{width:210mm;height:297mm;margin:16px auto;padding:16mm 16mm 12mm;background:#fff;
+  box-shadow:0 2px 14px rgba(0,0,0,.12);display:flex;flex-direction:column;overflow:hidden;
+  --fs:15pt;font-size:var(--fs);line-height:1.45}
+.pg-body{flex:1;min-height:0;overflow:hidden}
+.pg-foot{flex:none;margin-top:5mm;padding-top:3mm;border-top:.6pt solid var(--beige);
+  display:flex;justify-content:space-between;gap:6mm;font-size:8.5pt;line-height:1.6;color:var(--text-light)}
+.pg-foot p{margin:0}
+.pg-foot .meta{text-align:right;white-space:nowrap;color:var(--taupe)}
+.pg-foot .brand{display:block;font-family:'Cormorant Garamond',serif;font-size:11pt;letter-spacing:.18em;color:var(--brown)}
 
-.ph{display:flex;align-items:flex-end;justify-content:space-between;gap:8mm;
-  padding-bottom:4mm;margin-bottom:5mm;border-bottom:.8pt solid var(--brown)}
-.ph .label{margin:0 0 1.5mm;font-family:'Cormorant Garamond',serif;font-size:9pt;letter-spacing:.32em;color:var(--taupe)}
-.ph h1{margin:0;font-family:'Cormorant Garamond','Noto Serif KR',serif;font-weight:400;font-size:24pt;
-  color:var(--dark);letter-spacing:.01em;line-height:1.1}
-.ph h1 em{font-style:italic;color:var(--brown)}
-.ph .meta{text-align:right;font-size:7.6pt;line-height:1.7;color:var(--text-light);white-space:nowrap}
-.ph .meta .brand{display:block;font-family:'Cormorant Garamond',serif;font-size:12pt;letter-spacing:.18em;color:var(--dark)}
+.cat + .cat{margin-top:1.6em}
+.cat h2{margin:0;padding-bottom:.25em;font-family:'Cormorant Garamond','Noto Serif KR',serif;font-weight:600;
+  font-size:2.05em;line-height:1.15;color:var(--dark);letter-spacing:.01em;border-bottom:1.2pt solid var(--gold)}
+.cat .note{margin:.45em 0 0;font-size:.74em;color:var(--text-light);line-height:1.5}
 
-.cols.c2{column-count:2;column-gap:9mm;column-rule:.4pt solid var(--beige)}
-
-.cat-head{break-inside:avoid;page-break-inside:avoid}
-.cat{margin:0 0 5.2mm}
-.cat h2{margin:0;padding:0 0 1.2mm;font-family:'Cormorant Garamond','Noto Serif KR',serif;font-weight:500;
-  font-size:calc(var(--fs) * 1.55);color:var(--dark);letter-spacing:.02em;
-  border-bottom:.5pt solid var(--gold);display:flex;align-items:baseline;gap:2mm}
-.cat .note{margin:1.4mm 0 0;font-size:calc(var(--fs) * .86);color:var(--text-light);line-height:1.55}
-
-.grp{break-inside:avoid;page-break-inside:avoid;padding:1.9mm 0 1.7mm;border-bottom:.4pt solid var(--beige)}
+.grp{padding:.62em 0 .55em;border-bottom:.5pt solid var(--beige);break-inside:avoid;page-break-inside:avoid}
+/* 항목이 많은 장(색소·돌출 질환)은 두 단으로 나눠 글자를 크게 유지한다 */
+.page.two .items{column-count:2;column-gap:9mm;column-rule:.5pt solid var(--beige)}
+.page.two .grp:last-child{border-bottom:.5pt solid var(--beige)}
 .grp:last-child{border-bottom:0}
-.line{display:flex;align-items:baseline;gap:1.6mm}
-.line .nm{font-weight:500;color:var(--dark)}
-.line .sp{color:var(--text-light);font-size:calc(var(--fs) * .92)}
-.line .nm .sp{font-weight:300;margin-left:1.4mm}
-.line .dots{flex:1;min-width:4mm;border-bottom:.6pt dotted var(--taupe);transform:translateY(-.25em)}
-.line .pr{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--dark);font-weight:400}
-.line .pr s{color:var(--taupe);font-size:.86em;margin-right:1.4mm;font-weight:300}
-.line .pr .ev{color:var(--brown);font-weight:500}
-.line .pr .ask{color:var(--text-light);font-size:.92em}
-.desc{margin:.3mm 0 .5mm;font-size:calc(var(--fs) * .86);color:var(--text-light);line-height:1.5}
-.opt{padding-left:3mm}
-.opt + .opt{margin-top:.3mm}
-
-.pf{margin-top:6mm;padding:3.2mm 4mm;background:var(--warm);border-left:1.4pt solid var(--gold);
-  font-size:calc(var(--fs) * .88);color:var(--text-light);line-height:1.75;break-inside:avoid}
-.pf p{margin:0}
-.addr{margin-top:3mm;text-align:center;font-size:7.4pt;letter-spacing:.04em;color:var(--taupe)}
+.line{display:flex;align-items:baseline;gap:.45em}
+.line .nm{font-weight:600;color:var(--dark)}
+.line .sp{color:var(--text-light);font-size:.88em;font-weight:400}
+.line .nm .sp{margin-left:.45em;white-space:nowrap}
+.line .dots{flex:1;min-width:1.2em;border-bottom:.8pt dotted var(--taupe);transform:translateY(-.28em)}
+.line .pr{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--dark);font-weight:500}
+.line .pr s{color:var(--taupe);font-size:.78em;margin-right:.45em;font-weight:400}
+.line .pr .ev{color:var(--brown);font-weight:600}
+.line .pr .ask{color:var(--text-light);font-size:.88em;font-weight:400}
+.desc{margin:.12em 0 .1em;font-size:.76em;color:var(--text-light);line-height:1.45}
+.opt{padding-left:.9em;margin-top:.18em}
 
 @media print{
-  @page{size:A4;margin:12mm 12mm 12mm}
+  @page{size:A4;margin:0}
   body{background:#fff}
   .toolbar,.status{display:none!important}
-  .sheet{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}
+  .page{margin:0;box-shadow:none;break-after:page;page-break-after:always}
+  .page:last-child{break-after:auto;page-break-after:auto}
 }
 </style>
 </head>
 <body>
 <div class="toolbar">
-  <span class="seg" id="segCols"><button data-v="2" class="on">2단</button><button data-v="1">1단</button></span>
-  <span class="seg" id="segSize"><button data-v="md" class="on">글자 보통</button><button data-v="lg">글자 크게</button></span>
   <label><input type="checkbox" id="optStrike" checked> 할인 전 가격 표시</label>
   <span class="grow"></span>
   <button class="btn" id="btnPop" title="인쇄 버튼이 안 먹을 때">새 창에서 열기</button>
   <button class="btn primary" id="btnPrint">🖨 인쇄</button>
 </div>
 <div class="status" id="status">시트 읽는 중…</div>
-<div class="sheet" id="sheet"></div>
+<div id="sheet"></div>
 
 <script>
 (function(){
   var DATA = null;
-  var opt = { cols: 2, size: 'md', strike: true };
+  var opt = { strike: true };
+
+  // 한 장에 같이 싣는 카테고리(맥락이 가깝고 내용이 짧은 것끼리).
+  // 여기 없는 카테고리는 한 장에 하나씩. 시트에 새 카테고리가 생기면 자동으로 따로 한 장.
+  var PAGE_GROUPS = [
+    ['여드름 관리', '여드름 레이저 치료'],
+    ['스킨부스터', '줄기세포 · 재생'],
+    ['주름', '볼륨'],
+    ['제모', '케어 · 수액'],
+    ['LUMI EVENT', 'VIP PROGRAM'],
+  ];
 
   // 노출 값 → [원내 출력물, 홈페이지]
   var LV = { '둘다':[1,1], '원내만':[1,0], '홈페이지만':[0,1], '숨김':[0,0] };
@@ -206,16 +202,23 @@ body{background:#ECE9E4;color:var(--text);font-family:'Noto Sans KR',sans-serif;
               + '<span class="pr">' + priceHtml(x) + '</span></div>';
           }).join('') + '</div>';
     }
-
-    var body = catOrder.map(function(cat){
+    function catHtml(cat){
       var gs = (groups[cat] || []).filter(function(g){ return g.opts.length; });
       if (!gs.length) return '';
       var info = catInfo[cat];
-      // 카테고리 제목은 첫 묶음과 함께 붙여서 단·쪽 끝에 제목만 남지 않게
-      return '<section class="cat"><div class="cat-head"><h2>' + esc(cat) + '</h2>'
+      return '<section class="cat"><h2>' + esc(cat) + '</h2>'
         + (info.note ? '<p class="note">' + esc(info.note) + '</p>' : '')
-        + grpHtml(gs[0]) + '</div>' + gs.slice(1).map(grpHtml).join('') + '</section>';
-    }).join('');
+        + '<div class="items">' + gs.map(grpHtml).join('') + '</div></section>';
+    }
+
+    // 장 나누기: 카테고리 탭 순서대로 가되, PAGE_GROUPS 에 묶인 것은 첫 카테고리 자리에 함께 싣는다.
+    var used = {}, pages = [];
+    catOrder.forEach(function(cat){
+      if (used[cat]) return;
+      var grp = PAGE_GROUPS.filter(function(gr){ return gr.indexOf(cat) >= 0; })[0] || [cat];
+      var html = grp.map(function(c){ used[c] = 1; return catInfo[c] ? catHtml(c) : ''; }).join('');
+      if (html) pages.push(html);
+    });
 
     var fhh = foot[0] || [];
     var F = { text: col(fhh,'문구',0), show: col(fhh,'노출',1) };
@@ -225,35 +228,43 @@ body{background:#ECE9E4;color:var(--text);font-family:'Noto Sans KR',sans-serif;
       return String(r[F.text] || '').trim() && LV[v][0];
     }).map(function(r){ return '<p>' + esc(r[F.text]) + '</p>'; }).join('');
 
-    var date = DATA.today || '';
-    document.getElementById('sheet').innerHTML =
-        '<header class="ph"><div><p class="label">PRICE LIST</p><h1>시술 <em>가격</em> 안내</h1></div>'
-      + '<div class="meta"><span class="brand">THE CLINIC LUMI</span>더클리닉루미 · 기준일 ' + esc(date) + '</div></header>'
-      + '<main class="cols' + (opt.cols === 2 ? ' c2' : '') + '">' + body + '</main>'
-      + (notes ? '<footer class="pf">' + notes + '</footer>' : '')
-      + '<div class="addr">서울 송파구 백제고분로 204 5·6층 · Tel. 02-419-1900</div>';
-    document.getElementById('sheet').className = 'sheet' + (opt.size === 'lg' ? ' lg' : '');
+    var footHtml = '<footer class="pg-foot"><div>' + notes + '</div>'
+      + '<div class="meta"><span class="brand">THE CLINIC LUMI</span>기준일 ' + esc(DATA.today || '') + '</div></footer>';
+    document.getElementById('sheet').innerHTML = pages.map(function(h){
+      return '<section class="page"><div class="pg-body">' + h + '</div>' + footHtml + '</section>';
+    }).join('');
 
-    document.getElementById('status').innerHTML = '출력 <b>' + shown + '줄</b> · 노출 설정으로 빠진 줄 ' + hidden
+    document.getElementById('status').innerHTML = 'A4 <b>' + pages.length + '장</b> · 출력 ' + shown + '줄 · 노출 설정으로 빠진 줄 ' + hidden
       + (warns.length ? warns.map(function(w){ return '<span class="warn">⚠ ' + esc(w) + '</span>'; }).join('') : '');
+    fitPages();
   }
 
-  function seg(id, key, conv){
-    document.getElementById(id).addEventListener('click', function(e){
-      var b = e.target.closest('button'); if (!b) return;
-      Array.prototype.forEach.call(this.children, function(x){ x.classList.toggle('on', x === b); });
-      opt[key] = conv ? conv(b.dataset.v) : b.dataset.v; if (DATA) build();
+  // 장마다 18pt 에서 시작해 넘치면 0.5pt 씩 줄인다. 한 단으로 13pt 아래로 내려가야 하면
+  // 두 단으로 바꿔 16pt 부터 다시 맞춘다(최소 10pt). 글꼴이 다 받아진 뒤에 한 번 더 돈다.
+  function fitPages(){
+    Array.prototype.forEach.call(document.querySelectorAll('.page'), function(pg){
+      var body = pg.querySelector('.pg-body');
+      function over(){ return body.scrollHeight > body.clientHeight + 1; }
+      function fit(start, min){
+        var fs = start; pg.style.setProperty('--fs', fs + 'pt');
+        while (over() && fs > min) { fs -= 0.5; pg.style.setProperty('--fs', fs + 'pt'); }
+        return fs;
+      }
+      pg.classList.remove('two');
+      var fs = fit(18, 13);
+      if (over()) { pg.classList.add('two'); fs = fit(16, 10); }
+      pg.dataset.fs = fs + (pg.classList.contains('two') ? ' (2단)' : '');
     });
   }
-  seg('segCols', 'cols', Number);
-  seg('segSize', 'size');
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ if (DATA) fitPages(); });
+
   document.getElementById('optStrike').addEventListener('change', function(){ opt.strike = this.checked; if (DATA) build(); });
   document.getElementById('btnPrint').addEventListener('click', function(){ window.print(); });
   document.getElementById('btnPop').addEventListener('click', function(){
     var w = window.open('', '_blank');
     if (!w) { alert('팝업이 막혔어요. 브라우저 주소창 오른쪽에서 팝업을 허용해 주세요.'); return; }
     w.document.write('<!DOCTYPE html><html lang="ko"><head>' + document.head.innerHTML
-      + '</head><body>' + document.getElementById('sheet').outerHTML + '</body></html>');
+      + '</head><body>' + document.getElementById('sheet').innerHTML + '</body></html>');
     w.document.close();
     setTimeout(function(){ w.focus(); w.print(); }, 900);
   });
