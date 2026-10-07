@@ -90,9 +90,9 @@
   통합앱 홈의 **💵 수가표** 줄은 이 시트를 새 창으로 여는 링크일 뿐이다.
 - 노출 규칙: 줄 노출이 비면 카테고리 값, 채워져 있으면 **카테고리 ∩ 줄(좁은 쪽 우선)**.
   자세한 표는 `apps-script/fee-print/README.md`.
-- 예전 **수가표2**(Firestore `fee_*` + `publishFees`·`regenerateFeePages`)는 폐지했다.
-  두 함수는 배포가 멈추지 않도록 빈 껍데기로 남아 있다 — 이 함수들이 다시 price.html 을
-  쓰게 만들면 시트로 만든 홈페이지 가격표를 덮어쓴다.
+- 예전 **수가표2**(Firestore `fee_*` + `publishFees`·`regenerateFeePages`)는 폐지했고, 두 함수는
+  콘솔에서 삭제한 뒤 코드에서도 뺐다. Firestore `fee_*` 데이터는 백업으로 남아 있다.
+  ⚠️ `lumiclinic/price.html` 을 서버에서 다시 쓰는 기능을 만들면 시트로 만든 홈페이지 가격표를 덮어쓴다.
 - 홈의 **💊 시술 수가표** 줄은 뺐지만 화면(`tab-feeschedule`)과 데이터(`settings/feeSchedule`)는 그대로다.
   시술시간 탭·차팅 오더 자동완성·시술 마스터(`_procCache`)·재고 소모 연결이 이 목록을 쓰므로
   지우면 안 된다. 진입은 상담 화면의 '수가표 보기'로만 된다. 공개 가격(시트)과는 별개의 내부 목록이다.

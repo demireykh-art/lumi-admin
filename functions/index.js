@@ -2359,30 +2359,3 @@ exports.ocrDailySales = onCall(
    }
   }
 );
-
-/* ══════════════════════════════════════════════════════════════════
-   💵 수가표2 — 폐지 (2026-10)
-   ─────────────────────────────────────────────────────────────────
-   홈페이지 가격(lumiclinic/price.html)은 이제 Google 시트
-   「루미의원 수가표 (원본)」에서 만든다. 예전 publishFees(게시 버튼)와
-   regenerateFeePages(매일 00:10)는 Firestore fee_items 로 price.html·event.html
-   을 다시 만들어 lumiclinic main 에 커밋했기 때문에, 살아 있으면 새 가격표를
-   덮어쓴다(9/29 실제로 덮어써서 되돌린 적 있음).
-   배포 워크플로우는 --force 없이 돌아서, 소스에서 함수를 지우면 "프로젝트엔
-   있는데 소스에 없음"으로 배포 전체가 멈춘다. 그래서 같은 이름의 빈 껍데기로
-   덮어 기능만 끈다. Firebase 콘솔에서 두 함수를 삭제한 뒤 이 블록을 지우면 된다.
-   Firestore fee_* 컬렉션 데이터는 백업 삼아 그대로 둔다.
-   ══════════════════════════════════════════════════════════════════ */
-exports.publishFees = onCall(
-  {region: 'asia-northeast3'},
-  async () => {
-    throw new HttpsError('failed-precondition', '수가표2는 폐지되었습니다. 가격은 Google 시트 수가표(원본)에서 고칩니다.');
-  }
-);
-
-exports.regenerateFeePages = onSchedule(
-  {schedule: '10 0 * * *', timeZone: 'Asia/Seoul', region: 'asia-northeast3'},
-  async () => {
-    logger.info('regenerateFeePages: 수가표2 폐지 — 아무것도 하지 않음');
-  }
-);
