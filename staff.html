@@ -762,7 +762,18 @@
                         <button onclick="dismissMissedAlert()" style="padding:.4rem .8rem;background:transparent;border:1px solid #FFEEBA;color:#856404;font-size:.8rem;cursor:pointer;border-radius:var(--r-sm)">닫기</button>
                     </div>
                 </div>
-                
+
+                <!-- 출근 시간 정정 요청 (버튼 늦게 누른 경우 등) -->
+                <div style="margin-bottom:1rem">
+                    <button onclick="toggleCheckinFix()" id="checkinFixToggle" style="width:100%;padding:.55rem;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-size:.85rem;font-weight:600;cursor:pointer;border-radius:var(--r-sm)">🕘 출근 시간 정정 요청</button>
+                    <div id="checkinFixBox" style="display:none;background:#eef2ff;border:1px solid #c7d2fe;border-top:none;padding:.85rem;border-radius:0 0 var(--r-sm) var(--r-sm)">
+                        <div style="font-size:.8rem;color:#3730a3;margin-bottom:.6rem;line-height:1.5">
+                            출근 버튼을 늦게 눌러 시간이 실제와 다를 때, <b>실제 출근 시간</b>을 입력하고 승인 요청을 보내면 관리자 승인 후 반영됩니다(지각 여부도 다시 계산).
+                        </div>
+                        <div id="checkinFixBody"></div>
+                    </div>
+                </div>
+
                 <div class="stats-grid">
                     <div class="stat-card"><div class="stat-value" id="attWorkDays">0</div><div class="stat-label">출근일</div></div>
                     <div class="stat-card orange"><div class="stat-value" id="attLate">0</div><div class="stat-label">지각</div></div>
@@ -6341,7 +6352,86 @@
             _missedDismissed=true;
             document.getElementById('missedClockOutAlert').style.display='none';
         }
-        
+
+        // ===== 출근 시간 정정 요청 (버튼 늦게 누름 등) =====
+        //  · 실제 출근시간을 입력해 승인 요청(pending) → 관리자 승인 시 checkIn 확정·지각 재계산.
+        //  · attendance 문서에 직접 저장: pendingCheckIn / checkinStatus / checkinNote …
+        function toggleCheckinFix(){
+            const box=document.getElementById('checkinFixBox');
+            if(!box) return;
+            const open=box.style.display!=='none';
+            if(open){ box.style.display='none'; return; }
+            box.style.display='block';
+            renderCheckinFix();
+        }
+        function renderCheckinFix(){
+            const body=document.getElementById('checkinFixBody');
+            if(!body) return;
+            const today=getToday();
+            const lo=new Date(); lo.setDate(lo.getDate()-7);
+            const loYmd=lo.toISOString().split('T')[0];
+            const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+            const list=(attendance||[]).filter(a=>a.date && a.date>=loYmd && a.date<=today && a.checkIn)
+                .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+            if(!list.length){ body.innerHTML='<div style="font-size:.82rem;color:#6366f1">최근 7일 출근 기록이 없습니다.</div>'; return; }
+            body.innerHTML=list.map(a=>{
+                const stTxt=a.status==='late'?' · 지각':a.status==='early'?' · 조퇴':'';
+                if(a.checkinStatus==='pending'){
+                    return `<div style="border-top:1px dashed #c7d2fe;padding:.55rem 0">
+                        <div style="font-size:.85rem;color:#3730a3"><b>${esc(a.date)}</b> · 📋 승인 대기 중 (요청 ${esc(a.pendingCheckIn||'-')})</div>
+                        <div style="display:flex;justify-content:flex-end;margin-top:.35rem">
+                            <button onclick="cancelCheckinRequest('${esc(a.id)}')" style="padding:.35rem .7rem;background:#fff;border:1px solid #6366f1;color:#4338ca;font-size:.78rem;cursor:pointer;border-radius:var(--r-sm)">요청 취소</button>
+                        </div></div>`;
+                }
+                const rejected=a.checkinStatus==='rejected';
+                const head=rejected
+                    ? `<div style="font-size:.85rem;color:#b91c1c"><b>${esc(a.date)}</b> · ⛔ 반려됨${a.checkinRejectReason?(' ('+esc(a.checkinRejectReason)+')'):''} — 다시 요청</div>`
+                    : `<div style="font-size:.85rem;color:#3730a3"><b>${esc(a.date)}</b> · 현재 출근 ${esc(a.checkIn||'-')}${stTxt}</div>`;
+                return `<div style="border-top:1px dashed #c7d2fe;padding:.55rem 0">
+                    ${head}
+                    <div style="display:flex;align-items:center;gap:.5rem;margin-top:.4rem">
+                        <input type="time" id="ciTime_${esc(a.id)}" value="${esc(a.pendingCheckIn||a.checkIn||'')}" style="padding:.4rem;border:1px solid #c7d2fe;border-radius:var(--r-sm);font-size:.95rem">
+                        <button onclick="requestCheckinCorrection('${esc(a.id)}')" style="flex:1;padding:.55rem;background:#4338ca;color:#fff;border:none;font-size:.82rem;font-weight:600;cursor:pointer;border-radius:var(--r-sm)">정정 요청</button>
+                    </div></div>`;
+            }).join('');
+        }
+        async function requestCheckinCorrection(recId){
+            const rec=(attendance||[]).find(a=>a.id===recId);
+            if(!rec){ alert('기록을 찾을 수 없습니다.'); return; }
+            const inp=document.getElementById('ciTime_'+recId);
+            const timeInput=inp&&inp.value;
+            if(!timeInput){ alert('출근 시간을 입력해주세요.'); return; }
+            if(!/^\d{2}:\d{2}$/.test(timeInput)){ alert('시간 형식이 올바르지 않습니다.'); return; }
+            if(timeInput===rec.checkIn){ alert('현재 기록과 동일합니다.'); return; }
+            if(!confirm(`${rec.date} 출근 시간을 ${rec.checkIn}→${timeInput}(으)로 정정 요청합니다.\n\n※ 실제 출근한 시간을 정확히 입력해주세요.\n관리자 승인 후 반영됩니다.`)) return;
+            try{
+                await db.collection('attendance').doc(recId).update({
+                    pendingCheckIn:timeInput,
+                    checkinStatus:'pending',
+                    checkinNote:'출근 정정 - 본인 승인요청',
+                    checkinRequestedBy:(currentUser&&(currentUser.name||currentUser.id))||'',
+                    checkinRequestedAt:firebase.firestore.FieldValue.serverTimestamp(),
+                    checkinRejectReason:firebase.firestore.FieldValue.delete()
+                });
+                alert('출근 정정 요청을 보냈습니다. 관리자 승인 후 반영됩니다.');
+                await loadAttendance();
+                renderAttendance();
+                renderCheckinFix();
+            }catch(e){ alert('요청 실패: '+(e.message||e)); }
+        }
+        async function cancelCheckinRequest(recId){
+            if(!confirm('출근 정정 요청을 취소할까요?')) return;
+            try{
+                await db.collection('attendance').doc(recId).update({
+                    checkinStatus:firebase.firestore.FieldValue.delete(),
+                    pendingCheckIn:firebase.firestore.FieldValue.delete()
+                });
+                await loadAttendance();
+                renderAttendance();
+                renderCheckinFix();
+            }catch(e){ alert('취소 실패: '+(e.message||e)); }
+        }
+
         // ===== 점심 OT v2.0 =====
         function updateLunchOTHint(){
             const DAY_KO=['일','월','화','수','목','금','토'];
@@ -15960,9 +16050,10 @@
                 early:'<span style="background:#dbeafe;color:#1e40af;padding:1px 7px;border-radius:var(--r-sm);font-size:.68rem">조퇴</span>',
                 absent:'<span style="background:#fee2e2;color:#991b1b;padding:1px 7px;border-radius:var(--r-sm);font-size:.68rem">결근</span>'
             };
-            // 퇴근 정정 '승인 대기'를 맨 위로
+            // 정정 '승인 대기'(출근/퇴근)를 맨 위로
+            const _isPend=(x)=>(x.checkoutStatus==='pending'||x.checkinStatus==='pending')?0:1;
             recs.sort((a,b)=>{
-                const pa=a.checkoutStatus==='pending'?0:1, pb=b.checkoutStatus==='pending'?0:1;
+                const pa=_isPend(a), pb=_isPend(b);
                 if(pa!==pb) return pa-pb;
                 return String(b.date||'').localeCompare(String(a.date||''));
             });
@@ -15970,20 +16061,34 @@
                 const cin=a.checkIn||a.clockIn||'-';
                 const cout=a.checkOut||a.clockOut||'-';
                 const badge=statusBadge[a.status]||'';
-                const pending=a.checkoutStatus==='pending';
-                if(pending){
-                    const who=a.checkoutRequestedBy?(' · 요청자 '+_esc(a.checkoutRequestedBy)):'';
+                const coPending=a.checkoutStatus==='pending';
+                const ciPending=a.checkinStatus==='pending';
+                if(coPending||ciPending){
+                    let rows='';
+                    if(ciPending){
+                        const who=a.checkinRequestedBy?(' · 요청자 '+_esc(a.checkinRequestedBy)):'';
+                        rows+=`<div style="font-size:.75rem;color:#374151;margin-top:.15rem">🕘 출근 정정: 현재 ${_esc(cin)} → 요청 <b>${_esc(a.pendingCheckIn||'-')}</b>${who}</div>
+                        <div style="display:flex;gap:.3rem;margin-top:.35rem;justify-content:flex-end">
+                            <button onclick="_staffRejectCheckin('${a.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer">반려</button>
+                            <button onclick="_staffApproveCheckin('${a.id}')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer;font-weight:600">✓ 출근 승인</button>
+                        </div>`;
+                    }
+                    if(coPending){
+                        const who=a.checkoutRequestedBy?(' · 요청자 '+_esc(a.checkoutRequestedBy)):'';
+                        rows+=`<div style="font-size:.75rem;color:#374151;margin-top:.15rem">🌙 퇴근 정정: 요청 <b>${_esc(a.pendingCheckOut||'-')}</b>${who}</div>
+                        <div style="display:flex;gap:.3rem;margin-top:.35rem;justify-content:flex-end">
+                            <button onclick="_staffRejectCheckout('${a.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer">반려</button>
+                            <button onclick="_staffApproveCheckout('${a.id}')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer;font-weight:600">✓ 퇴근 승인</button>
+                        </div>`;
+                    }
+                    const tag=(ciPending&&coPending)?'출근·퇴근 정정 승인대기':(ciPending?'출근 정정 승인대기':'퇴근 정정 승인대기');
                     return `<div style="padding:.55rem .6rem;border:1px solid #fcd34d;border-radius:var(--r-sm);margin-bottom:.35rem;background:#fffbeb">
                         <div style="font-weight:700;font-size:.82rem">${_esc(_name(a))} <span style="color:#6b7280;font-weight:500;font-size:.75rem">${_esc(a.date||'')}</span>
-                            <span style="background:#fde68a;color:#92400e;padding:1px 7px;border-radius:var(--r-sm);font-size:.66rem;margin-left:4px">퇴근 정정 승인대기</span></div>
-                        <div style="font-size:.75rem;color:#374151;margin-top:.15rem">출근 ${_esc(cin)} · 요청 퇴근 <b>${_esc(a.pendingCheckOut||'-')}</b>${who}</div>
-                        <div style="display:flex;gap:.3rem;flex-shrink:0;margin-top:.45rem;justify-content:flex-end">
-                            <button onclick="_staffRejectCheckout('${a.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer">반려</button>
-                            <button onclick="_staffApproveCheckout('${a.id}')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer;font-weight:600">✓ 승인</button>
-                        </div>
+                            <span style="background:#fde68a;color:#92400e;padding:1px 7px;border-radius:var(--r-sm);font-size:.66rem;margin-left:4px">${tag}</span></div>
+                        ${rows}
                     </div>`;
                 }
-                const rej=a.checkoutStatus==='rejected'
+                const rej=(a.checkoutStatus==='rejected'||a.checkinStatus==='rejected')
                     ? `<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:var(--r-sm);font-size:.64rem;margin-left:4px">정정 반려</span>` : '';
                 return `<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.5rem .6rem;border:1px solid #e5e7eb;border-radius:var(--r-sm);margin-bottom:.35rem;background:#fff">
                     <div style="min-width:0">
@@ -16042,7 +16147,8 @@
             if(!att){ alert('기록을 찾을 수 없습니다.'); return; }
             const t=att.pendingCheckOut;
             if(!t||!/^\d{2}:\d{2}$/.test(t)){ alert('요청된 퇴근 시간이 올바르지 않습니다.'); return; }
-            if(!confirm(`${_name(att)} · ${att.date} 퇴근 시간을 ${t}(으)로 승인합니다.`)) return;
+            const _nm=(()=>{ const e=(_staffAdminEmployees||[]).find(x=>x.id===(att.employeeId||att.empId)); return (e&&e.name)||att.employeeName||att.employeeId||'직원'; })();
+            if(!confirm(`${_nm} · ${att.date} 퇴근 시간을 ${t}(으)로 승인합니다.`)) return;
             try{
                 const [hh,mm]=t.split(':').map(Number);
                 const endMin=getWorkEndMin(att.date);
@@ -16076,6 +16182,50 @@
                     checkoutRejectedAt:firebase.firestore.FieldValue.serverTimestamp()
                 });
                 Object.assign(att,{checkoutStatus:'rejected',checkoutRejectReason:reason.trim()||''});
+                _renderStaffAdminBody();
+            }catch(e){ alert('반려 실패: '+(e?.message||e)); }
+        }
+        // 출근 정정 요청 승인 → pendingCheckIn 을 checkIn 으로 확정(지각/조퇴 재계산)
+        async function _staffApproveCheckin(id){
+            const att=_staffAdminAttendance.find(a=>a.id===id);
+            if(!att){ alert('기록을 찾을 수 없습니다.'); return; }
+            const t=att.pendingCheckIn;
+            if(!t||!/^\d{2}:\d{2}$/.test(t)){ alert('요청된 출근 시간이 올바르지 않습니다.'); return; }
+            const _nm=(()=>{ const e=(_staffAdminEmployees||[]).find(x=>x.id===(att.employeeId||att.empId)); return (e&&e.name)||att.employeeName||att.employeeId||'직원'; })();
+            if(!confirm(`${_nm} · ${att.date} 출근 시간을 ${att.checkIn||'-'}→${t}(으)로 승인합니다.`)) return;
+            try{
+                const [hh,mm]=t.split(':').map(Number);
+                let newStatus='normal';
+                if(hh*60+mm > ATT_LATE_H*60+ATT_LATE_M) newStatus='late';
+                else if(att.checkOut){ const [eh,em]=String(att.checkOut).split(':').map(Number); if((eh*60+em) < getWorkEndMin(att.date)-10) newStatus='early'; }
+                await db.collection('attendance').doc(id).update({
+                    checkIn:t, status:newStatus,
+                    manualCorrection:true, correctionNote:'출근 정정 - 승인됨',
+                    checkinStatus:'approved',
+                    checkinApprovedBy:(currentUser&&(currentUser.name||currentUser.id))||'',
+                    checkinApprovedAt:firebase.firestore.FieldValue.serverTimestamp(),
+                    correctedAt:firebase.firestore.FieldValue.serverTimestamp(),
+                    pendingCheckIn:firebase.firestore.FieldValue.delete(),
+                    checkinRejectReason:firebase.firestore.FieldValue.delete()
+                });
+                Object.assign(att,{checkIn:t,status:newStatus,checkinStatus:'approved'}); delete att.pendingCheckIn;
+                _renderStaffAdminBody();
+            }catch(e){ alert('승인 실패: '+(e?.message||e)); }
+        }
+        // 출근 정정 요청 반려
+        async function _staffRejectCheckin(id){
+            const att=_staffAdminAttendance.find(a=>a.id===id);
+            if(!att){ alert('기록을 찾을 수 없습니다.'); return; }
+            const reason=prompt('반려 사유(직원에게 표시됩니다):','시간 확인 필요');
+            if(reason===null) return;
+            try{
+                await db.collection('attendance').doc(id).update({
+                    checkinStatus:'rejected',
+                    checkinRejectReason:reason.trim()||'',
+                    checkinRejectedBy:(currentUser&&(currentUser.name||currentUser.id))||'',
+                    checkinRejectedAt:firebase.firestore.FieldValue.serverTimestamp()
+                });
+                Object.assign(att,{checkinStatus:'rejected',checkinRejectReason:reason.trim()||''});
                 _renderStaffAdminBody();
             }catch(e){ alert('반려 실패: '+(e?.message||e)); }
         }
