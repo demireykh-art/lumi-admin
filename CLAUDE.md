@@ -26,6 +26,9 @@
 
 - Firebase 프로젝트: `lumiclinic-c1a95` (Firestore + Functions). 로그인한 직원만 접근하도록
   `firestore.rules`에서 컬렉션별 화이트리스트로 제어합니다. 새 컬렉션을 쓰면 규칙에 추가해야 합니다.
+- 🔒 `settings` 의 권한 목록 문서(`bizAdmins`·`adminHigh`·`snsAccess`·`dailySales`)는 **bizAdmins 만 쓸 수 있다**
+  (`firestore.rules` `isPermissionDoc`). 다른 settings 문서는 로그인 직원이 쓴다. 권한 목록 문서를 새로 만들면
+  `isPermissionDoc` 목록에 추가하고 `test/rules/rules.test.mjs` 에 거부 케이스를 넣는다.
 - 통합앱(`staff.html`)은 큰 단일 HTML 파일이며, 대부분의 로직이 인라인 `<script>`에 들어 있습니다
   (일부만 `supplies-catalog.js` 등 외부 파일). 탭 추가 등은 이 인라인 스크립트에 함께 작성합니다.
 
