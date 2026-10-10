@@ -170,11 +170,23 @@ service cloud.firestore {
     match /consultTreeBackups/{id}              { allow read, write: if signedIn(); }
 
     // 설정: 홈페이지 공개 콘텐츠 문서만 비로그인 읽기 허용, 나머지(bizAdmins 등)는 직원 전용
+    //
+    // 🔒 권한 목록 문서 — 쓰기는 경영관리자(bizAdmins)만 (2026-10-10 보안 핫픽스)
+    //    bizAdmins · adminHigh · snsAccess 는 위 isAdmin()/isSnsAdmin() 이 그대로 믿는 목록이고,
+    //    dailySales 는 💵 매출 결산 노출 목록이다. 예전엔 로그인만 하면 누구나 쓸 수 있어서
+    //    직원·공용 계정이 자기 이메일을 넣어 관리자가 될 수 있었다(resetUserPassword 함수도 bizAdmins 를 믿음).
+    //    앱에서 이 넷을 쓰는 곳은 ⚙ 관리자 설정(openAdminSettings — isBizAdmin 전용)뿐이라 기존 흐름은 안 깨진다.
+    //    bizAdmins 가 비거나 없으면 아무도 앱에서 못 고친다 → Firebase 콘솔에서 직접 넣는다.
+    //    ⚠️ 새 권한 목록 문서를 만들면 여기 목록에 추가할 것.
+    //    (staff·employees 목록은 근태·직원관리에서 adminHigh 등도 쓰므로 이번엔 그대로 둔다 — 후속 과제)
+    function isPermissionDoc(docId) {
+      return docId in ['bizAdmins','adminHigh','snsAccess','dailySales'];
+    }
     match /settings/{docId} {
       allow read: if signedIn()
         || docId in ['treatmentMenu','heroSlider','spaceGallery','schedule',
                      'feeInfo','pageLayout','gallery','clinicHours'];
-      allow write: if signedIn();
+      allow write: if isPermissionDoc(docId) ? isAdmin() : signedIn();
     }
 
     match /config/{id}                          { allow read, write: if signedIn(); }

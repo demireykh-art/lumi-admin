@@ -1,6 +1,13 @@
 # Firestore 보안 규칙 에뮬레이터 테스트
 
-지시서 Section 5 요구 4개 케이스 + 정상 경로 8개 확인.
+수가표2 규칙 14건 + settings 권한 목록 잠금 16건(2026-10-10 보안 핫픽스).
+
+한 줄 실행(저장소 루트에서, 에뮬레이터 자동 기동·종료):
+
+```bash
+firebase emulators:exec --only firestore --project lumiclinic-c1a95-test "node test/rules/rules.test.mjs"
+```
+(`test/rules` 에서 `npm install` 먼저)
 
 ## 준비
 
@@ -9,7 +16,7 @@
 npm install -g firebase-tools
 
 # 테스트 의존성 설치
-cd fee-schedule/rules-test
+cd test/rules
 npm install
 ```
 
@@ -19,14 +26,14 @@ npm install
 
 **터미널 1 — 에뮬레이터 기동** (Java 필수: `apt-get install -y default-jre` 또는 로컬에 이미 설치)
 ```bash
-cd fee-schedule/rules-test
+cd test/rules
 npm run emulator
 ```
 `Firestore emulator: http://127.0.0.1:8080` 문구 나올 때까지 대기.
 
 **터미널 2 — 테스트 실행**
 ```bash
-cd fee-schedule/rules-test
+cd test/rules
 npm test
 ```
 
