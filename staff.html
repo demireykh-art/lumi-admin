@@ -3515,12 +3515,12 @@
             if(_st){ _st.style.display=''; _st.className='gps-status loading'; _st.textContent='📍 위치 확인 중... (잠시만요)'; }
             let loc=null;
             try{ loc=await _getFreshPosition(9000); }catch(_){ loc=userLocation||null; }
-            if(!loc){ return {ok:false, reason:'위치를 확인할 수 없습니다.\n위치 권한을 허용하고 잠시 후 다시 시도해주세요.'}; }
+            if(!loc){ return {ok:false, reason:'위치를 확인할 수 없습니다. (위치 권한/GPS 신호 없음)', noLoc:true}; }
             userLocation={lat:loc.lat,lng:loc.lng,accuracy:loc.accuracy};
             const dist=getDistance(loc.lat,loc.lng,CLINIC_LAT,CLINIC_LNG);
             const acc=loc.accuracy||0;
             if(dist-acc<=CLINIC_RADIUS) return {ok:true, loc};
-            return {ok:false, reason:`클리닉 범위 밖입니다.\n(약 ${Math.round(dist)}m · GPS 오차 ±${Math.round(acc)}m)\n${CLINIC_RADIUS}m 이내에서 다시 시도해주세요.`};
+            return {ok:false, reason:`클리닉 범위 밖입니다.\n(약 ${Math.round(dist)}m · GPS 오차 ±${Math.round(acc)}m)\n${CLINIC_RADIUS}m 이내에서 다시 시도해주세요.`, dist:Math.round(dist), acc:Math.round(acc)};
         }
 
         function getDistance(lat1,lng1,lat2,lng2){
@@ -6196,7 +6196,7 @@
             
             if(!currentUser?.locationExempt){
                 const chk=await _ensureWithinClinic();
-                if(!chk.ok){ alert(chk.reason); checkLocation(); return; }
+                if(!chk.ok){ await _handleCheckoutBlocked(todayAtt, chk); return; }
             }
 
             if(!confirm('퇴근하시겠습니까?')) return;
@@ -6346,6 +6346,38 @@
                 await loadAttendance();
                 renderAttendance();
             }catch(e){ alert('취소 실패: '+(e.message||e)); }
+        }
+
+        // 퇴근이 위치 확인에서 막혔을 때: '확인' 한 번으로 지금 시각을 실제 퇴근시간으로 승인요청(사유 포함)
+        async function _handleCheckoutBlocked(todayAtt, chk){
+            const now=new Date();
+            const nowT=now.toTimeString().substring(0,5);
+            const reason=(chk&&chk.reason)||'위치 확인 실패';
+            if(todayAtt.checkoutStatus==='pending'){
+                alert('📍 위치 확인이 안 됩니다.\n'+reason+'\n\n이미 퇴근 정정 승인요청이 접수되어 있습니다 (요청 '+(todayAtt.pendingCheckOut||'-')+').\n관리자 승인을 기다려 주세요.');
+                return;
+            }
+            const msg='📍 위치가 확인되지 않아 자동 퇴근이 안 됩니다.\n'+reason
+                +'\n\n지금 시각 '+nowT+'을(를) 실제 퇴근시간으로 하여\n관리자에게 "퇴근 정정 승인요청"을 보낼까요?\n\n[확인] 요청 보내기   [취소] 위치 다시 확인';
+            if(!confirm(msg)){ checkLocation(); return; }
+            const blockReason=String(reason).replace(/\s*\n\s*/g,' ').trim();
+            const update={
+                pendingCheckOut:nowT,
+                checkoutStatus:'pending',
+                checkoutNote:'퇴근 위치확인 실패 - 자동 승인요청',
+                checkoutBlockReason:blockReason,
+                checkoutRequestedBy:(currentUser&&(currentUser.name||currentUser.id))||'',
+                checkoutRequestedAt:firebase.firestore.FieldValue.serverTimestamp(),
+                checkoutRejectReason:firebase.firestore.FieldValue.delete()
+            };
+            if(typeof chk.dist==='number') update.checkoutBlockDist=chk.dist;
+            if(typeof chk.acc==='number') update.checkoutBlockAcc=chk.acc;
+            try{
+                await db.collection('attendance').doc(todayAtt.id).update(update);
+                alert('✅ 퇴근 정정 승인요청을 보냈습니다. (요청 '+nowT+')\n관리자 승인 후 퇴근시간이 기록됩니다.\n안심하고 들어가셔도 됩니다.');
+                await loadAttendance();
+                renderAttendance();
+            }catch(e){ alert('요청 전송 실패: '+(e.message||e)+'\n네트워크 확인 후 다시 시도해주세요.'); }
         }
 
         function dismissMissedAlert(){
@@ -16075,7 +16107,8 @@
                     }
                     if(coPending){
                         const who=a.checkoutRequestedBy?(' · 요청자 '+_esc(a.checkoutRequestedBy)):'';
-                        rows+=`<div style="font-size:.75rem;color:#374151;margin-top:.15rem">🌙 퇴근 정정: 요청 <b>${_esc(a.pendingCheckOut||'-')}</b>${who}</div>
+                        const rsn=a.checkoutBlockReason?`<div style="font-size:.68rem;color:#b45309;margin-top:.1rem">📍 ${_esc(a.checkoutBlockReason)}${(typeof a.checkoutBlockDist==='number')?(' (약 '+a.checkoutBlockDist+'m·오차±'+(a.checkoutBlockAcc||'?')+'m)'):''}</div>`:'';
+                        rows+=`<div style="font-size:.75rem;color:#374151;margin-top:.15rem">🌙 퇴근 정정: 요청 <b>${_esc(a.pendingCheckOut||'-')}</b>${who}</div>${rsn}
                         <div style="display:flex;gap:.3rem;margin-top:.35rem;justify-content:flex-end">
                             <button onclick="_staffRejectCheckout('${a.id}')" style="background:#fff;border:1px solid #ef4444;color:#dc2626;padding:.3rem .7rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer">반려</button>
                             <button onclick="_staffApproveCheckout('${a.id}')" style="background:#4338ca;border:1px solid #4338ca;color:#fff;padding:.3rem .8rem;font-size:.72rem;border-radius:var(--r-sm);cursor:pointer;font-weight:600">✓ 퇴근 승인</button>
