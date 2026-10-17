@@ -152,6 +152,84 @@ await T('owner(bizAdmins)가 fee_access write → 허용', async () => {
     );
 });
 
+// ══════════════════════════════════════════════════════════════
+//  🔒 settings 권한 목록 문서 잠금 (2026-10-10 보안 핫픽스)
+//  bizAdmins · adminHigh · snsAccess · dailySales 는 bizAdmins 만 쓸 수 있다.
+//  다른 settings 문서는 지금처럼 로그인 직원이 쓴다.
+// ══════════════════════════════════════════════════════════════
+console.log('\n[settings 권한 목록 잠금]');
+
+await testEnv.withSecurityRulesDisabled(async ctx => {
+    const db = ctx.firestore();
+    await db.collection('settings').doc('adminHigh').set({ emails: ['high@lumi.test'] });
+    await db.collection('settings').doc('snsAccess').set({ emails: ['sns@lumi.test'] });
+    await db.collection('settings').doc('dailySales').set({ emails: [] });
+    await db.collection('snsSlateLog').doc('seed1').set({ content: 'seed', status: '촬영' });
+});
+const high = testEnv.authenticatedContext('high-uid', { email: 'high@lumi.test' }).firestore(); // adminHigh (bizAdmin 아님)
+const sns  = testEnv.authenticatedContext('sns-uid',  { email: 'sns@lumi.test' }).firestore();  // snsAccess
+
+// ── 권한 상승 시도 → 전부 거부 ──
+for (const docId of ['bizAdmins', 'adminHigh', 'snsAccess', 'dailySales']) {
+    await T(`로그인 직원(carol)이 settings/${docId}에 자기 이메일 추가 → 거부`, async () => {
+        await assertFails(
+            carol.collection('settings').doc(docId).set({ emails: ['carol@lumi.test'] }, { merge: true })
+        );
+    });
+}
+await T('로그인 직원(carol)이 settings/bizAdmins 삭제 → 거부', async () => {
+    await assertFails(carol.collection('settings').doc('bizAdmins').delete());
+});
+await T('adminHigh(high)도 settings/bizAdmins 쓰기 → 거부 (bizAdmins 전용)', async () => {
+    await assertFails(
+        high.collection('settings').doc('bizAdmins').set({ emails: ['high@lumi.test'] }, { merge: true })
+    );
+});
+await T('snsAccess(sns)가 settings/snsAccess 쓰기 → 거부', async () => {
+    await assertFails(
+        sns.collection('settings').doc('snsAccess').set({ emails: ['sns@lumi.test', 'friend@x'] }, { merge: true })
+    );
+});
+await T('권한 없는 carol은 상승 시도 후에도 snsSlateLog 읽기 → 거부', async () => {
+    await assertFails(carol.collection('snsSlateLog').doc('seed1').get());
+});
+
+// ── 경영관리자 정상 경로 ──
+await T('owner(bizAdmins)가 settings/snsAccess 쓰기 → 허용 (⚙ 관리자 설정)', async () => {
+    await assertSucceeds(
+        owner.collection('settings').doc('snsAccess').set({ emails: ['sns@lumi.test', 'new@lumi.test'] }, { merge: true })
+    );
+});
+await T('owner(bizAdmins)가 settings/dailySales 쓰기 → 허용', async () => {
+    await assertSucceeds(
+        owner.collection('settings').doc('dailySales').set({ emails: ['desk@lumi.test'] }, { merge: true })
+    );
+});
+
+// ── 기존 동작 유지 (회귀 방지) ──
+await T('로그인 직원(carol)이 settings/bizAdmins 읽기 → 허용 (앱이 권한 판별에 읽음)', async () => {
+    await assertSucceeds(carol.collection('settings').doc('bizAdmins').get());
+});
+await T('로그인 직원(carol)이 일반 설정(settings/attendance) 쓰기 → 허용', async () => {
+    await assertSucceeds(
+        carol.collection('settings').doc('attendance').set({ lateH: 9 }, { merge: true })
+    );
+});
+await T('로그인 직원(carol)이 settings/feeSchedule 쓰기 → 허용', async () => {
+    await assertSucceeds(
+        carol.collection('settings').doc('feeSchedule').set({ updatedAt: 'test' }, { merge: true })
+    );
+});
+await T('snsAccess(sns)가 snsSlateLog 읽기 → 허용', async () => {
+    await assertSucceeds(sns.collection('snsSlateLog').doc('seed1').get());
+});
+await T('비로그인이 홈페이지 공개 설정(settings/clinicHours) 읽기 → 허용', async () => {
+    await assertSucceeds(anon.collection('settings').doc('clinicHours').get());
+});
+await T('비로그인이 settings/clinicHours 쓰기 → 거부', async () => {
+    await assertFails(anon.collection('settings').doc('clinicHours').set({ x: 1 }));
+});
+
 // ─── 리포트 ───────────────────────────────────────────────────
 await testEnv.cleanup();
 
