@@ -229,8 +229,9 @@ function renderAttendance(){
             const inCell=ciPending
                 ? `<span style="color:#b45309;font-weight:600">⏳ 요청 ${a.pendingCheckIn||'-'}</span><div style="font-size:.68rem;color:#777">현재 ${a.checkIn||'-'}</div>`
                 : (a.checkIn||'-');
+            const rsn=(coPending&&a.checkoutBlockReason)?`<div style="font-size:.66rem;color:#b45309">📍 ${a.checkoutBlockReason}${(typeof a.checkoutBlockDist==='number')?(' (약 '+a.checkoutBlockDist+'m·오차±'+(a.checkoutBlockAcc||'?')+'m)'):''}</div>`:'';
             const outCell=coPending
-                ? `<span style="color:#b45309;font-weight:600">⏳ 요청 ${a.pendingCheckOut||'-'}</span>`
+                ? `<span style="color:#b45309;font-weight:600">⏳ 요청 ${a.pendingCheckOut||'-'}</span>${rsn}`
                 : (a.checkOut||'-');
             const tag=(ciPending&&coPending)?'출근·퇴근 정정 승인대기':(ciPending?'출근 정정 승인대기':'퇴근 정정 승인대기');
             let btns='';
