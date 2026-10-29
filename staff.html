@@ -18114,6 +18114,12 @@
                 const it=(_catalogItems()||[]).find(x=>x.name===name);
                 // 직원이 수정한 링크(오버라이드)를 우선 사용하고, URL 형태만 등록
                 const reqLink=_normalizeCatalogUrl(_rawCatalogLink(it||{name}));
+                // 중복 방지: 이미 요청함에 열려 있는(대기/주문됨) 같은 이름이 있으면 한 번 더 확인
+                const openReq=_allPurchaseReqs().find(r=>!r.itemId && (r.name||'').trim()===name && _isReqOpen(r));
+                if(openReq){
+                    const st=openReq.status==='ordered'?'주문됨':'대기중';
+                    if(!confirm(`'${name}' 은(는) 이미 요청함에 있습니다 (${st}).\n또 추가할까요?`)) return;
+                }
                 await db.collection('purchaseRequests').add({
                     name,
                     qty:1,
@@ -18142,6 +18148,19 @@
             const qtyStr=prompt(`'${item.name}' 구매 요청 수량 (${item.unit||'개'})`, String(suggest));
             if(qtyStr==null) return;
             const qty=Math.max(1,parseInt(qtyStr,10)||1);
+            // 중복 방지: 이미 요청함에 열려 있는(대기/주문됨) 같은 품목이 있으면 새로 추가하지 않고 수량만 변경
+            const openReq=_allPurchaseReqs().find(r=>r.itemId===item.id && _isReqOpen(r));
+            if(openReq){
+                const st=openReq.status==='ordered'?'주문됨':'대기중';
+                if(!confirm(`'${item.name}' 은(는) 이미 구매 요청함에 있습니다 (${openReq.qty||1}${openReq.unit||'개'} · ${st}).\n\n새로 추가하지 않고 수량을 ${qty}${item.unit||'개'}로 바꿀까요?\n(취소 = 그대로 두기)`)) return;
+                try{
+                    await db.collection('purchaseRequests').doc(openReq.id).update({qty, updatedAt:new Date().toISOString()});
+                    _applyReqLocal(openReq.id,{qty});
+                    alert(`✅ '${item.name}' 요청 수량을 ${qty}${item.unit||'개'}로 변경했습니다.`);
+                    if(typeof loadStaffWishlist==='function') await loadStaffWishlist();
+                }catch(e){ alert('수정 실패: '+(e.message||e)); }
+                return;
+            }
             try{
                 await db.collection('purchaseRequests').add({
                     name:item.name,
@@ -19555,12 +19574,43 @@
             }catch(e){ console.warn('purchaseRequests 실시간 초기화 실패:', e); }
         }
         function _allPurchaseReqs(){ return Array.isArray(_purchaseReqs)?_purchaseReqs:[]; }
+        function _isReqOpen(r){ const s=r.status||'pending'; return s==='pending'||s==='ordered'; }  // 열린 요청(대기/주문됨)
         function _pendingPurchaseReqs(){ return _allPurchaseReqs().filter(r=>(r.status||'pending')==='pending'); }
         function _orderedPurchaseReqs(){ return _allPurchaseReqs().filter(r=>r.status==='ordered'); }
+        // 같은 품목(재고는 itemId, 비품은 이름) 기준 키 — 중복 요청 묶기용
+        function _openReqKey(r){ return r.itemId ? ('id:'+r.itemId) : ('nm:'+(r.name||'').trim()); }
+        // 열린 요청 중 같은 품목이 2건 이상이면, 가장 최근 1건만 남기고 숨길 id 집합을 돌려줌
+        function _dupOpenReqIds(){
+            const open=_allPurchaseReqs().filter(_isReqOpen);
+            const byKey=new Map();
+            open.forEach(r=>{ const k=_openReqKey(r); if(!byKey.has(k)) byKey.set(k,[]); byKey.get(k).push(r); });
+            const hide=new Set();
+            byKey.forEach(list=>{
+                if(list.length<2) return;
+                list.sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));  // 최신 우선
+                list.slice(1).forEach(r=>hide.add(r.id));  // 최신 1건 유지, 나머지 숨김
+            });
+            return hide;
+        }
+        // 중복 요청 영구 정리 — 같은 품목은 가장 최근 1건만 남기고 삭제
+        async function _reqDedupeOpen(){
+            const hide=_dupOpenReqIds();
+            if(!hide.size){ alert('정리할 중복 요청이 없습니다.'); return; }
+            if(!confirm(`중복 요청 ${hide.size}건을 정리할까요?\n(같은 품목은 가장 최근 1건만 남깁니다)`)) return;
+            try{
+                const batch=db.batch();
+                hide.forEach(id=>batch.delete(db.collection('purchaseRequests').doc(id)));
+                await batch.commit();
+                if(Array.isArray(_purchaseReqs)) _purchaseReqs=_purchaseReqs.filter(x=>!hide.has(x.id));
+                _updatePurchaseReqBadge();
+                if(document.getElementById('purchaseRequestsModal')?.classList.contains('active')) renderPurchaseRequests();
+                alert(`✅ 중복 ${hide.size}건을 정리했습니다.`);
+            }catch(e){ alert('정리 실패: '+(e.message||e)); }
+        }
         function _openPurchaseCount(){ return _pendingPurchaseReqs().length + _orderedPurchaseReqs().length; }
         function _pendingPurchaseCount(){ return _openPurchaseCount(); } // 홈 배지 = 처리 대기(대기 + 주문됨)
         function _updatePurchaseReqBadge(){
-            const n=_openPurchaseCount();
+            const n=Math.max(0, _openPurchaseCount()-_dupOpenReqIds().size);  // 중복 숨김분 제외 → 배지와 목록 일치
             document.querySelectorAll('[data-purchase-badge]').forEach(el=>{ el.textContent=n; el.style.display=n>0?'flex':'none'; });
         }
         // 낙관적 반영: 서버 쓰기 성공 후 로컬 캐시를 즉시 갱신 → 화면 바로 반응 (실시간 리스너와 별개 안전장치)
@@ -19603,11 +19653,20 @@
             const box=document.getElementById('purchaseRequestsGroups');
             const sum=document.getElementById('purchaseRequestsSummary');
             if(!box) return;
-            const pending=_pendingPurchaseReqs();
-            const ordered=_orderedPurchaseReqs();
+            const hide=_dupOpenReqIds();  // 같은 품목 중복 요청은 최신 1건만 표시
+            const pending=_pendingPurchaseReqs().filter(r=>!hide.has(r.id));
+            const ordered=_orderedPurchaseReqs().filter(r=>!hide.has(r.id));
             if(sum) sum.textContent=`대기 ${pending.length} · 주문됨 ${ordered.length}`;
             const showDone=document.getElementById('prShowDone')?.checked;
             let html='';
+
+            // 중복 요청 안내 + 정리 버튼 (같은 품목이 2건 이상 담긴 경우)
+            if(hide.size){
+                html+=`<div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--r-sm);padding:.5rem .6rem;margin-bottom:.6rem">
+                    <span style="font-size:.76rem;color:#9a3412;min-width:0">⚠️ 같은 품목이 중복 요청되어 <b>${hide.size}건</b>을 숨겼어요 (최신 1건만 표시).</span>
+                    <button onclick="_reqDedupeOpen()" style="background:#f97316;color:#fff;border:none;padding:.3rem .6rem;border-radius:var(--r-sm);font-size:.72rem;font-weight:800;cursor:pointer;white-space:nowrap">🧹 중복 정리</button>
+                </div>`;
+            }
 
             // ① 대기 — 채널/거래처별 그룹 (구매담당자가 주문)
             if(pending.length){
@@ -19643,8 +19702,15 @@
                 html+=`<div style="margin:1rem 0 .4rem;font-weight:800;font-size:.82rem;color:#6b7280">처리 완료 (${done.length})</div>`;
                 html+=done.slice(0,40).map(r=>{
                     const badge={received:'✅ 입고완료',purchased:'✅ 구매완료',approved:'✅ 승인',rejected:'❌ 거절'}[r.status]||r.status;
+                    // 입고완료는 '실제 받은 수량'을 보여주고, 요청과 다르면 함께 표기
+                    const hasRecv=(r.status==='received' && r.receivedQty!=null);
+                    const qtyLabel=hasRecv
+                        ? (Number(r.receivedQty)===Number(r.qty||1)
+                            ? `×${r.receivedQty}`
+                            : `×${r.receivedQty} <span style="color:#c2410c">(요청 ${r.qty||1})</span>`)
+                        : `×${r.qty||1}`;
                     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:.4rem;padding:.4rem .5rem;border-bottom:1px solid #f1f5f9;font-size:.82rem">
-                        <span style="flex:1;min-width:0">${_esc(r.name)} <span style="color:#9ca3af">×${r.qty||1}</span></span>
+                        <span style="flex:1;min-width:0">${_esc(r.name)} <span style="color:#9ca3af">${qtyLabel}</span></span>
                         <span style="color:#6b7280;font-size:.72rem;white-space:nowrap">${badge}</span>
                         <button onclick="_reqReopen('${r.id}')" title="다시 대기로" style="background:none;border:1px solid #d1d5db;color:#4b5563;font-size:.66rem;padding:1px 5px;border-radius:3px;cursor:pointer">↩︎</button>
                         ${isBizAdmin?`<button onclick="_reqDelete('${r.id}')" style="background:none;border:1px solid #ef4444;color:#dc2626;font-size:.66rem;padding:1px 6px;border-radius:3px;cursor:pointer">×</button>`:''}
@@ -19700,12 +19766,20 @@
                 _applyReqLocal(id,{status:'ordered',orderedBy:currentUser?.name||'구매담당'});
             }catch(e){ alert('처리 실패: '+(e.message||e)); }
         }
-        // ② 수령·입고: 파트 직원이 물건을 받으면 → 재고 품목은 요청 수량만큼 현재고에 더함('미지정' 장소), 비품은 완료 표시
+        // ② 수령·입고: 파트 직원이 물건을 받으면 → 받은 사람이 '실제 받은 수량'을 직접 입력해 현재고에 더함
+        //    (주문이 요청대로 안 될 수 있어 요청 수량 ≠ 입고 수량. 요청 수량을 그대로 입고로 받으면 안 됨)
         async function _reqReceive(id){
             const r=_allPurchaseReqs().find(x=>x.id===id); if(!r) return;
-            const qty=Number(r.qty)||1;
+            const reqQty=Number(r.qty)||1;
+            // 받은 사람이 실제 수령 수량을 직접 입력 (기본값=요청 수량, 다르면 고쳐 입력)
+            const ans=prompt(`'${r.name}' 실제로 받은 수량을 입력하세요 (${r.unit||'개'}).\n요청: ${reqQty}${r.unit||'개'} · 주문이 요청과 다를 수 있으니 받은 수량 그대로 입력하세요.`, String(reqQty));
+            if(ans==null) return; // 취소
+            const qty=Math.max(0,parseInt(ans,10)||0);
+            if(r.itemId && qty<=0){
+                if(!confirm('받은 수량이 0입니다. 현재고에 더하지 않고 수령만 완료로 표시할까요?')) return;
+            }
             try{
-                if(r.itemId){
+                if(r.itemId && qty>0){
                     await db.runTransaction(async tx=>{
                         const ref=db.collection('inventory').doc(r.itemId);
                         const snap=await tx.get(ref);
@@ -19717,10 +19791,12 @@
                         tx.update(ref,{locations:locs,currentStock:newTotal,lastReceiveDate:new Date().toISOString().split('T')[0],updatedAt:new Date().toISOString()});
                     });
                 }
-                await db.collection('purchaseRequests').doc(id).update({status:'received',receivedAt:new Date().toISOString(),receivedBy:currentUser?.name||'직원'});
-                _applyReqLocal(id,{status:'received',receivedBy:currentUser?.name||'직원'});
+                await db.collection('purchaseRequests').doc(id).update({status:'received',receivedQty:qty,receivedAt:new Date().toISOString(),receivedBy:currentUser?.name||'직원'});
+                _applyReqLocal(id,{status:'received',receivedQty:qty,receivedBy:currentUser?.name||'직원'});
                 if(typeof loadInventoryForStaff==='function') loadInventoryForStaff();
-                alert(r.itemId?`✅ '${r.name}' ${qty}${r.unit||'개'} 입고 완료 (현재고에 반영 · 장소: 미지정 — 나중에 🔄 이동 가능)`:`✅ '${r.name}' 수령 완료`);
+                alert(r.itemId
+                    ?`✅ '${r.name}' ${qty}${r.unit||'개'} 입고 완료 (현재고에 반영 · 장소: 미지정 — 나중에 🔄 이동 가능)`
+                    :`✅ '${r.name}' 수령 완료`);
             }catch(e){ alert('처리 실패: '+(e.message||e)); }
         }
         async function _reqReopen(id){
