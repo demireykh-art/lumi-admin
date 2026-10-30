@@ -2344,6 +2344,10 @@
                     </div>
                     <div id="editItemUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:var(--r-sm);font-size:.85rem;font-weight:600;color:var(--primary)">낱개당 단가: -</div>
                     <div style="font-size:.68rem;color:var(--text-muted);margin-top:.2rem">🎁 단가 0 덤은 '할증(덤)'에. · 1개 용량 = 액상 1병/1개의 ml·cc(믹스 계산용, 아니면 비움)</div>
+                    <div style="display:flex;align-items:center;gap:.4rem;margin-top:.5rem;padding-top:.5rem;border-top:1px dashed var(--border)">
+                        <button type="button" onclick="fixUnitPrice(document.getElementById('editItemId').value)" style="background:#fff7ed;border:1px solid #fdba74;color:#c2410c;font-size:.74rem;font-weight:700;padding:.35rem .6rem;border-radius:var(--r-sm);cursor:pointer;white-space:nowrap">💲 낱개 단가 보정</button>
+                        <span style="font-size:.66rem;color:var(--text-muted)">₩1 등 잘못된 단가를 <b>평균 없이 이 값으로 고정</b>하고 이전 이력을 정리합니다.</span>
+                    </div>
                 </div>
                 <div class="form-group" style="margin-top:.5rem">
                     <label class="form-label">안전재고 <span style="font-size:.7rem;color:var(--text-muted)">(이 개수 미만이면 발주 필요)</span></label>
@@ -19288,10 +19292,51 @@
             </div>`:'';
         }
 
+        // 💲 낱개 단가 직접 보정 — 평균 없이 입력값으로 '고정'하고 지저분한 이전 이력(₩1 등) 정리
+        async function fixUnitPrice(id){
+            if(!id){ alert('품목을 먼저 선택하세요.'); return; }
+            const item=invItems.find(i=>i.id===id);
+            if(!item){ alert('품목을 찾을 수 없습니다.'); return; }
+            const cur=Math.round(Number(item.unitPrice)||0);
+            const ans=prompt(
+                `'${item.name}' 낱개 단가를 직접 보정합니다.\n`
+                +`현재 단가: ₩${cur.toLocaleString()}\n\n`
+                +`올바른 낱개(1개당) 단가를 입력하세요.\n`
+                +`→ 평균 내지 않고 이 값으로 고정하며, 이전 ₩1 등 잘못된 이력을 지웁니다.`,
+                String(cur||''));
+            if(ans==null) return;
+            const v=Math.round(parseFloat(String(ans).replace(/[,\s₩원]/g,''))||0);
+            if(!(v>0)){ alert('0보다 큰 금액을 입력하세요.'); return; }
+            if(!confirm(`'${item.name}' 낱개 단가를 ₩${v.toLocaleString()}로 고정할까요?\n(가중평균 아님 · 이전 가격 이력 정리)`)) return;
+            try{
+                const today=new Date().toISOString().split('T')[0];
+                await db.collection('inventory').doc(id).update({
+                    unitPrice:v,
+                    purchasePrice:v,     // 수정화면·단가표시가 평균을 덮지 않도록 단가 기준(총액=단가, 수량=1)
+                    purchaseQty:1,
+                    costSource:'manual', // 수동 보정값
+                    priceHistory:[{ unitPrice:v, lotUnitPrice:v, vendorName:'', receiveDate:today, note:'단가 보정' }],
+                    updatedAt:new Date().toISOString(),
+                    updatedBy:currentUser?.name||'staff'
+                });
+                // 로컬 캐시 즉시 반영
+                if(Array.isArray(invItems)){ const it=invItems.find(x=>x.id===id); if(it){ it.unitPrice=v; it.purchasePrice=v; it.purchaseQty=1; it.costSource='manual'; it.priceHistory=[{unitPrice:v,lotUnitPrice:v,vendorName:'',receiveDate:today,note:'단가 보정'}]; } }
+                alert(`✅ '${item.name}' 낱개 단가를 ₩${v.toLocaleString()}로 고정했습니다.`);
+                if(typeof loadInventoryForStaff==='function') await loadInventoryForStaff();
+                // 수정 모달이 열려 있으면 표시값 갱신
+                if(document.getElementById('editItemId')?.value===id){
+                    const tp=document.getElementById('editItemTotalPrice'); if(tp) tp.value=v;
+                    const bx=document.getElementById('editItemBoxes'); if(bx) bx.value=1;
+                    const fr=document.getElementById('editItemFree'); if(fr) fr.value=0;
+                    const pb=document.getElementById('editItemPerBox'); if(pb) pb.value=1;
+                    if(typeof calcEditItemUnit==='function') calcEditItemUnit();
+                }
+            }catch(e){ alert('보정 실패: '+(e.message||e)); }
+        }
         function openEditItemModal(itemId){
             const item=invItems.find(i=>i.id===itemId);
             if(!item){alert('품목을 찾을 수 없습니다.');return;}
-            
+
             console.log('📦 품목 정보:', item);
             console.log('📍 locations 객체:', item.locations);
             console.log('📍 단일 location:', item.location);
