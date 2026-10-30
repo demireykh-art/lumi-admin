@@ -2290,6 +2290,7 @@
                         </div>
                         <div id="receiveUnitCalc" style="text-align:center;padding:.4rem;background:var(--bg-card);border-radius:var(--r-sm);font-size:.85rem;font-weight:600;color:var(--primary);margin-top:.4rem">낱개당 단가: -</div>
                         <div style="font-size:.68rem;color:var(--text-muted);margin-top:.25rem">🎁 단가 0으로 찍힌 덤은 '할증(덤)'에 넣으세요 (낱개 단가 자동 하향).</div>
+                        <div style="font-size:.68rem;color:#0369a1;margin-top:.15rem">💡 이 단가는 <b>기존 재고와 가중평균</b>되어 반영됩니다. (위 '낱개당 단가'는 이번 입고분 단가)</div>
                     </div>
                 </div>
             </div>
@@ -8042,7 +8043,7 @@
                 if(unitPriceCalc>0){
                     const cur=priceHist[0];
                     const curCtx = cur ? ` (${_esc(cur.vendorName||'거래처없음')}, ${_fmtDate(cur.receiveDate)})` : '';
-                    unitPriceHtml=`<span style="color:#0369a1;font-weight:600">낱개당 단가: <strong>₩${unitPriceCalc.toLocaleString()}</strong>${curCtx}</span>`;
+                    unitPriceHtml=`<span style="color:#0369a1;font-weight:600">낱개 평균단가: <strong>₩${unitPriceCalc.toLocaleString()}</strong>${curCtx}</span>`;
                     // 이전 항목이 있고 가격이 다르면 아래에 표기
                     for(let i=1;i<priceHist.length;i++){
                         const prev=priceHist[i];
@@ -18937,31 +18938,53 @@
 
             // 단가 처리: new=새로 계산해 덮어씀 / same=이전 단가 그대로 유지 / skip=단가 건드리지 않음
             //  → 이전엔 총액이 필수라 직원이 1원을 넣어 단가가 ₩1로 망가졌음. 이제 '동일' 클릭으로 유지 가능.
-            let newUnitPrice=null;   // 입고 이력(receiveHistory) 기록용
+            let newUnitPrice=null;   // receiveHistory 기록용: 이번 입고 낱개가(lot)
+            let avgUnitAfter=null;   // 이번 입고 후 평균 단가
             if(priceMode==='new' && totalPrice > 0){
-                newUnitPrice = Math.round(totalPrice / totalQty);
-                updateData.purchasePrice = totalPrice;
-                updateData.purchaseQty = totalQty;
-                updateData.purchaseQtyPaid = paidQty;   // 유상 낱개
-                updateData.purchaseQtyFree = freeQty;   // 할증(덤) 낱개
-                updateData.costSource = 'paid';         // 단가 산출 기준: 실지불액
-                updateData.unitPrice = newUnitPrice;
-                // 가격 이력 — 가격이 바뀐 경우만 최근 5개 유지
+                const lotUnit = Math.round(totalPrice / totalQty);                 // 이번 입고 낱개가(할증 반영)
+                const prevUnit = Math.round(Number(item.unitPrice)||0);            // 기존 평균 단가
+                const prevStock = Object.values(item.locations||{}).reduce((s,q)=>s+(Number(q)||0),0); // 입고 전 재고(낱개)
+                const addedQty = totalAdd;                                         // 이번에 재고에 더해진 수량
+                // 가중 이동평균: (기존재고×기존평균 + 입고량×이번단가) ÷ (기존재고+입고량)
+                //  · 기존 재고나 단가가 없으면 이번 단가로 시작
+                const avgUnit = (prevUnit>0 && prevStock>0 && (prevStock+addedQty)>0)
+                    ? Math.round((prevStock*prevUnit + addedQty*lotUnit)/(prevStock+addedQty))
+                    : lotUnit;
+                newUnitPrice = lotUnit;
+                avgUnitAfter = avgUnit;
+                // 평균을 단가로 저장. 수정화면이 평균을 덮어쓰지 않도록 구매정보도 평균 기준(총액=평균, 수량=1)으로 맞춤
+                updateData.unitPrice = avgUnit;
+                updateData.purchasePrice = avgUnit;
+                updateData.purchaseQty = 1;
+                updateData.costSource = 'movingAvg';
+                // 이번 입고(lot) 실제 내역은 참고용으로 별도 보관
+                updateData.lastLotUnitPrice = lotUnit;
+                updateData.lastLotTotalPrice = totalPrice;
+                updateData.lastLotQty = totalQty;
+                updateData.lastLotQtyPaid = paidQty;
+                updateData.lastLotQtyFree = freeQty;
+                updateData.lastLotStockBefore = prevStock;
+                // 가격 이력 — 평균 추이 + lot 단가, 최근 5개 유지
                 const prevHist = Array.isArray(item.priceHistory) ? item.priceHistory.slice() : [];
                 prevHist.unshift({
-                    unitPrice: newUnitPrice,
+                    unitPrice: avgUnit,          // 이 입고 후 평균 단가 (화면 '이전' 비교용)
+                    lotUnitPrice: lotUnit,       // 이번 입고 낱개가
                     vendorId: item.vendorId || null,
                     vendorName: snapVendorName || '',
                     receiveDate: receiveDate,
                     totalPrice: totalPrice,
                     totalQty: totalQty,
                     qtyPaid: paidQty,
-                    qtyFree: freeQty
+                    qtyFree: freeQty,
+                    addedQty: addedQty,
+                    stockBefore: prevStock,
+                    stockAfter: prevStock + addedQty
                 });
                 updateData.priceHistory = prevHist.slice(0, 5);
             } else if(priceMode==='same'){
                 // 이전 단가/구매정보 그대로 — 아무 것도 덮어쓰지 않음(기록용으로만 이전 단가 사용)
                 newUnitPrice = Math.round(Number(item.unitPrice)||0) || null;
+                avgUnitAfter = newUnitPrice;
             }
             // skip: 단가 미기록(newUnitPrice=null), 구매정보 변경 없음
 
@@ -18979,7 +19002,8 @@
                     purchasePrice: totalPrice || null,
                     purchaseQtyPaid: totalPrice > 0 ? paidQty : null,
                     purchaseQtyFree: totalPrice > 0 ? freeQty : null,
-                    unitPrice: newUnitPrice,
+                    unitPrice: newUnitPrice,        // 이번 입고 낱개가(lot)
+                    avgUnitAfter: avgUnitAfter,     // 입고 후 평균 단가
                     vendorId: item.vendorId || null,
                     vendorName: snapVendorName || '',
                     receivedBy: currentUser?.name || 'staff',
@@ -18987,7 +19011,13 @@
                 });
 
                 closeModal('receiveItemModal');
-                alert('✅ 입고 완료!\n' + item.name + ' ' + totalAdd + '개 입고되었습니다.');
+                let _doneMsg = '✅ 입고 완료!\n' + item.name + ' ' + totalAdd + (item.unit||'개') + ' 입고되었습니다.';
+                if(priceMode==='new' && avgUnitAfter!=null){
+                    _doneMsg += '\n이번 입고가 ₩'+Math.round(newUnitPrice).toLocaleString()+' → 가중평균 단가 ₩'+Math.round(avgUnitAfter).toLocaleString();
+                } else if(priceMode==='same' && avgUnitAfter){
+                    _doneMsg += '\n단가 유지: ₩'+Math.round(avgUnitAfter).toLocaleString();
+                }
+                alert(_doneMsg);
                 await loadInventoryForStaff();
                 renderInvCatButtons();
                 renderInvAuditList();
