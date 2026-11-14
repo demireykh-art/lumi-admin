@@ -216,7 +216,7 @@
         .tl-cal-hdr{text-align:center;padding:.3rem 0;font-weight:600;color:var(--text-muted);font-size:.65rem}
         .tl-cal-hdr.sun{color:#e53935}
         .tl-cal-hdr.sat{color:#1565c0}
-        .tl-cal-day{min-height:48px;border:1px solid var(--border);border-radius:var(--r-sm);padding:2px;position:relative;background:var(--bg-card)}
+        .tl-cal-day{min-height:48px;border:1px solid var(--border);border-radius:var(--r-sm);padding:2px;position:relative;background:var(--bg-card);min-width:0;overflow:hidden}
         .tl-cal-day.today{border-color:var(--primary);border-width:2px}
         .tl-cal-day.other{opacity:.3}
         .tl-cal-day.sun .tl-cal-num{color:#e53935}
@@ -15662,7 +15662,7 @@
             html+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;background:#e5e7eb;padding:2px;border-radius:var(--r-sm)">';
             // 앞부분 빈 셀
             for(let i=0;i<startDow;i++){
-                html+='<div style="background:#f9fafb;min-height:76px;border-radius:3px"></div>';
+                html+='<div style="background:#f9fafb;min-height:76px;border-radius:3px;min-width:0"></div>';
             }
             const today=_todayYmd();
             for(let d=1;d<=daysInMonth;d++){
@@ -15677,9 +15677,9 @@
                     return `<div style="font-size:.62rem;background:${bg};color:${color};padding:1px 4px;margin-top:1px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_esc(o.empName)} ${_esc(o.type)} (${o.status==='pending'?'대기':'승인'})">${_esc(o.empName)}</div>`;
                 }).join('');
                 const more=offs.length>4?`<div style="font-size:.6rem;color:#9ca3af">+${offs.length-4}</div>`:'';
-                html+=`<div onclick="_staffCalDayClick('${dateStr}')" style="background:#fff;min-height:76px;border-radius:3px;padding:3px;cursor:pointer;position:relative;${isToday?'outline:2px solid #7c3aed;outline-offset:-1px':''}">
+                html+=`<div onclick="_staffCalDayClick('${dateStr}')" style="background:#fff;min-height:76px;border-radius:3px;padding:3px;cursor:pointer;position:relative;min-width:0;overflow:hidden;${isToday?'outline:2px solid #7c3aed;outline-offset:-1px':''}">
                     <div style="font-size:.75rem;font-weight:${isToday?'700':'500'};color:${dowColor}">${d}</div>
-                    <div>${namesHtml}${more}</div>
+                    <div style="min-width:0">${namesHtml}${more}</div>
                 </div>`;
             }
             html+='</div>';
