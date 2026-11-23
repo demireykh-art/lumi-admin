@@ -18704,6 +18704,9 @@
                 purchaseQty:totalQty,
                 purchaseQtyPaid:paidQty,             // 유상 낱개
                 purchaseQtyFree:freeQty,             // 할증(덤) 낱개
+                purchaseBoxes:boxes,                 // 입력 구성 — 다시 열 때 그대로 복원
+                purchaseFree:free,
+                purchasePerBox:perBox,
                 costSource:'paid',                   // 단가 산출 기준: 실지불액
                 unitPrice:unitPrice,
                 expiryDate:document.getElementById('newItemExpiry').value||null,
@@ -18960,6 +18963,7 @@
                 updateData.unitPrice = avgUnit;
                 updateData.purchasePrice = avgUnit;
                 updateData.purchaseQty = 1;
+                updateData.purchaseBoxes = null; updateData.purchaseFree = null; updateData.purchasePerBox = null; // 평균 기준이라 입력 구성 없음
                 updateData.costSource = 'movingAvg';
                 // 이번 입고(lot) 실제 내역은 참고용으로 별도 보관
                 updateData.lastLotUnitPrice = lotUnit;
@@ -19314,13 +19318,14 @@
                     unitPrice:v,
                     purchasePrice:v,     // 수정화면·단가표시가 평균을 덮지 않도록 단가 기준(총액=단가, 수량=1)
                     purchaseQty:1,
+                    purchaseBoxes:null, purchaseFree:null, purchasePerBox:null, // 단가 보정이라 입력 구성 없음
                     costSource:'manual', // 수동 보정값
                     priceHistory:[{ unitPrice:v, lotUnitPrice:v, vendorName:'', receiveDate:today, note:'단가 보정' }],
                     updatedAt:new Date().toISOString(),
                     updatedBy:currentUser?.name||'staff'
                 });
                 // 로컬 캐시 즉시 반영
-                if(Array.isArray(invItems)){ const it=invItems.find(x=>x.id===id); if(it){ it.unitPrice=v; it.purchasePrice=v; it.purchaseQty=1; it.costSource='manual'; it.priceHistory=[{unitPrice:v,lotUnitPrice:v,vendorName:'',receiveDate:today,note:'단가 보정'}]; } }
+                if(Array.isArray(invItems)){ const it=invItems.find(x=>x.id===id); if(it){ it.unitPrice=v; it.purchasePrice=v; it.purchaseQty=1; it.purchaseBoxes=null; it.purchaseFree=null; it.purchasePerBox=null; it.costSource='manual'; it.priceHistory=[{unitPrice:v,lotUnitPrice:v,vendorName:'',receiveDate:today,note:'단가 보정'}]; } }
                 alert(`✅ '${item.name}' 낱개 단가를 ₩${v.toLocaleString()}로 고정했습니다.`);
                 if(typeof loadInventoryForStaff==='function') await loadInventoryForStaff();
                 // 수정 모달이 열려 있으면 표시값 갱신
@@ -19386,13 +19391,15 @@
             
             calcEditTotalStock();
             
-            // 구매 정보 역산
+            // 구매 정보 — 저장된 입력 구성(박스·할증·박스당)이 있으면 그대로 복원, 없으면 역산
             const totalPrice=item.purchasePrice||0;
             const totalQty=item.purchaseQty||1;
             document.getElementById('editItemTotalPrice').value=totalPrice||'';
-            document.getElementById('editItemBoxes').value=1;
-            const _ef=document.getElementById('editItemFree'); if(_ef) _ef.value=0;  // 할증칸 초기화(저장된 purchaseQty엔 이미 할증 포함)
-            document.getElementById('editItemPerBox').value=totalQty||1;
+            const _hasBreakdown = (item.purchaseBoxes!=null && item.purchasePerBox!=null);
+            document.getElementById('editItemBoxes').value = _hasBreakdown ? (Number(item.purchaseBoxes)||1) : 1;
+            const _ef=document.getElementById('editItemFree'); if(_ef) _ef.value = _hasBreakdown ? (Number(item.purchaseFree)||0) : 0;
+            // 구성 없으면 역산: 박스1·할증0·박스당=수량 (저장된 purchaseQty엔 이미 할증 포함)
+            document.getElementById('editItemPerBox').value = _hasBreakdown ? (Number(item.purchasePerBox)||1) : (totalQty||1);
             calcEditItemUnit();
             openModal('editItemModal');
         }
@@ -19551,6 +19558,9 @@
                 purchaseQty:totalQty,
                 purchaseQtyPaid:paidQty,         // 유상 낱개
                 purchaseQtyFree:freeQty,         // 할증(덤) 낱개
+                purchaseBoxes:boxes,             // 입력 구성 — 다시 열 때 그대로 복원
+                purchaseFree:free,
+                purchasePerBox:perBox,
                 costSource:'paid',               // 단가 산출 기준: 실지불액
                 unitPrice:_editUnitPrice,
                 purchaseLink:document.getElementById('editItemPurchaseLink').value.trim(),
